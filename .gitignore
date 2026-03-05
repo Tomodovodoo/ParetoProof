@@ -1,0 +1,11 @@
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+.tmp/
+.turbo/
+.venv/
+dist/
+coverage/
+node_modules/

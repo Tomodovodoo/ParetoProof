@@ -1,0 +1,50 @@
+name: Benchmark proposal
+description: Propose a new benchmark item, corpus slice, or evaluation track.
+title: "[benchmark] "
+labels:
+  - area:benchmark
+  - kind:design
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when proposing benchmark content or methodology changes.
+  - type: input
+    id: title
+    attributes:
+      label: Proposal title
+      placeholder: Add algebra formalization slice
+    validations:
+      required: true
+  - type: dropdown
+    id: track
+    attributes:
+      label: Track
+      options:
+        - formalize
+        - prove
+        - repair
+        - full_stack
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why this belongs in ParetoProof
+      description: Explain the research value and what signal it adds.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Source and licensing
+      description: Include provenance, ownership, and any reuse constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Definition of done
+      description: Describe the exact artifacts needed for this proposal to be complete.
+    validations:
+      required: true

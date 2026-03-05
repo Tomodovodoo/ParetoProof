@@ -1,0 +1,24 @@
+id: 2026-03-06-gpt-x-pass1-v0
+benchmark_release: draft-v0
+mode: pass@1
+model:
+  provider: openai
+  name: example-model
+  temperature: 0.2
+  max_output_tokens: 16000
+tooling:
+  allow_shell: false
+  allow_network: false
+  allow_repo_write: false
+budget:
+  wall_clock_seconds: 300
+  attempts_per_item: 1
+  max_cost_usd: 50
+runtime:
+  lean_image: ghcr.io/example/lean-runner:latest
+  runner_version: 0.1.0
+artifacts:
+  capture_stdout: true
+  capture_stderr: true
+  capture_patch: true
+notes: "Example manifest for repository setup."

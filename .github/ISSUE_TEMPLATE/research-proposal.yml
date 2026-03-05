@@ -1,0 +1,27 @@
+name: Research proposal
+description: Open a design or methodology thread that should likely become a discussion or ADR.
+title: "[research] "
+labels:
+  - area:community
+  - kind:question
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Proposal or question
+      description: State the idea clearly and concretely.
+    validations:
+      required: true
+  - type: textarea
+    id: stakes
+    attributes:
+      label: Why this matters
+    validations:
+      required: true
+  - type: textarea
+    id: next
+    attributes:
+      label: Suggested next step
+      description: Discussion, ADR, implementation, or experiment.
+    validations:
+      required: true

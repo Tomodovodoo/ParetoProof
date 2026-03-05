@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: ParetoProof
+message: If you use this repository, please cite it using this metadata.
+type: software
+authors:
+  - family-names: de Groot
+    given-names: Tom
+repository-code: https://github.com/Tomodovodoo/ParetoProof
+license: Apache-2.0
+abstract: Public benchmark and evaluation harness for Lean theorem proving and Lean formalization workflows.

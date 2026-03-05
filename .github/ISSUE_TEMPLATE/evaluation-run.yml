@@ -1,0 +1,39 @@
+name: Evaluation run
+description: Request or define a concrete model evaluation run.
+title: "[run] "
+labels:
+  - area:models
+  - kind:task
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model and provider
+      placeholder: provider/model-name
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Evaluation mode
+      options:
+        - pass@1
+        - pass@k
+        - budgeted_search
+        - full_effort
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: Planned run manifest details
+      description: Summarize tool permissions, budget, and artifact capture.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: What result will make this run useful even if the scores are poor?
+    validations:
+      required: true

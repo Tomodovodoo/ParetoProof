@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Tomodovodoo/ParetoProof/schemas/run-manifest.schema.json",
+  "title": "ParetoProof Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "benchmark_release",
+    "mode",
+    "model",
+    "tooling",
+    "budget",
+    "runtime",
+    "artifacts"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "benchmark_release": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "pass@1",
+        "pass@k",
+        "budgeted_search",
+        "full_effort"
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "name"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "max_output_tokens": {
+          "type": "integer"
+        }
+      }
+    },
+    "tooling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow_shell",
+        "allow_network",
+        "allow_repo_write"
+      ],
+      "properties": {
+        "allow_shell": {
+          "type": "boolean"
+        },
+        "allow_network": {
+          "type": "boolean"
+        },
+        "allow_repo_write": {
+          "type": "boolean"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_clock_seconds",
+        "attempts_per_item"
+      ],
+      "properties": {
+        "wall_clock_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "attempts_per_item": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_cost_usd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lean_image",
+        "runner_version"
+      ],
+      "properties": {
+        "lean_image": {
+          "type": "string"
+        },
+        "runner_version": {
+          "type": "string"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capture_stdout",
+        "capture_stderr",
+        "capture_patch"
+      ],
+      "properties": {
+        "capture_stdout": {
+          "type": "boolean"
+        },
+        "capture_stderr": {
+          "type": "boolean"
+        },
+        "capture_patch": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
