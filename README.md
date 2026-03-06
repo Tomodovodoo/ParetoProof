@@ -1,6 +1,6 @@
 # ParetoProof
 
-For now, if you wish to contribute (now, or in the future), please [leave a message here!](https://github.com/Tomodovodoo/ParetoProof/discussions/79)
+For now, if you wish to contribute (now, or in the future ever), PLEASE, [leave a message here!](https://github.com/Tomodovodoo/ParetoProof/discussions/79)
 
 ParetoProof is a public repo for scoping and building a Lean benchmark.
 
