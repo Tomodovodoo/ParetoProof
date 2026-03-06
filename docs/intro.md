@@ -1,6 +1,6 @@
 # Project Intro
 
-ParetoProof is an early-stage effort to build a Lean benchmark.
+ParetoProof is an early-stage effort to build a Lean benchmark (and more!).
 
 Current workstreams:
 
@@ -13,5 +13,5 @@ Current workstreams:
 Current repo use:
 
 - keep tasks short,
-- keep durable decisions on GitHub,
-- use the project board to track work.
+- please provide feedback via the Discussions!
+- use the project board to track work and add scopes from discussion!
