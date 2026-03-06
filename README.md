@@ -2,10 +2,7 @@
 
 ParetoProof is a public repo for scoping and building a Lean benchmark.
 
-Start here: [Project intro](docs/intro.md)
+For MORE information, please find the current work [on scoping](https://github.com/Tomodovodoo/ParetoProof/discussions/categories/scope)!
+We really need extra feedback, input, and helpers, and I would immensely appreciate it! So, please leave a comment/star if this project interests you, or if you want to contribute!
 
-Use:
-
-- Issues and pull requests for concrete work
-- Discussions for broader coordination
-- The project board for task tracking
+All work will be done via Discussions and Projects for now!
