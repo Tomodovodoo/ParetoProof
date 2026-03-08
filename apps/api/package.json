@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@paretoproof/shared": "workspace:*",
     "drizzle-orm": "latest",
     "fastify": "latest",
     "postgres": "latest",

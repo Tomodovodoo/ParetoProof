@@ -8,6 +8,7 @@
     "apps/api": {
       "name": "@paretoproof/api",
       "dependencies": {
+        "@paretoproof/shared": "workspace:*",
         "drizzle-orm": "latest",
         "fastify": "latest",
         "postgres": "latest",
@@ -23,6 +24,7 @@
     "apps/web": {
       "name": "@paretoproof/web",
       "dependencies": {
+        "@paretoproof/shared": "workspace:*",
         "react": "latest",
         "react-dom": "latest",
       },
@@ -37,6 +39,7 @@
     "apps/worker": {
       "name": "@paretoproof/worker",
       "dependencies": {
+        "@paretoproof/shared": "workspace:*",
         "zod": "latest",
       },
       "devDependencies": {

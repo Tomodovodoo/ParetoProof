@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@paretoproof/shared": "workspace:*",
     "zod": "latest"
   },
   "devDependencies": {

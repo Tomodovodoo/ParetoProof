@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@paretoproof/shared": "workspace:*",
     "react": "latest",
     "react-dom": "latest"
   },
