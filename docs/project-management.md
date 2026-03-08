@@ -35,6 +35,17 @@ When creating a new issue:
    - start in status **Todo** unless it is already blocked by an open dependency
 4. Add dates only if the issue is part of the active short-term plan.
 
+## PR Rule
+
+Execution work should land through a pull request, not through direct pushes to `main`.
+
+- Open a dedicated branch for the issue.
+- Open a PR against `main`.
+- Merge the PR into `main`.
+- Close the issue only after the relevant PR has merged into `main`.
+
+If a branch or PR contains work for multiple issues, do not close those issues early. Close each issue only when the merged PR actually contains that issue's completed work.
+
 ## Status Rules
 
 Execution boards use the same status vocabulary:
