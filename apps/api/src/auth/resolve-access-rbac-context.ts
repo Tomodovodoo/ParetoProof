@@ -1,13 +1,13 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { createDbClient } from "../db/client";
+import { createDbClient } from "../db/client.js";
 import {
   accessRequests,
   roleGrants,
   userIdentities,
   users,
   type accessRoleEnum
-} from "../db/schema";
-import type { CloudflareAccessIdentity } from "./cloudflare-access";
+} from "../db/schema.js";
+import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
 
 type DbClient = ReturnType<typeof createDbClient>;
 type AccessRole = (typeof accessRoleEnum.enumValues)[number];
@@ -79,9 +79,22 @@ export async function resolveAccessRbacContext(
       };
     }
 
-    const latestRequest = identity.email
-      ? await getLatestAccessRequestByEmail(db, identity.email)
-      : null;
+    const latestRequest = await getLatestAccessRequestByEmail(
+      db,
+      linkedIdentity.user.email
+    );
+
+    if (
+      latestRequest &&
+      (latestRequest.status === "rejected" || latestRequest.status === "withdrawn")
+    ) {
+      return {
+        email: linkedIdentity.user.email,
+        reason: "rejected_or_withdrawn",
+        status: "denied",
+        subject: identity.subject
+      };
+    }
 
     return {
       email: linkedIdentity.user.email,

@@ -1,10 +1,20 @@
 import { defineConfig } from "drizzle-kit";
 
+function readDatabaseUrl(name: "DATABASE_URL" | "MIGRATION_DATABASE_URL") {
+  const value = process.env[name]?.trim();
+
+  if (!value || value.includes("user:password@host:5432")) {
+    return null;
+  }
+
+  return value;
+}
+
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL ?? ""
+    url: readDatabaseUrl("MIGRATION_DATABASE_URL") ?? readDatabaseUrl("DATABASE_URL") ?? ""
   }
 });

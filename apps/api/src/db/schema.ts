@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -67,8 +68,11 @@ export const userIdentities = pgTable(
   },
   (table) => ({
     providerSubjectUnique: uniqueIndex("user_identities_provider_subject_unique").on(
-      table.provider,
       table.providerSubject
+    ),
+    idUserUnique: uniqueIndex("user_identities_id_user_id_unique").on(
+      table.id,
+      table.userId
     ),
     userIndex: index("user_identities_user_id_idx").on(table.userId)
   })
@@ -133,9 +137,7 @@ export const sessions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    identityId: uuid("identity_id")
-      .notNull()
-      .references(() => userIdentities.id, { onDelete: "cascade" }),
+    identityId: uuid("identity_id").notNull(),
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -149,6 +151,11 @@ export const sessions = pgTable(
       .notNull()
   },
   (table) => ({
+    identityOwnerForeignKey: foreignKey({
+      columns: [table.identityId, table.userId],
+      foreignColumns: [userIdentities.id, userIdentities.userId],
+      name: "sessions_identity_owner_fk"
+    }).onDelete("cascade"),
     tokenHashUnique: uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
     userIndex: index("sessions_user_id_idx").on(table.userId),
     identityIndex: index("sessions_identity_id_idx").on(table.identityId)
