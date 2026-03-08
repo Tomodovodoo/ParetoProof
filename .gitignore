@@ -3,9 +3,15 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.env.local
 .tmp/
 .turbo/
 .venv/
+.bun/
+.wrangler/
+.vscode/
+.idea/
 dist/
 coverage/
 node_modules/
+*.tsbuildinfo
