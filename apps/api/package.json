@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "build:railway": "cd ../.. && bun run build:shared && bun --cwd apps/api build",
     "start": "node dist/index.js",
+    "start:railway": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
