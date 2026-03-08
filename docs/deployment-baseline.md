@@ -2,7 +2,7 @@
 
 The repository is set up so each deployable surface can be built without prematurely locking the product into a narrow runtime story. The web app in `apps/web` is a normal Vite application and deploys to Cloudflare Pages. The API in `apps/api` is intended to run on Railway from the Bun workspace build output, while `apps/worker` keeps the container-oriented path that the later benchmark workers will need.
 
-The Railway control-plane baseline now exists as a live service, not just a plan. The Railway project is `ParetoProof API`, the service is `api`, the service source points at `Tomodovodoo/ParetoProof`, and the instance is pinned to `apps/api` with `apps/api/railway.json` as its config boundary.
+The Railway control-plane baseline now exists as a live service, not just a plan. The Railway project is `ParetoProof API`, the service is `api`, the service source points at `Tomodovodoo/ParetoProof`, and the instance is pinned to `apps/api` with `apps/api/railway.json` as its config boundary. The live service runtime now expects Railway-managed `DATABASE_URL`, `APP_SESSION_SECRET`, `HOST`, and `NODE_ENV`, while `PORT` remains Railway-provided.
 
 Pages now has a concrete project baseline. The Cloudflare project is `paretoproof-web`, and its durable deployment path lives in `apps/web/wrangler.toml`. The public website is attached to `paretoproof.com` and `www.paretoproof.com`, and the portal hostname is attached at `portal.paretoproof.com`. Local frontend development is the pre-production path: contributors should run `bun run dev:web` from the repository root and validate unfinished website and portal work against the local Vite server instead of relying on a dedicated staging hostname or a protected preview URL.
 
