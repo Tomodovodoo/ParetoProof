@@ -4,4 +4,4 @@ ParetoProof is an early-stage effort to build a serious benchmark and evaluation
 
 The project still has major open questions around benchmark design, worker execution, and testing methodology, but the service model is stable. The web app, API, and worker runtimes are separate deployables. The shared documentation in this folder is meant to keep that picture clear without forcing contributors to piece it together from GitHub boards alone.
 
-If you are new to the repository, start with [README.md](/U:/Personal/ParetoProof/README.md) and then [architecture.md](/U:/Personal/ParetoProof/docs/architecture.md).
+If you are new to the repository, start with [README.md](../README.md) and then [architecture.md](architecture.md).

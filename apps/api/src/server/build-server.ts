@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { registerHealthRoute } from "../routes/health";
+import { registerHealthRoute } from "../routes/health.js";
 
 export function buildServer() {
   const app = Fastify({
