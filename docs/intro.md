@@ -1,17 +1,7 @@
 # Project Intro
 
-ParetoProof is an early-stage effort to build a Lean benchmark (and more!).
+ParetoProof is an early-stage effort to build a serious benchmark and evaluation platform for AI systems working in Lean. The repository is no longer just a note-taking space for scope ideas. It now has a defined implementation stack and a concrete monorepo layout so execution work can begin without re-deciding the basics each time.
 
-Current workstreams:
+The project still has major open questions around benchmark design, worker execution, and testing methodology, but the service model is stable. The web app, API, and worker runtimes are separate deployables. The shared documentation in this folder is meant to keep that picture clear without forcing contributors to piece it together from GitHub boards alone.
 
-- Scoping
-- Backend
-- Frontend
-- Math Problems
-- AI implementation
-
-Current repo use:
-
-- keep tasks short,
-- please provide feedback via the Discussions!
-- use the project board to track work and add scopes from discussion!
+If you are new to the repository, start with [README.md](/U:/Personal/ParetoProof/README.md) and then [architecture.md](/U:/Personal/ParetoProof/docs/architecture.md).

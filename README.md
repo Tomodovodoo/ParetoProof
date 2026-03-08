@@ -1,15 +1,9 @@
 # ParetoProof
 
-For now, if you wish to contribute (now, or in the future ever), PLEASE, [leave a message here!](https://github.com/Tomodovodoo/ParetoProof/discussions/79)
+ParetoProof is being built as a Lean benchmark and evaluation platform for modern AI systems. The repository is moving from broad scoping into an implementation baseline, so the codebase now reflects the service boundaries and tooling we intend to build against rather than a finished product.
 
-ParetoProof is a public repo for scoping and building a Lean benchmark.
+The MVP stack is now locked around TypeScript. The web application lives in React with Vite, the API is built on Fastify, and database access is handled through Drizzle on top of Neon Postgres. Bun is the workspace and package runner for the monorepo. Cloudflare hosts the public and gated web surfaces, Railway runs the control-plane API, Modal runs workers, and Cloudflare R2 will hold larger artifacts that do not belong in Postgres.
 
-For MORE information, please find the current work [on scoping](https://github.com/Tomodovodoo/ParetoProof/discussions/categories/scope)!
-We really need extra feedback, input, and helpers, and I would immensely appreciate it! So, please leave a comment/star if this project interests you, or if you want to contribute!
+The quickest way to understand the repository is through the documentation index at [docs/README.md](/U:/Personal/ParetoProof/docs/README.md). The current architecture summary is in [docs/architecture.md](/U:/Personal/ParetoProof/docs/architecture.md), the repository layout is described in [docs/repository-layout.md](/U:/Personal/ParetoProof/docs/repository-layout.md), the deployment baseline is described in [docs/deployment-baseline.md](/U:/Personal/ParetoProof/docs/deployment-baseline.md), and the accepted stack decision is recorded in [docs/adrs/0001-mvp-implementation-stack.md](/U:/Personal/ParetoProof/docs/adrs/0001-mvp-implementation-stack.md).
 
-The goal of ParetoProof is to become the best possible evaluation methodology for AI on Lean problems, keep it scalable, consistent, and start from the ground up.
-Additionally, its goal is to make sure that both researchers and strong coders can come together on an open source project to contribute meaningfully!
-There's a wide scope to complete with many challenges, so I hope you (yes, YOU!) are willing to contribute to this scope, either by specific implementations, deployment strategies, backend/frontend stack inputs. The eventual scope really is a complete full stack application, not a simple hobby project.
-
-Please, help contribute to this scope [HERE](https://github.com/Tomodovodoo/ParetoProof/discussions/categories/scope)!
-And, Please help me work through defining issues/tasks from these scopes inside [the scoping project board](https://github.com/users/Tomodovodoo/projects/3)
+If you want to contribute to the still-open product questions, the scoping discussions remain the best entry point: [Scope discussions](https://github.com/Tomodovodoo/ParetoProof/discussions/categories/scope). If you want to follow concrete execution work, use the GitHub projects and issues rather than the older discussion threads.

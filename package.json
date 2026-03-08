@@ -1,0 +1,24 @@
+{
+  "name": "paretoproof",
+  "private": true,
+  "packageManager": "bun@1.3.10",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run build:shared && bun run build:web && bun run build:api && bun run build:worker",
+    "typecheck": "bun run typecheck:shared && bun run typecheck:web && bun run typecheck:api && bun run typecheck:worker",
+    "dev:web": "bun --cwd apps/web dev",
+    "dev:api": "bun --cwd apps/api dev",
+    "dev:worker": "bun --cwd apps/worker dev",
+    "build:web": "bun --cwd apps/web build",
+    "build:api": "bun --cwd apps/api build",
+    "build:worker": "bun --cwd apps/worker build",
+    "build:shared": "bun --cwd packages/shared build",
+    "typecheck:web": "bun --cwd apps/web typecheck",
+    "typecheck:api": "bun --cwd apps/api typecheck",
+    "typecheck:worker": "bun --cwd apps/worker typecheck",
+    "typecheck:shared": "bun --cwd packages/shared typecheck"
+  }
+}
