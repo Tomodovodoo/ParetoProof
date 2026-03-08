@@ -13,6 +13,8 @@
     "dev:api": "bun --cwd apps/api dev",
     "dev:worker": "bun --cwd apps/worker dev",
     "build:web": "bun --cwd apps/web build",
+    "build:web:pages": "bun run build:shared && bun run build:web",
+    "deploy:web:pages": "bun run build:web:pages && bun --cwd apps/web pages:deploy",
     "build:api": "bun --cwd apps/api build",
     "build:worker": "bun --cwd apps/worker build",
     "build:shared": "bun --cwd packages/shared build",
