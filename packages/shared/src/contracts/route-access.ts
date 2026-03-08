@@ -29,7 +29,7 @@ export const appRouteAccessMatrix = [
     summary: "Published benchmark report and aggregate public results."
   },
   {
-    access: "pending_or_approved",
+    access: "portal_authenticated",
     host: "portal.paretoproof.com",
     id: "portal.home",
     path: "/",
@@ -38,7 +38,7 @@ export const appRouteAccessMatrix = [
     summary: "Authenticated portal landing page after Cloudflare Access."
   },
   {
-    access: "pending_or_approved",
+    access: "portal_authenticated",
     host: "portal.paretoproof.com",
     id: "portal.access-request",
     path: "/access-request",
@@ -56,7 +56,7 @@ export const appRouteAccessMatrix = [
     summary: "Pending approval holding page after the user is identified."
   },
   {
-    access: "pending_or_approved",
+    access: "denied_only",
     host: "portal.paretoproof.com",
     id: "portal.denied",
     path: "/denied",

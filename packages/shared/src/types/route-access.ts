@@ -2,8 +2,9 @@ export type AppSurface = "public_site" | "portal";
 
 export type RouteAccessLevel =
   | "public"
-  | "pending_or_approved"
+  | "portal_authenticated"
   | "pending_only"
+  | "denied_only"
   | "approved_helper_or_higher"
   | "approved_collaborator_or_higher"
   | "admin_only";
