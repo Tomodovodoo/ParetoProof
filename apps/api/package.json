@@ -14,6 +14,7 @@
     "@paretoproof/shared": "workspace:*",
     "drizzle-orm": "latest",
     "fastify": "latest",
+    "jose": "^6.2.0",
     "postgres": "latest",
     "zod": "latest"
   },
