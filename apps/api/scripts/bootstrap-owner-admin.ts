@@ -71,8 +71,14 @@ async function readCloudflareAccessUser(ownerEmail: string) {
     );
   }
 
+  const requestUrl = new URL(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/access/users`
+  );
+  requestUrl.searchParams.set("email", ownerEmail);
+  requestUrl.searchParams.set("per_page", "1");
+
   const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${accountId}/access/users`,
+    requestUrl,
     {
       headers: getCloudflareHeaders()
     }
