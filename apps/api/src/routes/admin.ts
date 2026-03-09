@@ -3,7 +3,7 @@ import {
   portalAdminAccessRequestRejectInputSchema,
   type PortalAccessRequestSummary
 } from "@paretoproof/shared";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { accessRequests, auditEvents, roleGrants, users } from "../db/schema.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
@@ -47,7 +47,8 @@ export function registerAdminRoutes(
     async () => {
       const requests = await db.query.accessRequests.findMany({
         limit: 50,
-        orderBy: [desc(accessRequests.createdAt)]
+        orderBy: [asc(accessRequests.createdAt)],
+        where: eq(accessRequests.status, "pending")
       });
 
       return {

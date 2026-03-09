@@ -19,11 +19,7 @@ function readAllowedCorsOrigins() {
     return configuredOrigins.map(normalizeOrigin);
   }
 
-  return [
-    "https://paretoproof.com",
-    "https://auth.paretoproof.com",
-    "https://portal.paretoproof.com"
-  ];
+  return ["https://portal.paretoproof.com"];
 }
 
 function isAllowedLocalOrigin(origin: string) {
