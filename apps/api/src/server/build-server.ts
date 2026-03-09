@@ -13,7 +13,7 @@ export function buildServer() {
   const requireAccess = createAccessGuard(db);
 
   registerHealthRoute(app);
-  registerPortalRoutes(app, requireAccess);
+  registerPortalRoutes(app, db, requireAccess);
   registerAdminRoutes(app, db, requireAccess);
 
   return app;

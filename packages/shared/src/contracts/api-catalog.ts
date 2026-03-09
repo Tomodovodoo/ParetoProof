@@ -26,7 +26,7 @@ export const apiEndpointCatalog = [
     purpose: "Serve the published public report for a benchmark version."
   },
   {
-    access: "pending_or_approved",
+    access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.me.read",
     method: "GET",
@@ -34,7 +34,7 @@ export const apiEndpointCatalog = [
     purpose: "Return the caller's resolved identity, role summary, and approval state."
   },
   {
-    access: "pending_or_approved",
+    access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.access-request.create",
     method: "POST",
@@ -42,7 +42,7 @@ export const apiEndpointCatalog = [
     purpose: "Create or refresh the caller's contributor access request."
   },
   {
-    access: "pending_or_approved",
+    access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.access-request.read",
     method: "GET",

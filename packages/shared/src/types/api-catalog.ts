@@ -2,6 +2,7 @@ export type ApiAudience = "public" | "portal" | "internal";
 
 export type ApiAccessLevel =
   | "anonymous"
+  | "authenticated_access_identity"
   | "pending_or_approved"
   | "approved_helper_or_higher"
   | "approved_collaborator_or_higher"
