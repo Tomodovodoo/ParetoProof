@@ -8,25 +8,29 @@ type PortalProfilePanelProps = {
   email: string | null;
 };
 
-const localProfileStorageKey = "paretoproof.portal.profile.displayName";
-
-function readLocalDisplayName() {
-  return window.localStorage.getItem(localProfileStorageKey);
+function getLocalProfileStorageKey(email: string | null) {
+  return `paretoproof.portal.profile.displayName:${email ?? "anonymous"}`;
 }
 
-function writeLocalDisplayName(displayName: string | null) {
+function readLocalDisplayName(email: string | null) {
+  return window.localStorage.getItem(getLocalProfileStorageKey(email));
+}
+
+function writeLocalDisplayName(email: string | null, displayName: string | null) {
+  const storageKey = getLocalProfileStorageKey(email);
+
   if (!displayName) {
-    window.localStorage.removeItem(localProfileStorageKey);
+    window.localStorage.removeItem(storageKey);
     return;
   }
 
-  window.localStorage.setItem(localProfileStorageKey, displayName);
+  window.localStorage.setItem(storageKey, displayName);
 }
 
 function buildLocalProfile(email: string | null): PortalProfile {
   return {
     createdAt: null,
-    displayName: readLocalDisplayName(),
+    displayName: readLocalDisplayName(email),
     email,
     identities: email
       ? [
@@ -125,7 +129,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       setIsSaving(true);
 
       if (isLocalHostname(window.location.hostname)) {
-        writeLocalDisplayName(parsed.data.displayName);
+        writeLocalDisplayName(email, parsed.data.displayName);
         const nextProfile = buildLocalProfile(email);
         setDisplayNameInput(nextProfile.displayName ?? "");
         setProfile(nextProfile);
