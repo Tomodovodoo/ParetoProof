@@ -112,6 +112,9 @@ export function registerPortalRoutes(
     async (request, reply) => {
       const identity = request.accessIdentity;
       const accessContext = request.accessRbacContext;
+      const pendingUserId =
+        accessContext?.status === "pending" ? accessContext.userId : null;
+      const canUsePendingFallback = accessContext?.status === "pending";
 
       if (!identity) {
         throw new Error("Authenticated Access identity was not attached to the request.");
@@ -128,13 +131,13 @@ export function registerPortalRoutes(
               where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
             })
           : null) ??
-        (accessContext.status === "pending" && accessContext.userId
+        (pendingUserId
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.requestedByUserId, accessContext.userId)
+              where: eq(accessRequests.requestedByUserId, pendingUserId)
             })
           : null) ??
-        (accessContext.status === "pending" && identity.email
+        (canUsePendingFallback && identity.email
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
               where: and(
