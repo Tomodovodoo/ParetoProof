@@ -133,7 +133,7 @@ export function registerPortalRoutes(
   app.get(
     "/portal/profile",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: requireAccess("approved_helper_or_higher")
     },
     async (request) => {
       const identity = request.accessIdentity;
@@ -154,7 +154,7 @@ export function registerPortalRoutes(
   app.patch(
     "/portal/profile",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: requireAccess("approved_helper_or_higher")
     },
     async (request, reply) => {
       const parsedBody = portalProfileUpdateInputSchema.safeParse(request.body ?? {});
