@@ -5,6 +5,7 @@ import {
   getCurrentRelativeUrl,
   isLocalHostname
 } from "../lib/surface";
+import { PortalShell } from "./portal-shell";
 
 type PortalAccessState =
   | { status: "loading" }
@@ -200,18 +201,7 @@ export function PortalBootstrap() {
   }
 
   return (
-    <main className="portal-shell-preview">
-      <section className="portal-preview-card">
-        <p className="eyebrow">Portal</p>
-        <h1>Authentication complete</h1>
-        <p>
-          Signed in{state.email ? ` as ${state.email}` : ""}. The portal shell
-          and role-aware dashboard layout land next, but the host-aware auth
-          entry flow is now active.
-        </p>
-        <p className="role-chip">Roles: {state.roles.join(", ") || "none"}</p>
-      </section>
-    </main>
+    <PortalShell email={state.email} roles={state.roles} />
   );
 }
 
