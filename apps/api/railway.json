@@ -6,8 +6,12 @@
     "watchPatterns": [
       "/apps/api/**",
       "/packages/shared/**",
+      "/bun.lock",
       "/package.json",
       "/apps/api/package.json",
+      "/packages/shared/package.json",
+      "/apps/api/tsconfig.json",
+      "/packages/shared/tsconfig.json",
       "/tsconfig.base.json"
     ]
   },
