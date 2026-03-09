@@ -13,6 +13,7 @@ import {
   userIdentities,
   users
 } from "../db/schema.js";
+import { normalizeOptionalEmail } from "../lib/email.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -47,7 +48,7 @@ function toPortalProfile(options: {
   return {
     createdAt: options.userRow?.createdAt.toISOString() ?? null,
     displayName: options.userRow?.displayName ?? null,
-    email: options.userRow?.email ?? options.fallbackEmail,
+    email: options.userRow?.email ?? normalizeOptionalEmail(options.fallbackEmail),
     identities: [...options.linkedIdentityRows]
       .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
       .map((identityRow) => ({
@@ -111,8 +112,9 @@ export function registerPortalRoutes(
     },
     async (request, reply) => {
       const identity = request.accessIdentity;
+      const accessEmail = normalizeOptionalEmail(identity?.email);
 
-      if (!identity?.email) {
+      if (!accessEmail) {
         reply.code(400).send({
           error: "access_email_required"
         });
@@ -121,7 +123,7 @@ export function registerPortalRoutes(
 
       const latestRequest = await db.query.accessRequests.findFirst({
         orderBy: [desc(accessRequests.createdAt)],
-        where: eq(accessRequests.email, identity.email)
+        where: eq(accessRequests.email, accessEmail)
       });
 
       return {
@@ -144,7 +146,7 @@ export function registerPortalRoutes(
 
       return {
         profile: await loadPortalProfile(db, {
-          fallbackEmail: identity.email,
+          fallbackEmail: normalizeOptionalEmail(identity.email),
           identitySubject: identity.subject
         })
       };
@@ -197,7 +199,7 @@ export function registerPortalRoutes(
 
       return {
         profile: await loadPortalProfile(db, {
-          fallbackEmail: identity.email,
+          fallbackEmail: normalizeOptionalEmail(identity.email),
           identitySubject: identity.subject
         })
       };
@@ -229,7 +231,14 @@ export function registerPortalRoutes(
         return;
       }
 
-      const accessEmail = identity.email;
+      const accessEmail = normalizeOptionalEmail(identity.email);
+
+      if (!accessEmail) {
+        reply.code(400).send({
+          error: "access_email_required"
+        });
+        return;
+      }
 
       let latestRequest;
 

@@ -36,6 +36,13 @@
       "when": 1773036621758,
       "tag": "0004_abstract_norrin_radd",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773039000000,
+      "tag": "0005_premium_cuckoo",
+      "breakpoints": true
     }
   ]
 }

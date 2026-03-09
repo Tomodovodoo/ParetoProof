@@ -8,6 +8,7 @@ import {
   type accessRoleEnum
 } from "../db/schema.js";
 import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
+import { normalizeOptionalEmail } from "../lib/email.js";
 
 type DbClient = ReturnType<typeof createDbClient>;
 type AccessRole = (typeof accessRoleEnum.enumValues)[number];
@@ -61,6 +62,7 @@ export async function resolveAccessRbacContext(
   db: DbClient,
   identity: CloudflareAccessIdentity
 ): Promise<AccessRbacContext> {
+  const normalizedIdentityEmail = normalizeOptionalEmail(identity.email);
   const linkedIdentity = await db.query.userIdentities.findFirst({
     where: eq(userIdentities.providerSubject, identity.subject),
     with: {
@@ -117,7 +119,7 @@ export async function resolveAccessRbacContext(
     };
   }
 
-  if (!identity.email) {
+  if (!normalizedIdentityEmail) {
     return {
       email: null,
       reason: "unknown_identity",
@@ -127,16 +129,16 @@ export async function resolveAccessRbacContext(
   }
 
   const matchingUser = await db.query.users.findFirst({
-    where: eq(users.email, identity.email)
+    where: eq(users.email, normalizedIdentityEmail)
   });
-  const latestRequest = await getLatestAccessRequestByEmail(db, identity.email);
+  const latestRequest = await getLatestAccessRequestByEmail(db, normalizedIdentityEmail);
 
   if (
     latestRequest &&
     (latestRequest.status === "rejected" || latestRequest.status === "withdrawn")
   ) {
     return {
-      email: identity.email,
+      email: normalizedIdentityEmail,
       reason: "rejected_or_withdrawn",
       status: "denied",
       subject: identity.subject
@@ -145,7 +147,7 @@ export async function resolveAccessRbacContext(
 
   if (!latestRequest || latestRequest.status !== "pending") {
     return {
-      email: identity.email,
+      email: normalizedIdentityEmail,
       reason: "access_request_required",
       status: "denied",
       subject: identity.subject
@@ -153,7 +155,7 @@ export async function resolveAccessRbacContext(
   }
 
   return {
-    email: identity.email,
+    email: normalizedIdentityEmail,
     requestId: latestRequest.id,
     status: "pending",
     subject: identity.subject,
