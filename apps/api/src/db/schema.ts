@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   foreignKey,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -27,6 +28,25 @@ export const identityProviderEnum = pgEnum("identity_provider", [
   "cloudflare_one_time_pin",
   "cloudflare_github",
   "cloudflare_google"
+]);
+
+export const auditActorKindEnum = pgEnum("audit_actor_kind", [
+  "portal_user",
+  "internal_service",
+  "system_bootstrap"
+]);
+
+export const auditSubjectKindEnum = pgEnum("audit_subject_kind", [
+  "access_request",
+  "role_grant",
+  "run",
+  "user_identity"
+]);
+
+export const auditSeverityEnum = pgEnum("audit_severity", [
+  "info",
+  "warning",
+  "critical"
 ]);
 
 export const users = pgTable(
@@ -161,11 +181,43 @@ export const sessions = pgTable(
   })
 );
 
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: text("event_id").notNull(),
+    actorKind: auditActorKindEnum("actor_kind").notNull(),
+    subjectKind: auditSubjectKindEnum("subject_kind").notNull(),
+    severity: auditSeverityEnum("severity").notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    targetUserId: uuid("target_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    createdAtIndex: index("audit_events_created_at_idx").on(table.createdAt),
+    eventIdIndex: index("audit_events_event_id_idx").on(table.eventId),
+    targetUserIdIndex: index("audit_events_target_user_id_idx").on(table.targetUserId)
+  })
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   identities: many(userIdentities),
   roleGrants: many(roleGrants),
   accessRequests: many(accessRequests),
-  sessions: many(sessions)
+  sessions: many(sessions),
+  auditEventsAsActor: many(auditEvents, {
+    relationName: "audit_event_actor"
+  }),
+  auditEventsAsTarget: many(auditEvents, {
+    relationName: "audit_event_target"
+  })
 }));
 
 export const userIdentitiesRelations = relations(userIdentities, ({ one, many }) => ({
@@ -210,5 +262,18 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   identity: one(userIdentities, {
     fields: [sessions.identityId],
     references: [userIdentities.id]
+  })
+}));
+
+export const auditEventsRelations = relations(auditEvents, ({ one }) => ({
+  actorUser: one(users, {
+    fields: [auditEvents.actorUserId],
+    references: [users.id],
+    relationName: "audit_event_actor"
+  }),
+  targetUser: one(users, {
+    fields: [auditEvents.targetUserId],
+    references: [users.id],
+    relationName: "audit_event_target"
   })
 }));

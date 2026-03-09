@@ -5,6 +5,19 @@ type CloudflareAccessUser = {
   uid: string;
 };
 
+type BootstrapUserRow = {
+  id: string;
+};
+
+type ExistingIdentityRow = {
+  id: string;
+  user_id: string;
+};
+
+type ExistingGrantRow = {
+  id: string;
+};
+
 function getDatabaseUrl() {
   const connectionString =
     process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -28,7 +41,7 @@ function getOwnerEmail() {
   return email;
 }
 
-function getCloudflareHeaders() {
+function getCloudflareHeaders(): Record<string, string> {
   if (process.env.CLOUDFLARE_API_TOKEN) {
     return {
       Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
@@ -103,11 +116,9 @@ async function main() {
 
   try {
     await sql.begin(async (transaction) => {
-      const [user] = await transaction<
-        Array<{
-          id: string;
-        }>
-      >`
+      const tx = transaction as unknown as typeof sql;
+
+      const [user] = await tx<Array<BootstrapUserRow>>`
         insert into public.users (email)
         values (${ownerEmail})
         on conflict (email)
@@ -120,12 +131,7 @@ async function main() {
       }
 
       // The Access users API returns the stable user uid that the portal JWT subject resolves to for the current IdP.
-      const [existingIdentity] = await transaction<
-        Array<{
-          id: string;
-          user_id: string;
-        }>
-      >`
+      const [existingIdentity] = await tx<Array<ExistingIdentityRow>>`
         select id, user_id
         from public.user_identities
         where provider_subject = ${ownerAccessUser.uid}
@@ -139,7 +145,7 @@ async function main() {
       }
 
       if (!existingIdentity) {
-        await transaction`
+        await tx`
           insert into public.user_identities (
             user_id,
             provider,
@@ -154,7 +160,7 @@ async function main() {
           )
         `;
       } else {
-        await transaction`
+        await tx`
           update public.user_identities
           set provider_email = ${ownerEmail},
               last_seen_at = now()
@@ -162,11 +168,7 @@ async function main() {
         `;
       }
 
-      const [existingAdminGrant] = await transaction<
-        Array<{
-          id: string;
-        }>
-      >`
+      const [existingAdminGrant] = await tx<Array<ExistingGrantRow>>`
         select id
         from public.role_grants
         where user_id = ${user.id}
@@ -176,9 +178,39 @@ async function main() {
       `;
 
       if (!existingAdminGrant) {
-        await transaction`
+        await tx`
           insert into public.role_grants (user_id, role)
           values (${user.id}, ${"admin"})
+        `;
+
+        await tx`
+          update public.sessions
+          set revoked_at = now()
+          where user_id = ${user.id}
+            and revoked_at is null
+        `;
+
+        await tx`
+          insert into public.audit_events (
+            event_id,
+            actor_kind,
+            subject_kind,
+            severity,
+            target_user_id,
+            payload
+          )
+          values (
+            ${"user_identity.bootstrapped_admin"},
+            ${"system_bootstrap"},
+            ${"user_identity"},
+            ${"critical"},
+            ${user.id},
+            ${JSON.stringify({
+              providerSubject: ownerAccessUser.uid,
+              targetEmail: ownerEmail,
+              targetUserId: user.id
+            })}::jsonb
+          )
         `;
       }
     });

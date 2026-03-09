@@ -22,6 +22,13 @@
       "when": 1773025660849,
       "tag": "0002_puzzling_red_ghost",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773027752673,
+      "tag": "0003_lowly_magneto",
+      "breakpoints": true
     }
   ]
 }
