@@ -90,6 +90,7 @@ export function PortalBootstrap() {
 
     return resolvePortalRouteRedirect({
       pathname: window.location.pathname,
+      reason: state.status === "denied" ? state.reason : undefined,
       roles: state.status === "approved" ? state.roles : [],
       status: state.status
     });
@@ -247,7 +248,10 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "denied") {
-    if (window.location.pathname === "/access-request") {
+    if (
+      state.reason === "access_request_required" &&
+      window.location.pathname === "/access-request"
+    ) {
       return (
         <AccessRequestScreen
           email={state.email}

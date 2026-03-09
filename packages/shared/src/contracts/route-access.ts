@@ -38,13 +38,13 @@ export const appRouteAccessMatrix = [
     summary: "Authenticated portal landing page after Cloudflare Access."
   },
   {
-    access: "portal_authenticated",
+    access: "access_request_required_only",
     host: "portal.paretoproof.com",
     id: "portal.access-request",
     path: "/access-request",
-    redirectIfDenied: "public_home",
+    redirectIfDenied: "portal_denied",
     surface: "portal",
-    summary: "Contributor request and approval-state summary."
+    summary: "Contributor request screen for authenticated identities that have never been reviewed."
   },
   {
     access: "approved_helper_or_higher",
