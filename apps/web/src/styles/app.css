@@ -96,6 +96,40 @@ a.button {
   padding: clamp(2rem, 4vw, 3rem);
 }
 
+.auth-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-field {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+
+.auth-field select,
+.auth-field textarea {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(70, 55, 30, 0.15);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #211d16;
+  font: inherit;
+}
+
+.auth-field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.form-error {
+  margin-bottom: 0;
+  color: #8d2412;
+  font-weight: 600;
+}
+
 .eyebrow {
   margin: 0 0 0.75rem;
   font-size: 0.8rem;

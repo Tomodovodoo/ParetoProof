@@ -1,7 +1,10 @@
+import type { PortalAccessRequestInput } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
+import { AccessRequestScreen } from "./access-request-screen";
 import {
+  buildPortalUrl,
   buildAuthUrl,
   getCurrentRelativeUrl,
   isLocalHostname
@@ -13,13 +16,18 @@ type PortalAccessState =
   | { status: "unauthenticated" }
   | { status: "approved"; email: string | null; roles: string[] }
   | { status: "pending"; email: string | null }
-  | { status: "denied"; email: string | null }
+  | {
+      email: string | null;
+      reason: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
+      status: "denied";
+    }
   | { status: "error"; message: string };
 
 type PortalMeResponse = {
   access: {
     email: string | null;
     roles?: string[];
+    reason?: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
     status: "approved" | "pending" | "denied";
   };
 };
@@ -46,6 +54,9 @@ function readLocalAccessOverride(): PortalAccessState | null {
   if (accessState === "denied") {
     return {
       email: params.get("email"),
+      reason:
+        (params.get("reason") as PortalMeResponse["access"]["reason"] | null) ??
+        "access_request_required",
       status: "denied"
     };
   }
@@ -135,6 +146,7 @@ export function PortalBootstrap() {
 
         setState({
           email: payload.access.email,
+          reason: payload.access.reason ?? "unknown_identity",
           status: "denied"
         });
       } catch (error) {
@@ -172,6 +184,37 @@ export function PortalBootstrap() {
     window.location.replace(routeRedirectTarget);
   }, [routeRedirectTarget]);
 
+  async function submitAccessRequest(payload: PortalAccessRequestInput) {
+    if (isLocalHostname(window.location.hostname)) {
+      setState({
+        email: state.status === "denied" || state.status === "pending" ? state.email : null,
+        status: "pending"
+      });
+      window.history.replaceState({}, "", buildPortalUrl("/pending"));
+      return;
+    }
+
+    const response = await fetch(`${apiBaseUrl}/portal/access-requests`, {
+      body: JSON.stringify(payload),
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Access request failed with ${response.status}.`);
+    }
+
+    setState({
+      email: state.status === "denied" || state.status === "pending" ? state.email : null,
+      status: "pending"
+    });
+    window.location.replace(buildPortalUrl("/pending"));
+  }
+
   if (state.status === "loading") {
     return (
       <PortalStatusCard
@@ -204,11 +247,28 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "denied") {
+    if (window.location.pathname === "/access-request") {
+      return (
+        <AccessRequestScreen
+          email={state.email}
+          onSubmit={submitAccessRequest}
+        />
+      );
+    }
+
     return (
       <PortalStatusCard
         eyebrow="Portal"
         title="Access denied"
         body={`Signed in${state.email ? ` as ${state.email}` : ""}, but this account is not allowed to open the portal.`}
+        action={
+          state.reason === "access_request_required"
+            ? {
+                href: buildPortalUrl("/access-request"),
+                label: "Request contributor access"
+              }
+            : undefined
+        }
       />
     );
   }
