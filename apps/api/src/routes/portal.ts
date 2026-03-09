@@ -107,21 +107,28 @@ export function registerPortalRoutes(
   app.get(
     "/portal/access-requests/me",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: requireAccess("pending_or_approved")
     },
     async (request, reply) => {
       const identity = request.accessIdentity;
 
-      if (!identity?.email) {
-        reply.code(400).send({
-          error: "access_email_required"
-        });
-        return;
+      if (!identity) {
+        throw new Error("Authenticated Access identity was not attached to the request.");
+      }
+
+      const linkedIdentity = await db.query.userIdentities.findFirst({
+        where: eq(userIdentities.providerSubject, identity.subject)
+      });
+
+      if (!linkedIdentity) {
+        return {
+          item: null
+        };
       }
 
       const latestRequest = await db.query.accessRequests.findFirst({
         orderBy: [desc(accessRequests.createdAt)],
-        where: eq(accessRequests.email, identity.email)
+        where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
       });
 
       return {
