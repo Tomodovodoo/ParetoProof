@@ -1,5 +1,7 @@
 import {
   portalAccessRequestInputSchema,
+  portalProfileUpdateInputSchema,
+  type PortalProfile,
   type PortalAccessRequestSummary
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -28,6 +30,54 @@ function toAccessRequestSummary(
     reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
     status: requestRow.status
   };
+}
+
+function toPortalProfile(options: {
+  currentSubject: string;
+  fallbackEmail: string | null;
+  linkedIdentityRows: (typeof userIdentities.$inferSelect)[];
+  userRow: typeof users.$inferSelect | null;
+}): PortalProfile {
+  return {
+    createdAt: options.userRow?.createdAt.toISOString() ?? null,
+    displayName: options.userRow?.displayName ?? null,
+    email: options.userRow?.email ?? options.fallbackEmail,
+    identities: [...options.linkedIdentityRows]
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .map((identityRow) => ({
+        createdAt: identityRow.createdAt.toISOString(),
+        current: identityRow.providerSubject === options.currentSubject,
+        id: identityRow.id,
+        lastSeenAt: identityRow.lastSeenAt.toISOString(),
+        provider: identityRow.provider,
+        providerEmail: identityRow.providerEmail
+      })),
+    linkedUserId: options.userRow?.id ?? null,
+    updatedAt: options.userRow?.updatedAt.toISOString() ?? null
+  };
+}
+
+async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
+  fallbackEmail: string | null;
+  identitySubject: string;
+}) {
+  const linkedIdentity = await db.query.userIdentities.findFirst({
+    where: eq(userIdentities.providerSubject, options.identitySubject),
+    with: {
+      user: {
+        with: {
+          identities: true
+        }
+      }
+    }
+  });
+
+  return toPortalProfile({
+    currentSubject: options.identitySubject,
+    fallbackEmail: options.fallbackEmail,
+    linkedIdentityRows: linkedIdentity?.user.identities ?? [],
+    userRow: linkedIdentity?.user ?? null
+  });
 }
 
 export function registerPortalRoutes(
@@ -70,6 +120,80 @@ export function registerPortalRoutes(
 
       return {
         item: latestRequest ? toAccessRequestSummary(latestRequest) : null
+      };
+    }
+  );
+
+  app.get(
+    "/portal/profile",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    async (request) => {
+      const identity = request.accessIdentity;
+
+      if (!identity) {
+        throw new Error("Authenticated Access identity was not attached to the request.");
+      }
+
+      return {
+        profile: await loadPortalProfile(db, {
+          fallbackEmail: identity.email,
+          identitySubject: identity.subject
+        })
+      };
+    }
+  );
+
+  app.patch(
+    "/portal/profile",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    async (request, reply) => {
+      const parsedBody = portalProfileUpdateInputSchema.safeParse(request.body ?? {});
+
+      if (!parsedBody.success) {
+        reply.code(400).send({
+          error: "invalid_profile_payload",
+          issues: parsedBody.error.issues
+        });
+        return;
+      }
+
+      const identity = request.accessIdentity;
+
+      if (!identity) {
+        throw new Error("Authenticated Access identity was not attached to the request.");
+      }
+
+      const linkedIdentity = await db.query.userIdentities.findFirst({
+        where: eq(userIdentities.providerSubject, identity.subject),
+        with: {
+          user: true
+        }
+      });
+
+      if (!linkedIdentity) {
+        reply.code(409).send({
+          error: "profile_not_initialized"
+        });
+        return;
+      }
+
+      await db
+        .update(users)
+        .set({
+          displayName: parsedBody.data.displayName,
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, linkedIdentity.user.id));
+
+      return {
+        profile: await loadPortalProfile(db, {
+          fallbackEmail: identity.email,
+          identitySubject: identity.subject
+        })
       };
     }
   );
