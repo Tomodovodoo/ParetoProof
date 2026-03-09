@@ -2,6 +2,7 @@ export type PortalRole = "admin" | "collaborator" | "helper";
 
 export type PortalSectionId =
   | "overview"
+  | "profile"
   | "runs"
   | "launch"
   | "workers"

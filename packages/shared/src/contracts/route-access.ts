@@ -47,6 +47,15 @@ export const appRouteAccessMatrix = [
     summary: "Contributor request and approval-state summary."
   },
   {
+    access: "approved_helper_or_higher",
+    host: "portal.paretoproof.com",
+    id: "portal.profile",
+    path: "/profile",
+    redirectIfDenied: "portal_pending",
+    surface: "portal",
+    summary: "Editable contributor profile details and linked Access identities."
+  },
+  {
     access: "pending_only",
     host: "portal.paretoproof.com",
     id: "portal.pending",

@@ -8,6 +8,7 @@ import {
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
+import { PortalProfilePanel } from "./portal-profile-panel";
 
 type PortalShellProps = {
   email: string | null;
@@ -27,6 +28,8 @@ const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
     "This launch view will become the benchmark entrypoint for collaborators and admins once the backend run flow is wired through.",
   overview:
     "This overview will surface benchmark health, recent activity, and the most important contributor actions first.",
+  profile:
+    "This profile view holds the signed-in contributor details the MVP already supports and the currently linked Access identities.",
   runs:
     "This section will list benchmark runs, queue status, and the route into deeper run detail pages.",
   users:
@@ -159,20 +162,26 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         </section>
 
         <section className="portal-grid">
-          <article className="portal-panel">
-            <p className="eyebrow">Current section</p>
-            <h2>{activeSection?.navLabel ?? "Portal section"}</h2>
-            <p>{activeSection?.summary}</p>
-          </article>
-          <article className="portal-panel">
-            <p className="eyebrow">Action gating</p>
-            <h2>Role-aware controls</h2>
-            <div className="portal-action-list">
-              {overviewActions.map((action) => (
-                <PortalActionCard action={action} key={action.id} />
-              ))}
-            </div>
-          </article>
+          {activeSection?.id === "profile" ? (
+            <PortalProfilePanel email={email} />
+          ) : (
+            <>
+              <article className="portal-panel">
+                <p className="eyebrow">Current section</p>
+                <h2>{activeSection?.navLabel ?? "Portal section"}</h2>
+                <p>{activeSection?.summary}</p>
+              </article>
+              <article className="portal-panel">
+                <p className="eyebrow">Action gating</p>
+                <h2>Role-aware controls</h2>
+                <div className="portal-action-list">
+                  {overviewActions.map((action) => (
+                    <PortalActionCard action={action} key={action.id} />
+                  ))}
+                </div>
+              </article>
+            </>
+          )}
         </section>
       </section>
     </main>
