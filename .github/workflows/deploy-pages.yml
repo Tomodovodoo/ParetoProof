@@ -42,8 +42,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
           command: >-
-            --cwd=apps/web
             pages deploy dist
             --project-name=paretoproof-web
             --branch=main
