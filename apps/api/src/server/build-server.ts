@@ -30,6 +30,13 @@ function isAllowedLocalOrigin(origin: string) {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/u.test(origin);
 }
 
+function shouldAllowLocalhostCors() {
+  return (
+    process.env.NODE_ENV !== "production" ||
+    process.env.CORS_ALLOW_LOCALHOST === "true"
+  );
+}
+
 export async function buildServer() {
   const app = Fastify({
     logger: true
@@ -47,10 +54,11 @@ export async function buildServer() {
       }
 
       const normalizedOrigin = normalizeOrigin(origin);
+      const allowLocalhostCors = shouldAllowLocalhostCors();
 
       if (
         allowedOrigins.includes(normalizedOrigin) ||
-        isAllowedLocalOrigin(normalizedOrigin)
+        (allowLocalhostCors && isAllowedLocalOrigin(normalizedOrigin))
       ) {
         callback(null, true);
         return;
