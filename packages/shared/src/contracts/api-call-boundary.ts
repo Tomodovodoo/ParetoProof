@@ -36,6 +36,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.access-recovery.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Identity recovery starts from the denied portal surface, so the authenticated browser must be able to open a manual recovery request without a second backend proxy."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.profile.read",
     mode: "browser_direct",
     origin: "portal_browser",

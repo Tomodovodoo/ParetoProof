@@ -1,9 +1,14 @@
 export type PortalAccessRequestRole = "admin" | "collaborator" | "helper";
 export type PortalSelfServiceAccessRequestRole = "collaborator" | "helper";
+export type PortalAccessRequestKind = "access_request" | "identity_recovery";
 
 export type PortalAccessRequestInput = {
   rationale: string | null;
   requestedRole: PortalSelfServiceAccessRequestRole;
+};
+
+export type PortalAccessRecoveryInput = {
+  rationale: string | null;
 };
 
 export type PortalAdminApprovedRole = "collaborator" | "helper";
@@ -28,6 +33,7 @@ export type PortalAccessRequestSummary = {
   decisionNote: string | null;
   email: string;
   id: string;
+  requestKind: PortalAccessRequestKind;
   rationale: string | null;
   requestedRole: PortalAccessRequestRole;
   reviewedAt: string | null;

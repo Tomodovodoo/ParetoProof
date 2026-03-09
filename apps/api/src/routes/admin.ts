@@ -5,7 +5,13 @@ import {
 } from "@paretoproof/shared";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { accessRequests, auditEvents, roleGrants, users } from "../db/schema.js";
+import {
+  accessRequests,
+  auditEvents,
+  roleGrants,
+  userIdentities,
+  users
+} from "../db/schema.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -17,6 +23,7 @@ function toAccessRequestSummary(
     decisionNote: requestRow.decisionNote,
     email: requestRow.email,
     id: requestRow.id,
+    requestKind: requestRow.requestKind,
     rationale: requestRow.rationale,
     requestedRole: requestRow.requestedRole,
     reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
@@ -145,38 +152,75 @@ export function registerAdminRoutes(
           .from(roleGrants)
           .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
 
-        if (activeRoleRows.length > 0) {
-          await tx
-            .update(roleGrants)
-            .set({
-              revokedAt: now,
-              revokedByUserId: actorUserId
-            })
-            .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
+        if (requestRow.requestKind === "identity_recovery") {
+          if (!requestRow.requestedIdentitySubject || !requestRow.requestedIdentityProvider) {
+            return {
+              kind: "conflict" as const,
+              requestRow
+            };
+          }
 
-          await tx.insert(auditEvents).values(
-            activeRoleRows.map((roleRow) => ({
-              actorKind: "portal_user" as const,
-              actorUserId,
-              eventId: "role_grant.revoked",
-              payload: {
+          const existingSubjectOwner = await tx.query.userIdentities.findFirst({
+            where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject)
+          });
+
+          if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
+            return {
+              kind: "conflict" as const,
+              requestRow
+            };
+          }
+
+          if (!existingSubjectOwner) {
+            await tx.insert(userIdentities).values({
+              provider: requestRow.requestedIdentityProvider,
+              providerEmail: requestRow.email,
+              providerSubject: requestRow.requestedIdentitySubject,
+              userId: targetUser.id
+            });
+          } else {
+            await tx
+              .update(userIdentities)
+              .set({
+                lastSeenAt: now,
+                providerEmail: requestRow.email
+              })
+              .where(eq(userIdentities.id, existingSubjectOwner.id));
+          }
+        } else {
+          if (activeRoleRows.length > 0) {
+            await tx
+              .update(roleGrants)
+              .set({
+                revokedAt: now,
+                revokedByUserId: actorUserId
+              })
+              .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
+
+            await tx.insert(auditEvents).values(
+              activeRoleRows.map((roleRow) => ({
+                actorKind: "portal_user" as const,
                 actorUserId,
-                revokedRole: roleRow.role,
-                roleGrantId: roleRow.id,
+                eventId: "role_grant.revoked",
+                payload: {
+                  actorUserId,
+                  revokedRole: roleRow.role,
+                  roleGrantId: roleRow.id,
+                  targetUserId: targetUser.id
+                },
+                severity: "critical" as const,
+                subjectKind: "role_grant" as const,
                 targetUserId: targetUser.id
-              },
-              severity: "critical" as const,
-              subjectKind: "role_grant" as const,
-              targetUserId: targetUser.id
-            }))
-          );
-        }
+              }))
+            );
+          }
 
-        await tx.insert(roleGrants).values({
-          grantedByUserId: actorUserId,
-          role: parsedBody.data.approvedRole,
-          userId: targetUser.id
-        });
+          await tx.insert(roleGrants).values({
+            grantedByUserId: actorUserId,
+            role: parsedBody.data.approvedRole,
+            userId: targetUser.id
+          });
+        }
 
         await tx.insert(auditEvents).values([
           {
@@ -186,26 +230,34 @@ export function registerAdminRoutes(
             payload: {
               accessRequestId: reviewedRequest.id,
               actorUserId,
-              approvedRole: parsedBody.data.approvedRole,
+              approvedRole:
+                requestRow.requestKind === "identity_recovery"
+                  ? requestRow.requestedRole
+                  : parsedBody.data.approvedRole,
+              requestKind: requestRow.requestKind,
               targetUserId: targetUser.id
             },
             severity: "critical" as const,
             subjectKind: "access_request" as const,
             targetUserId: targetUser.id
           },
-          {
-            actorKind: "portal_user" as const,
-            actorUserId,
-            eventId: "role_grant.granted",
-            payload: {
-              actorUserId,
-              grantedRole: parsedBody.data.approvedRole,
-              targetUserId: targetUser.id
-            },
-            severity: "critical" as const,
-            subjectKind: "role_grant" as const,
-            targetUserId: targetUser.id
-          }
+          ...(requestRow.requestKind === "identity_recovery"
+            ? []
+            : [
+                {
+                  actorKind: "portal_user" as const,
+                  actorUserId,
+                  eventId: "role_grant.granted",
+                  payload: {
+                    actorUserId,
+                    grantedRole: parsedBody.data.approvedRole,
+                    targetUserId: targetUser.id
+                  },
+                  severity: "critical" as const,
+                  subjectKind: "role_grant" as const,
+                  targetUserId: targetUser.id
+                }
+              ])
         ]);
 
         return {
@@ -308,6 +360,7 @@ export function registerAdminRoutes(
             accessRequestId: reviewedRequest.id,
             actorUserId,
             decisionNote: parsedBody.data.decisionNote,
+            requestKind: reviewedRequest.requestKind,
             targetEmail: reviewedRequest.email
           },
           severity: "warning" as const,

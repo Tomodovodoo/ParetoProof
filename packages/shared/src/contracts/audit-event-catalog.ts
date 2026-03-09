@@ -7,7 +7,7 @@ export const auditEventCatalog = [
     id: "access_request.submitted",
     rationale:
       "Contributor onboarding starts with a user action, so the system needs a durable record of who requested which role.",
-    requiredFields: ["actorUserId", "requestedRole", "targetEmail"],
+    requiredFields: ["accessRequestId", "actorUserId", "requestKind", "targetEmail"],
     severity: "info",
     subject: "access_request"
   },

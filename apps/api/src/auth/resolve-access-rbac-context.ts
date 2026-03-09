@@ -18,6 +18,7 @@ export type AccessRbacContext =
       email: string | null;
       reason:
         | "access_request_required"
+        | "identity_recovery_required"
         | "rejected_or_withdrawn"
         | "unknown_identity";
       status: "denied";
@@ -50,11 +51,26 @@ async function getActiveRoles(db: DbClient, userId: string) {
   return grants.map(({ role }) => role);
 }
 
-// Email fallback only identifies pending users; it never grants access on its own.
 async function getLatestAccessRequestByEmail(db: DbClient, email: string) {
   return db.query.accessRequests.findFirst({
     orderBy: [desc(accessRequests.createdAt)],
     where: eq(accessRequests.email, email)
+  });
+}
+
+async function getPendingRecoveryRequestForSubject(
+  db: DbClient,
+  email: string,
+  subject: string
+) {
+  return db.query.accessRequests.findFirst({
+    orderBy: [desc(accessRequests.createdAt)],
+    where: and(
+      eq(accessRequests.email, email),
+      eq(accessRequests.requestKind, "identity_recovery"),
+      eq(accessRequests.requestedIdentitySubject, subject),
+      eq(accessRequests.status, "pending")
+    )
   });
 }
 
@@ -131,7 +147,35 @@ export async function resolveAccessRbacContext(
   const matchingUser = await db.query.users.findFirst({
     where: eq(users.email, normalizedIdentityEmail)
   });
+  const activeMatchingUserRoles = matchingUser
+    ? await getActiveRoles(db, matchingUser.id)
+    : [];
   const latestRequest = await getLatestAccessRequestByEmail(db, normalizedIdentityEmail);
+
+  if (matchingUser && activeMatchingUserRoles.length > 0) {
+    const pendingRecoveryRequest = await getPendingRecoveryRequestForSubject(
+      db,
+      normalizedIdentityEmail,
+      identity.subject
+    );
+
+    if (pendingRecoveryRequest) {
+      return {
+        email: normalizedIdentityEmail,
+        requestId: pendingRecoveryRequest.id,
+        status: "pending",
+        subject: identity.subject,
+        userId: matchingUser.id
+      };
+    }
+
+    return {
+      email: normalizedIdentityEmail,
+      reason: "identity_recovery_required",
+      status: "denied",
+      subject: identity.subject
+    };
+  }
 
   if (
     latestRequest &&

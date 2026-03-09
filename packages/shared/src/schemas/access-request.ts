@@ -5,6 +5,10 @@ export const portalSelfServiceAccessRequestRoleSchema = z.enum([
   "helper",
   "collaborator"
 ]);
+export const portalAccessRequestKindSchema = z.enum([
+  "access_request",
+  "identity_recovery"
+]);
 
 export const portalAccessRequestInputSchema = z.object({
   rationale: z.string().trim().max(500).nullish().transform((value) => {
@@ -15,6 +19,16 @@ export const portalAccessRequestInputSchema = z.object({
     return value;
   }),
   requestedRole: portalSelfServiceAccessRequestRoleSchema
+});
+
+export const portalAccessRecoveryInputSchema = z.object({
+  rationale: z.string().trim().max(500).nullish().transform((value) => {
+    if (!value) {
+      return null;
+    }
+
+    return value;
+  })
 });
 
 const portalAccessDecisionNoteSchema = z.string().trim().max(500).nullish().transform((value) => {
@@ -37,6 +51,7 @@ export const portalAccessRequestSummarySchema = z.object({
   decisionNote: z.string().nullable(),
   email: z.string().email(),
   id: z.string().uuid(),
+  requestKind: portalAccessRequestKindSchema,
   rationale: z.string().nullable(),
   requestedRole: portalAccessRequestRoleSchema,
   reviewedAt: z.string().nullable(),
