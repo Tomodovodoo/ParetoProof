@@ -1,5 +1,7 @@
 # ParetoProof
 
+WIP! Currently, working on platform authentication and API handking!
+
 ParetoProof is an end-to-end framework for evaluating models and harnesses in a structural, highly reproducible manner. The goal of this project is to show what the pareto-frontier REALLY is, not simply one-off-benchmarks, or running single passes through models.
 
 This project aims to guide researchers and mathematicians into figuring out how good AI is at the moment, AND how it can help them. By building full open-source harnesses, infrastructure, and methodology we aim to fully work through how you can solve math problems.
