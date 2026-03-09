@@ -99,6 +99,16 @@ export async function resolveAccessRbacContext(
       };
     }
 
+    if (latestRequest?.status === "pending") {
+      return {
+        email: linkedIdentity.user.email,
+        requestId: latestRequest.id,
+        status: "pending",
+        subject: identity.subject,
+        userId: linkedIdentity.user.id
+      };
+    }
+
     return {
       email: linkedIdentity.user.email,
       reason: "access_request_required",
