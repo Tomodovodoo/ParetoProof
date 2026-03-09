@@ -229,31 +229,48 @@ export function registerPortalRoutes(
 
       try {
         latestRequest = await db.transaction(async (tx) => {
-          const [user] = await tx
-            .insert(users)
-            .values({
-              email: accessEmail
-            })
-            .onConflictDoUpdate({
-              set: {
-                updatedAt: new Date()
-              },
-              target: users.email
-            })
-            .returning({
-              id: users.id
-            });
-
-          if (!user) {
-            throw new Error("Failed to persist the access-request user record.");
-          }
-
           const existingIdentity = await tx.query.userIdentities.findFirst({
             where: eq(userIdentities.providerSubject, identity.subject)
           });
 
-          if (existingIdentity && existingIdentity.userId !== user.id) {
+          const matchingUser = await tx.query.users.findFirst({
+            where: eq(users.email, accessEmail),
+            with: {
+              identities: true
+            }
+          });
+
+          if (
+            existingIdentity &&
+            matchingUser &&
+            existingIdentity.userId !== matchingUser.id
+          ) {
             throw new PortalAccessRequestConflictError("access_identity_already_linked");
+          }
+
+          if (
+            !existingIdentity &&
+            matchingUser &&
+            matchingUser.identities.length > 0
+          ) {
+            throw new PortalAccessRequestConflictError("identity_link_required");
+          }
+
+          const user =
+            matchingUser ??
+            (
+              await tx
+                .insert(users)
+                .values({
+                  email: accessEmail
+                })
+                .returning({
+                  id: users.id
+                })
+            )[0];
+
+          if (!user) {
+            throw new Error("Failed to persist the access-request user record.");
           }
 
           if (existingIdentity) {
@@ -265,6 +282,8 @@ export function registerPortalRoutes(
               })
               .where(eq(userIdentities.id, existingIdentity.id));
           } else {
+            // A new Access subject may only link itself to a user record that has never
+            // been linked before. Multi-provider recovery and explicit linking live elsewhere.
             await tx.insert(userIdentities).values({
               provider: "cloudflare_one_time_pin",
               providerEmail: accessEmail,
