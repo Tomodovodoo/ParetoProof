@@ -54,7 +54,13 @@ function buildLocalSurfaceUrl(
   const surfaceUrl = new URL(origin);
   const normalizedTargetPath = normalizeTargetPath(targetPath);
 
-  surfaceUrl.searchParams.set("surface", surface);
+  if (surface === "portal") {
+    const portalUrl = new URL(normalizedTargetPath, origin);
+    portalUrl.searchParams.set("surface", surface);
+    return portalUrl.toString();
+  }
+
+  surfaceUrl.searchParams.set("surface", "auth");
 
   if (normalizedTargetPath !== "/") {
     surfaceUrl.searchParams.set("redirect", normalizedTargetPath);
@@ -87,7 +93,15 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
 }
 
 export function getCurrentRelativeUrl(location = window.location) {
-  const relativeUrl = `${location.pathname}${location.search}${location.hash}`;
+  const params = new URLSearchParams(location.search);
+
+  params.delete("surface");
+  params.delete("access");
+  params.delete("email");
+  params.delete("roles");
+
+  const search = params.toString();
+  const relativeUrl = `${location.pathname}${search ? `?${search}` : ""}${location.hash}`;
 
   return relativeUrl || "/";
 }
