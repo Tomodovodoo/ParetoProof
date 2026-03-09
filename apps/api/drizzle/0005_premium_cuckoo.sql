@@ -1,3 +1,19 @@
+do $$
+begin
+  if exists (
+    select 1
+    from (
+      select lower(btrim("email")) as "normalized_email"
+      from "users"
+      group by 1
+      having count(*) > 1
+    ) as "duplicate_users"
+  ) then
+    raise exception 'Cannot normalize users.email while case-colliding duplicates still exist.';
+  end if;
+end
+$$;
+
 update "users"
 set "email" = lower(btrim("email"))
 where "email" <> lower(btrim("email"));
