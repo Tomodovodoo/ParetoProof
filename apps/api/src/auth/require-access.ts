@@ -16,6 +16,15 @@ type RouteAccessRequirement =
   | "approved_collaborator_or_higher"
   | "admin_only";
 
+class AccessAssertionVerificationError extends Error {
+  constructor(cause: unknown) {
+    super("invalid_access_assertion", {
+      cause
+    });
+    this.name = "AccessAssertionVerificationError";
+  }
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     accessIdentity: CloudflareAccessIdentity | null;
@@ -62,7 +71,14 @@ async function resolveRequestAccess(
     return null;
   }
 
-  const identity = await verifier.verifyAssertion(assertion);
+  let identity: CloudflareAccessIdentity;
+
+  try {
+    identity = await verifier.verifyAssertion(assertion);
+  } catch (error) {
+    throw new AccessAssertionVerificationError(error);
+  }
+
   const context = await resolveAccessRbacContext(db, identity);
 
   request.accessIdentity = identity;
@@ -102,7 +118,17 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
 
           done();
         })
-        .catch(done);
+        .catch((error) => {
+          if (error instanceof AccessAssertionVerificationError) {
+            reply.code(401).send({
+              error: "invalid_access_assertion"
+            });
+
+            return;
+          }
+
+          done(error);
+        });
     };
   };
 }
