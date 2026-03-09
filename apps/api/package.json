@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/cors": "^11.1.0",
     "@paretoproof/shared": "workspace:*",
     "drizzle-orm": "latest",
     "fastify": "latest",
