@@ -147,7 +147,10 @@ export const accessRequests = pgTable(
   },
   (table) => ({
     emailIndex: index("access_requests_email_idx").on(table.email),
-    statusIndex: index("access_requests_status_idx").on(table.status)
+    statusIndex: index("access_requests_status_idx").on(table.status),
+    activePendingEmailUnique: uniqueIndex("access_requests_active_pending_email_unique")
+      .on(table.email)
+      .where(sql`${table.status} = 'pending'`)
   })
 );
 

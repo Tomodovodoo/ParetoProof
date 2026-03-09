@@ -24,6 +24,25 @@ class PortalAccessRequestConflictError extends Error {
   }
 }
 
+function isPendingAccessRequestConflict(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const databaseCode = "code" in error ? String(error.code) : null;
+  const constraintName =
+    "constraint_name" in error
+      ? String(error.constraint_name)
+      : "constraint" in error
+        ? String(error.constraint)
+        : null;
+
+  return (
+    databaseCode === "23505" &&
+    constraintName === "access_requests_active_pending_email_unique"
+  );
+}
+
 function toAccessRequestSummary(
   requestRow: typeof accessRequests.$inferSelect
 ): PortalAccessRequestSummary {
@@ -108,9 +127,9 @@ export function registerPortalRoutes(
   app.get(
     "/portal/access-requests/me",
     {
-      preHandler: requireAccess("pending_or_approved")
+      preHandler: requireAccess("authenticated_access_identity")
     },
-    async (request, reply) => {
+    async (request) => {
       const identity = request.accessIdentity;
       const accessContext = request.accessRbacContext;
       const pendingUserId =
@@ -355,6 +374,14 @@ export function registerPortalRoutes(
           }
 
           if (existingRequest?.status === "pending") {
+            const payloadChanged =
+              existingRequest.rationale !== parsedBody.data.rationale ||
+              existingRequest.requestedRole !== parsedBody.data.requestedRole;
+
+            if (!payloadChanged) {
+              return existingRequest;
+            }
+
             const [updatedRequest] = await tx
               .update(accessRequests)
               .set({
@@ -414,7 +441,19 @@ export function registerPortalRoutes(
           return createdRequest;
         });
       } catch (error) {
-        if (error instanceof PortalAccessRequestConflictError) {
+        if (isPendingAccessRequestConflict(error)) {
+          latestRequest = await db.query.accessRequests.findFirst({
+            orderBy: [desc(accessRequests.createdAt)],
+            where: and(
+              eq(accessRequests.email, accessEmail),
+              eq(accessRequests.status, "pending")
+            )
+          });
+
+          if (!latestRequest) {
+            throw error;
+          }
+        } else if (error instanceof PortalAccessRequestConflictError) {
           reply.code(409).send({
             error: error.message
           });
@@ -425,7 +464,7 @@ export function registerPortalRoutes(
       }
 
       if (!latestRequest) {
-        return;
+        throw new Error("The access-request flow completed without returning a request.");
       }
 
       return {
