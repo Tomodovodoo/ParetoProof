@@ -83,6 +83,14 @@ export const apiEndpointCatalog = [
   },
   {
     access: "admin_only",
+    audience: "portal",
+    id: "admin.access-request.list",
+    method: "GET",
+    path: "/portal/admin/access-requests",
+    purpose: "List recent contributor access requests for manual admin review."
+  },
+  {
+    access: "admin_only",
     audience: "internal",
     id: "admin.access-request.approve",
     method: "POST",
