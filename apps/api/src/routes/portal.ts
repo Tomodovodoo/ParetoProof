@@ -108,23 +108,46 @@ export function registerPortalRoutes(
   app.get(
     "/portal/access-requests/me",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: requireAccess("pending_or_approved")
     },
     async (request, reply) => {
       const identity = request.accessIdentity;
+      const accessContext = request.accessRbacContext;
+      const pendingUserId =
+        accessContext?.status === "pending" ? accessContext.userId : null;
+      const canUsePendingFallback = accessContext?.status === "pending";
       const accessEmail = normalizeOptionalEmail(identity?.email);
 
-      if (!accessEmail) {
-        reply.code(400).send({
-          error: "access_email_required"
-        });
-        return;
+      if (!identity) {
+        throw new Error("Authenticated Access identity was not attached to the request.");
       }
 
-      const latestRequest = await db.query.accessRequests.findFirst({
-        orderBy: [desc(accessRequests.createdAt)],
-        where: eq(accessRequests.email, accessEmail)
+      const linkedIdentity = await db.query.userIdentities.findFirst({
+        where: eq(userIdentities.providerSubject, identity.subject)
       });
+
+      const latestRequest =
+        (linkedIdentity
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
+            })
+          : null) ??
+        (pendingUserId
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: eq(accessRequests.requestedByUserId, pendingUserId)
+            })
+          : null) ??
+        (canUsePendingFallback && accessEmail
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: and(
+                eq(accessRequests.email, accessEmail),
+                eq(accessRequests.status, "pending")
+              )
+            })
+          : null);
 
       return {
         item: latestRequest ? toAccessRequestSummary(latestRequest) : null
