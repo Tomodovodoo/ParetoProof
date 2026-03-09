@@ -109,6 +109,7 @@ a.button {
 }
 
 .auth-field select,
+.auth-field input,
 .auth-field textarea {
   width: 100%;
   padding: 0.85rem 1rem;
@@ -122,6 +123,11 @@ a.button {
 .auth-field textarea {
   min-height: 7rem;
   resize: vertical;
+}
+
+.auth-input:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .form-error {
@@ -328,6 +334,25 @@ p {
   gap: 0.9rem;
 }
 
+.portal-grid-profile {
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
+}
+
+.portal-identity-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.portal-identity-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.03);
+}
+
 .portal-action-card {
   display: flex;
   align-items: center;
@@ -393,6 +418,10 @@ p {
   }
 
   .portal-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-grid-profile {
     grid-template-columns: minmax(0, 1fr);
   }
 }
