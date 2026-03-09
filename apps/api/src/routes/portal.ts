@@ -6,7 +6,13 @@ import {
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { accessRequests, roleGrants, userIdentities, users } from "../db/schema.js";
+import {
+  accessRequests,
+  auditEvents,
+  roleGrants,
+  userIdentities,
+  users
+} from "../db/schema.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -326,6 +332,21 @@ export function registerPortalRoutes(
               .where(eq(accessRequests.id, existingRequest.id))
               .returning();
 
+            await tx.insert(auditEvents).values({
+              actorKind: "portal_user",
+              actorUserId: user.id,
+              eventId: "access_request.submitted",
+              payload: {
+                accessRequestId: (updatedRequest ?? existingRequest).id,
+                actorUserId: user.id,
+                requestedRole: parsedBody.data.requestedRole,
+                targetEmail: accessEmail
+              },
+              severity: "info",
+              subjectKind: "access_request",
+              targetUserId: user.id
+            });
+
             return updatedRequest ?? existingRequest;
           }
 
@@ -342,6 +363,21 @@ export function registerPortalRoutes(
           if (!createdRequest) {
             throw new Error("Failed to create the contributor access request.");
           }
+
+          await tx.insert(auditEvents).values({
+            actorKind: "portal_user",
+            actorUserId: user.id,
+            eventId: "access_request.submitted",
+            payload: {
+              accessRequestId: createdRequest.id,
+              actorUserId: user.id,
+              requestedRole: parsedBody.data.requestedRole,
+              targetEmail: accessEmail
+            },
+            severity: "info",
+            subjectKind: "access_request",
+            targetUserId: user.id
+          });
 
           return createdRequest;
         });
