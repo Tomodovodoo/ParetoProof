@@ -9,6 +9,7 @@ type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
 
 type PortalRouteAccessContext = {
   pathname: string;
+  reason?: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
   roles: string[];
   status: PortalAccessStatus;
 };
@@ -50,6 +51,12 @@ function canAccessRoute(
 ) {
   if (route.access === "portal_authenticated") {
     return context.status !== "unauthenticated";
+  }
+
+  if (route.access === "access_request_required_only") {
+    return (
+      context.status === "denied" && context.reason === "access_request_required"
+    );
   }
 
   if (route.access === "pending_only") {

@@ -308,6 +308,14 @@ export function registerPortalRoutes(
             where: eq(accessRequests.email, accessEmail)
           });
 
+          if (
+            existingRequest &&
+            (existingRequest.status === "rejected" ||
+              existingRequest.status === "withdrawn")
+          ) {
+            throw new PortalAccessRequestConflictError("access_request_reentry_not_allowed");
+          }
+
           if (existingRequest?.status === "pending") {
             const [updatedRequest] = await tx
               .update(accessRequests)
