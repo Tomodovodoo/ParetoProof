@@ -111,6 +111,7 @@ export function registerPortalRoutes(
     },
     async (request, reply) => {
       const identity = request.accessIdentity;
+      const accessContext = request.accessRbacContext;
 
       if (!identity) {
         throw new Error("Authenticated Access identity was not attached to the request.");
@@ -120,16 +121,28 @@ export function registerPortalRoutes(
         where: eq(userIdentities.providerSubject, identity.subject)
       });
 
-      if (!linkedIdentity) {
-        return {
-          item: null
-        };
-      }
-
-      const latestRequest = await db.query.accessRequests.findFirst({
-        orderBy: [desc(accessRequests.createdAt)],
-        where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
-      });
+      const latestRequest =
+        (linkedIdentity
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
+            })
+          : null) ??
+        (accessContext.status === "pending" && accessContext.userId
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: eq(accessRequests.requestedByUserId, accessContext.userId)
+            })
+          : null) ??
+        (accessContext.status === "pending" && identity.email
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: and(
+                eq(accessRequests.email, identity.email),
+                eq(accessRequests.status, "pending")
+              )
+            })
+          : null);
 
       return {
         item: latestRequest ? toAccessRequestSummary(latestRequest) : null
