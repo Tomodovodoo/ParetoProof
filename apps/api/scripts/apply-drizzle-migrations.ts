@@ -48,13 +48,21 @@ async function main() {
 
   try {
     // Migration bookkeeping stays in public so the dedicated migration role never needs database-level schema creation.
-    await sql`
-      create table if not exists public.__drizzle_migrations (
-        id serial primary key,
-        hash text not null,
-        created_at numeric not null
-      )
-    `;
+    const [migrationTable] = await sql<
+      Array<{
+        to_regclass: string | null;
+      }>
+    >`select to_regclass('public.__drizzle_migrations')`;
+
+    if (!migrationTable?.to_regclass) {
+      await sql`
+        create table public.__drizzle_migrations (
+          id serial primary key,
+          hash text not null,
+          created_at numeric not null
+        )
+      `;
+    }
 
     const [latestMigration] = await sql<
       Array<{
