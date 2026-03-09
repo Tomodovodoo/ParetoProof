@@ -36,6 +36,15 @@ export const apiEndpointCatalog = [
   {
     access: "authenticated_access_identity",
     audience: "portal",
+    id: "portal.access-recovery.create",
+    method: "POST",
+    path: "/portal/access-recovery",
+    purpose:
+      "Create or refresh an approved-user recovery request when a new Cloudflare Access subject must be linked by an admin."
+  },
+  {
+    access: "authenticated_access_identity",
+    audience: "portal",
     id: "portal.profile.read",
     method: "GET",
     path: "/portal/profile",

@@ -1,4 +1,5 @@
 import {
+  portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
   portalProfileUpdateInputSchema,
   type PortalProfile,
@@ -51,10 +52,27 @@ function toAccessRequestSummary(
     decisionNote: requestRow.decisionNote,
     email: requestRow.email,
     id: requestRow.id,
+    requestKind: requestRow.requestKind,
     rationale: requestRow.rationale,
     requestedRole: requestRow.requestedRole,
     reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
     status: requestRow.status
+  };
+}
+
+function createSubmittedAuditPayload(options: {
+  accessRequestId: string;
+  actorUserId: string;
+  requestKind: "access_request" | "identity_recovery";
+  requestedRole: "admin" | "collaborator" | "helper";
+  targetEmail: string;
+}) {
+  return {
+    accessRequestId: options.accessRequestId,
+    actorUserId: options.actorUserId,
+    requestKind: options.requestKind,
+    requestedRole: options.requestedRole,
+    targetEmail: options.targetEmail
   };
 }
 
@@ -376,7 +394,8 @@ export function registerPortalRoutes(
           if (existingRequest?.status === "pending") {
             const payloadChanged =
               existingRequest.rationale !== parsedBody.data.rationale ||
-              existingRequest.requestedRole !== parsedBody.data.requestedRole;
+              existingRequest.requestedRole !== parsedBody.data.requestedRole ||
+              existingRequest.requestKind !== "access_request";
 
             if (!payloadChanged) {
               return existingRequest;
@@ -395,12 +414,13 @@ export function registerPortalRoutes(
               actorKind: "portal_user",
               actorUserId: user.id,
               eventId: "access_request.submitted",
-              payload: {
+              payload: createSubmittedAuditPayload({
                 accessRequestId: (updatedRequest ?? existingRequest).id,
                 actorUserId: user.id,
+                requestKind: "access_request",
                 requestedRole: parsedBody.data.requestedRole,
                 targetEmail: accessEmail
-              },
+              }),
               severity: "info",
               subjectKind: "access_request",
               targetUserId: user.id
@@ -414,6 +434,7 @@ export function registerPortalRoutes(
             .values({
               email: accessEmail,
               rationale: parsedBody.data.rationale,
+              requestKind: "access_request",
               requestedByUserId: user.id,
               requestedRole: parsedBody.data.requestedRole
             })
@@ -427,12 +448,13 @@ export function registerPortalRoutes(
             actorKind: "portal_user",
             actorUserId: user.id,
             eventId: "access_request.submitted",
-            payload: {
+            payload: createSubmittedAuditPayload({
               accessRequestId: createdRequest.id,
               actorUserId: user.id,
+              requestKind: "access_request",
               requestedRole: parsedBody.data.requestedRole,
               targetEmail: accessEmail
-            },
+            }),
             severity: "info",
             subjectKind: "access_request",
             targetUserId: user.id
@@ -465,6 +487,189 @@ export function registerPortalRoutes(
 
       if (!latestRequest) {
         throw new Error("The access-request flow completed without returning a request.");
+      }
+
+      return {
+        item: toAccessRequestSummary(latestRequest)
+      };
+    }
+  );
+
+  app.post(
+    "/portal/access-recovery",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    async (request, reply) => {
+      const parsedBody = portalAccessRecoveryInputSchema.safeParse(request.body ?? {});
+
+      if (!parsedBody.success) {
+        reply.code(400).send({
+          error: "invalid_access_recovery_payload",
+          issues: parsedBody.error.issues
+        });
+        return;
+      }
+
+      const identity = request.accessIdentity;
+
+      if (!identity?.email) {
+        reply.code(400).send({
+          error: "access_email_required"
+        });
+        return;
+      }
+
+      const accessEmail = normalizeOptionalEmail(identity.email);
+
+      if (!accessEmail) {
+        reply.code(400).send({
+          error: "access_email_required"
+        });
+        return;
+      }
+
+      let latestRequest;
+
+      try {
+        latestRequest = await db.transaction(async (tx) => {
+          const existingIdentity = await tx.query.userIdentities.findFirst({
+            where: eq(userIdentities.providerSubject, identity.subject)
+          });
+
+          if (existingIdentity) {
+            throw new PortalAccessRequestConflictError("identity_already_linked");
+          }
+
+          const matchingUser = await tx.query.users.findFirst({
+            where: eq(users.email, accessEmail)
+          });
+
+          if (!matchingUser) {
+            throw new PortalAccessRequestConflictError("identity_recovery_not_available");
+          }
+
+          const activeRoleRows = await tx
+            .select({
+              role: roleGrants.role
+            })
+            .from(roleGrants)
+            .where(and(eq(roleGrants.userId, matchingUser.id), isNull(roleGrants.revokedAt)));
+
+          if (activeRoleRows.length === 0) {
+            throw new PortalAccessRequestConflictError("identity_recovery_not_available");
+          }
+
+          const recoveryRole = activeRoleRows[0]?.role ?? "helper";
+          const existingRequest = await tx.query.accessRequests.findFirst({
+            orderBy: [desc(accessRequests.createdAt)],
+            where: eq(accessRequests.email, accessEmail)
+          });
+
+          if (existingRequest?.status === "pending") {
+            const payloadChanged =
+              existingRequest.requestKind !== "identity_recovery" ||
+              existingRequest.rationale !== parsedBody.data.rationale ||
+              existingRequest.requestedIdentityProvider !== "cloudflare_one_time_pin" ||
+              existingRequest.requestedIdentitySubject !== identity.subject ||
+              existingRequest.requestedRole !== recoveryRole;
+
+            if (!payloadChanged) {
+              return existingRequest;
+            }
+
+            const [updatedRequest] = await tx
+              .update(accessRequests)
+              .set({
+                rationale: parsedBody.data.rationale,
+                requestKind: "identity_recovery",
+                requestedIdentityProvider: "cloudflare_one_time_pin",
+                requestedIdentitySubject: identity.subject,
+                requestedByUserId: matchingUser.id,
+                requestedRole: recoveryRole
+              })
+              .where(eq(accessRequests.id, existingRequest.id))
+              .returning();
+
+            await tx.insert(auditEvents).values({
+              actorKind: "portal_user",
+              actorUserId: matchingUser.id,
+              eventId: "access_request.submitted",
+              payload: createSubmittedAuditPayload({
+                accessRequestId: (updatedRequest ?? existingRequest).id,
+                actorUserId: matchingUser.id,
+                requestKind: "identity_recovery",
+                requestedRole: recoveryRole,
+                targetEmail: accessEmail
+              }),
+              severity: "info",
+              subjectKind: "access_request",
+              targetUserId: matchingUser.id
+            });
+
+            return updatedRequest ?? existingRequest;
+          }
+
+          const [createdRequest] = await tx
+            .insert(accessRequests)
+            .values({
+              email: accessEmail,
+              rationale: parsedBody.data.rationale,
+              requestKind: "identity_recovery",
+              requestedIdentityProvider: "cloudflare_one_time_pin",
+              requestedIdentitySubject: identity.subject,
+              requestedByUserId: matchingUser.id,
+              requestedRole: recoveryRole
+            })
+            .returning();
+
+          if (!createdRequest) {
+            throw new Error("Failed to create the identity recovery request.");
+          }
+
+          await tx.insert(auditEvents).values({
+            actorKind: "portal_user",
+            actorUserId: matchingUser.id,
+            eventId: "access_request.submitted",
+            payload: createSubmittedAuditPayload({
+              accessRequestId: createdRequest.id,
+              actorUserId: matchingUser.id,
+              requestKind: "identity_recovery",
+              requestedRole: recoveryRole,
+              targetEmail: accessEmail
+            }),
+            severity: "info",
+            subjectKind: "access_request",
+            targetUserId: matchingUser.id
+          });
+
+          return createdRequest;
+        });
+      } catch (error) {
+        if (isPendingAccessRequestConflict(error)) {
+          latestRequest = await db.query.accessRequests.findFirst({
+            orderBy: [desc(accessRequests.createdAt)],
+            where: and(
+              eq(accessRequests.email, accessEmail),
+              eq(accessRequests.status, "pending")
+            )
+          });
+
+          if (!latestRequest) {
+            throw error;
+          }
+        } else if (error instanceof PortalAccessRequestConflictError) {
+          reply.code(409).send({
+            error: error.message
+          });
+          return;
+        }
+
+        throw error;
+      }
+
+      if (!latestRequest) {
+        throw new Error("The access-recovery flow completed without returning a request.");
       }
 
       return {

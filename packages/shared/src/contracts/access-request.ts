@@ -1,4 +1,5 @@
 import {
+  portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
   portalAccessRequestSummarySchema,
   portalAdminAccessRequestApproveInputSchema,
@@ -9,5 +10,6 @@ export const portalAccessRequestContract = {
   adminApproveInput: portalAdminAccessRequestApproveInputSchema,
   adminRejectInput: portalAdminAccessRequestRejectInputSchema,
   createInput: portalAccessRequestInputSchema,
+  recoveryInput: portalAccessRecoveryInputSchema,
   summary: portalAccessRequestSummarySchema
 };
