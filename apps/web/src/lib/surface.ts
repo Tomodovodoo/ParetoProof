@@ -1,6 +1,7 @@
 export type WebSurface = "public" | "auth" | "portal";
 
 const productionPublicOrigin = "https://paretoproof.com";
+const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
 
 function readLocalSurfaceOverride() {
@@ -105,7 +106,7 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
     return buildLocalSurfaceUrl("auth", normalizedTargetPath);
   }
 
-  const authUrl = new URL("https://auth.paretoproof.com");
+  const authUrl = new URL(productionAuthOrigin);
 
   if (normalizedTargetPath !== "/") {
     authUrl.searchParams.set("redirect", normalizedTargetPath);
@@ -132,6 +133,30 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
   }
 
   return new URL(normalizedTargetPath, productionPortalOrigin).toString();
+}
+
+export function buildAccessStartUrl(
+  provider: "github" | "google",
+  targetPath = "/",
+  hostname = window.location.hostname
+) {
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+
+  if (isLocalOrigin(hostname)) {
+    const localUrl = new URL(buildPortalUrl(normalizedTargetPath, hostname));
+    localUrl.searchParams.set("access", "approved");
+    localUrl.searchParams.set("email", "local@example.com");
+    localUrl.searchParams.set("roles", "admin");
+    return localUrl.toString();
+  }
+
+  const authUrl = new URL(`/api/access/start/${provider}`, productionAuthOrigin);
+
+  if (normalizedTargetPath !== "/") {
+    authUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  return authUrl.toString();
 }
 
 export function getCurrentRelativeUrl(location = window.location) {
