@@ -118,6 +118,22 @@ function resolveRedirectTarget(redirectTarget: RouteRedirectTarget) {
   return buildPublicUrl("/");
 }
 
+function getLoopSafeFallbackTarget(context: PortalRouteAccessContext) {
+  if (context.status === "pending") {
+    return preserveLocalPortalState("/pending");
+  }
+
+  if (context.status === "approved") {
+    return preserveLocalPortalState("/");
+  }
+
+  if (context.status === "denied") {
+    return preserveLocalPortalState("/denied");
+  }
+
+  return buildPublicUrl("/");
+}
+
 export function findMatchedPortalRoute(pathname: string) {
   return findPortalRoute(pathname) ?? null;
 }
@@ -129,5 +145,12 @@ export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
     return null;
   }
 
-  return resolveRedirectTarget(matchedRoute.redirectIfDenied);
+  const redirectTarget = resolveRedirectTarget(matchedRoute.redirectIfDenied);
+  const redirectPathname = new URL(redirectTarget, window.location.origin).pathname;
+
+  if (redirectPathname === context.pathname) {
+    return getLoopSafeFallbackTarget(context);
+  }
+
+  return redirectTarget;
 }
