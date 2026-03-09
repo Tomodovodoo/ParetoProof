@@ -1,6 +1,8 @@
 import {
   appRouteAccessMatrix,
+  getPortalActionsForRoles,
   getPortalSectionsForRoles,
+  type PortalActionDefinition,
   type PortalRole,
   type PortalSectionDefinition
 } from "@paretoproof/shared";
@@ -58,6 +60,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   const approvedRoles = useMemo(() => coercePortalRoles(roles), [roles]);
   const sections = useMemo(
     () => getPortalSectionsForRoles(approvedRoles),
+    [approvedRoles]
+  );
+  const overviewActions = useMemo(
+    () => getPortalActionsForRoles(approvedRoles),
     [approvedRoles]
   );
   const activeSection = useMemo(
@@ -157,15 +163,43 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             <p>{activeSection?.summary}</p>
           </article>
           <article className="portal-panel">
-            <p className="eyebrow">Why it exists</p>
-            <h2>MVP placeholder</h2>
-            <p>
-              The layout, role gating, and path structure are now in place so
-              the next issues can fill each surface without redefining the shell.
-            </p>
+            <p className="eyebrow">Action gating</p>
+            <h2>Role-aware controls</h2>
+            <div className="portal-action-list">
+              {overviewActions.map((action) => (
+                <PortalActionCard action={action} key={action.id} />
+              ))}
+            </div>
           </article>
         </section>
       </section>
     </main>
+  );
+}
+
+type PortalActionCardProps = {
+  action: PortalActionDefinition;
+};
+
+function PortalActionCard({ action }: PortalActionCardProps) {
+  const href = portalRoutePathById.get(action.routeId) ?? "/";
+
+  return (
+    <article className={`portal-action-card portal-action-${action.state}`}>
+      <div>
+        <p className="portal-action-title">{action.title}</p>
+        <p className="portal-action-copy">{action.description}</p>
+        {action.disabledReason ? (
+          <p className="portal-action-hint">{action.disabledReason}</p>
+        ) : null}
+      </div>
+      {action.state === "enabled" ? (
+        <a className="button button-secondary" href={href}>
+          Open
+        </a>
+      ) : (
+        <span className="portal-action-badge">Unavailable</span>
+      )}
+    </article>
   );
 }
