@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { normalizeOptionalEmail } from "../lib/email.js";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
   email?: string;
@@ -63,7 +64,7 @@ export function createCloudflareAccessVerifier(options: {
       }
 
       return {
-        email: payload.email?.toLowerCase() ?? null,
+        email: normalizeOptionalEmail(payload.email),
         issuer,
         subject: payload.sub
       };
