@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   foreignKey,
   index,
@@ -117,6 +117,9 @@ export const roleGrants = pgTable(
     })
   },
   (table) => ({
+    activeUserUnique: uniqueIndex("role_grants_active_user_unique")
+      .on(table.userId)
+      .where(sql`${table.revokedAt} is null`),
     userIndex: index("role_grants_user_id_idx").on(table.userId),
     roleIndex: index("role_grants_role_idx").on(table.role)
   })

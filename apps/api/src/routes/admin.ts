@@ -111,6 +111,31 @@ export function registerAdminRoutes(
         }
 
         const now = new Date();
+        const [reviewedRequest] = await tx
+          .update(accessRequests)
+          .set({
+            decisionNote: parsedBody.data.decisionNote,
+            reviewedAt: now,
+            reviewedByUserId: actorUserId,
+            status: "approved"
+          })
+          .where(
+            and(
+              eq(accessRequests.id, requestRow.id),
+              eq(accessRequests.status, "pending")
+            )
+          )
+          .returning();
+
+        if (!reviewedRequest) {
+          return {
+            kind: "conflict" as const,
+            requestRow: await tx.query.accessRequests.findFirst({
+              where: eq(accessRequests.id, requestRow.id)
+            })
+          };
+        }
+
         const activeRoleRows = await tx
           .select({
             id: roleGrants.id,
@@ -151,21 +176,6 @@ export function registerAdminRoutes(
           role: parsedBody.data.approvedRole,
           userId: targetUser.id
         });
-
-        const [reviewedRequest] = await tx
-          .update(accessRequests)
-          .set({
-            decisionNote: parsedBody.data.decisionNote,
-            reviewedAt: now,
-            reviewedByUserId: actorUserId,
-            status: "approved"
-          })
-          .where(eq(accessRequests.id, requestRow.id))
-          .returning();
-
-        if (!reviewedRequest) {
-          throw new Error("Failed to persist the approval decision.");
-        }
 
         await tx.insert(auditEvents).values([
           {
@@ -213,7 +223,7 @@ export function registerAdminRoutes(
       if (result.kind === "conflict") {
         reply.code(409).send({
           error: "access_request_not_pending",
-          item: toAccessRequestSummary(result.requestRow)
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
         });
         return;
       }
@@ -272,11 +282,21 @@ export function registerAdminRoutes(
             reviewedByUserId: actorUserId,
             status: "rejected"
           })
-          .where(eq(accessRequests.id, requestRow.id))
+          .where(
+            and(
+              eq(accessRequests.id, requestRow.id),
+              eq(accessRequests.status, "pending")
+            )
+          )
           .returning();
 
         if (!reviewedRequest) {
-          throw new Error("Failed to persist the rejection decision.");
+          return {
+            kind: "conflict" as const,
+            requestRow: await tx.query.accessRequests.findFirst({
+              where: eq(accessRequests.id, requestRow.id)
+            })
+          };
         }
 
         await tx.insert(auditEvents).values({
@@ -310,7 +330,7 @@ export function registerAdminRoutes(
       if (result.kind === "conflict") {
         reply.code(409).send({
           error: "access_request_not_pending",
-          item: toAccessRequestSummary(result.requestRow)
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
         });
         return;
       }
