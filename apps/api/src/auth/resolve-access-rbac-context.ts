@@ -15,7 +15,10 @@ type AccessRole = (typeof accessRoleEnum.enumValues)[number];
 export type AccessRbacContext =
   | {
       email: string | null;
-      reason: "rejected_or_withdrawn" | "unknown_identity";
+      reason:
+        | "access_request_required"
+        | "rejected_or_withdrawn"
+        | "unknown_identity";
       status: "denied";
       subject: string;
     }
@@ -98,10 +101,9 @@ export async function resolveAccessRbacContext(
 
     return {
       email: linkedIdentity.user.email,
-      requestId: latestRequest?.id ?? null,
-      status: "pending",
-      subject: identity.subject,
-      userId: linkedIdentity.user.id
+      reason: "access_request_required",
+      status: "denied",
+      subject: identity.subject
     };
   }
 
@@ -131,9 +133,18 @@ export async function resolveAccessRbacContext(
     };
   }
 
+  if (!latestRequest || latestRequest.status !== "pending") {
+    return {
+      email: identity.email,
+      reason: "access_request_required",
+      status: "denied",
+      subject: identity.subject
+    };
+  }
+
   return {
     email: identity.email,
-    requestId: latestRequest?.id ?? null,
+    requestId: latestRequest.id,
     status: "pending",
     subject: identity.subject,
     userId: matchingUser?.id ?? null

@@ -11,6 +11,7 @@ import {
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 type RouteAccessRequirement =
+  | "authenticated_access_identity"
   | "pending_or_approved"
   | "approved_helper_or_higher"
   | "approved_collaborator_or_higher"
@@ -37,6 +38,10 @@ function hasRole(context: AccessRbacContext, role: "admin" | "collaborator" | "h
 }
 
 function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequirement) {
+  if (requirement === "authenticated_access_identity") {
+    return true;
+  }
+
   if (requirement === "pending_or_approved") {
     return context.status === "pending" || context.status === "approved";
   }
