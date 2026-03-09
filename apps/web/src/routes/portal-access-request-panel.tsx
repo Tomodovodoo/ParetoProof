@@ -332,7 +332,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
                 <p className="portal-request-meta">
                   Created {new Date(requestItem.createdAt).toLocaleString()}
                   {requestItem.reviewedAt
-                    ? ` · Reviewed ${new Date(requestItem.reviewedAt).toLocaleString()}`
+                    ? ` Â· Reviewed ${new Date(requestItem.reviewedAt).toLocaleString()}`
                     : ""}
                 </p>
 
