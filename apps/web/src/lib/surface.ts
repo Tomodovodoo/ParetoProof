@@ -1,5 +1,6 @@
 export type WebSurface = "public" | "auth" | "portal";
 
+const productionPublicOrigin = "https://paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
 
 function readLocalSurfaceOverride() {
@@ -111,6 +112,16 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
   }
 
   return authUrl.toString();
+}
+
+export function buildPublicUrl(targetPath = "/", hostname = window.location.hostname) {
+  const normalizedTargetPath = normalizeTargetPath(targetPath);
+
+  if (isLocalOrigin(hostname)) {
+    return new URL(normalizedTargetPath, window.location.origin).toString();
+  }
+
+  return new URL(normalizedTargetPath, productionPublicOrigin).toString();
 }
 
 export function buildPortalUrl(targetPath = "/", hostname = window.location.hostname) {
