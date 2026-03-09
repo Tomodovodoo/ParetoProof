@@ -289,6 +289,53 @@ p {
   min-height: 11rem;
 }
 
+.portal-action-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.portal-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.portal-action-disabled {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.portal-action-title {
+  margin-bottom: 0.25rem;
+  font-weight: 700;
+}
+
+.portal-action-copy,
+.portal-action-hint {
+  margin-bottom: 0;
+}
+
+.portal-action-hint {
+  color: #8a5b21;
+  font-size: 0.92rem;
+}
+
+.portal-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(31, 29, 26, 0.08);
+  color: #5d5140;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .portal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
