@@ -69,6 +69,11 @@ function sanitizePortalTargetPath(targetPath: string) {
   }
 }
 
+export function readPortalRedirectTarget(search = window.location.search) {
+  const params = new URLSearchParams(search);
+  return sanitizePortalTargetPath(params.get("redirect") ?? "/");
+}
+
 function buildLocalSurfaceUrl(
   surface: Exclude<WebSurface, "public">,
   targetPath: string,
