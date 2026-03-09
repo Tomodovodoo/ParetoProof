@@ -25,6 +25,7 @@ function createLocalRequest(id: string, email: string, requestedRole: PortalAdmi
     decisionNote: null,
     email,
     id,
+    requestKind: "access_request",
     rationale: `Local development request for ${email}.`,
     requestedRole,
     reviewedAt: null,
@@ -51,7 +52,10 @@ function readLocalAccessRequests() {
     ];
   }
 
-  return JSON.parse(storedValue) as PortalAccessRequestSummary[];
+  return (JSON.parse(storedValue) as PortalAccessRequestSummary[]).map((item) => ({
+    ...item,
+    requestKind: item.requestKind ?? "access_request"
+  }));
 }
 
 function writeLocalAccessRequests(items: PortalAccessRequestSummary[]) {
@@ -316,6 +320,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
             };
             const isPending = requestItem.status === "pending";
             const isMutating = isMutatingId === requestItem.id;
+            const isRecoveryRequest = requestItem.requestKind === "identity_recovery";
 
             return (
               <article className="portal-panel portal-request-card" key={requestItem.id}>
@@ -323,7 +328,9 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
                   <div>
                     <p className="portal-action-title">{requestItem.email}</p>
                     <p className="portal-action-copy">
-                      Requested role: {requestItem.requestedRole}
+                      {isRecoveryRequest
+                        ? `Recovery request Â· Preserve ${requestItem.requestedRole}`
+                        : `Requested role: ${requestItem.requestedRole}`}
                     </p>
                   </div>
                   <span className="portal-action-badge">{requestItem.status}</span>
@@ -332,7 +339,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
                 <p className="portal-request-meta">
                   Created {new Date(requestItem.createdAt).toLocaleString()}
                   {requestItem.reviewedAt
-                    ? ` · Reviewed ${new Date(requestItem.reviewedAt).toLocaleString()}`
+                    ? ` ï¿½ Reviewed ${new Date(requestItem.reviewedAt).toLocaleString()}`
                     : ""}
                 </p>
 
@@ -343,27 +350,29 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
                 )}
 
                 <div className="auth-form">
-                  <label className="auth-field">
-                    <span>Approve as</span>
-                    <select
-                      disabled={!isPending || isMutating}
-                      onChange={(event) => {
-                        const approvedRole = event.currentTarget
-                          .value as PortalAdminApprovedRole;
-                        setDrafts((currentDrafts) => ({
-                          ...currentDrafts,
-                          [requestItem.id]: {
-                            ...draft,
-                            approvedRole
-                          }
-                        }));
-                      }}
-                      value={draft.approvedRole}
-                    >
-                      <option value="helper">Helper</option>
-                      <option value="collaborator">Collaborator</option>
-                    </select>
-                  </label>
+                  {!isRecoveryRequest ? (
+                    <label className="auth-field">
+                      <span>Approve as</span>
+                      <select
+                        disabled={!isPending || isMutating}
+                        onChange={(event) => {
+                          const approvedRole = event.currentTarget
+                            .value as PortalAdminApprovedRole;
+                          setDrafts((currentDrafts) => ({
+                            ...currentDrafts,
+                            [requestItem.id]: {
+                              ...draft,
+                              approvedRole
+                            }
+                          }));
+                        }}
+                        value={draft.approvedRole}
+                      >
+                        <option value="helper">Helper</option>
+                        <option value="collaborator">Collaborator</option>
+                      </select>
+                    </label>
+                  ) : null}
 
                   <label className="auth-field">
                     <span>Decision note</span>
@@ -394,7 +403,11 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
                     }}
                     type="button"
                   >
-                    {isMutating ? "Saving..." : "Approve"}
+                    {isMutating
+                      ? "Saving..."
+                      : isRecoveryRequest
+                        ? "Link identity"
+                        : "Approve"}
                   </button>
                   <button
                     className="button button-secondary"
