@@ -13,8 +13,7 @@ import {
 export const accessRoleEnum = pgEnum("access_role", [
   "admin",
   "collaborator",
-  "helper",
-  "mathematician"
+  "helper"
 ]);
 
 export const accessRequestStatusEnum = pgEnum("access_request_status", [
