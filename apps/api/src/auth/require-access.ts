@@ -1,0 +1,108 @@
+import type { FastifyReply, FastifyRequest } from "fastify";
+import type { HookHandlerDoneFunction } from "fastify/types/hooks";
+import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
+import { resolveAccessRbacContext } from "./resolve-access-rbac-context.js";
+import {
+  createCloudflareAccessVerifierFromEnv,
+  readAccessJwtAssertion,
+  type CloudflareAccessIdentity,
+  type CloudflareAccessVerifier
+} from "./cloudflare-access.js";
+import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
+
+type RouteAccessRequirement =
+  | "pending_or_approved"
+  | "approved_helper_or_higher"
+  | "approved_collaborator_or_higher"
+  | "admin_only";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    accessIdentity: CloudflareAccessIdentity | null;
+    accessRbacContext: AccessRbacContext | null;
+  }
+}
+
+function hasRole(context: AccessRbacContext, role: "admin" | "collaborator" | "helper") {
+  return context.status === "approved" && context.roles.includes(role);
+}
+
+function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequirement) {
+  if (requirement === "pending_or_approved") {
+    return context.status === "pending" || context.status === "approved";
+  }
+
+  if (requirement === "approved_helper_or_higher") {
+    return (
+      hasRole(context, "helper") ||
+      hasRole(context, "collaborator") ||
+      hasRole(context, "admin")
+    );
+  }
+
+  if (requirement === "approved_collaborator_or_higher") {
+    return hasRole(context, "collaborator") || hasRole(context, "admin");
+  }
+
+  return hasRole(context, "admin");
+}
+
+async function resolveRequestAccess(
+  db: ReturnTypeOfCreateDbClient,
+  verifier: CloudflareAccessVerifier,
+  request: FastifyRequest
+) {
+  if (request.accessRbacContext) {
+    return request.accessRbacContext;
+  }
+
+  const assertion = readAccessJwtAssertion(request);
+
+  if (!assertion) {
+    return null;
+  }
+
+  const identity = await verifier.verifyAssertion(assertion);
+  const context = await resolveAccessRbacContext(db, identity);
+
+  request.accessIdentity = identity;
+  request.accessRbacContext = context;
+
+  return context;
+}
+
+// Access proves identity at the edge, but the backend still decides whether that caller may use its DB-backed routes.
+export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
+  const verifier = createCloudflareAccessVerifierFromEnv();
+
+  return (requirement: RouteAccessRequirement) => {
+    return (
+      request: FastifyRequest,
+      reply: FastifyReply,
+      done: HookHandlerDoneFunction
+    ) => {
+      void resolveRequestAccess(db, verifier, request)
+        .then((context) => {
+          if (!context) {
+            reply.code(401).send({
+              error: "access_assertion_required"
+            });
+
+            return;
+          }
+
+          if (!isAllowed(context, requirement)) {
+            reply.code(403).send({
+              access: context,
+              error: "insufficient_role"
+            });
+
+            return;
+          }
+
+          done();
+        })
+        .catch(done);
+    };
+  };
+}
