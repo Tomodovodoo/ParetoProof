@@ -15,6 +15,13 @@
       "when": 1773011507144,
       "tag": "0001_shocking_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773025660849,
+      "tag": "0002_puzzling_red_ghost",
+      "breakpoints": true
     }
   ]
 }
