@@ -8,7 +8,7 @@ export function registerPortalRoutes(
   app.get(
     "/portal/me",
     {
-      preHandler: requireAccess("pending_or_approved")
+      preHandler: requireAccess("authenticated_access_identity")
     },
     async (request) => {
       return {
