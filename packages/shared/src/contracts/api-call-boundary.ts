@@ -91,20 +91,20 @@ export const apiCallBoundaryCatalog = [
       "Admins review contributor access requests from the portal UI, but the backend still narrows access to admin-only callers."
   },
   {
-    credential: "cloudflare_service_token",
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.access-request.approve",
-    mode: "portal_server_mediated",
-    origin: "admin_service",
+    mode: "browser_direct",
+    origin: "portal_browser",
     rationale:
-      "Admin approval mutates roles and should move through a trusted backend-operated surface instead of a raw browser call."
+      "The MVP portal has no separate admin server layer, so approved admins call the protected decision route directly with their Access identity and RBAC check."
   },
   {
-    credential: "cloudflare_service_token",
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.access-request.reject",
-    mode: "portal_server_mediated",
-    origin: "admin_service",
+    mode: "browser_direct",
+    origin: "portal_browser",
     rationale:
-      "Rejections change contributor state and should stay on the internal admin surface so future audit and approval controls remain centralized."
+      "Rejection stays on the authenticated portal audience for MVP, while the backend still enforces admin-only RBAC and audit logging."
   },
   {
     credential: "cloudflare_service_token",
