@@ -13,7 +13,7 @@ export type ApiEndpointCatalogEntry = {
   access: ApiAccessLevel;
   audience: ApiAudience;
   id: string;
-  method: "GET" | "POST";
+  method: "GET" | "PATCH" | "POST";
   path: string;
   purpose: string;
 };

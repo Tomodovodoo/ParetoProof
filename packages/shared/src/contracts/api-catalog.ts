@@ -50,6 +50,22 @@ export const apiEndpointCatalog = [
     purpose: "Show the caller's latest access request state inside the portal."
   },
   {
+    access: "authenticated_access_identity",
+    audience: "portal",
+    id: "portal.profile.read",
+    method: "GET",
+    path: "/portal/profile",
+    purpose: "Return the caller's editable portal profile details and linked identities."
+  },
+  {
+    access: "authenticated_access_identity",
+    audience: "portal",
+    id: "portal.profile.update",
+    method: "PATCH",
+    path: "/portal/profile",
+    purpose: "Update the caller's MVP portal profile fields without changing role grants."
+  },
+  {
     access: "approved_helper_or_higher",
     audience: "portal",
     id: "portal.runs.list",
