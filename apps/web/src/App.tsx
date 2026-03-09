@@ -1,12 +1,11 @@
 import { AuthEntry } from "./routes/auth-entry";
 import { PortalBootstrap } from "./routes/portal-bootstrap";
 import { PublicSite } from "./routes/public-site";
-import { resolveWebSurface } from "./lib/surface";
+import { readPortalRedirectTarget, resolveWebSurface } from "./lib/surface";
 
 export default function App() {
   const surface = resolveWebSurface();
-  const redirectPath =
-    new URLSearchParams(window.location.search).get("redirect") ?? "/";
+  const redirectPath = readPortalRedirectTarget();
 
   if (surface === "auth") {
     return <AuthEntry redirectPath={redirectPath} />;
