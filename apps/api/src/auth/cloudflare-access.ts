@@ -17,6 +17,11 @@ export type CloudflareAccessVerifier = {
   verifyAssertion: (assertion: string) => Promise<CloudflareAccessIdentity>;
 };
 
+export type CloudflareAccessVerifierSet = {
+  internal: CloudflareAccessVerifier;
+  portal: CloudflareAccessVerifier;
+};
+
 function normalizeTeamDomain(teamDomain: string) {
   return teamDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
@@ -66,18 +71,36 @@ export function createCloudflareAccessVerifier(options: {
   };
 }
 
-export function createCloudflareAccessVerifierFromEnv() {
-  const teamDomain = process.env.CF_ACCESS_TEAM_DOMAIN;
-  const audience = process.env.CF_ACCESS_AUD;
+export function selectCloudflareAccessVerifier(
+  request: Pick<FastifyRequest, "raw" | "routeOptions">,
+  verifiers: CloudflareAccessVerifierSet
+) {
+  const routePath = request.routeOptions?.url ?? request.raw.url ?? "";
 
-  if (!teamDomain || !audience) {
+  return routePath.startsWith("/internal/") ? verifiers.internal : verifiers.portal;
+}
+
+export function createCloudflareAccessVerifierSetFromEnv() {
+  const teamDomain = process.env.CF_ACCESS_TEAM_DOMAIN;
+  const portalAudience =
+    process.env.CF_ACCESS_PORTAL_AUD ?? process.env.CF_ACCESS_AUD;
+  const internalAudience =
+    process.env.CF_ACCESS_INTERNAL_AUD ?? portalAudience;
+
+  if (!teamDomain || !portalAudience || !internalAudience) {
     throw new Error(
-      "CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are required for Access JWT validation."
+      "CF_ACCESS_TEAM_DOMAIN plus CF_ACCESS_PORTAL_AUD/CF_ACCESS_AUD are required for Access JWT validation."
     );
   }
 
-  return createCloudflareAccessVerifier({
-    audience,
-    teamDomain
-  });
+  return {
+    internal: createCloudflareAccessVerifier({
+      audience: internalAudience,
+      teamDomain
+    }),
+    portal: createCloudflareAccessVerifier({
+      audience: portalAudience,
+      teamDomain
+    })
+  };
 }

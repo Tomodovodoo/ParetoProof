@@ -3,10 +3,11 @@ import type { HookHandlerDoneFunction } from "fastify/types/hooks";
 import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
 import { resolveAccessRbacContext } from "./resolve-access-rbac-context.js";
 import {
-  createCloudflareAccessVerifierFromEnv,
+  createCloudflareAccessVerifierSetFromEnv,
   readAccessJwtAssertion,
+  selectCloudflareAccessVerifier,
   type CloudflareAccessIdentity,
-  type CloudflareAccessVerifier
+  type CloudflareAccessVerifierSet
 } from "./cloudflare-access.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -63,7 +64,7 @@ function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequireme
 
 async function resolveRequestAccess(
   db: ReturnTypeOfCreateDbClient,
-  verifier: CloudflareAccessVerifier,
+  verifiers: CloudflareAccessVerifierSet,
   request: FastifyRequest
 ) {
   if (request.accessRbacContext) {
@@ -79,6 +80,7 @@ async function resolveRequestAccess(
   let identity: CloudflareAccessIdentity;
 
   try {
+    const verifier = selectCloudflareAccessVerifier(request, verifiers);
     identity = await verifier.verifyAssertion(assertion);
   } catch (error) {
     throw new AccessAssertionVerificationError(error);
@@ -94,7 +96,7 @@ async function resolveRequestAccess(
 
 // Access proves identity at the edge, but the backend still decides whether that caller may use its DB-backed routes.
 export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
-  const verifier = createCloudflareAccessVerifierFromEnv();
+  const verifiers = createCloudflareAccessVerifierSetFromEnv();
 
   return (requirement: RouteAccessRequirement) => {
     return (
@@ -102,7 +104,7 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
       reply: FastifyReply,
       done: HookHandlerDoneFunction
     ) => {
-      void resolveRequestAccess(db, verifier, request)
+      void resolveRequestAccess(db, verifiers, request)
         .then((context) => {
           if (!context) {
             reply.code(401).send({
