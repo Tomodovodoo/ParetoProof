@@ -31,10 +31,7 @@ function isAllowedLocalOrigin(origin: string) {
 }
 
 function shouldAllowLocalhostCors() {
-  return (
-    process.env.NODE_ENV !== "production" ||
-    process.env.CORS_ALLOW_LOCALHOST === "true"
-  );
+  return process.env.CORS_ALLOW_LOCALHOST === "true";
 }
 
 export async function buildServer() {
