@@ -92,6 +92,15 @@ export const appRouteAccessMatrix = [
     summary: "Run launch flow for collaborators and admins."
   },
   {
+    access: "approved_collaborator_or_higher",
+    host: "portal.paretoproof.com",
+    id: "portal.workers",
+    path: "/workers",
+    redirectIfDenied: "portal_denied",
+    surface: "portal",
+    summary: "Worker fleet and queue overview for collaborators and admins."
+  },
+  {
     access: "admin_only",
     host: "portal.paretoproof.com",
     id: "portal.admin.access-requests",
