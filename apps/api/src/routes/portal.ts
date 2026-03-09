@@ -8,6 +8,13 @@ import { accessRequests, roleGrants, userIdentities, users } from "../db/schema.
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
+class PortalAccessRequestConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PortalAccessRequestConflictError";
+  }
+}
+
 function toAccessRequestSummary(
   requestRow: typeof accessRequests.$inferSelect
 ): PortalAccessRequestSummary {
@@ -94,104 +101,109 @@ export function registerPortalRoutes(
 
       const accessEmail = identity.email;
 
-      const latestRequest = await db.transaction(async (tx) => {
-        const [user] = await tx
-          .insert(users)
-          .values({
-            email: accessEmail
-          })
-          .onConflictDoUpdate({
-            set: {
-              updatedAt: new Date()
-            },
-            target: users.email
-          })
-          .returning({
-            id: users.id
-          });
+      let latestRequest;
 
-        if (!user) {
-          throw new Error("Failed to persist the access-request user record.");
-        }
-
-        const existingIdentity = await tx.query.userIdentities.findFirst({
-          where: eq(userIdentities.providerSubject, identity.subject)
-        });
-
-        if (existingIdentity && existingIdentity.userId !== user.id) {
-          reply.code(409).send({
-            error: "access_identity_already_linked"
-          });
-          return null;
-        }
-
-        if (existingIdentity) {
-          await tx
-            .update(userIdentities)
-            .set({
-              lastSeenAt: new Date(),
-              providerEmail: accessEmail
+      try {
+        latestRequest = await db.transaction(async (tx) => {
+          const [user] = await tx
+            .insert(users)
+            .values({
+              email: accessEmail
             })
-            .where(eq(userIdentities.id, existingIdentity.id));
-        } else {
-          await tx.insert(userIdentities).values({
-            provider: "cloudflare_one_time_pin",
-            providerEmail: accessEmail,
-            providerSubject: identity.subject,
-            userId: user.id
+            .onConflictDoUpdate({
+              set: {
+                updatedAt: new Date()
+              },
+              target: users.email
+            })
+            .returning({
+              id: users.id
+            });
+
+          if (!user) {
+            throw new Error("Failed to persist the access-request user record.");
+          }
+
+          const existingIdentity = await tx.query.userIdentities.findFirst({
+            where: eq(userIdentities.providerSubject, identity.subject)
           });
-        }
 
-        const activeRoleRows = await tx
-          .select({
-            role: roleGrants.role
-          })
-          .from(roleGrants)
-          .where(and(eq(roleGrants.userId, user.id), isNull(roleGrants.revokedAt)));
+          if (existingIdentity && existingIdentity.userId !== user.id) {
+            throw new PortalAccessRequestConflictError("access_identity_already_linked");
+          }
 
-        const activeRoles = activeRoleRows.map(({ role }) => role);
+          if (existingIdentity) {
+            await tx
+              .update(userIdentities)
+              .set({
+                lastSeenAt: new Date(),
+                providerEmail: accessEmail
+              })
+              .where(eq(userIdentities.id, existingIdentity.id));
+          } else {
+            await tx.insert(userIdentities).values({
+              provider: "cloudflare_one_time_pin",
+              providerEmail: accessEmail,
+              providerSubject: identity.subject,
+              userId: user.id
+            });
+          }
 
-        if (activeRoles.length > 0) {
-          reply.code(409).send({
-            error: "already_approved"
+          const activeRoleRows = await tx
+            .select({
+              role: roleGrants.role
+            })
+            .from(roleGrants)
+            .where(and(eq(roleGrants.userId, user.id), isNull(roleGrants.revokedAt)));
+
+          if (activeRoleRows.length > 0) {
+            throw new PortalAccessRequestConflictError("already_approved");
+          }
+
+          const existingRequest = await tx.query.accessRequests.findFirst({
+            orderBy: [desc(accessRequests.createdAt)],
+            where: eq(accessRequests.email, accessEmail)
           });
-          return null;
-        }
 
-        const existingRequest = await tx.query.accessRequests.findFirst({
-          orderBy: [desc(accessRequests.createdAt)],
-          where: eq(accessRequests.email, accessEmail)
-        });
+          if (existingRequest?.status === "pending") {
+            const [updatedRequest] = await tx
+              .update(accessRequests)
+              .set({
+                rationale: parsedBody.data.rationale,
+                requestedRole: parsedBody.data.requestedRole
+              })
+              .where(eq(accessRequests.id, existingRequest.id))
+              .returning();
 
-        if (existingRequest?.status === "pending") {
-          const [updatedRequest] = await tx
-            .update(accessRequests)
-            .set({
+            return updatedRequest ?? existingRequest;
+          }
+
+          const [createdRequest] = await tx
+            .insert(accessRequests)
+            .values({
+              email: accessEmail,
               rationale: parsedBody.data.rationale,
+              requestedByUserId: user.id,
               requestedRole: parsedBody.data.requestedRole
             })
-            .where(eq(accessRequests.id, existingRequest.id))
             .returning();
 
-          return updatedRequest ?? existingRequest;
+          if (!createdRequest) {
+            throw new Error("Failed to create the contributor access request.");
+          }
+
+          return createdRequest;
+        });
+      } catch (error) {
+        if (error instanceof PortalAccessRequestConflictError) {
+          reply.code(409).send({
+            error: error.message
+          });
+          return;
         }
 
-        const [createdRequest] = await tx
-          .insert(accessRequests)
-          .values({
-            email: accessEmail,
-            rationale: parsedBody.data.rationale,
-            requestedByUserId: user.id,
-            requestedRole: parsedBody.data.requestedRole
-          })
-          .returning();
-
-        if (!createdRequest) {
-          throw new Error("Failed to create the contributor access request.");
-        }
-
-        return createdRequest;
-      });
+        throw error;
+      }
 
       if (!latestRequest) {
         return;
