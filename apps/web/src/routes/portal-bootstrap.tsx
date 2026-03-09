@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import {
   buildAuthUrl,
   getCurrentRelativeUrl,
@@ -67,6 +68,21 @@ export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
+  const routeRedirectTarget = useMemo(() => {
+    if (
+      state.status === "loading" ||
+      state.status === "error" ||
+      state.status === "unauthenticated"
+    ) {
+      return null;
+    }
+
+    return resolvePortalRouteRedirect({
+      pathname: window.location.pathname,
+      roles: state.status === "approved" ? state.roles : [],
+      status: state.status
+    });
+  }, [state]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -147,6 +163,14 @@ export function PortalBootstrap() {
 
     window.location.replace(buildAuthUrl(currentRelativeUrl));
   }, [currentRelativeUrl, state]);
+
+  useEffect(() => {
+    if (!routeRedirectTarget) {
+      return;
+    }
+
+    window.location.replace(routeRedirectTarget);
+  }, [routeRedirectTarget]);
 
   if (state.status === "loading") {
     return (

@@ -7,6 +7,7 @@ import {
   type PortalSectionDefinition
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
+import { findMatchedPortalRoute } from "../lib/portal-route-access";
 
 type PortalShellProps = {
   email: string | null;
@@ -71,16 +72,17 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     [sections]
   );
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
+  const matchedPortalRoute = findMatchedPortalRoute(window.location.pathname);
 
   useEffect(() => {
     const pathname = window.location.pathname;
 
-    if (pathname === activeSectionHref || pathname.startsWith("/runs/")) {
+    if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
       return;
     }
 
     window.history.replaceState({}, "", activeSectionHref);
-  }, [activeSectionHref]);
+  }, [activeSectionHref, matchedPortalRoute]);
 
   return (
     <main className="portal-shell">
