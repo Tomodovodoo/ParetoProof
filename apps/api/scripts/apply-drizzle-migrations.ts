@@ -64,21 +64,32 @@ async function main() {
       `;
     }
 
-    const [latestMigration] = await sql<
+    const appliedMigrations = await sql<
       Array<{
         created_at: string;
+        hash: string;
       }>
-    >`select created_at from public.__drizzle_migrations order by created_at desc limit 1`;
-
-    const latestAppliedAt = Number(latestMigration?.created_at ?? 0);
+    >`select created_at, hash from public.__drizzle_migrations`;
+    const appliedHashes = new Set(appliedMigrations.map(({ hash }) => hash));
     const journal = await readMigrationJournal();
 
     for (const entry of journal.entries) {
-      if (entry.when <= latestAppliedAt) {
+      const migration = await readMigrationSql(entry.tag);
+
+      if (appliedHashes.has(migration.hash)) {
         continue;
       }
 
-      const migration = await readMigrationSql(entry.tag);
+      const conflictingMigration = appliedMigrations.find(
+        ({ created_at, hash }) =>
+          Number(created_at) === entry.when && hash !== migration.hash
+      );
+
+      if (conflictingMigration) {
+        throw new Error(
+          `Migration journal entry ${entry.tag} conflicts with existing migration metadata for timestamp ${entry.when}.`
+        );
+      }
 
       await sql.begin(async (transaction) => {
         for (const statement of migration.statements) {
@@ -91,6 +102,11 @@ async function main() {
         `;
       });
 
+      appliedMigrations.push({
+        created_at: String(entry.when),
+        hash: migration.hash
+      });
+      appliedHashes.add(migration.hash);
       console.log(`Applied migration ${entry.tag}`);
     }
   } finally {
