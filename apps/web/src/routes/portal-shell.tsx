@@ -8,6 +8,7 @@ import {
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
+import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalProfilePanel } from "./portal-profile-panel";
 
 type PortalShellProps = {
@@ -162,7 +163,9 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         </section>
 
         <section className="portal-grid">
-          {activeSection?.id === "profile" ? (
+          {activeSection?.id === "access_requests" ? (
+            <PortalAccessRequestPanel email={email} />
+          ) : activeSection?.id === "profile" ? (
             <PortalProfilePanel email={email} />
           ) : (
             <>
