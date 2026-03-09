@@ -28,6 +28,15 @@ export const portalSectionDefinitions = [
   },
   {
     description:
+      "Signed-in profile details, linked Access identities, and the small MVP contributor fields the portal already supports.",
+    id: "profile",
+    navLabel: "Profile",
+    routeId: "portal.profile",
+    summary: "Profile details and linked sign-in methods for approved users.",
+    visibility: "approved_helper_or_higher"
+  },
+  {
+    description:
       "Read-only run listings and detail links for approved helpers, collaborators, and admins.",
     id: "runs",
     navLabel: "Runs",
