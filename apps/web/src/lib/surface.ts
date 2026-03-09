@@ -1,5 +1,7 @@
 export type WebSurface = "public" | "auth" | "portal";
 
+const productionPortalOrigin = "https://portal.paretoproof.com";
+
 function readLocalSurfaceOverride() {
   const params = new URLSearchParams(window.location.search);
   const surface = params.get("surface");
@@ -46,13 +48,34 @@ function normalizeTargetPath(targetPath: string) {
   return targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 }
 
+function sanitizePortalTargetPath(targetPath: string) {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(targetPath) || targetPath.startsWith("//")) {
+    return "/";
+  }
+
+  try {
+    const candidateUrl = new URL(
+      normalizeTargetPath(targetPath),
+      productionPortalOrigin
+    );
+
+    if (candidateUrl.origin !== productionPortalOrigin) {
+      return "/";
+    }
+
+    return `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/";
+  } catch {
+    return "/";
+  }
+}
+
 function buildLocalSurfaceUrl(
   surface: Exclude<WebSurface, "public">,
   targetPath: string,
   origin = window.location.origin
 ) {
   const surfaceUrl = new URL(origin);
-  const normalizedTargetPath = normalizeTargetPath(targetPath);
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
 
   if (surface === "portal") {
     const portalUrl = new URL(normalizedTargetPath, origin);
@@ -70,12 +93,13 @@ function buildLocalSurfaceUrl(
 }
 
 export function buildAuthUrl(targetPath = "/", hostname = window.location.hostname) {
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+
   if (isLocalOrigin(hostname)) {
-    return buildLocalSurfaceUrl("auth", targetPath);
+    return buildLocalSurfaceUrl("auth", normalizedTargetPath);
   }
 
   const authUrl = new URL("https://auth.paretoproof.com");
-  const normalizedTargetPath = normalizeTargetPath(targetPath);
 
   if (normalizedTargetPath !== "/") {
     authUrl.searchParams.set("redirect", normalizedTargetPath);
@@ -85,11 +109,13 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
 }
 
 export function buildPortalUrl(targetPath = "/", hostname = window.location.hostname) {
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+
   if (isLocalOrigin(hostname)) {
-    return buildLocalSurfaceUrl("portal", targetPath);
+    return buildLocalSurfaceUrl("portal", normalizedTargetPath);
   }
 
-  return new URL(targetPath, "https://portal.paretoproof.com").toString();
+  return new URL(normalizedTargetPath, productionPortalOrigin).toString();
 }
 
 export function getCurrentRelativeUrl(location = window.location) {
