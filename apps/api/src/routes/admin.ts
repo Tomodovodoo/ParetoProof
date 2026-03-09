@@ -3,7 +3,7 @@ import {
   portalAdminAccessRequestRejectInputSchema,
   type PortalAccessRequestSummary
 } from "@paretoproof/shared";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { accessRequests, auditEvents, roleGrants, users } from "../db/schema.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
@@ -45,8 +45,8 @@ export function registerAdminRoutes(
       preHandler: requireAccess("admin_only")
     },
     async () => {
+      // Until the queue exposes pagination, returning all pending requests keeps every actionable review reachable.
       const requests = await db.query.accessRequests.findMany({
-        limit: 50,
         orderBy: [asc(accessRequests.createdAt)],
         where: eq(accessRequests.status, "pending")
       });
