@@ -6,6 +6,17 @@ export type PortalAccessRequestInput = {
   requestedRole: PortalSelfServiceAccessRequestRole;
 };
 
+export type PortalAdminApprovedRole = "collaborator" | "helper";
+
+export type PortalAdminAccessRequestApproveInput = {
+  approvedRole: PortalAdminApprovedRole;
+  decisionNote: string | null;
+};
+
+export type PortalAdminAccessRequestRejectInput = {
+  decisionNote: string | null;
+};
+
 export type PortalAccessRequestStatus =
   | "approved"
   | "pending"

@@ -107,19 +107,19 @@ export const apiEndpointCatalog = [
   },
   {
     access: "admin_only",
-    audience: "internal",
+    audience: "portal",
     id: "admin.access-request.approve",
     method: "POST",
-    path: "/internal/admin/access-requests/:accessRequestId/approve",
-    purpose: "Approve an access request and issue the requested role grant."
+    path: "/portal/admin/access-requests/:accessRequestId/approve",
+    purpose: "Approve an access request and issue the chosen contributor role grant."
   },
   {
     access: "admin_only",
-    audience: "internal",
+    audience: "portal",
     id: "admin.access-request.reject",
     method: "POST",
-    path: "/internal/admin/access-requests/:accessRequestId/reject",
-    purpose: "Reject an access request and record the decision note."
+    path: "/portal/admin/access-requests/:accessRequestId/reject",
+    purpose: "Reject an access request and record the admin decision note."
   },
   {
     access: "service_token",

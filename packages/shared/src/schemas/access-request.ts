@@ -17,6 +17,14 @@ export const portalAccessRequestInputSchema = z.object({
   requestedRole: portalSelfServiceAccessRequestRoleSchema
 });
 
+const portalAccessDecisionNoteSchema = z.string().trim().max(500).nullish().transform((value) => {
+  if (!value) {
+    return null;
+  }
+
+  return value;
+});
+
 export const portalAccessRequestStatusSchema = z.enum([
   "approved",
   "pending",
@@ -33,4 +41,15 @@ export const portalAccessRequestSummarySchema = z.object({
   requestedRole: portalAccessRequestRoleSchema,
   reviewedAt: z.string().nullable(),
   status: portalAccessRequestStatusSchema
+});
+
+export const portalAdminApprovedRoleSchema = z.enum(["helper", "collaborator"]);
+
+export const portalAdminAccessRequestApproveInputSchema = z.object({
+  approvedRole: portalAdminApprovedRoleSchema,
+  decisionNote: portalAccessDecisionNoteSchema
+});
+
+export const portalAdminAccessRequestRejectInputSchema = z.object({
+  decisionNote: portalAccessDecisionNoteSchema
 });
