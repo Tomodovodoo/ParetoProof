@@ -13,6 +13,7 @@ import {
   userIdentities,
   users
 } from "../db/schema.js";
+import { normalizeOptionalEmail } from "../lib/email.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -47,7 +48,7 @@ function toPortalProfile(options: {
   return {
     createdAt: options.userRow?.createdAt.toISOString() ?? null,
     displayName: options.userRow?.displayName ?? null,
-    email: options.userRow?.email ?? options.fallbackEmail,
+    email: options.userRow?.email ?? normalizeOptionalEmail(options.fallbackEmail),
     identities: [...options.linkedIdentityRows]
       .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
       .map((identityRow) => ({
@@ -115,6 +116,7 @@ export function registerPortalRoutes(
       const pendingUserId =
         accessContext?.status === "pending" ? accessContext.userId : null;
       const canUsePendingFallback = accessContext?.status === "pending";
+      const accessEmail = normalizeOptionalEmail(identity?.email);
 
       if (!identity) {
         throw new Error("Authenticated Access identity was not attached to the request.");
@@ -137,11 +139,11 @@ export function registerPortalRoutes(
               where: eq(accessRequests.requestedByUserId, pendingUserId)
             })
           : null) ??
-        (canUsePendingFallback && identity.email
+        (canUsePendingFallback && accessEmail
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
               where: and(
-                eq(accessRequests.email, identity.email),
+                eq(accessRequests.email, accessEmail),
                 eq(accessRequests.status, "pending")
               )
             })
@@ -167,7 +169,7 @@ export function registerPortalRoutes(
 
       return {
         profile: await loadPortalProfile(db, {
-          fallbackEmail: identity.email,
+          fallbackEmail: normalizeOptionalEmail(identity.email),
           identitySubject: identity.subject
         })
       };
@@ -220,7 +222,7 @@ export function registerPortalRoutes(
 
       return {
         profile: await loadPortalProfile(db, {
-          fallbackEmail: identity.email,
+          fallbackEmail: normalizeOptionalEmail(identity.email),
           identitySubject: identity.subject
         })
       };
@@ -252,7 +254,14 @@ export function registerPortalRoutes(
         return;
       }
 
-      const accessEmail = identity.email;
+      const accessEmail = normalizeOptionalEmail(identity.email);
+
+      if (!accessEmail) {
+        reply.code(400).send({
+          error: "access_email_required"
+        });
+        return;
+      }
 
       let latestRequest;
 
