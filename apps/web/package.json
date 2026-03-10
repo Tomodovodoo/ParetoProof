@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "pages:deploy": "wrangler pages deploy"
+    "pages:deploy": "wrangler pages deploy --project-name=paretoproof-web"
   },
   "dependencies": {
     "@paretoproof/shared": "workspace:*",

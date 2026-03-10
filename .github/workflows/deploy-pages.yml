@@ -44,6 +44,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
           command: >-
-            pages deploy dist
+            pages deploy
             --project-name=paretoproof-web
             --branch=main
