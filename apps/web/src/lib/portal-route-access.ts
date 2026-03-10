@@ -102,7 +102,7 @@ function preserveLocalPortalState(targetPath: string, location = window.location
   const redirectUrl = new URL(targetPath, location.origin);
   const currentParams = new URLSearchParams(location.search);
 
-  for (const key of ["surface", "access", "email", "roles"]) {
+  for (const key of ["surface", "access", "email", "reason", "roles"]) {
     const value = currentParams.get(key);
 
     if (value) {
