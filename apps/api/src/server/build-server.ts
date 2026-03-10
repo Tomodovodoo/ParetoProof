@@ -12,15 +12,15 @@ function normalizeOrigin(value: string) {
 }
 
 function readAllowedCorsOrigins() {
+  const baselineOrigins = [
+    "https://auth.paretoproof.com",
+    "https://portal.paretoproof.com"
+  ];
   const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  if (configuredOrigins?.length) {
-    return configuredOrigins.map(normalizeOrigin);
-  }
-
-  return ["https://portal.paretoproof.com"];
+  return [...new Set([...baselineOrigins, ...(configuredOrigins ?? [])].map(normalizeOrigin))];
 }
 
 function isAllowedLocalOrigin(origin: string) {
