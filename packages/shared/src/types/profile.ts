@@ -3,6 +3,10 @@ export type PortalIdentityProvider =
   | "cloudflare_github"
   | "cloudflare_one_time_pin";
 
+export type PortalLinkableIdentityProvider =
+  | "cloudflare_google"
+  | "cloudflare_github";
+
 export type PortalProfileIdentity = {
   createdAt: string;
   current: boolean;
@@ -23,4 +27,15 @@ export type PortalProfile = {
 
 export type PortalProfileUpdateInput = {
   displayName: string | null;
+};
+
+export type PortalProfileLinkIntentInput = {
+  provider: PortalLinkableIdentityProvider;
+  redirectPath?: string | null;
+};
+
+export type PortalProfileLinkIntent = {
+  expiresAt: string;
+  provider: PortalLinkableIdentityProvider;
+  startUrl: string;
 };

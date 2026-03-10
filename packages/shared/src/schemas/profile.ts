@@ -6,6 +6,11 @@ export const portalIdentityProviderSchema = z.enum([
   "cloudflare_one_time_pin"
 ]);
 
+export const portalLinkableIdentityProviderSchema = z.enum([
+  "cloudflare_google",
+  "cloudflare_github"
+]);
+
 export const portalProfileIdentitySchema = z.object({
   createdAt: z.string(),
   current: z.boolean(),
@@ -32,4 +37,21 @@ export const portalProfileUpdateInputSchema = z.object({
 
     return value;
   })
+});
+
+export const portalProfileLinkIntentInputSchema = z.object({
+  provider: portalLinkableIdentityProviderSchema,
+  redirectPath: z.string().trim().max(500).nullish().transform((value) => {
+    if (!value) {
+      return null;
+    }
+
+    return value;
+  })
+});
+
+export const portalProfileLinkIntentSchema = z.object({
+  expiresAt: z.string(),
+  provider: portalLinkableIdentityProviderSchema,
+  startUrl: z.string().url()
 });

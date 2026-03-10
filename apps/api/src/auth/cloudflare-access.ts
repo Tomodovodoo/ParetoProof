@@ -16,6 +16,11 @@ export type CloudflareAccessIdentity = {
   subject: string;
 };
 
+export type VerifiedAccessLinkIntent = {
+  expiresAt: number;
+  intentId: string;
+};
+
 export type CloudflareAccessVerifier = {
   issuer: string;
   verifyAssertion: (assertion: string) => Promise<CloudflareAccessIdentity>;
@@ -46,21 +51,20 @@ function readCookieValue(cookieHeader: string | undefined, name: string) {
   return null;
 }
 
-export function verifyAccessProviderHint(cookieHeader: string | undefined) {
+function verifySignedAccessCookie(cookieHeader: string | undefined, cookieName: string) {
   const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
-  const rawValue = readCookieValue(cookieHeader, "PortalAccessProvider");
+  const rawValue = readCookieValue(cookieHeader, cookieName);
 
   if (!secret || !rawValue) {
     return null;
   }
 
-  const [provider, expiresAt, signature] = rawValue.split(".");
+  const parts = rawValue.split(".");
+  const signature = parts.at(-1);
+  const expiresAt = parts.at(-2);
+  const payloadParts = parts.slice(0, -2);
 
-  if (
-    (provider !== "cloudflare_github" && provider !== "cloudflare_google") ||
-    !expiresAt ||
-    !signature
-  ) {
+  if (!signature || !expiresAt || payloadParts.length === 0) {
     return null;
   }
 
@@ -70,7 +74,7 @@ export function verifyAccessProviderHint(cookieHeader: string | undefined) {
     return null;
   }
 
-  const payload = `${provider}.${expiresAt}`;
+  const payload = `${payloadParts.join(".")}.${expiresAt}`;
   const expectedSignature = createHmac("sha256", secret).update(payload).digest("base64url");
   const providedSignature = Buffer.from(signature);
   const expectedSignatureBuffer = Buffer.from(expectedSignature);
@@ -82,7 +86,34 @@ export function verifyAccessProviderHint(cookieHeader: string | undefined) {
     return null;
   }
 
+  return {
+    expiresAt: expiresAtNumber,
+    payload: payloadParts.join(".")
+  };
+}
+
+export function verifyAccessProviderHint(cookieHeader: string | undefined) {
+  const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalAccessProvider");
+  const provider = verifiedCookie?.payload;
+
+  if (provider !== "cloudflare_github" && provider !== "cloudflare_google") {
+    return null;
+  }
+
   return provider satisfies PortalIdentityProvider;
+}
+
+export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
+  const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalLinkIntent");
+
+  if (!verifiedCookie?.payload) {
+    return null;
+  }
+
+  return {
+    expiresAt: verifiedCookie.expiresAt,
+    intentId: verifiedCookie.payload
+  } satisfies VerifiedAccessLinkIntent;
 }
 
 export function readAccessJwtAssertion(
