@@ -119,6 +119,40 @@ export function registerAdminRoutes(
         }
 
         const now = new Date();
+        if (requestRow.requestKind === "identity_recovery") {
+          const requestedIdentitySubject = requestRow.requestedIdentitySubject;
+          const requestedIdentityProvider = requestRow.requestedIdentityProvider;
+
+          if (!requestedIdentitySubject || !requestedIdentityProvider) {
+            return {
+              kind: "conflict" as const,
+              requestRow
+            };
+          }
+
+          const existingSubjectOwner = await tx.query.userIdentities.findFirst({
+            where: eq(userIdentities.providerSubject, requestedIdentitySubject)
+          });
+
+          if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
+            return {
+              kind: "conflict" as const,
+              requestRow
+            };
+          }
+        } else {
+          const linkedIdentity = await tx.query.userIdentities.findFirst({
+            where: eq(userIdentities.userId, targetUser.id)
+          });
+
+          if (!linkedIdentity) {
+            return {
+              kind: "identity_link_required" as const,
+              requestRow
+            };
+          }
+        }
+
         const [reviewedRequest] = await tx
           .update(accessRequests)
           .set({
@@ -153,29 +187,15 @@ export function registerAdminRoutes(
           .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
 
         if (requestRow.requestKind === "identity_recovery") {
-          if (!requestRow.requestedIdentitySubject || !requestRow.requestedIdentityProvider) {
-            return {
-              kind: "conflict" as const,
-              requestRow
-            };
-          }
-
           const existingSubjectOwner = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject)
+            where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject!)
           });
-
-          if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
-            return {
-              kind: "conflict" as const,
-              requestRow
-            };
-          }
 
           if (!existingSubjectOwner) {
             await tx.insert(userIdentities).values({
-              provider: requestRow.requestedIdentityProvider,
+              provider: requestRow.requestedIdentityProvider!,
               providerEmail: requestRow.email,
-              providerSubject: requestRow.requestedIdentitySubject,
+              providerSubject: requestRow.requestedIdentitySubject!,
               userId: targetUser.id
             });
           } else {
@@ -276,6 +296,14 @@ export function registerAdminRoutes(
       if (result.kind === "conflict") {
         reply.code(409).send({
           error: "access_request_not_pending",
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
+        });
+        return;
+      }
+
+      if (result.kind === "identity_link_required") {
+        reply.code(409).send({
+          error: "access_identity_link_required",
           item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
         });
         return;

@@ -6,6 +6,7 @@ import {
   createCloudflareAccessVerifierSetFromEnv,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
+  verifyAccessProviderHint,
   type CloudflareAccessIdentity,
   type CloudflareAccessVerifierSet
 } from "./cloudflare-access.js";
@@ -85,6 +86,13 @@ async function resolveRequestAccess(
   } catch (error) {
     throw new AccessAssertionVerificationError(error);
   }
+
+  identity = {
+    ...identity,
+    provider: verifyAccessProviderHint(
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined
+    ) ?? identity.provider
+  };
 
   const context = await resolveAccessRbacContext(db, identity);
 

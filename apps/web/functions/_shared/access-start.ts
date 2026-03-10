@@ -2,10 +2,20 @@ const portalOrigin = "https://portal.paretoproof.com";
 const apiOrigin = "https://api.paretoproof.com";
 
 type Provider = "github" | "google";
+type PersistedProvider = "cloudflare_github" | "cloudflare_google";
+
+type AccessStartEnv = {
+  ACCESS_PROVIDER_STATE_SECRET?: string;
+};
 
 const providerHosts: Record<Provider, string> = {
   github: "github.com",
   google: "accounts.google.com"
+};
+
+const persistedProviders: Record<Provider, PersistedProvider> = {
+  github: "cloudflare_github",
+  google: "cloudflare_google"
 };
 
 function sanitizeRedirectPath(rawRedirectPath: string | null) {
@@ -77,6 +87,46 @@ function buildSharedCookie(setCookieHeader: string | null) {
   ].join("; ");
 }
 
+function toBase64Url(bytes: ArrayBuffer) {
+  const encoded = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return encoded.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function signProviderHint(provider: PersistedProvider, secret: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = `${provider}.${expiresAt}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { hash: "SHA-256", name: "HMAC" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+
+  return `${payload}.${toBase64Url(signature)}`;
+}
+
+async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) {
+  const secret = env.ACCESS_PROVIDER_STATE_SECRET;
+
+  if (!secret) {
+    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
+  }
+
+  const value = await signProviderHint(persistedProviders[provider], secret);
+
+  return [
+    `PortalAccessProvider=${value}`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=None",
+    "Max-Age=600",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
+}
+
 async function resolveAccessLoginState(redirectPath: string) {
   const sessionCompleteUrl = new URL("/portal/session/complete", apiOrigin);
   sessionCompleteUrl.searchParams.set("redirect", redirectPath);
@@ -132,19 +182,26 @@ async function resolveProviderUrl(loginUrl: URL, provider: Provider) {
   throw new Error(`No ${provider} login URL was found on the Access login page.`);
 }
 
-export async function handleAccessStart(request: Request, provider: Provider) {
+export async function handleAccessStart(
+  request: Request,
+  env: AccessStartEnv,
+  provider: Provider
+) {
   const requestUrl = new URL(request.url);
   const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
 
   try {
     const { cookie, loginUrl } = await resolveAccessLoginState(redirectPath);
     const providerUrl = await resolveProviderUrl(loginUrl, provider);
+    const providerHintCookie = await buildProviderHintCookie(env, provider);
+    const headers = new Headers();
+
+    headers.set("location", providerUrl);
+    headers.append("set-cookie", cookie);
+    headers.append("set-cookie", providerHintCookie);
 
     return new Response(null, {
-      headers: {
-        location: providerUrl,
-        "set-cookie": cookie
-      },
+      headers,
       status: 302
     });
   } catch (error) {

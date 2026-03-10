@@ -1,6 +1,8 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { normalizeOptionalEmail } from "../lib/email.js";
+import type { PortalIdentityProvider } from "@paretoproof/shared";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
   email?: string;
@@ -10,6 +12,7 @@ type CloudflareAccessTokenClaims = JWTPayload & {
 export type CloudflareAccessIdentity = {
   email: string | null;
   issuer: string;
+  provider: PortalIdentityProvider | null;
   subject: string;
 };
 
@@ -25,6 +28,61 @@ export type CloudflareAccessVerifierSet = {
 
 function normalizeTeamDomain(teamDomain: string) {
   return teamDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+}
+
+function readCookieValue(cookieHeader: string | undefined, name: string) {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...valueParts] = part.trim().split("=");
+
+    if (rawName === name) {
+      return valueParts.join("=") || null;
+    }
+  }
+
+  return null;
+}
+
+export function verifyAccessProviderHint(cookieHeader: string | undefined) {
+  const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  const rawValue = readCookieValue(cookieHeader, "PortalAccessProvider");
+
+  if (!secret || !rawValue) {
+    return null;
+  }
+
+  const [provider, expiresAt, signature] = rawValue.split(".");
+
+  if (
+    (provider !== "cloudflare_github" && provider !== "cloudflare_google") ||
+    !expiresAt ||
+    !signature
+  ) {
+    return null;
+  }
+
+  const expiresAtNumber = Number.parseInt(expiresAt, 10);
+
+  if (!Number.isFinite(expiresAtNumber) || expiresAtNumber < Math.floor(Date.now() / 1000)) {
+    return null;
+  }
+
+  const payload = `${provider}.${expiresAt}`;
+  const expectedSignature = createHmac("sha256", secret).update(payload).digest("base64url");
+  const providedSignature = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSignature);
+
+  if (
+    providedSignature.length !== expectedSignatureBuffer.length ||
+    !timingSafeEqual(providedSignature, expectedSignatureBuffer)
+  ) {
+    return null;
+  }
+
+  return provider satisfies PortalIdentityProvider;
 }
 
 export function readAccessJwtAssertion(
@@ -66,6 +124,7 @@ export function createCloudflareAccessVerifier(options: {
       return {
         email: normalizeOptionalEmail(payload.email),
         issuer,
+        provider: null,
         subject: payload.sub
       };
     }

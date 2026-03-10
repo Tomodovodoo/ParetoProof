@@ -224,6 +224,12 @@ export function registerPortalRoutes(
                 eq(accessRequests.status, "pending")
               )
             })
+          : null) ??
+        (accessEmail
+          ? await db.query.accessRequests.findFirst({
+              orderBy: [desc(accessRequests.createdAt)],
+              where: eq(accessRequests.email, accessEmail)
+            })
           : null);
 
       return {
@@ -332,6 +338,7 @@ export function registerPortalRoutes(
       }
 
       const accessEmail = normalizeOptionalEmail(identity.email);
+      const accessProvider = identity.provider ?? "cloudflare_one_time_pin";
 
       if (!accessEmail) {
         reply.code(400).send({
@@ -400,7 +407,7 @@ export function registerPortalRoutes(
             // A new Access subject may only link itself to a user record that has never
             // been linked before. Multi-provider recovery and explicit linking live elsewhere.
             await tx.insert(userIdentities).values({
-              provider: "cloudflare_one_time_pin",
+              provider: accessProvider,
               providerEmail: accessEmail,
               providerSubject: identity.subject,
               userId: user.id
@@ -561,6 +568,7 @@ export function registerPortalRoutes(
       }
 
       const accessEmail = normalizeOptionalEmail(identity.email);
+      const accessProvider = identity.provider ?? "cloudflare_one_time_pin";
 
       if (!accessEmail) {
         reply.code(400).send({
@@ -610,7 +618,7 @@ export function registerPortalRoutes(
             const payloadChanged =
               existingRequest.requestKind !== "identity_recovery" ||
               existingRequest.rationale !== parsedBody.data.rationale ||
-              existingRequest.requestedIdentityProvider !== "cloudflare_one_time_pin" ||
+              existingRequest.requestedIdentityProvider !== accessProvider ||
               existingRequest.requestedIdentitySubject !== identity.subject ||
               existingRequest.requestedRole !== recoveryRole;
 
@@ -623,7 +631,7 @@ export function registerPortalRoutes(
               .set({
                 rationale: parsedBody.data.rationale,
                 requestKind: "identity_recovery",
-                requestedIdentityProvider: "cloudflare_one_time_pin",
+                requestedIdentityProvider: accessProvider,
                 requestedIdentitySubject: identity.subject,
                 requestedByUserId: matchingUser.id,
                 requestedRole: recoveryRole
@@ -656,7 +664,7 @@ export function registerPortalRoutes(
               email: accessEmail,
               rationale: parsedBody.data.rationale,
               requestKind: "identity_recovery",
-              requestedIdentityProvider: "cloudflare_one_time_pin",
+              requestedIdentityProvider: accessProvider,
               requestedIdentitySubject: identity.subject,
               requestedByUserId: matchingUser.id,
               requestedRole: recoveryRole
