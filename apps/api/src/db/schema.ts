@@ -24,6 +24,11 @@ export const accessRequestStatusEnum = pgEnum("access_request_status", [
   "withdrawn"
 ]);
 
+export const accessRequestKindEnum = pgEnum("access_request_kind", [
+  "access_request",
+  "identity_recovery"
+]);
+
 export const identityProviderEnum = pgEnum("identity_provider", [
   "cloudflare_one_time_pin",
   "cloudflare_github",
@@ -130,9 +135,14 @@ export const accessRequests = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
+    requestKind: accessRequestKindEnum("request_kind")
+      .default("access_request")
+      .notNull(),
     requestedRole: accessRoleEnum("requested_role").notNull(),
     status: accessRequestStatusEnum("status").default("pending").notNull(),
     rationale: text("rationale"),
+    requestedIdentityProvider: identityProviderEnum("requested_identity_provider"),
+    requestedIdentitySubject: text("requested_identity_subject"),
     requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
       onDelete: "set null"
     }),
@@ -147,7 +157,13 @@ export const accessRequests = pgTable(
   },
   (table) => ({
     emailIndex: index("access_requests_email_idx").on(table.email),
-    statusIndex: index("access_requests_status_idx").on(table.status)
+    requestedIdentitySubjectIndex: index("access_requests_requested_identity_subject_idx").on(
+      table.requestedIdentitySubject
+    ),
+    statusIndex: index("access_requests_status_idx").on(table.status),
+    activePendingEmailUnique: uniqueIndex("access_requests_active_pending_email_unique")
+      .on(table.email)
+      .where(sql`${table.status} = 'pending'`)
   })
 );
 
@@ -184,6 +200,30 @@ export const sessions = pgTable(
   })
 );
 
+export const identityLinkIntents = pgTable(
+  "identity_link_intents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetProvider: identityProviderEnum("target_provider").notNull(),
+    redirectPath: text("redirect_path").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    activeUserProviderUnique: uniqueIndex("identity_link_intents_active_user_provider_unique")
+      .on(table.userId, table.targetProvider)
+      .where(sql`${table.usedAt} is null`),
+    expiresAtIndex: index("identity_link_intents_expires_at_idx").on(table.expiresAt),
+    userIndex: index("identity_link_intents_user_id_idx").on(table.userId)
+  })
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {
@@ -212,6 +252,7 @@ export const auditEvents = pgTable(
 
 export const usersRelations = relations(users, ({ many }) => ({
   identities: many(userIdentities),
+  identityLinkIntents: many(identityLinkIntents),
   roleGrants: many(roleGrants),
   accessRequests: many(accessRequests),
   sessions: many(sessions),
@@ -229,6 +270,13 @@ export const userIdentitiesRelations = relations(userIdentities, ({ one, many })
     references: [users.id]
   }),
   sessions: many(sessions)
+}));
+
+export const identityLinkIntentsRelations = relations(identityLinkIntents, ({ one }) => ({
+  user: one(users, {
+    fields: [identityLinkIntents.userId],
+    references: [users.id]
+  })
 }));
 
 export const roleGrantsRelations = relations(roleGrants, ({ one }) => ({

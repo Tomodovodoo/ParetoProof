@@ -1,6 +1,6 @@
-import type { ApiCallBoundaryEntry } from "../types/api-call-boundary";
+import type { ApiCallBoundaryEntry } from "../types/api-call-boundary.js";
 
-// MVP keeps portal traffic simple: the browser talks directly to /portal routes, while /internal stays service-only.
+// The current live contract only includes routes that the Fastify API actually registers.
 export const apiCallBoundaryCatalog = [
   {
     credential: "none",
@@ -11,28 +11,20 @@ export const apiCallBoundaryCatalog = [
       "Health checks need to work without Access so Railway and external uptime probes can reach the API."
   },
   {
-    credential: "none",
-    endpointId: "benchmarks.list",
-    mode: "browser_direct",
-    origin: "public_browser",
-    rationale:
-      "Public benchmark metadata is read directly by the public website without portal mediation."
-  },
-  {
-    credential: "none",
-    endpointId: "benchmark-report.read",
-    mode: "browser_direct",
-    origin: "public_browser",
-    rationale:
-      "Published benchmark reports are public read traffic, so the website can fetch them directly from the browser."
-  },
-  {
     credential: "cloudflare_access_jwt",
     endpointId: "portal.me.read",
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
       "The portal shell needs the caller identity immediately after Access login, so the browser calls the protected route directly."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.session.complete",
+    mode: "browser_navigation",
+    origin: "portal_browser",
+    rationale:
+      "Custom auth buttons finish on a protected API handoff route first so Cloudflare Access can establish the API audience before the browser returns to the static portal host."
   },
   {
     credential: "cloudflare_access_jwt",
@@ -52,35 +44,27 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
-    endpointId: "portal.runs.list",
+    endpointId: "portal.access-recovery.create",
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
-      "Run listings are first-party portal data and the browser already arrives with an Access-backed identity assertion."
+      "Identity recovery starts from the denied portal surface, so the authenticated browser must be able to open a manual recovery request without a second backend proxy."
   },
   {
     credential: "cloudflare_access_jwt",
-    endpointId: "portal.runs.read",
+    endpointId: "portal.profile.read",
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
-      "Authenticated users inspect run status directly from the portal, so the browser can call the matching portal route."
+      "Approved portal users read their own profile directly from the authenticated portal surface."
   },
   {
     credential: "cloudflare_access_jwt",
-    endpointId: "portal.runs.create",
+    endpointId: "portal.profile.update",
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
-      "Benchmark launches remain user-initiated portal actions; the backend still enforces collaborator-or-admin role checks."
-  },
-  {
-    credential: "cloudflare_access_jwt",
-    endpointId: "portal.runs.cancel",
-    mode: "browser_direct",
-    origin: "portal_browser",
-    rationale:
-      "Run cancellation is the same authenticated portal control-plane action and does not need a second server mediation layer in MVP."
+      "Profile edits remain first-party portal mutations and use the same portal audience as other user-facing routes."
   },
   {
     credential: "cloudflare_access_jwt",
@@ -105,29 +89,5 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "Rejection stays on the authenticated portal audience for MVP, while the backend still enforces admin-only RBAC and audit logging."
-  },
-  {
-    credential: "cloudflare_service_token",
-    endpointId: "worker.jobs.heartbeat",
-    mode: "internal_service_only",
-    origin: "worker_service",
-    rationale:
-      "Heartbeat traffic is machine-to-machine control-plane traffic and must never be reachable from the browser."
-  },
-  {
-    credential: "cloudflare_service_token",
-    endpointId: "worker.jobs.event",
-    mode: "internal_service_only",
-    origin: "worker_service",
-    rationale:
-      "Worker event ingestion is internal telemetry and should stay behind the internal Access audience and service token boundary."
-  },
-  {
-    credential: "cloudflare_service_token",
-    endpointId: "worker.jobs.result",
-    mode: "internal_service_only",
-    origin: "worker_service",
-    rationale:
-      "Final worker result submission carries privileged run state and artifact references, so it is restricted to internal service callers."
   }
 ] satisfies ApiCallBoundaryEntry[];

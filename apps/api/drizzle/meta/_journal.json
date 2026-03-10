@@ -43,6 +43,27 @@
       "when": 1773039000000,
       "tag": "0005_premium_cuckoo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773042600000,
+      "tag": "0006_violet_hobgoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773046200000,
+      "tag": "0007_dazzling_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773139800000,
+      "tag": "0008_tan_molecule_man",
+      "breakpoints": true
     }
   ]
 }

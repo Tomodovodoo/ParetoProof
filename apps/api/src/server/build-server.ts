@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
 import Fastify from "fastify";
 import { createAccessGuard } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
@@ -19,11 +20,7 @@ function readAllowedCorsOrigins() {
     return configuredOrigins.map(normalizeOrigin);
   }
 
-  return [
-    "https://paretoproof.com",
-    "https://auth.paretoproof.com",
-    "https://portal.paretoproof.com"
-  ];
+  return ["https://portal.paretoproof.com"];
 }
 
 function isAllowedLocalOrigin(origin: string) {
@@ -64,6 +61,7 @@ export async function buildServer() {
       callback(new Error("origin_not_allowed"), false);
     }
   });
+  await app.register(formbody);
 
   registerHealthRoute(app);
   registerPortalRoutes(app, db, requireAccess);

@@ -1,11 +1,20 @@
 const portalOrigin = "https://portal.paretoproof.com";
-const accessOrigin = "https://paretoproof.cloudflareaccess.com";
 
 type Provider = "github" | "google";
+type PersistedProvider = "cloudflare_github" | "cloudflare_google";
 
-const providerHosts: Record<Provider, string> = {
-  github: "github.com",
-  google: "accounts.google.com"
+type AccessStartEnv = {
+  ACCESS_PROVIDER_STATE_SECRET?: string;
+};
+
+const providerOrigins: Record<Provider, string> = {
+  github: "https://github.auth.paretoproof.com",
+  google: "https://google.auth.paretoproof.com"
+};
+
+const persistedProviders: Record<Provider, PersistedProvider> = {
+  github: "cloudflare_github",
+  google: "cloudflare_google"
 };
 
 function sanitizeRedirectPath(rawRedirectPath: string | null) {
@@ -18,7 +27,10 @@ function sanitizeRedirectPath(rawRedirectPath: string | null) {
   }
 
   try {
-    const url = new URL(rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`, portalOrigin);
+    const url = new URL(
+      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
+      portalOrigin
+    );
 
     if (url.origin !== portalOrigin) {
       return "/";
@@ -30,85 +42,89 @@ function sanitizeRedirectPath(rawRedirectPath: string | null) {
   }
 }
 
-function decodeHtmlEntities(input: string) {
-  return input
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
-      String.fromCodePoint(Number.parseInt(hex, 16))
-    )
-    .replace(/&#([0-9]+);/g, (_, decimal) =>
-      String.fromCodePoint(Number.parseInt(decimal, 10))
-    )
-    .replaceAll("&amp;", "&")
-    .replaceAll("&quot;", "\"")
-    .replaceAll("&#39;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">");
+function toBase64Url(bytes: ArrayBuffer) {
+  const encoded = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return encoded.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-async function resolveAccessLoginUrl(redirectPath: string) {
-  const response = await fetch(new URL(redirectPath, portalOrigin), {
-    method: "GET",
-    redirect: "manual"
-  });
+async function signProviderHint(provider: PersistedProvider, secret: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = `${provider}.${expiresAt}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { hash: "SHA-256", name: "HMAC" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
 
-  if (response.status !== 302) {
-    throw new Error(`Expected Access redirect, received ${response.status}.`);
-  }
-
-  const location = response.headers.get("location");
-
-  if (!location) {
-    throw new Error("Cloudflare Access did not return a login redirect.");
-  }
-
-  const loginUrl = new URL(location);
-
-  if (loginUrl.origin !== accessOrigin) {
-    throw new Error("Cloudflare Access login redirect origin did not match the expected team domain.");
-  }
-
-  return loginUrl;
+  return `${payload}.${toBase64Url(signature)}`;
 }
 
-async function resolveProviderUrl(loginUrl: URL, provider: Provider) {
-  const response = await fetch(loginUrl.toString(), {
-    method: "GET",
-    redirect: "follow"
-  });
+async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) {
+  const secret = env.ACCESS_PROVIDER_STATE_SECRET;
 
-  if (!response.ok) {
-    throw new Error(`Cloudflare Access login page returned ${response.status}.`);
+  if (!secret) {
+    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
   }
 
-  const html = await response.text();
-  const hrefMatches = html.matchAll(/href="([^"]+)"/g);
+  const value = await signProviderHint(persistedProviders[provider], secret);
 
-  for (const match of hrefMatches) {
-    const href = decodeHtmlEntities(match[1] ?? "");
-
-    try {
-      const candidate = new URL(href);
-
-      if (candidate.hostname === providerHosts[provider]) {
-        return candidate.toString();
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  throw new Error(`No ${provider} login URL was found on the Access login page.`);
+  return [
+    `PortalAccessProvider=${value}`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=Strict",
+    "Max-Age=600",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
 }
 
-export async function handleAccessStart(request: Request, provider: Provider) {
-  const requestUrl = new URL(request.url);
-  const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
+  return [
+    `${name}=`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=Strict",
+    "Max-Age=0",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
+}
 
+export async function handleAccessStart(
+  request: Request,
+  env: AccessStartEnv,
+  provider: Provider
+) {
   try {
-    const loginUrl = await resolveAccessLoginUrl(redirectPath);
-    const providerUrl = await resolveProviderUrl(loginUrl, provider);
+    const requestUrl = new URL(request.url);
+    const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+    const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
+    const providerUrl = new URL("/", providerOrigins[provider]);
+    const providerHintCookie = await buildProviderHintCookie(env, provider);
 
-    return Response.redirect(providerUrl, 302);
+    if (redirectPath !== "/") {
+      providerUrl.searchParams.set("redirect", redirectPath);
+    }
+
+    const headers = new Headers({
+      location: providerUrl.toString()
+    });
+
+    // Regular sign-in should not inherit an abandoned profile-link cookie.
+    if (flow !== "link") {
+      headers.append("set-cookie", clearSignedAccessCookie("PortalLinkIntent"));
+    }
+
+    headers.append("set-cookie", providerHintCookie);
+
+    return new Response(null, {
+      headers,
+      status: 302
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({

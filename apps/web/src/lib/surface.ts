@@ -1,8 +1,13 @@
 export type WebSurface = "public" | "auth" | "portal";
+export type AccessProvider = "github" | "google";
 
 const productionPublicOrigin = "https://paretoproof.com";
 const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
+const productionProviderAuthOrigins: Record<AccessProvider, string> = {
+  github: "https://github.auth.paretoproof.com",
+  google: "https://google.auth.paretoproof.com"
+};
 
 function readLocalSurfaceOverride() {
   const params = new URLSearchParams(window.location.search);
@@ -27,7 +32,11 @@ function isLocalOrigin(hostname = window.location.hostname) {
 }
 
 export function resolveWebSurface(hostname = window.location.hostname): WebSurface {
-  if (hostname === "auth.paretoproof.com") {
+  if (
+    hostname === "auth.paretoproof.com" ||
+    hostname === "github.auth.paretoproof.com" ||
+    hostname === "google.auth.paretoproof.com"
+  ) {
     return "auth";
   }
 
@@ -136,8 +145,11 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
 }
 
 export function buildAccessStartUrl(
-  provider: "github" | "google",
+  provider: AccessProvider,
   targetPath = "/",
+  options?: {
+    flow?: "sign_in" | "link";
+  },
   hostname = window.location.hostname
 ) {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
@@ -156,7 +168,34 @@ export function buildAccessStartUrl(
     authUrl.searchParams.set("redirect", normalizedTargetPath);
   }
 
+  if (options?.flow === "link") {
+    authUrl.searchParams.set("flow", "link");
+  }
+
   return authUrl.toString();
+}
+
+export function buildApiSessionCompleteUrl(targetPath = "/") {
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+  const completionUrl = new URL("/portal/session/complete", "https://api.paretoproof.com");
+
+  if (normalizedTargetPath !== "/") {
+    completionUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  return completionUrl.toString();
+}
+
+export function resolveAccessProviderHost(hostname = window.location.hostname): AccessProvider | null {
+  if (hostname === "github.auth.paretoproof.com") {
+    return "github";
+  }
+
+  if (hostname === "google.auth.paretoproof.com") {
+    return "google";
+  }
+
+  return null;
 }
 
 export function getCurrentRelativeUrl(location = window.location) {

@@ -16,6 +16,7 @@ type ExistingIdentityRow = {
 
 type ExistingGrantRow = {
   id: string;
+  role: "admin" | "collaborator" | "helper";
 };
 
 function getDatabaseUrl() {
@@ -174,16 +175,23 @@ async function main() {
         `;
       }
 
-      const [existingAdminGrant] = await tx<Array<ExistingGrantRow>>`
-        select id
+      const activeGrantRows = await tx<Array<ExistingGrantRow>>`
+        select id, role
         from public.role_grants
         where user_id = ${user.id}
-          and role = ${"admin"}
           and revoked_at is null
-        limit 1
       `;
 
-      if (!existingAdminGrant) {
+      const hasActiveAdminGrant = activeGrantRows.some(({ role }) => role === "admin");
+
+      if (!hasActiveAdminGrant) {
+        await tx`
+          update public.role_grants
+          set revoked_at = now()
+          where user_id = ${user.id}
+            and revoked_at is null
+        `;
+
         await tx`
           insert into public.role_grants (user_id, role)
           values (${user.id}, ${"admin"})

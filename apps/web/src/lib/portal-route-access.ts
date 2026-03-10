@@ -9,7 +9,11 @@ type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
 
 type PortalRouteAccessContext = {
   pathname: string;
-  reason?: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
+  reason?:
+    | "access_request_required"
+    | "identity_recovery_required"
+    | "rejected_or_withdrawn"
+    | "unknown_identity";
   roles: string[];
   status: PortalAccessStatus;
 };

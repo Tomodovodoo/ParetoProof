@@ -18,7 +18,11 @@ type PortalAccessState =
   | { status: "pending"; email: string | null }
   | {
       email: string | null;
-      reason: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
+      reason:
+        | "access_request_required"
+        | "identity_recovery_required"
+        | "rejected_or_withdrawn"
+        | "unknown_identity";
       status: "denied";
     }
   | { status: "error"; message: string };
@@ -27,7 +31,11 @@ type PortalMeResponse = {
   access: {
     email: string | null;
     roles?: string[];
-    reason?: "access_request_required" | "rejected_or_withdrawn" | "unknown_identity";
+    reason?:
+      | "access_request_required"
+      | "identity_recovery_required"
+      | "rejected_or_withdrawn"
+      | "unknown_identity";
     status: "approved" | "pending" | "denied";
   };
 };
@@ -216,6 +224,37 @@ export function PortalBootstrap() {
     window.location.replace(buildPortalUrl("/pending"));
   }
 
+  async function submitAccessRecovery(payload: { rationale: string | null }) {
+    if (isLocalHostname(window.location.hostname)) {
+      setState({
+        email: state.status === "denied" || state.status === "pending" ? state.email : null,
+        status: "pending"
+      });
+      window.history.replaceState({}, "", buildPortalUrl("/pending"));
+      return;
+    }
+
+    const response = await fetch(`${apiBaseUrl}/portal/access-recovery`, {
+      body: JSON.stringify(payload),
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Access recovery failed with ${response.status}.`);
+    }
+
+    setState({
+      email: state.status === "denied" || state.status === "pending" ? state.email : null,
+      status: "pending"
+    });
+    window.location.replace(buildPortalUrl("/pending"));
+  }
+
   if (state.status === "loading") {
     return (
       <PortalStatusCard
@@ -260,6 +299,16 @@ export function PortalBootstrap() {
       );
     }
 
+    if (state.reason === "identity_recovery_required") {
+      return (
+        <AccessRequestScreen
+          email={state.email}
+          mode="identity_recovery"
+          onSubmit={submitAccessRecovery}
+        />
+      );
+    }
+
     return (
       <PortalStatusCard
         eyebrow="Portal"
@@ -283,7 +332,7 @@ export function PortalBootstrap() {
         eyebrow="Portal"
         title="Portal unavailable"
         body={state.message}
-        action={{ href: buildAuthUrl(currentRelativeUrl), label: "Return to sign in" }}
+        action={{ href: buildPortalUrl(currentRelativeUrl), label: "Retry portal" }}
       />
     );
   }

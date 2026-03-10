@@ -2,7 +2,7 @@ import type {
   PortalRole,
   PortalSectionDefinition,
   PortalSectionVisibility
-} from "../types/portal-navigation";
+} from "../types/portal-navigation.js";
 
 const portalRoleRank: Record<PortalRole, number> = {
   admin: 3,

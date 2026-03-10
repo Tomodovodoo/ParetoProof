@@ -1,4 +1,4 @@
-import type { PortalRole } from "./portal-navigation";
+import type { PortalRole } from "./portal-navigation.js";
 
 export type PortalActionId =
   | "review_runs"

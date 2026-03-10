@@ -7,7 +7,7 @@ type AuthEntryProps = {
 export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const githubStartUrl = buildAccessStartUrl("github", redirectPath);
   const googleStartUrl = buildAccessStartUrl("google", redirectPath);
-  const isLocal = isLocalHostname(window.location.hostname);
+  const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
 
   return (
     <main className="auth-shell">

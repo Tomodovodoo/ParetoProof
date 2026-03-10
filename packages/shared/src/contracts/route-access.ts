@@ -1,4 +1,4 @@
-import type { AppRouteMatrixEntry } from "../types/route-access";
+import type { AppRouteMatrixEntry } from "../types/route-access.js";
 
 export const appRouteAccessMatrix = [
   {
