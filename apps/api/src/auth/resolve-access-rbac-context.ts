@@ -74,6 +74,21 @@ async function getPendingRecoveryRequestForSubject(
   });
 }
 
+async function getLatestRecoveryRequestForSubject(
+  db: DbClient,
+  email: string,
+  subject: string
+) {
+  return db.query.accessRequests.findFirst({
+    orderBy: [desc(accessRequests.createdAt)],
+    where: and(
+      eq(accessRequests.email, email),
+      eq(accessRequests.requestKind, "identity_recovery"),
+      eq(accessRequests.requestedIdentitySubject, subject)
+    )
+  });
+}
+
 export async function resolveAccessRbacContext(
   db: DbClient,
   identity: CloudflareAccessIdentity
@@ -166,6 +181,25 @@ export async function resolveAccessRbacContext(
         status: "pending",
         subject: identity.subject,
         userId: matchingUser.id
+      };
+    }
+
+    const latestRecoveryRequest = await getLatestRecoveryRequestForSubject(
+      db,
+      normalizedIdentityEmail,
+      identity.subject
+    );
+
+    if (
+      latestRecoveryRequest &&
+      (latestRecoveryRequest.status === "rejected" ||
+        latestRecoveryRequest.status === "withdrawn")
+    ) {
+      return {
+        email: normalizedIdentityEmail,
+        reason: "rejected_or_withdrawn",
+        status: "denied",
+        subject: identity.subject
       };
     }
 
