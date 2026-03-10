@@ -2,6 +2,7 @@ const portalOrigin = "https://portal.paretoproof.com";
 
 type Provider = "github" | "google";
 type PersistedProvider = "cloudflare_github" | "cloudflare_google";
+type AccessFlow = "sign_in" | "link";
 
 type AccessStartEnv = {
   ACCESS_PROVIDER_STATE_SECRET?: string;
@@ -82,6 +83,18 @@ async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) 
   ].join("; ");
 }
 
+function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
+  return [
+    `${name}=`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=Strict",
+    "Max-Age=0",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
+}
+
 export async function handleAccessStart(
   request: Request,
   env: AccessStartEnv,
@@ -90,18 +103,26 @@ export async function handleAccessStart(
   try {
     const requestUrl = new URL(request.url);
     const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+    const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
     const providerUrl = new URL("/", providerOrigins[provider]);
     const providerHintCookie = await buildProviderHintCookie(env, provider);
+    const headers = new Headers({
+      location: providerUrl.toString()
+    });
 
     if (redirectPath !== "/") {
       providerUrl.searchParams.set("redirect", redirectPath);
     }
 
+    // Regular sign-in should not inherit an abandoned profile-link cookie.
+    if (flow !== "link") {
+      headers.append("set-cookie", clearSignedAccessCookie("PortalLinkIntent"));
+    }
+
+    headers.append("set-cookie", providerHintCookie);
+
     return new Response(null, {
-      headers: {
-        location: providerUrl.toString(),
-        "set-cookie": providerHintCookie
-      },
+      headers,
       status: 302
     });
   } catch (error) {

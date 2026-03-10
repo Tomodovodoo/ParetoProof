@@ -148,7 +148,7 @@ export function buildAccessStartUrl(
   provider: AccessProvider,
   targetPath = "/",
   options?: {
-    linkIntentId?: string | null;
+    flow?: "sign_in" | "link";
   },
   hostname = window.location.hostname
 ) {
@@ -162,10 +162,14 @@ export function buildAccessStartUrl(
     return localUrl.toString();
   }
 
-  const authUrl = new URL("/", productionProviderAuthOrigins[provider]);
+  const authUrl = new URL(`/api/access/start/${provider}`, productionAuthOrigin);
 
   if (normalizedTargetPath !== "/") {
     authUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  if (options?.flow === "link") {
+    authUrl.searchParams.set("flow", "link");
   }
 
   return authUrl.toString();

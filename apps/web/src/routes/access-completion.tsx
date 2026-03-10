@@ -8,7 +8,17 @@ type AccessCompletionProps = {
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
   useEffect(() => {
-    window.location.replace(buildApiSessionCompleteUrl(redirectPath));
+    const form = document.createElement("form");
+
+    form.method = "POST";
+    form.action = buildApiSessionCompleteUrl(redirectPath);
+    form.style.display = "none";
+    document.body.append(form);
+    form.submit();
+
+    return () => {
+      form.remove();
+    };
   }, [redirectPath]);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";

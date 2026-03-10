@@ -117,15 +117,17 @@ function buildPortalAuthStartUrl(options: {
   redirectPath: string;
 }) {
   const authUrl = new URL(
-    "/",
     options.provider === "cloudflare_github"
-      ? "https://github.auth.paretoproof.com"
-      : "https://google.auth.paretoproof.com"
+      ? "/api/access/start/github"
+      : "/api/access/start/google",
+    "https://auth.paretoproof.com"
   );
 
   if (options.redirectPath !== "/") {
     authUrl.searchParams.set("redirect", options.redirectPath);
   }
+
+  authUrl.searchParams.set("flow", "link");
 
   return authUrl.toString();
 }
@@ -196,15 +198,21 @@ export function registerPortalRoutes(
     }
   );
 
-  app.get(
+  app.post(
     "/portal/session/complete",
     {
       preHandler: requireAccess("authenticated_access_identity")
     },
     async (request, reply) => {
+      const parsedBody =
+        typeof request.body === "object" && request.body !== null
+          ? (request.body as { redirect?: string })
+          : undefined;
       const identity = request.accessIdentity;
       const redirectPath = sanitizePortalRedirectPath(
-        (request.query as { redirect?: string } | undefined)?.redirect ?? null
+        parsedBody?.redirect ??
+          (request.query as { redirect?: string } | undefined)?.redirect ??
+          null
       );
       const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
       const cookieHeader =
