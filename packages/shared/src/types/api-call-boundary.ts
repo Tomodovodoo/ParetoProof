@@ -1,5 +1,6 @@
 export type ApiCallBoundaryMode =
   | "browser_direct"
+  | "browser_navigation"
   | "portal_server_mediated"
   | "internal_service_only";
 

@@ -1,4 +1,4 @@
-import type { ApiEndpointCatalogEntry } from "../types/api-catalog";
+import type { ApiEndpointCatalogEntry } from "../types/api-catalog.js";
 
 export const apiEndpointCatalog = [
   {
@@ -16,6 +16,15 @@ export const apiEndpointCatalog = [
     method: "GET",
     path: "/portal/me",
     purpose: "Return the caller's resolved identity, role summary, and approval state."
+  },
+  {
+    access: "authenticated_access_identity",
+    audience: "portal",
+    id: "portal.session.complete",
+    method: "GET",
+    path: "/portal/session/complete",
+    purpose:
+      "Finish the Cloudflare Access login handoff on the API audience and return the browser to the static portal host."
   },
   {
     access: "authenticated_access_identity",

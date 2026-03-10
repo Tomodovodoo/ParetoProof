@@ -1,4 +1,4 @@
-import type { ApiCallBoundaryEntry } from "../types/api-call-boundary";
+import type { ApiCallBoundaryEntry } from "../types/api-call-boundary.js";
 
 // The current live contract only includes routes that the Fastify API actually registers.
 export const apiCallBoundaryCatalog = [
@@ -17,6 +17,14 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "The portal shell needs the caller identity immediately after Access login, so the browser calls the protected route directly."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.session.complete",
+    mode: "browser_navigation",
+    origin: "portal_browser",
+    rationale:
+      "Custom auth buttons finish on a protected API handoff route first so Cloudflare Access can establish the API audience before the browser returns to the static portal host."
   },
   {
     credential: "cloudflare_access_jwt",

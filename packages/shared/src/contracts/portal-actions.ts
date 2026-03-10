@@ -1,5 +1,5 @@
-import type { PortalActionDefinition, PortalActionId } from "../types/portal-actions";
-import type { PortalRole } from "../types/portal-navigation";
+import type { PortalActionDefinition, PortalActionId } from "../types/portal-actions.js";
+import type { PortalRole } from "../types/portal-navigation.js";
 
 type PortalActionBlueprint = {
   collaboratorState: PortalActionDefinition["state"];

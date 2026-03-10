@@ -4,7 +4,7 @@ import {
   portalAccessRequestSummarySchema,
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
-} from "../schemas/access-request";
+} from "../schemas/access-request.js";
 
 export const portalAccessRequestContract = {
   adminApproveInput: portalAdminAccessRequestApproveInputSchema,

@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "bun run build:railway",
+    "buildCommand": "bun run build:api:railway",
     "watchPatterns": [
       "/apps/api/**",
       "/packages/shared/**",
@@ -16,7 +16,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "bun run start:railway",
+    "startCommand": "bun run start:api:railway",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

@@ -1,4 +1,4 @@
-import type { AuditEventCatalogEntry } from "../types/audit-event";
+import type { AuditEventCatalogEntry } from "../types/audit-event.js";
 
 // These are the minimum privileged events the MVP backend must be able to record before manual approvals and run control expand.
 export const auditEventCatalog = [

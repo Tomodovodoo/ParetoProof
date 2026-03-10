@@ -1,7 +1,7 @@
 import type {
   RunKindCatalogEntry,
   RunLifecycleStateCatalogEntry
-} from "../types/run-control";
+} from "../types/run-control.js";
 
 export const runKindCatalog = [
   {

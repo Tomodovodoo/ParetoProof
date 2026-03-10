@@ -1,4 +1,4 @@
-import { portalProfileSchema, portalProfileUpdateInputSchema } from "../schemas/profile";
+import { portalProfileSchema, portalProfileUpdateInputSchema } from "../schemas/profile.js";
 
 export const portalProfileContract = {
   readOutput: portalProfileSchema,
