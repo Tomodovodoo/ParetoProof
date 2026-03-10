@@ -332,7 +332,7 @@ export function PortalBootstrap() {
         eyebrow="Portal"
         title="Portal unavailable"
         body={state.message}
-        action={{ href: buildAuthUrl(currentRelativeUrl), label: "Return to sign in" }}
+        action={{ href: buildPortalUrl(currentRelativeUrl), label: "Retry portal" }}
       />
     );
   }

@@ -2,7 +2,6 @@ const portalOrigin = "https://portal.paretoproof.com";
 
 type Provider = "github" | "google";
 type PersistedProvider = "cloudflare_github" | "cloudflare_google";
-type AccessFlow = "sign_in" | "link";
 
 type AccessStartEnv = {
   ACCESS_PROVIDER_STATE_SECRET?: string;
@@ -106,13 +105,14 @@ export async function handleAccessStart(
     const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
     const providerUrl = new URL("/", providerOrigins[provider]);
     const providerHintCookie = await buildProviderHintCookie(env, provider);
-    const headers = new Headers({
-      location: providerUrl.toString()
-    });
 
     if (redirectPath !== "/") {
       providerUrl.searchParams.set("redirect", redirectPath);
     }
+
+    const headers = new Headers({
+      location: providerUrl.toString()
+    });
 
     // Regular sign-in should not inherit an abandoned profile-link cookie.
     if (flow !== "link") {
