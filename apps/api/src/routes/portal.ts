@@ -20,6 +20,7 @@ import {
 import { normalizeOptionalEmail } from "../lib/email.js";
 import {
   buildSignedAccessCookie,
+  verifyAccessProviderHint,
   verifyAccessLinkIntent
 } from "../auth/cloudflare-access.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
@@ -204,20 +205,21 @@ export function registerPortalRoutes(
       preHandler: requireAccess("authenticated_access_identity")
     },
     async (request, reply) => {
+      const cookieHeader =
+        typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+      const identity = request.accessIdentity;
       const parsedBody =
         typeof request.body === "object" && request.body !== null
           ? (request.body as { redirect?: string })
           : undefined;
-      const identity = request.accessIdentity;
       const redirectPath = sanitizePortalRedirectPath(
         parsedBody?.redirect ??
-          (request.query as { redirect?: string } | undefined)?.redirect ??
-          null
+            (request.query as { redirect?: string } | undefined)?.redirect ??
+            null
       );
       const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
-      const cookieHeader =
-        typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
       const linkIntent = verifyAccessLinkIntent(cookieHeader);
+      const providerHint = verifyAccessProviderHint(cookieHeader);
 
       if (identity && linkIntent) {
         const linkStatus = await db.transaction(async (tx) => {
@@ -237,7 +239,7 @@ export function registerPortalRoutes(
             return "conflict";
           }
 
-          if (identity.provider !== intentRow.targetProvider) {
+          if (providerHint !== intentRow.targetProvider) {
             return "provider_mismatch";
           }
 
@@ -287,10 +289,21 @@ export function registerPortalRoutes(
         portalUrl.searchParams.set("link", linkStatus);
       }
 
-      reply.header("set-cookie", [
-        clearSignedAccessCookie("PortalAccessProvider"),
-        clearSignedAccessCookie("PortalLinkIntent")
-      ]);
+      const responseCookies = [clearSignedAccessCookie("PortalLinkIntent")];
+
+      if (identity && providerHint) {
+        responseCookies.unshift(
+          buildSignedAccessCookie(
+            "PortalAccessProvider",
+            `${providerHint}|${identity.subject}`,
+            { maxAgeSeconds: 24 * 60 * 60 }
+          )
+        );
+      } else {
+        responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
+      }
+
+      reply.header("set-cookie", responseCookies);
       reply.redirect(portalUrl.toString());
     }
   );

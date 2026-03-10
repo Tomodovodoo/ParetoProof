@@ -29,6 +29,27 @@ function createSignedAccessValue(value: string, secret: string) {
   return `${payload}.${signature}`;
 }
 
+function parseVerifiedProviderHintPayload(payload: string) {
+  const [provider, ...subjectParts] = payload.split("|");
+
+  if (
+    provider !== "cloudflare_github" &&
+    provider !== "cloudflare_google"
+  ) {
+    return null;
+  }
+
+  const boundSubject = subjectParts.join("|") || null;
+
+  return {
+    boundSubject,
+    provider
+  } satisfies {
+    boundSubject: string | null;
+    provider: PortalIdentityProvider;
+  };
+}
+
 export type CloudflareAccessVerifier = {
   issuer: string;
   verifyAssertion: (assertion: string) => Promise<CloudflareAccessIdentity>;
@@ -100,15 +121,24 @@ function verifySignedAccessCookie(cookieHeader: string | undefined, cookieName: 
   };
 }
 
-export function verifyAccessProviderHint(cookieHeader: string | undefined) {
+export function verifyAccessProviderHint(
+  cookieHeader: string | undefined,
+  expectedSubject?: string
+) {
   const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalAccessProvider");
-  const provider = verifiedCookie?.payload;
+  const parsedPayload = verifiedCookie?.payload
+    ? parseVerifiedProviderHintPayload(verifiedCookie.payload)
+    : null;
 
-  if (provider !== "cloudflare_github" && provider !== "cloudflare_google") {
+  if (!parsedPayload) {
     return null;
   }
 
-  return provider satisfies PortalIdentityProvider;
+  if (parsedPayload.boundSubject && expectedSubject && parsedPayload.boundSubject !== expectedSubject) {
+    return null;
+  }
+
+  return parsedPayload.provider;
 }
 
 export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
@@ -126,7 +156,10 @@ export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
 
 export function buildSignedAccessCookie(
   name: "PortalAccessProvider" | "PortalLinkIntent",
-  value: string
+  value: string,
+  options?: {
+    maxAgeSeconds?: number;
+  }
 ) {
   const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
 
@@ -139,7 +172,7 @@ export function buildSignedAccessCookie(
     "Domain=.paretoproof.com",
     "Path=/",
     "SameSite=Strict",
-    "Max-Age=600",
+    `Max-Age=${options?.maxAgeSeconds ?? 600}`,
     "Secure",
     "HttpOnly"
   ].join("; ");
