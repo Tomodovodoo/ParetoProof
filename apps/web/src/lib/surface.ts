@@ -138,6 +138,9 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
 export function buildAccessStartUrl(
   provider: "github" | "google",
   targetPath = "/",
+  options?: {
+    linkIntentId?: string | null;
+  },
   hostname = window.location.hostname
 ) {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
@@ -154,6 +157,10 @@ export function buildAccessStartUrl(
 
   if (normalizedTargetPath !== "/") {
     authUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  if (options?.linkIntentId) {
+    authUrl.searchParams.set("link_intent", options.linkIntentId);
   }
 
   return authUrl.toString();

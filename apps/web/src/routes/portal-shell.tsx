@@ -8,6 +8,7 @@ import {
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
+import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalProfilePanel } from "./portal-profile-panel";
 
@@ -21,6 +22,15 @@ const portalRoutePathById = new Map(
 );
 
 const portalRoleOrder: PortalRole[] = ["admin", "collaborator", "helper"];
+const portalSectionCode: Record<PortalSectionDefinition["id"], string> = {
+  access_requests: "AQ",
+  launch: "LN",
+  overview: "OV",
+  profile: "PF",
+  runs: "RN",
+  users: "US",
+  workers: "WK"
+};
 
 const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
@@ -44,20 +54,23 @@ function coercePortalRoles(rawRoles: string[]): PortalRole[] {
 }
 
 function getSectionHref(section: PortalSectionDefinition) {
-  return portalRoutePathById.get(section.routeId) ?? "/";
+  return buildPortalUrl(portalRoutePathById.get(section.routeId) ?? "/");
 }
 
 function resolveActiveSection(
   pathname: string,
+  matchedRouteId: string | null,
   sections: PortalSectionDefinition[]
 ) {
   if (pathname.startsWith("/runs/")) {
     return sections.find((section) => section.id === "runs") ?? sections[0];
   }
 
-  return (
-    sections.find((section) => getSectionHref(section) === pathname) ?? sections[0]
-  );
+  if (matchedRouteId) {
+    return sections.find((section) => section.routeId === matchedRouteId) ?? sections[0];
+  }
+
+  return sections[0];
 }
 
 export function PortalShell({ email, roles }: PortalShellProps) {
@@ -71,12 +84,17 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     () => getPortalActionsForRoles(approvedRoles),
     [approvedRoles]
   );
+  const matchedPortalRoute = findMatchedPortalRoute(window.location.pathname);
   const activeSection = useMemo(
-    () => resolveActiveSection(window.location.pathname, sections),
-    [sections]
+    () =>
+      resolveActiveSection(
+        window.location.pathname,
+        matchedPortalRoute?.id ?? null,
+        sections
+      ),
+    [matchedPortalRoute, sections]
   );
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
-  const matchedPortalRoute = findMatchedPortalRoute(window.location.pathname);
 
   useEffect(() => {
     const pathname = window.location.pathname;
@@ -95,9 +113,16 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         className={`portal-sidebar${navigationCollapsed ? " portal-sidebar-collapsed" : ""}`}
       >
         <div className="portal-sidebar-header">
-          <div>
+          <div className="portal-brand-block">
             <p className="eyebrow">Portal</p>
-            {!navigationCollapsed ? <h1>ParetoProof</h1> : null}
+            {!navigationCollapsed ? (
+              <>
+                <h1>ParetoProof</h1>
+                <p className="portal-brand-copy">
+                  Formal benchmark operations and contributor tooling.
+                </p>
+              </>
+            ) : null}
           </div>
           <button
             aria-expanded={!navigationCollapsed}
@@ -107,7 +132,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             }}
             type="button"
           >
-            {navigationCollapsed ? "Expand" : "Collapse"}
+            {navigationCollapsed ? ">>" : "<<"}
           </button>
         </div>
 
@@ -124,9 +149,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 key={section.id}
                 title={section.navLabel}
               >
-                <span className="portal-nav-link-initial">
-                  {section.navLabel.slice(0, 1)}
-                </span>
+                <span className="portal-nav-link-initial">{portalSectionCode[section.id]}</span>
                 {!navigationCollapsed ? (
                   <span className="portal-nav-copy">
                     <span className="portal-nav-label">{section.navLabel}</span>
@@ -137,6 +160,15 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             );
           })}
         </nav>
+
+        {!navigationCollapsed ? (
+          <div className="portal-sidebar-footer">
+            <p className="portal-sidebar-footer-label">Signed in</p>
+            <p className="portal-sidebar-footer-value">
+              {email ?? "Authenticated session"}
+            </p>
+          </div>
+        ) : null}
       </aside>
 
       <section className="portal-main">
@@ -144,6 +176,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           <div>
             <p className="eyebrow">Authenticated portal</p>
             <h1>{activeSection?.navLabel ?? "Portal"}</h1>
+            <p className="portal-topbar-copy">
+              {activeSection?.description ??
+                "Contributor and benchmark control surface."}
+            </p>
           </div>
           <div className="portal-identity">
             <span className="role-chip">{email ?? "Signed in"}</span>
@@ -155,35 +191,55 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           </div>
         </header>
 
-        <section className="portal-panel portal-panel-hero">
-          <p>{activeSection?.description}</p>
-          <p className="portal-panel-muted">
+        <section className="portal-status-strip">
+          <p className="portal-status-copy">
             {activeSection ? portalSectionBodyCopy[activeSection.id] : ""}
           </p>
+          <span className="role-chip role-chip-muted">
+            {approvedRoles.join(" · ") || "authenticated"}
+          </span>
         </section>
 
-        <section className="portal-grid">
+        <section className="portal-content">
           {activeSection?.id === "access_requests" ? (
             <PortalAccessRequestPanel email={email} />
           ) : activeSection?.id === "profile" ? (
             <PortalProfilePanel email={email} />
           ) : (
-            <>
-              <article className="portal-panel">
+            <section className="portal-workspace-grid">
+              <article className="portal-panel portal-surface-main">
                 <p className="eyebrow">Current section</p>
                 <h2>{activeSection?.navLabel ?? "Portal section"}</h2>
                 <p>{activeSection?.summary}</p>
+                <div className="portal-section-notes">
+                  <p className="portal-panel-muted">
+                    This surface is structurally ready and can be filled in as backend
+                    features land.
+                  </p>
+                  <ul className="portal-note-list">
+                    <li>
+                      Navigation and route access already reflect the approved role model.
+                    </li>
+                    <li>
+                      Live data can replace these placeholders without redesigning the shell.
+                    </li>
+                    <li>
+                      The left workspace rail stays stable while each section grows
+                      independently.
+                    </li>
+                  </ul>
+                </div>
               </article>
-              <article className="portal-panel">
-                <p className="eyebrow">Action gating</p>
+              <aside className="portal-panel portal-surface-rail">
+                <p className="eyebrow">Available actions</p>
                 <h2>Role-aware controls</h2>
                 <div className="portal-action-list">
                   {overviewActions.map((action) => (
-                    <PortalActionCard action={action} key={action.id} />
+                    <PortalActionRow action={action} key={action.id} />
                   ))}
                 </div>
-              </article>
-            </>
+              </aside>
+            </section>
           )}
         </section>
       </section>
@@ -191,12 +247,12 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   );
 }
 
-type PortalActionCardProps = {
+type PortalActionRowProps = {
   action: PortalActionDefinition;
 };
 
-function PortalActionCard({ action }: PortalActionCardProps) {
-  const href = portalRoutePathById.get(action.routeId) ?? "/";
+function PortalActionRow({ action }: PortalActionRowProps) {
+  const href = buildPortalUrl(portalRoutePathById.get(action.routeId) ?? "/");
 
   return (
     <article className={`portal-action-card portal-action-${action.state}`}>

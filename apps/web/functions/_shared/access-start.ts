@@ -107,6 +107,21 @@ async function signProviderHint(provider: PersistedProvider, secret: string) {
   return `${payload}.${toBase64Url(signature)}`;
 }
 
+async function signOpaqueIntent(intentId: string, secret: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = `${intentId}.${expiresAt}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { hash: "SHA-256", name: "HMAC" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+
+  return `${payload}.${toBase64Url(signature)}`;
+}
+
 async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) {
   const secret = env.ACCESS_PROVIDER_STATE_SECRET;
 
@@ -118,6 +133,30 @@ async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) 
 
   return [
     `PortalAccessProvider=${value}`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=None",
+    "Max-Age=600",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
+}
+
+async function buildLinkIntentCookie(env: AccessStartEnv, intentId: string | null) {
+  if (!intentId) {
+    return null;
+  }
+
+  const secret = env.ACCESS_PROVIDER_STATE_SECRET;
+
+  if (!secret) {
+    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
+  }
+
+  const value = await signOpaqueIntent(intentId, secret);
+
+  return [
+    `PortalLinkIntent=${value}`,
     "Domain=.paretoproof.com",
     "Path=/",
     "SameSite=None",
@@ -189,16 +228,22 @@ export async function handleAccessStart(
 ) {
   const requestUrl = new URL(request.url);
   const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+  const linkIntentId = requestUrl.searchParams.get("link_intent");
 
   try {
     const { cookie, loginUrl } = await resolveAccessLoginState(redirectPath);
     const providerUrl = await resolveProviderUrl(loginUrl, provider);
     const providerHintCookie = await buildProviderHintCookie(env, provider);
+    const linkIntentCookie = await buildLinkIntentCookie(env, linkIntentId);
     const headers = new Headers();
 
     headers.set("location", providerUrl);
     headers.append("set-cookie", cookie);
     headers.append("set-cookie", providerHintCookie);
+
+    if (linkIntentCookie) {
+      headers.append("set-cookie", linkIntentCookie);
+    }
 
     return new Response(null, {
       headers,
