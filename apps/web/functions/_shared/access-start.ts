@@ -1,5 +1,5 @@
 const portalOrigin = "https://portal.paretoproof.com";
-const accessOrigin = "https://paretoproof.cloudflareaccess.com";
+const apiOrigin = "https://api.paretoproof.com";
 
 type Provider = "github" | "google";
 
@@ -18,7 +18,10 @@ function sanitizeRedirectPath(rawRedirectPath: string | null) {
   }
 
   try {
-    const url = new URL(rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`, portalOrigin);
+    const url = new URL(
+      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
+      portalOrigin
+    );
 
     if (url.origin !== portalOrigin) {
       return "/";
@@ -45,29 +48,58 @@ function decodeHtmlEntities(input: string) {
     .replaceAll("&gt;", ">");
 }
 
-async function resolveAccessLoginUrl(redirectPath: string) {
-  const response = await fetch(new URL(redirectPath, portalOrigin), {
+function buildSharedCookie(setCookieHeader: string | null) {
+  if (!setCookieHeader) {
+    throw new Error("Cloudflare Access did not return an application session cookie.");
+  }
+
+  const firstCookie = setCookieHeader.split(/,(?=[^;]+=)/)[0]?.trim();
+
+  if (!firstCookie?.startsWith("CF_AppSession=")) {
+    throw new Error("Cloudflare Access returned an unexpected session cookie.");
+  }
+
+  const attributes = firstCookie
+    .split(";")
+    .slice(1)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !/^path=/i.test(part))
+    .filter((part) => !/^domain=/i.test(part))
+    .filter((part) => !/^samesite=/i.test(part));
+
+  return [
+    firstCookie.split(";")[0],
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=None",
+    ...attributes
+  ].join("; ");
+}
+
+async function resolveAccessLoginState(redirectPath: string) {
+  const sessionCompleteUrl = new URL("/portal/session/complete", apiOrigin);
+  sessionCompleteUrl.searchParams.set("redirect", redirectPath);
+
+  const response = await fetch(sessionCompleteUrl, {
     method: "GET",
     redirect: "manual"
   });
 
   if (response.status !== 302) {
-    throw new Error(`Expected Access redirect, received ${response.status}.`);
+    throw new Error(`Expected an Access redirect, received ${response.status}.`);
   }
 
-  const location = response.headers.get("location");
+  const loginLocation = response.headers.get("location");
 
-  if (!location) {
+  if (!loginLocation) {
     throw new Error("Cloudflare Access did not return a login redirect.");
   }
 
-  const loginUrl = new URL(location);
-
-  if (loginUrl.origin !== accessOrigin) {
-    throw new Error("Cloudflare Access login redirect origin did not match the expected team domain.");
-  }
-
-  return loginUrl;
+  return {
+    cookie: buildSharedCookie(response.headers.get("set-cookie")),
+    loginUrl: new URL(loginLocation)
+  };
 }
 
 async function resolveProviderUrl(loginUrl: URL, provider: Provider) {
@@ -105,10 +137,16 @@ export async function handleAccessStart(request: Request, provider: Provider) {
   const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
 
   try {
-    const loginUrl = await resolveAccessLoginUrl(redirectPath);
+    const { cookie, loginUrl } = await resolveAccessLoginState(redirectPath);
     const providerUrl = await resolveProviderUrl(loginUrl, provider);
 
-    return Response.redirect(providerUrl, 302);
+    return new Response(null, {
+      headers: {
+        location: providerUrl,
+        "set-cookie": cookie
+      },
+      status: 302
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({

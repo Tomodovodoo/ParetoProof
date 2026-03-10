@@ -76,6 +76,31 @@ function createSubmittedAuditPayload(options: {
   };
 }
 
+function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
+  if (!rawRedirectPath || rawRedirectPath === "/") {
+    return "/";
+  }
+
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) || rawRedirectPath.startsWith("//")) {
+    return "/";
+  }
+
+  try {
+    const candidateUrl = new URL(
+      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
+      "https://portal.paretoproof.com"
+    );
+
+    if (candidateUrl.origin !== "https://portal.paretoproof.com") {
+      return "/";
+    }
+
+    return `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/";
+  } catch {
+    return "/";
+  }
+}
+
 function toPortalProfile(options: {
   currentSubject: string;
   fallbackEmail: string | null;
@@ -139,6 +164,21 @@ export function registerPortalRoutes(
         identity: request.accessIdentity,
         access: request.accessRbacContext
       };
+    }
+  );
+
+  app.get(
+    "/portal/session/complete",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    async (request, reply) => {
+      const redirectPath = sanitizePortalRedirectPath(
+        (request.query as { redirect?: string } | undefined)?.redirect ?? null
+      );
+      const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
+      portalUrl.searchParams.set("access_session", "1");
+      reply.redirect(portalUrl.toString());
     }
   );
 
