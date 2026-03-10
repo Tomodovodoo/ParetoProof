@@ -83,31 +83,19 @@ function readLocalAccessOverride(): PortalAccessState | null {
   return null;
 }
 
-function hasPortalAccessSessionMarker() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.sessionStorage.getItem("portalAccessReady") === "1";
-}
-
 function readPortalAccessSessionHint(search = window.location.search) {
   const params = new URLSearchParams(search);
   return params.get("access_session") === "1";
-}
-
-function writePortalAccessSessionMarker() {
-  window.sessionStorage.setItem("portalAccessReady", "1");
-}
-
-function clearPortalAccessSessionMarker() {
-  window.sessionStorage.removeItem("portalAccessReady");
 }
 
 function stripPortalAccessSessionHint(currentUrl: string) {
   const url = new URL(currentUrl);
   url.searchParams.delete("access_session");
   return `${url.pathname}${url.search}${url.hash}` || "/";
+}
+
+function isAccessBootstrapMiss(error: unknown) {
+  return error instanceof TypeError && /fetch/i.test(error.message);
 }
 
 export function PortalBootstrap() {
@@ -143,13 +131,6 @@ export function PortalBootstrap() {
       };
     }
 
-    if (!accessSessionHint && !hasPortalAccessSessionMarker()) {
-      setState({ status: "unauthenticated" });
-      return () => {
-        controller.abort();
-      };
-    }
-
     async function loadAccessState() {
       try {
         const response = await fetch(`${apiBaseUrl}/portal/me`, {
@@ -161,7 +142,6 @@ export function PortalBootstrap() {
         });
 
         if (response.status === 401) {
-          clearPortalAccessSessionMarker();
           setState({ status: "unauthenticated" });
           return;
         }
@@ -173,7 +153,6 @@ export function PortalBootstrap() {
         const payload = (await response.json()) as PortalMeResponse;
 
         if (payload.access.status === "approved") {
-          writePortalAccessSessionMarker();
           setState({
             email: payload.access.email,
             roles: payload.access.roles ?? [],
@@ -183,7 +162,6 @@ export function PortalBootstrap() {
         }
 
         if (payload.access.status === "pending") {
-          writePortalAccessSessionMarker();
           setState({
             email: payload.access.email,
             status: "pending"
@@ -191,7 +169,6 @@ export function PortalBootstrap() {
           return;
         }
 
-        writePortalAccessSessionMarker();
         setState({
           email: payload.access.email,
           reason: payload.access.reason ?? "unknown_identity",
@@ -202,7 +179,11 @@ export function PortalBootstrap() {
           return;
         }
 
-        clearPortalAccessSessionMarker();
+        if (!isLocalHostname(window.location.hostname) && isAccessBootstrapMiss(error)) {
+          setState({ status: "unauthenticated" });
+          return;
+        }
+
         setState({
           message: error instanceof Error ? error.message : "Unknown portal bootstrap error.",
           status: "error"
