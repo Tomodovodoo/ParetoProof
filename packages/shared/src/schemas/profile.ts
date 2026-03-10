@@ -30,7 +30,7 @@ export const portalProfileSchema = z.object({
 });
 
 export const portalProfileUpdateInputSchema = z.object({
-  displayName: z.string().trim().max(80).nullish().transform((value) => {
+  displayName: z.union([z.string().trim().max(80), z.null()]).transform((value) => {
     if (!value) {
       return null;
     }

@@ -113,6 +113,10 @@ export function getPortalActionsForRoles(roles: PortalRole[]) {
       .filter((action) => action !== null);
   }
 
+  if (!roles.includes("helper")) {
+    return [];
+  }
+
   return portalActionBlueprints
     .map((blueprint) => resolveNonAdminAction(blueprint, "helper"))
     .filter((action) => action !== null);
