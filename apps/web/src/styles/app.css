@@ -105,6 +105,10 @@ a.button {
   place-items: center;
 }
 
+.auth-shell-compact {
+  padding: 1.5rem;
+}
+
 .auth-card,
 .portal-preview-card {
   padding: clamp(2rem, 4vw, 3rem);
@@ -192,6 +196,20 @@ a.button {
   margin: 0;
   max-width: 38rem;
   color: #5f6f87;
+}
+
+.auth-inline-status {
+  width: min(100%, 34rem);
+  padding: 2rem 2.25rem;
+  border: 1px solid rgba(20, 52, 164, 0.14);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 48px rgba(20, 52, 164, 0.12);
+}
+
+.auth-inline-status p:last-child {
+  margin-bottom: 0;
+  color: var(--text-muted);
 }
 
 .auth-form {

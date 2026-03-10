@@ -426,7 +426,6 @@ function readLinkStatusMessage() {
 
   const nextParams = new URLSearchParams(params);
   nextParams.delete("link");
-  nextParams.delete("access_session");
   const nextSearch = nextParams.toString();
   const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
   window.history.replaceState(null, "", nextUrl);

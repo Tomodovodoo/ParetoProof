@@ -18,7 +18,10 @@ import {
   users
 } from "../db/schema.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
-import { verifyAccessLinkIntent } from "../auth/cloudflare-access.js";
+import {
+  buildSignedAccessCookie,
+  verifyAccessLinkIntent
+} from "../auth/cloudflare-access.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -106,17 +109,19 @@ function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
 }
 
 function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
-  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=None; Max-Age=0; Secure; HttpOnly`;
+  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Strict; Max-Age=0; Secure; HttpOnly`;
 }
 
-function buildPortalAuthStartUrl(intentId: string, options: {
+function buildPortalAuthStartUrl(options: {
   provider: "cloudflare_github" | "cloudflare_google";
   redirectPath: string;
 }) {
-  const providerPath =
-    options.provider === "cloudflare_github" ? "github" : "google";
-  const authUrl = new URL(`/api/access/start/${providerPath}`, "https://auth.paretoproof.com");
-  authUrl.searchParams.set("link_intent", intentId);
+  const authUrl = new URL(
+    "/",
+    options.provider === "cloudflare_github"
+      ? "https://github.auth.paretoproof.com"
+      : "https://google.auth.paretoproof.com"
+  );
 
   if (options.redirectPath !== "/") {
     authUrl.searchParams.set("redirect", options.redirectPath);
@@ -274,7 +279,6 @@ export function registerPortalRoutes(
         portalUrl.searchParams.set("link", linkStatus);
       }
 
-      portalUrl.searchParams.set("access_session", "1");
       reply.header("set-cookie", [
         clearSignedAccessCookie("PortalAccessProvider"),
         clearSignedAccessCookie("PortalLinkIntent")
@@ -517,11 +521,13 @@ export function registerPortalRoutes(
       const responseBody: PortalProfileLinkIntent = {
         expiresAt: intent.expiresAt.toISOString(),
         provider: targetProvider,
-        startUrl: buildPortalAuthStartUrl(intent.id, {
+        startUrl: buildPortalAuthStartUrl({
           provider: targetProvider,
           redirectPath: intent.redirectPath
         })
       };
+
+      reply.header("set-cookie", buildSignedAccessCookie("PortalLinkIntent", intent.id));
 
       return {
         intent: responseBody
@@ -572,6 +578,15 @@ export function registerPortalRoutes(
             where: eq(userIdentities.providerSubject, identity.subject)
           });
 
+          const linkedUser = existingIdentity
+            ? await tx.query.users.findFirst({
+                where: eq(users.id, existingIdentity.userId),
+                with: {
+                  identities: true
+                }
+              })
+            : null;
+
           const matchingUser = await tx.query.users.findFirst({
             where: eq(users.email, accessEmail),
             with: {
@@ -596,6 +611,7 @@ export function registerPortalRoutes(
           }
 
           const user =
+            linkedUser ??
             matchingUser ??
             (
               await tx
@@ -604,6 +620,7 @@ export function registerPortalRoutes(
                   email: accessEmail
                 })
                 .returning({
+                  email: users.email,
                   id: users.id
                 })
             )[0];
@@ -613,6 +630,16 @@ export function registerPortalRoutes(
           }
 
           if (existingIdentity) {
+            if (user.email !== accessEmail) {
+              await tx
+                .update(users)
+                .set({
+                  email: accessEmail,
+                  updatedAt: new Date()
+                })
+                .where(eq(users.id, user.id));
+            }
+
             await tx
               .update(userIdentities)
               .set({
@@ -830,6 +857,16 @@ export function registerPortalRoutes(
             orderBy: [desc(accessRequests.createdAt)],
             where: eq(accessRequests.email, accessEmail)
           });
+
+          if (
+            existingRequest &&
+            (existingRequest.status === "rejected" ||
+              existingRequest.status === "withdrawn")
+          ) {
+            throw new PortalAccessRequestConflictError(
+              "identity_recovery_reentry_not_allowed"
+            );
+          }
 
           if (existingRequest?.status === "pending") {
             const payloadChanged =

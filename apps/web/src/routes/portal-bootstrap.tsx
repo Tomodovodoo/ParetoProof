@@ -83,26 +83,10 @@ function readLocalAccessOverride(): PortalAccessState | null {
   return null;
 }
 
-function readPortalAccessSessionHint(search = window.location.search) {
-  const params = new URLSearchParams(search);
-  return params.get("access_session") === "1";
-}
-
-function stripPortalAccessSessionHint(currentUrl: string) {
-  const url = new URL(currentUrl);
-  url.searchParams.delete("access_session");
-  return `${url.pathname}${url.search}${url.hash}` || "/";
-}
-
-function isAccessBootstrapMiss(error: unknown) {
-  return error instanceof TypeError && /fetch/i.test(error.message);
-}
-
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
-  const accessSessionHint = useMemo(() => readPortalAccessSessionHint(), []);
   const routeRedirectTarget = useMemo(() => {
     if (
       state.status === "loading" ||
@@ -179,11 +163,6 @@ export function PortalBootstrap() {
           return;
         }
 
-        if (!isLocalHostname(window.location.hostname) && isAccessBootstrapMiss(error)) {
-          setState({ status: "unauthenticated" });
-          return;
-        }
-
         setState({
           message: error instanceof Error ? error.message : "Unknown portal bootstrap error.",
           status: "error"
@@ -196,7 +175,7 @@ export function PortalBootstrap() {
     return () => {
       controller.abort();
     };
-  }, [accessSessionHint, apiBaseUrl]);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     if (state.status !== "unauthenticated") {
@@ -213,15 +192,6 @@ export function PortalBootstrap() {
 
     window.location.replace(routeRedirectTarget);
   }, [routeRedirectTarget]);
-
-  useEffect(() => {
-    if (!accessSessionHint) {
-      return;
-    }
-
-    const cleanedRelativeUrl = stripPortalAccessSessionHint(window.location.href);
-    window.history.replaceState({}, "", cleanedRelativeUrl);
-  }, [accessSessionHint]);
 
   async function submitAccessRequest(payload: PortalAccessRequestInput) {
     if (isLocalHostname(window.location.hostname)) {

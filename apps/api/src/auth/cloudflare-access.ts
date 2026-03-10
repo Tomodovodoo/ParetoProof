@@ -21,6 +21,14 @@ export type VerifiedAccessLinkIntent = {
   intentId: string;
 };
 
+function createSignedAccessValue(value: string, secret: string) {
+  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = `${value}.${expiresAt}`;
+  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+
+  return `${payload}.${signature}`;
+}
+
 export type CloudflareAccessVerifier = {
   issuer: string;
   verifyAssertion: (assertion: string) => Promise<CloudflareAccessIdentity>;
@@ -114,6 +122,27 @@ export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
     expiresAt: verifiedCookie.expiresAt,
     intentId: verifiedCookie.payload
   } satisfies VerifiedAccessLinkIntent;
+}
+
+export function buildSignedAccessCookie(
+  name: "PortalAccessProvider" | "PortalLinkIntent",
+  value: string
+) {
+  const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+
+  if (!secret) {
+    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
+  }
+
+  return [
+    `${name}=${createSignedAccessValue(value, secret)}`,
+    "Domain=.paretoproof.com",
+    "Path=/",
+    "SameSite=Strict",
+    "Max-Age=600",
+    "Secure",
+    "HttpOnly"
+  ].join("; ");
 }
 
 export function readAccessJwtAssertion(

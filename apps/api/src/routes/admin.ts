@@ -153,31 +153,6 @@ export function registerAdminRoutes(
           }
         }
 
-        const [reviewedRequest] = await tx
-          .update(accessRequests)
-          .set({
-            decisionNote: parsedBody.data.decisionNote,
-            reviewedAt: now,
-            reviewedByUserId: actorUserId,
-            status: "approved"
-          })
-          .where(
-            and(
-              eq(accessRequests.id, requestRow.id),
-              eq(accessRequests.status, "pending")
-            )
-          )
-          .returning();
-
-        if (!reviewedRequest) {
-          return {
-            kind: "conflict" as const,
-            requestRow: await tx.query.accessRequests.findFirst({
-              where: eq(accessRequests.id, requestRow.id)
-            })
-          };
-        }
-
         const activeRoleRows = await tx
           .select({
             id: roleGrants.id,
@@ -209,30 +184,10 @@ export function registerAdminRoutes(
           }
         } else {
           if (activeRoleRows.length > 0) {
-            await tx
-              .update(roleGrants)
-              .set({
-                revokedAt: now,
-                revokedByUserId: actorUserId
-              })
-              .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
-
-            await tx.insert(auditEvents).values(
-              activeRoleRows.map((roleRow) => ({
-                actorKind: "portal_user" as const,
-                actorUserId,
-                eventId: "role_grant.revoked",
-                payload: {
-                  actorUserId,
-                  revokedRole: roleRow.role,
-                  roleGrantId: roleRow.id,
-                  targetUserId: targetUser.id
-                },
-                severity: "critical" as const,
-                subjectKind: "role_grant" as const,
-                targetUserId: targetUser.id
-              }))
-            );
+            return {
+              kind: "already_approved" as const,
+              requestRow
+            };
           }
 
           await tx.insert(roleGrants).values({
@@ -240,6 +195,31 @@ export function registerAdminRoutes(
             role: parsedBody.data.approvedRole,
             userId: targetUser.id
           });
+        }
+
+        const [reviewedRequest] = await tx
+          .update(accessRequests)
+          .set({
+            decisionNote: parsedBody.data.decisionNote,
+            reviewedAt: now,
+            reviewedByUserId: actorUserId,
+            status: "approved"
+          })
+          .where(
+            and(
+              eq(accessRequests.id, requestRow.id),
+              eq(accessRequests.status, "pending")
+            )
+          )
+          .returning();
+
+        if (!reviewedRequest) {
+          return {
+            kind: "conflict" as const,
+            requestRow: await tx.query.accessRequests.findFirst({
+              where: eq(accessRequests.id, requestRow.id)
+            })
+          };
         }
 
         await tx.insert(auditEvents).values([
@@ -304,6 +284,14 @@ export function registerAdminRoutes(
       if (result.kind === "identity_link_required") {
         reply.code(409).send({
           error: "access_identity_link_required",
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
+        });
+        return;
+      }
+
+      if (result.kind === "already_approved") {
+        reply.code(409).send({
+          error: "access_request_stale_for_approved_user",
           item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
         });
         return;
