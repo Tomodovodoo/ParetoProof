@@ -1,6 +1,5 @@
 import type { ApiCallBoundaryEntry } from "../types/api-call-boundary.js";
 
-// The current live contract only includes routes that the Fastify API actually registers.
 export const apiCallBoundaryCatalog = [
   {
     credential: "none",
@@ -17,6 +16,22 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "The portal shell needs the caller identity immediately after Access login, so the browser calls the protected route directly."
+  },
+  {
+    credential: "none",
+    endpointId: "portal.session.retry.complete",
+    mode: "browser_direct",
+    origin: "public_browser",
+    rationale:
+      "Direct visits to the legacy session-completion URL should bounce back to the branded auth surface instead of exposing a raw API response."
+  },
+  {
+    credential: "none",
+    endpointId: "portal.session.retry.finalize",
+    mode: "browser_direct",
+    origin: "public_browser",
+    rationale:
+      "Direct visits to the session-finalize URL should bounce back to the branded auth surface instead of exposing a raw API response."
   },
   {
     credential: "cloudflare_access_jwt",
@@ -68,6 +83,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.profile.link-intent.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Approved users create identity-link intents from the authenticated portal before a provider-specific handoff starts."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.access-request.list",
     mode: "browser_direct",
     origin: "portal_browser",
@@ -80,7 +103,7 @@ export const apiCallBoundaryCatalog = [
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
-      "The MVP portal has no separate admin server layer, so approved admins call the protected decision route directly with their Access identity and RBAC check."
+      "The portal has no separate admin server layer, so approved admins call the protected decision route directly with their Access identity and RBAC check."
   },
   {
     credential: "cloudflare_access_jwt",
@@ -88,6 +111,6 @@ export const apiCallBoundaryCatalog = [
     mode: "browser_direct",
     origin: "portal_browser",
     rationale:
-      "Rejection stays on the authenticated portal audience for MVP, while the backend still enforces admin-only RBAC and audit logging."
+      "Rejection stays on the authenticated portal audience while the backend still enforces admin-only RBAC and audit logging."
   }
 ] satisfies ApiCallBoundaryEntry[];

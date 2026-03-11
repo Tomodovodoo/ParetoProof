@@ -4,8 +4,7 @@ import {
   portalProfileLinkIntentInputSchema,
   portalProfileUpdateInputSchema,
   type PortalProfile,
-  type PortalProfileLinkIntent,
-  type PortalAccessRequestSummary
+  type PortalProfileLinkIntent
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -17,6 +16,7 @@ import {
   userIdentities,
   users
 } from "../db/schema.js";
+import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
 import {
   buildSignedAccessCookie,
@@ -50,22 +50,6 @@ function isPendingAccessRequestConflict(error: unknown) {
     databaseCode === "23505" &&
     constraintName === "access_requests_active_pending_email_unique"
   );
-}
-
-function toAccessRequestSummary(
-  requestRow: typeof accessRequests.$inferSelect
-): PortalAccessRequestSummary {
-  return {
-    createdAt: requestRow.createdAt.toISOString(),
-    decisionNote: requestRow.decisionNote,
-    email: requestRow.email,
-    id: requestRow.id,
-    requestKind: requestRow.requestKind,
-    rationale: requestRow.rationale,
-    requestedRole: requestRow.requestedRole,
-    reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
-    status: requestRow.status
-  };
 }
 
 function createSubmittedAuditPayload(options: {
@@ -198,6 +182,17 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard
 ) {
+  const handlePortalSessionRetryRedirect = (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const redirectPath = sanitizePortalRedirectPath(
+      (request.query as { redirect?: string } | undefined)?.redirect ?? null
+    );
+
+    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+  };
+
   const handlePortalSessionCompletion = async (
     request: FastifyRequest,
     reply: FastifyReply
@@ -327,29 +322,8 @@ export function registerPortalRoutes(
     }
   );
 
-  app.get("/portal/session/complete", async (request, reply) => {
-    const redirectPath = sanitizePortalRedirectPath(
-      (request.query as { redirect?: string } | undefined)?.redirect ?? null
-    );
-
-    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
-  });
-
-  app.get("/portal/session/finalize", async (request, reply) => {
-    const redirectPath = sanitizePortalRedirectPath(
-      (request.query as { redirect?: string } | undefined)?.redirect ?? null
-    );
-
-    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
-  });
-
-  app.post(
-    "/portal/session/complete",
-    {
-      preHandler: requireAccess("authenticated_access_identity")
-    },
-    handlePortalSessionCompletion
-  );
+  app.get("/portal/session/complete", handlePortalSessionRetryRedirect);
+  app.get("/portal/session/finalize", handlePortalSessionRetryRedirect);
 
   app.post(
     "/portal/session/finalize/submit",

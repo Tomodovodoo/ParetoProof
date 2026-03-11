@@ -32,7 +32,7 @@ export function describePortalFreshness(
   now = Date.now()
 ) {
   if (!policy) {
-    return "This MVP view does not define a background refresh policy yet.";
+    return "This view does not define a background refresh policy yet.";
   }
 
   if (policy.mode === "manual") {

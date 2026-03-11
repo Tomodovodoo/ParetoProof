@@ -30,7 +30,6 @@ export const runKindCatalog = [
   }
 ] satisfies RunKindCatalogEntry[];
 
-// The control plane stays linear in MVP so later worker and budgeting logic can assume one durable terminal state per run.
 export const runLifecycleCatalog = [
   {
     allowedNextStates: ["queued", "cancelled"],

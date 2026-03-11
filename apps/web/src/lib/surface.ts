@@ -1,9 +1,12 @@
+import { getApiBaseUrl } from "./api-base-url";
+
 export type WebSurface = "public" | "auth" | "portal";
 export type AccessProvider = "github" | "google";
 
 const productionPublicOrigin = "https://paretoproof.com";
 const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
+const localPortalStateParamKeys = ["access", "email", "roles", "reason"] as const;
 const productionProviderAuthOrigins: Record<AccessProvider, string> = {
   github: "https://github.auth.paretoproof.com",
   google: "https://google.auth.paretoproof.com"
@@ -96,6 +99,7 @@ function buildLocalSurfaceUrl(
   if (surface === "portal") {
     const portalUrl = new URL(normalizedTargetPath, origin);
     portalUrl.searchParams.set("surface", surface);
+    copyLocalPortalState(portalUrl);
     return portalUrl.toString();
   }
 
@@ -106,6 +110,22 @@ function buildLocalSurfaceUrl(
   }
 
   return surfaceUrl.toString();
+}
+
+function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
+  if (!isLocalOrigin(currentLocation.hostname)) {
+    return;
+  }
+
+  const currentParams = new URLSearchParams(currentLocation.search);
+
+  for (const key of localPortalStateParamKeys) {
+    const value = currentParams.get(key);
+
+    if (value) {
+      targetUrl.searchParams.set(key, value);
+    }
+  }
 }
 
 export function buildAuthUrl(targetPath = "/", hostname = window.location.hostname) {
@@ -156,9 +176,12 @@ export function buildAccessStartUrl(
 
   if (isLocalOrigin(hostname)) {
     const localUrl = new URL(buildPortalUrl(normalizedTargetPath, hostname));
+    const currentParams = new URLSearchParams(window.location.search);
+
     localUrl.searchParams.set("access", "approved");
-    localUrl.searchParams.set("email", "local@example.com");
-    localUrl.searchParams.set("roles", "admin");
+    localUrl.searchParams.set("email", currentParams.get("email") ?? "local@example.com");
+    localUrl.searchParams.set("roles", currentParams.get("roles") ?? "admin");
+    localUrl.searchParams.delete("reason");
     return localUrl.toString();
   }
 
@@ -175,20 +198,9 @@ export function buildAccessStartUrl(
   return authUrl.toString();
 }
 
-export function buildApiSessionCompleteUrl(targetPath = "/") {
-  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
-  const completionUrl = new URL("/portal/session/complete", "https://api.paretoproof.com");
-
-  if (normalizedTargetPath !== "/") {
-    completionUrl.searchParams.set("redirect", normalizedTargetPath);
-  }
-
-  return completionUrl.toString();
-}
-
 export function buildApiSessionFinalizeUrl(targetPath = "/") {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
-  const completionUrl = new URL("/portal/session/finalize/submit", "https://api.paretoproof.com");
+  const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
 
   if (normalizedTargetPath !== "/") {
     completionUrl.searchParams.set("redirect", normalizedTargetPath);
@@ -216,6 +228,7 @@ export function getCurrentRelativeUrl(location = window.location) {
   params.delete("access");
   params.delete("email");
   params.delete("roles");
+  params.delete("reason");
 
   const search = params.toString();
   const relativeUrl = `${location.pathname}${search ? `?${search}` : ""}${location.hash}`;

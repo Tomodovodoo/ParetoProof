@@ -90,6 +90,18 @@ function readLocalAccessOverride(): PortalAccessState | null {
   return null;
 }
 
+function formatPortalBootstrapError(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message === "Failed to fetch") {
+      return "The portal could not reach the API. Check the API host and try again.";
+    }
+
+    return error.message;
+  }
+
+  return "The portal could not be loaded.";
+}
+
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
@@ -176,7 +188,7 @@ export function PortalBootstrap() {
         }
 
         setState({
-          message: error instanceof Error ? error.message : "Unknown portal bootstrap error.",
+          message: formatPortalBootstrapError(error),
           status: "error"
         });
       }
