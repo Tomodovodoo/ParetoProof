@@ -493,21 +493,21 @@ a.button-secondary {
 
 .portal-shell {
   min-height: 100vh;
-  padding: 18px;
+  padding: 12px;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 12px;
 }
 
 .portal-sidebar {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  background: linear-gradient(180deg, var(--navy) 0%, var(--navy-strong) 100%);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #153178 0%, var(--navy-strong) 100%);
   color: #fff;
-  padding: 24px 18px;
+  padding: 18px 14px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .portal-sidebar-header,
@@ -530,6 +530,7 @@ a.button-secondary {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.1);
   color: #fff;
+  border-radius: 4px;
 }
 
 .portal-sidebar .eyebrow {
@@ -552,7 +553,7 @@ a.button-secondary {
   width: 40px;
   height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   padding: 0;
@@ -577,8 +578,8 @@ a.button-secondary {
   align-items: center;
   gap: 12px;
   padding: 12px 10px;
-  border-left: 2px solid transparent;
-  border-radius: 12px;
+  border-left: 1px solid transparent;
+  border-radius: 4px;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -588,7 +589,7 @@ a.button-secondary {
 }
 
 .portal-nav-link-active {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   border-left-color: rgba(130, 173, 255, 0.95);
 }
 
@@ -598,6 +599,7 @@ a.button-secondary {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.08);
   color: #fff;
+  border-radius: 4px;
 }
 
 .portal-nav-label,
@@ -634,11 +636,13 @@ a.button-secondary {
 }
 
 .portal-main {
-  padding: 26px;
+  padding: 22px;
   display: grid;
-  gap: 18px;
+  gap: 20px;
   min-width: 0;
   align-content: start;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .portal-topbar h1 {
@@ -650,16 +654,24 @@ a.button-secondary {
 .portal-panel,
 .portal-table-shell {
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.74);
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .portal-status-strip {
-  padding: 16px 18px;
+  padding: 10px 0 12px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  border-width: 1px 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.portal-status-strip .role-chip {
+  display: none;
 }
 
 .role-chip,
@@ -668,10 +680,10 @@ a.button-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2rem;
-  padding: 0.42rem 0.8rem;
+  min-height: 1.85rem;
+  padding: 0.32rem 0.62rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.66);
   font-size: 0.84rem;
   font-weight: 700;
@@ -687,10 +699,13 @@ a.button-secondary {
 .portal-metric-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
 }
 
 .portal-metric-cell {
-  padding: 18px 20px;
+  padding: 14px 18px 18px;
   display: grid;
   gap: 6px;
 }
@@ -734,15 +749,16 @@ a.button-secondary {
 }
 
 .portal-panel {
-  padding: 22px;
+  padding: 20px;
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
-.portal-panel-emphasis {
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 34%),
-    rgba(255, 255, 255, 0.8);
+.portal-overview-lead {
+  border-width: 1px 0 0;
+  border-radius: 0;
+  padding: 16px 0 0;
+  background: transparent;
 }
 
 .portal-freshness-card {
@@ -750,10 +766,11 @@ a.button-secondary {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .portal-freshness-card h3 {
@@ -820,6 +837,31 @@ a.button-secondary {
   display: grid;
 }
 
+.portal-action-list,
+.portal-timeline {
+  border-top: 1px solid var(--line);
+}
+
+.portal-surface-rail,
+.portal-overview-timeline {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding-left: 22px;
+  border-left: 1px solid var(--line);
+}
+
+.portal-panel-table-flat {
+  display: grid;
+  gap: 14px;
+}
+
+.portal-overview-lead .portal-panel-header,
+.portal-overview-lead .portal-section-notes,
+.portal-panel-table-flat .portal-panel-header {
+  padding-inline: 0;
+}
+
 .portal-action-card,
 .portal-identity-row,
 .portal-timeline-item {
@@ -827,7 +869,7 @@ a.button-secondary {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 0;
+  padding: 16px 0;
 }
 
 .portal-action-card:first-child,
@@ -995,10 +1037,13 @@ a.button-secondary {
 
   .portal-shell {
     padding: 10px;
+    display: flex;
+    flex-direction: column;
   }
 
   .portal-sidebar {
-    border-radius: 18px;
+    order: 2;
+    border-radius: 4px;
     min-height: auto;
   }
 
@@ -1008,10 +1053,19 @@ a.button-secondary {
   }
 
   .portal-main {
-    border-radius: 18px;
+    order: 1;
+    border-radius: 4px;
   }
 
   .portal-metric-cell + .portal-metric-cell {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .portal-surface-rail,
+  .portal-overview-timeline {
+    padding-left: 0;
+    padding-top: 16px;
     border-left: 0;
     border-top: 1px solid var(--line);
   }

@@ -284,7 +284,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             {activeSection ? portalSectionBodyCopy[activeSection.id] : ""}
           </p>
           <span className="role-chip role-chip-tonal">
-            {approvedRoles.join(" · ") || "authenticated"}
+            {approvedRoles.join(" / ") || "authenticated"}
           </span>
         </section>
 
@@ -301,7 +301,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             </section>
 
             <section className="portal-overview-grid">
-              <article className="portal-panel portal-panel-emphasis">
+              <article className="portal-panel portal-overview-lead">
                 <p className="section-tag">Control plane overview</p>
                 <h2>One stable canvas for auth, approvals, and benchmark posture.</h2>
                 <p>
@@ -322,7 +322,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 </div>
               </article>
 
-              <aside className="portal-panel portal-surface-rail">
+              <aside className="portal-surface-rail">
                 <p className="section-tag">Role-aware controls</p>
                 <h2>Next actions</h2>
                 <div className="portal-action-list">
@@ -334,7 +334,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             </section>
 
             <section className="portal-overview-grid portal-overview-grid-secondary">
-              <article className="portal-panel portal-panel-table">
+              <article className="portal-panel-table-flat">
                 <div className="portal-panel-header">
                   <div>
                     <p className="section-tag">Run queue</p>
@@ -367,7 +367,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 </div>
               </article>
 
-              <aside className="portal-panel">
+              <aside className="portal-overview-timeline">
                 <p className="section-tag">Approvals</p>
                 <h2>Identity and review timeline</h2>
                 <div className="portal-timeline">
@@ -409,7 +409,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     </ul>
                   </div>
                 </article>
-                <aside className="portal-panel portal-surface-rail">
+                <aside className="portal-surface-rail">
                   <p className="section-tag">Available actions</p>
                   <h2>Role-aware controls</h2>
                   <div className="portal-action-list">
@@ -453,3 +453,4 @@ function PortalActionRow({ action }: PortalActionRowProps) {
     </article>
   );
 }
+
