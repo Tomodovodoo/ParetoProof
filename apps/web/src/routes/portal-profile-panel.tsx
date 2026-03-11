@@ -9,6 +9,7 @@ import {
   portalProfileUpdateInputSchema
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState, startTransition } from "react";
+import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { isLocalHostname } from "../lib/surface";
 
@@ -116,6 +117,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [linkingProvider, setLinkingProvider] = useState<PortalLinkableIdentityProvider | null>(
     null
   );
@@ -132,6 +134,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
 
           if (!cancelled) {
             setDisplayNameInput(localProfile.displayName ?? "");
+            setLastUpdatedAt(new Date().toISOString());
             setProfile(localProfile);
             setIsLoading(false);
           }
@@ -155,6 +158,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
 
         if (!cancelled) {
           setDisplayNameInput(payload.profile.displayName ?? "");
+          setLastUpdatedAt(new Date().toISOString());
           setProfile(payload.profile);
           setLinkMessage(readLinkStatusMessage());
           setIsLoading(false);
@@ -212,6 +216,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         }
 
         setProfile(buildLocalProfile(email));
+        setLastUpdatedAt(new Date().toISOString());
         setLinkMessage("The new sign-in method has been linked to your local development profile.");
         return;
       }
@@ -264,6 +269,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         writeLocalDisplayName(email, parsed.data.displayName);
         const nextProfile = buildLocalProfile(email);
         setDisplayNameInput(nextProfile.displayName ?? "");
+        setLastUpdatedAt(new Date().toISOString());
         setProfile(nextProfile);
         return;
       }
@@ -287,6 +293,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       };
 
       setDisplayNameInput(payload.profile.displayName ?? "");
+      setLastUpdatedAt(new Date().toISOString());
       setProfile(payload.profile);
     } catch (error) {
       setErrorMessage(
@@ -330,6 +337,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           Update the small contributor details the MVP already supports and attach an extra
           GitHub or Google sign-in method without changing your approved portal account.
         </p>
+        <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
         <form className="auth-form" onSubmit={handleSave}>
           <label className="auth-field">
             <span>Display name</span>

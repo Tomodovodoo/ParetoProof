@@ -5,7 +5,9 @@ import {
   type PortalAdminApprovedRole
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
+import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { usePortalPolling } from "../lib/portal-freshness";
 import { isLocalHostname } from "../lib/surface";
 
 type PortalAccessRequestPanelProps = {
@@ -81,55 +83,73 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const [isMutatingId, setIsMutatingId] = useState<string | null>(null);
   const [requests, setRequests] = useState<PortalAccessRequestSummary[]>([]);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const {
+    isPolling,
+    lastUpdatedAt,
+    markUpdated,
+    pollNow
+  } = usePortalPolling({
+    enabled: !isLoading && isMutatingId === null,
+    onPoll: refreshRequests,
+    routeId: "portal.admin.access-requests"
+  });
+
+  function applyRequests(nextItems: PortalAccessRequestSummary[]) {
+    setDrafts((currentDrafts) => {
+      const nextDrafts: Record<string, RequestDraftState> = {};
+
+      for (const item of nextItems) {
+        nextDrafts[item.id] = currentDrafts[item.id] ?? {
+          approvedRole:
+            item.requestedRole === "collaborator" ? "collaborator" : "helper",
+          decisionNote: item.decisionNote ?? ""
+        };
+      }
+
+      return nextDrafts;
+    });
+    setRequests(nextItems);
+  }
+
+  async function fetchRequestsSnapshot() {
+    if (isLocalHostname(window.location.hostname)) {
+      const localItems = sortRequests(readLocalAccessRequests());
+      writeLocalAccessRequests(localItems);
+      return localItems;
+    }
+
+    const response = await fetch(`${apiBaseUrl}/portal/admin/access-requests`, {
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Access-request load failed with ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as {
+      items: PortalAccessRequestSummary[];
+    };
+
+    return sortRequests(payload.items);
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadRequests() {
       try {
-        let nextItems: PortalAccessRequestSummary[];
-
-        if (isLocalHostname(window.location.hostname)) {
-          const localItems = sortRequests(readLocalAccessRequests());
-          writeLocalAccessRequests(localItems);
-          nextItems = localItems;
-        } else {
-          const response = await fetch(`${apiBaseUrl}/portal/admin/access-requests`, {
-            credentials: "include",
-            headers: {
-              Accept: "application/json"
-            }
-          });
-
-          if (!response.ok) {
-            throw new Error(`Access-request load failed with ${response.status}.`);
-          }
-
-          const payload = (await response.json()) as {
-            items: PortalAccessRequestSummary[];
-          };
-
-          nextItems = sortRequests(payload.items);
-        }
+        const nextItems = await fetchRequestsSnapshot();
 
         if (cancelled) {
           return;
         }
 
-        setDrafts((currentDrafts) => {
-          const nextDrafts: Record<string, RequestDraftState> = {};
-
-          for (const item of nextItems) {
-            nextDrafts[item.id] = currentDrafts[item.id] ?? {
-              approvedRole:
-                item.requestedRole === "collaborator" ? "collaborator" : "helper",
-              decisionNote: item.decisionNote ?? ""
-            };
-          }
-
-          return nextDrafts;
-        });
-        setRequests(nextItems);
+        setErrorMessage(null);
+        applyRequests(nextItems);
+        markUpdated();
         setIsLoading(false);
       } catch (error) {
         if (cancelled) {
@@ -153,28 +173,19 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   }, [apiBaseUrl]);
 
   async function refreshRequests() {
-    if (isLocalHostname(window.location.hostname)) {
-      const localItems = sortRequests(readLocalAccessRequests());
-      setRequests(localItems);
-      return;
+    try {
+      const nextItems = await fetchRequestsSnapshot();
+      setErrorMessage(null);
+      applyRequests(nextItems);
+      markUpdated();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "The access-request queue could not be refreshed."
+      );
+      throw error;
     }
-
-    const response = await fetch(`${apiBaseUrl}/portal/admin/access-requests`, {
-      credentials: "include",
-      headers: {
-        Accept: "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Access-request refresh failed with ${response.status}.`);
-    }
-
-    const payload = (await response.json()) as {
-      items: PortalAccessRequestSummary[];
-    };
-
-    setRequests(sortRequests(payload.items));
   }
 
   async function handleDecision(
@@ -310,6 +321,16 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
           Signed in{email ? ` as ${email}` : ""}. Review pending requests here and issue
           the contributor role that should be active immediately after approval.
         </p>
+        <PortalFreshnessCard
+          isRefreshing={isPolling || isMutatingId !== null}
+          lastUpdatedAt={lastUpdatedAt}
+          onRefresh={() => {
+            void pollNow().catch(() => {
+              // refreshRequests already surfaces the error to the panel state
+            });
+          }}
+          routeId="portal.admin.access-requests"
+        />
         {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
       </article>
 

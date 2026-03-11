@@ -15,6 +15,7 @@
   --text-muted: #5f719f;
   --text-soft: #263866;
   --danger: #d24747;
+  --warning: #b57709;
   --shadow: 0 24px 55px rgba(20, 52, 164, 0.1);
 }
 
@@ -608,6 +609,53 @@ p {
   border-bottom: 1px solid var(--border);
 }
 
+.portal-freshness-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--panel-soft);
+}
+
+.portal-freshness-card h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.portal-freshness-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.portal-freshness-badge {
+  min-width: 5.8rem;
+}
+
+.portal-freshness-fresh {
+  background: rgba(14, 142, 72, 0.12);
+  border-color: rgba(14, 142, 72, 0.22);
+  color: #15673c;
+}
+
+.portal-freshness-manual,
+.portal-freshness-planned {
+  background: rgba(20, 52, 164, 0.08);
+  border-color: rgba(20, 52, 164, 0.2);
+  color: var(--blue-strong);
+}
+
+.portal-freshness-stale {
+  background: rgba(181, 119, 9, 0.12);
+  border-color: rgba(181, 119, 9, 0.24);
+  color: var(--warning);
+}
+
 .portal-action-disabled {
   opacity: 0.72;
 }
@@ -708,6 +756,12 @@ p {
   }
 
   .portal-request-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .portal-freshness-card,
+  .portal-freshness-actions {
     align-items: flex-start;
     flex-direction: column;
   }
