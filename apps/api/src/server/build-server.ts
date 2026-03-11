@@ -14,6 +14,8 @@ function normalizeOrigin(value: string) {
 function readAllowedCorsOrigins() {
   const baselineOrigins = [
     "https://auth.paretoproof.com",
+    "https://github.auth.paretoproof.com",
+    "https://google.auth.paretoproof.com",
     "https://portal.paretoproof.com"
   ];
   const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
