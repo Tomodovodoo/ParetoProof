@@ -19,10 +19,14 @@ import {
 } from "../db/schema.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
 import {
+  createCloudflareAccessVerifierSetFromEnv,
   buildSignedAccessCookie,
+  readAccessJwtAssertion,
+  selectCloudflareAccessVerifier,
   verifyAccessProviderHint,
   verifyAccessLinkIntent
 } from "../auth/cloudflare-access.js";
+import { resolveAccessRbacContext } from "../auth/resolve-access-rbac-context.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -198,6 +202,8 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard
 ) {
+  const finalizeNavigationVerifiers = createCloudflareAccessVerifierSetFromEnv();
+
   const handlePortalSessionCompletion = async (
     request: FastifyRequest,
     reply: FastifyReply
@@ -314,6 +320,47 @@ export function registerPortalRoutes(
     reply.redirect(portalUrl.toString());
   };
 
+  const handlePortalSessionFinalizeNavigation = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const redirectPath = sanitizePortalRedirectPath(
+      (request.query as { redirect?: string } | undefined)?.redirect ?? null
+    );
+    const cookieHeader =
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+    const assertion = readAccessJwtAssertion(request);
+
+    if (!assertion) {
+      reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+      return;
+    }
+
+    try {
+      const verifier = selectCloudflareAccessVerifier(request, finalizeNavigationVerifiers);
+      let identity = await verifier.verifyAssertion(assertion);
+
+      identity = {
+        ...identity,
+        provider: verifyAccessProviderHint(cookieHeader, identity.subject) ?? identity.provider
+      };
+
+      const context = await resolveAccessRbacContext(db, identity);
+
+      if (!context) {
+        reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+        return;
+      }
+
+      request.accessIdentity = identity;
+      request.accessRbacContext = context;
+
+      await handlePortalSessionCompletion(request, reply);
+    } catch {
+      reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+    }
+  };
+
   app.get(
     "/portal/me",
     {
@@ -345,10 +392,7 @@ export function registerPortalRoutes(
 
   app.get(
     "/portal/session/finalize/submit",
-    {
-      preHandler: requireAccess("authenticated_access_identity")
-    },
-    handlePortalSessionCompletion
+    handlePortalSessionFinalizeNavigation
   );
 
   app.post(
