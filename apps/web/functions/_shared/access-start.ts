@@ -1,3 +1,4 @@
+const authOrigin = "https://auth.paretoproof.com";
 const portalOrigin = "https://portal.paretoproof.com";
 
 type Provider = "github" | "google";
@@ -94,14 +95,27 @@ function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkInten
   ].join("; ");
 }
 
+function buildAuthFailureUrl(redirectPath: string) {
+  const authUrl = new URL(authOrigin);
+
+  if (redirectPath !== "/") {
+    authUrl.searchParams.set("redirect", redirectPath);
+  }
+
+  authUrl.searchParams.set("handoff", "failed");
+
+  return authUrl.toString();
+}
+
 export async function handleAccessStart(
   request: Request,
   env: AccessStartEnv,
   provider: Provider
 ) {
+  const requestUrl = new URL(request.url);
+  const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+
   try {
-    const requestUrl = new URL(request.url);
-    const redirectPath = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
     const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
     const providerUrl = new URL("/", providerOrigins[provider]);
     const providerHintCookie = await buildProviderHintCookie(env, provider);
@@ -126,16 +140,13 @@ export async function handleAccessStart(
       status: 302
     });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown Access start failure."
-      }),
-      {
-        headers: {
-          "content-type": "application/json; charset=utf-8"
-        },
-        status: 502
-      }
-    );
+    void error;
+
+    return new Response(null, {
+      headers: {
+        location: buildAuthFailureUrl(redirectPath)
+      },
+      status: 302
+    });
   }
 }
