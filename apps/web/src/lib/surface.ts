@@ -188,7 +188,7 @@ export function buildApiSessionCompleteUrl(targetPath = "/") {
 
 export function buildApiSessionFinalizeUrl(targetPath = "/") {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
-  const completionUrl = new URL("/portal/session/finalize", "https://api.paretoproof.com");
+  const completionUrl = new URL("/portal/session/finalize/submit", "https://api.paretoproof.com");
 
   if (normalizedTargetPath !== "/") {
     completionUrl.searchParams.set("redirect", normalizedTargetPath);

@@ -335,6 +335,14 @@ export function registerPortalRoutes(
     reply.redirect(buildPortalAuthRetryUrl(redirectPath));
   });
 
+  app.get("/portal/session/finalize", async (request, reply) => {
+    const redirectPath = sanitizePortalRedirectPath(
+      (request.query as { redirect?: string } | undefined)?.redirect ?? null
+    );
+
+    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+  });
+
   app.post(
     "/portal/session/complete",
     {
@@ -344,7 +352,7 @@ export function registerPortalRoutes(
   );
 
   app.post(
-    "/portal/session/finalize",
+    "/portal/session/finalize/submit",
     {
       preHandler: requireAccess("authenticated_access_identity")
     },
