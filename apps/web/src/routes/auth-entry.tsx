@@ -26,6 +26,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const portalUrl = useMemo(() => buildPortalUrl(redirectPath), [redirectPath]);
   const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
   const handoffMode = new URLSearchParams(window.location.search).get("handoff");
+  const showFailedNotice = handoffMode === "failed";
   const showRetryNotice = handoffMode === "retry";
 
   useEffect(() => {
@@ -86,6 +87,12 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
             <p className="auth-panel-copy">
               The secure API handoff URL only works after sign-in. Restart from this auth
               entry and already-authenticated browsers will be sent straight to the portal.
+            </p>
+          ) : null}
+          {showFailedNotice ? (
+            <p className="auth-panel-copy">
+              The provider handoff could not be started cleanly. Restart from this auth
+              entry to try again instead of continuing on a broken intermediary screen.
             </p>
           ) : null}
           {isCheckingSession ? (
