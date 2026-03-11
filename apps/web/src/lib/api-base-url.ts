@@ -13,5 +13,8 @@ export function getApiBaseUrl() {
     return "https://api.paretoproof.com";
   }
 
-  return "http://localhost:3000";
+  const localApiUrl = new URL(window.location.origin);
+  localApiUrl.port = "3000";
+
+  return trimTrailingSlash(localApiUrl.origin);
 }

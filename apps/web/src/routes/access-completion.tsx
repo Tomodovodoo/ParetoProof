@@ -1,27 +1,16 @@
 import { useEffect } from "react";
 import { AppIcon } from "../components/app-icon";
-import { buildApiSessionFinalizeUrl } from "../lib/surface";
+import { buildApiSessionFinalizeUrl, buildAuthUrl } from "../lib/surface";
 
 type AccessCompletionProps = {
   provider: "github" | "google";
   redirectPath: string;
 };
 
-function isLocalAuthHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1";
-}
-
 function buildAuthRetryUrl(redirectPath: string) {
-  const authOrigin = isLocalAuthHost(window.location.hostname)
-    ? window.location.origin
-    : `${window.location.protocol}//auth.paretoproof.com`;
-  const retryUrl = new URL("/", authOrigin);
+  const retryUrl = new URL(buildAuthUrl(redirectPath, window.location.hostname));
 
   retryUrl.searchParams.set("handoff", "retry");
-
-  if (redirectPath !== "/") {
-    retryUrl.searchParams.set("redirect", redirectPath);
-  }
 
   return retryUrl.toString();
 }
