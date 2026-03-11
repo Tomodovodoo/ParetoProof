@@ -473,57 +473,70 @@ export function registerPortalRoutes(
     }
   );
 
+  const handlePortalProfileUpdate = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const parsedBody = portalProfileUpdateInputSchema.safeParse(request.body ?? {});
+
+    if (!parsedBody.success) {
+      reply.code(400).send({
+        error: "invalid_profile_payload",
+        issues: parsedBody.error.issues
+      });
+      return;
+    }
+
+    const identity = request.accessIdentity;
+
+    if (!identity) {
+      throw new Error("Authenticated Access identity was not attached to the request.");
+    }
+
+    const linkedIdentity = await db.query.userIdentities.findFirst({
+      where: eq(userIdentities.providerSubject, identity.subject),
+      with: {
+        user: true
+      }
+    });
+
+    if (!linkedIdentity) {
+      reply.code(409).send({
+        error: "profile_not_initialized"
+      });
+      return;
+    }
+
+    await db
+      .update(users)
+      .set({
+        displayName: parsedBody.data.displayName,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, linkedIdentity.user.id));
+
+    return {
+      profile: await loadPortalProfile(db, {
+        fallbackEmail: normalizeOptionalEmail(identity.email),
+        identitySubject: identity.subject
+      })
+    };
+  };
+
   app.patch(
     "/portal/profile",
     {
       preHandler: requireAccess("approved_helper_or_higher")
     },
-    async (request, reply) => {
-      const parsedBody = portalProfileUpdateInputSchema.safeParse(request.body ?? {});
+    handlePortalProfileUpdate
+  );
 
-      if (!parsedBody.success) {
-        reply.code(400).send({
-          error: "invalid_profile_payload",
-          issues: parsedBody.error.issues
-        });
-        return;
-      }
-
-      const identity = request.accessIdentity;
-
-      if (!identity) {
-        throw new Error("Authenticated Access identity was not attached to the request.");
-      }
-
-      const linkedIdentity = await db.query.userIdentities.findFirst({
-        where: eq(userIdentities.providerSubject, identity.subject),
-        with: {
-          user: true
-        }
-      });
-
-      if (!linkedIdentity) {
-        reply.code(409).send({
-          error: "profile_not_initialized"
-        });
-        return;
-      }
-
-      await db
-        .update(users)
-        .set({
-          displayName: parsedBody.data.displayName,
-          updatedAt: new Date()
-        })
-        .where(eq(users.id, linkedIdentity.user.id));
-
-      return {
-        profile: await loadPortalProfile(db, {
-          fallbackEmail: normalizeOptionalEmail(identity.email),
-          identitySubject: identity.subject
-        })
-      };
-    }
+  app.post(
+    "/portal/profile",
+    {
+      preHandler: requireAccess("approved_helper_or_higher")
+    },
+    handlePortalProfileUpdate
   );
 
   app.post(

@@ -7,6 +7,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { createApiFormBody } from "../lib/api-form";
 import { usePortalPolling } from "../lib/portal-freshness";
 import { isLocalHostname } from "../lib/surface";
 
@@ -231,10 +232,12 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
         const response = await fetch(
           `${apiBaseUrl}/portal/admin/access-requests/${requestItem.id}/approve`,
           {
-            body: JSON.stringify(parsed.data),
+            body: createApiFormBody({
+              approvedRole: parsed.data.approvedRole,
+              decisionNote: parsed.data.decisionNote ?? ""
+            }),
             credentials: "include",
             headers: {
-              "Content-Type": "application/json",
               Accept: "application/json"
             },
             method: "POST"
@@ -276,10 +279,11 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
       const response = await fetch(
         `${apiBaseUrl}/portal/admin/access-requests/${requestItem.id}/reject`,
         {
-          body: JSON.stringify(parsed.data),
+          body: createApiFormBody({
+            decisionNote: parsed.data.decisionNote ?? ""
+          }),
           credentials: "include",
           headers: {
-            "Content-Type": "application/json",
             Accept: "application/json"
           },
           method: "POST"

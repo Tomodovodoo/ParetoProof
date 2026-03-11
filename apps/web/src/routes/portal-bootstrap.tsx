@@ -2,6 +2,7 @@ import type { PortalAccessRequestInput } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { createApiFormBody } from "../lib/api-form";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import { AccessRequestScreen } from "./access-request-screen";
 import {
@@ -234,10 +235,12 @@ export function PortalBootstrap() {
     }
 
     const response = await fetch(`${apiBaseUrl}/portal/access-requests`, {
-      body: JSON.stringify(payload),
+      body: createApiFormBody({
+        rationale: payload.rationale ?? "",
+        requestedRole: payload.requestedRole
+      }),
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json"
       },
       method: "POST"
@@ -265,10 +268,11 @@ export function PortalBootstrap() {
     }
 
     const response = await fetch(`${apiBaseUrl}/portal/access-recovery`, {
-      body: JSON.stringify(payload),
+      body: createApiFormBody({
+        rationale: payload.rationale ?? ""
+      }),
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json"
       },
       method: "POST"
