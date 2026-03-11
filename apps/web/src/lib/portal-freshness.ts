@@ -32,23 +32,23 @@ export function describePortalFreshness(
   now = Date.now()
 ) {
   if (!policy) {
-    return "This MVP view does not define a background refresh policy yet.";
+    return "This view does not refresh in the background yet.";
   }
 
   if (policy.mode === "manual") {
     if (!lastUpdatedAt) {
-      return policy.description;
+      return "This view refreshes when you reload it or complete an action here.";
     }
 
-    return `${policy.description} Last refreshed ${formatTimestamp(lastUpdatedAt)}.`;
+    return `This view refreshes when you reload it or complete an action here. Last refreshed ${formatTimestamp(lastUpdatedAt)}.`;
   }
 
   if (!lastUpdatedAt) {
-    return `${policy.description} It should mark itself stale after ${formatDuration(policy.staleAfterMs ?? policy.pollIntervalMs ?? 0)} without a successful refresh.`;
+    return `This view refreshes in the background. If fresh data stops arriving for ${formatDuration(policy.staleAfterMs ?? policy.pollIntervalMs ?? 0)} or longer, it will be marked stale.`;
   }
 
   const ageMs = Math.max(0, now - Date.parse(lastUpdatedAt));
-  return `Last refreshed ${formatTimestamp(lastUpdatedAt)}. This view becomes stale after ${formatDuration(policy.staleAfterMs ?? policy.pollIntervalMs ?? 0)} without a successful refresh. Current age: ${formatDuration(Math.round(ageMs / 1000) * 1000)}.`;
+  return `Last refreshed ${formatTimestamp(lastUpdatedAt)}. This view refreshes in the background and will be marked stale if no fresh data arrives for ${formatDuration(policy.staleAfterMs ?? policy.pollIntervalMs ?? 0)}. Current age: ${formatDuration(Math.round(ageMs / 1000) * 1000)}.`;
 }
 
 export function formatTimestamp(timestamp: string) {

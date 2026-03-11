@@ -13,9 +13,9 @@ type AuthEntryProps = {
 };
 
 const authChecks = [
-  "Provider identity should resolve into one ParetoProof account, not duplicate users.",
-  "Approval state needs to be surfaced before the portal handoff looks broken.",
-  "Recovery should explain what changed instead of dumping users into Access noise."
+  "We match this provider to your existing ParetoProof account whenever possible.",
+  "If your account still needs approval, we will say that clearly before portal entry.",
+  "If sign-in or recovery needs attention, you stay on a branded surface with next steps."
 ];
 
 export function AuthEntry({ redirectPath }: AuthEntryProps) {
@@ -77,15 +77,15 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
             </span>
             ParetoProof portal
           </p>
-          <h1>Use one clean entry, then route users into the right identity state.</h1>
+          <h1>Sign in to the contributor portal.</h1>
           <p className="auth-lead">
-            Provider choice, account linking, and contributor approval belong in one
-            deliberate handoff instead of a stack of awkward intermediary screens.
+            Use GitHub or Google to continue. If this browser already has an approved
+            ParetoProof session, we will take you straight into the portal.
           </p>
           {showRetryNotice ? (
             <p className="auth-panel-copy">
-              The secure API handoff URL only works after sign-in. Restart from this auth
-              entry and already-authenticated browsers will be sent straight to the portal.
+              That sign-in handoff did not finish cleanly. Start again here and we will
+              retry from a fresh branded entry.
             </p>
           ) : null}
           {isCheckingSession ? (
@@ -98,9 +98,9 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
         <div className="auth-provider-layout">
           <section className="auth-provider-panel">
             <p className="section-tag">Sign in</p>
-            <h2>Choose a trusted provider</h2>
+            <h2>Choose a sign-in method</h2>
             <p className="auth-panel-copy">
-              GitHub and Google stay first-class without changing the overall shell.
+              Pick the provider that matches the identity you use for ParetoProof.
             </p>
             <div className="auth-provider-list">
               <a className="auth-provider-button" href={githubStartUrl}>
@@ -109,7 +109,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
                 </span>
                 <span>
                   <strong>Continue with GitHub</strong>
-                  <small>Primary contributor sign-in for repository-linked work.</small>
+                  <small>Best for contributors working from GitHub-linked repositories.</small>
                 </span>
                 <span className="auth-provider-arrow" aria-hidden="true">
                   <AppIcon name="arrow-right" />
@@ -121,7 +121,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
                 </span>
                 <span>
                   <strong>Continue with Google</strong>
-                  <small>Fallback for approved contributors who operate outside GitHub.</small>
+                  <small>Use Google when your approved ParetoProof identity lives outside GitHub.</small>
                 </span>
                 <span className="auth-provider-arrow" aria-hidden="true">
                   <AppIcon name="arrow-right" />
@@ -131,8 +131,8 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
           </section>
 
           <aside className="auth-provider-panel auth-provider-panel-notes">
-            <p className="section-tag">Guardrails</p>
-            <h2>What the flow has to explain</h2>
+            <p className="section-tag">Before you continue</p>
+            <h2>What happens next</h2>
             <ul className="auth-check-list">
               {authChecks.map((item) => (
                 <li key={item}>
@@ -150,7 +150,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
           <p>
             {isLocal
               ? "Local development can jump straight into an approved portal session so the UI can be tested without Cloudflare Access in the loop."
-              : "If you are not approved yet, sign in first and submit your contributor request from inside the portal."}
+              : "Not approved yet? Sign in first, then submit your contributor access request from inside the portal."}
           </p>
           <a className="button button-secondary" href={buildPublicUrl("/")}>
             Back to paretoproof.com

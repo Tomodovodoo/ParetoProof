@@ -358,7 +358,11 @@ export function PortalBootstrap() {
       <PortalStatusCard
         eyebrow="Portal"
         title="Portal unavailable"
-        body={state.message}
+        body={
+          state.message === "Failed to fetch"
+            ? "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry."
+            : "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry."
+        }
         action={{ href: buildPortalUrl(currentRelativeUrl), label: "Retry portal" }}
       />
     );
