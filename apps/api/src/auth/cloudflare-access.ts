@@ -159,6 +159,7 @@ export function buildSignedAccessCookie(
   value: string,
   options?: {
     maxAgeSeconds?: number;
+    sameSite?: "Strict" | "Lax";
   }
 ) {
   const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
@@ -168,12 +169,13 @@ export function buildSignedAccessCookie(
   }
 
   const maxAgeSeconds = options?.maxAgeSeconds ?? 600;
+  const sameSite = options?.sameSite ?? "Strict";
 
   return [
     `${name}=${createSignedAccessValue(value, secret, maxAgeSeconds)}`,
     "Domain=.paretoproof.com",
     "Path=/",
-    "SameSite=Strict",
+    `SameSite=${sameSite}`,
     `Max-Age=${maxAgeSeconds}`,
     "Secure",
     "HttpOnly"

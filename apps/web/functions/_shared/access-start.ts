@@ -76,7 +76,7 @@ async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) 
     `PortalAccessProvider=${value}`,
     "Domain=.paretoproof.com",
     "Path=/",
-    "SameSite=Strict",
+    "SameSite=Lax",
     "Max-Age=600",
     "Secure",
     "HttpOnly"
@@ -88,7 +88,7 @@ function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkInten
     `${name}=`,
     "Domain=.paretoproof.com",
     "Path=/",
-    "SameSite=Strict",
+    "SameSite=Lax",
     "Max-Age=0",
     "Secure",
     "HttpOnly"
