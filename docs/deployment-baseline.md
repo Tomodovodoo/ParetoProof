@@ -28,7 +28,7 @@ Because the API owns auth, approvals, and database writes, do not roll the API b
 
 ### Worker rollback (`apps/worker`, GHCR, Modal)
 
-The worker rollback path is image-based. The repository now publishes worker images to GHCR as `ghcr.io/<owner>/paretoproof-worker` with a moving `main` tag plus immutable `sha-*` tags. Roll back workers by pointing the Modal-side worker deployment or job configuration at the last known good image digest or `sha-*` tag, not by rebuilding a new emergency image from an unknown local state.
+The worker rollback path is image-based once the GHCR publish workflow at `.github/workflows/publish-worker-image.yml` has produced at least one image. That workflow is configured to publish `ghcr.io/<owner>/paretoproof-worker` with a moving `main` tag plus immutable `sha-*` tags. Roll back workers by pointing the Modal-side worker deployment or job configuration at the last known good image digest or `sha-*` tag, not by rebuilding a new emergency image from an unknown local state. If no successful worker image publish has happened yet, there is no GHCR rollback target and recovery has to start by publishing a known good worker revision first.
 
 Worker rollback should stay isolated from the public API unless the incident came from a shared backend/worker contract change. If the worker image is rolled back independently, keep the API deployment fixed unless the API now expects a newer worker protocol than the restored image can satisfy. When that contract mismatch exists, roll the API and worker back to a matching commit family instead of mixing arbitrary versions.
 
