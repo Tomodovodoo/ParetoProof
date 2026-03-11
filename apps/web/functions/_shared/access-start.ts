@@ -124,6 +124,10 @@ export async function handleAccessStart(
       providerUrl.searchParams.set("redirect", redirectPath);
     }
 
+    if (flow === "link") {
+      providerUrl.searchParams.set("flow", "link");
+    }
+
     const headers = new Headers({
       location: providerUrl.toString()
     });
