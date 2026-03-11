@@ -98,7 +98,7 @@ function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
 }
 
 function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
-  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Strict; Max-Age=0; Secure; HttpOnly`;
+  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Lax; Max-Age=0; Secure; HttpOnly`;
 }
 
 function buildPortalAuthStartUrl(options: {
@@ -293,7 +293,7 @@ export function registerPortalRoutes(
         buildSignedAccessCookie(
           "PortalAccessProvider",
           `${providerHint}|${identity.subject}`,
-          { maxAgeSeconds: 24 * 60 * 60 }
+          { maxAgeSeconds: 24 * 60 * 60, sameSite: "Lax" }
         )
       );
     } else {
@@ -649,7 +649,12 @@ export function registerPortalRoutes(
         })
       };
 
-      reply.header("set-cookie", buildSignedAccessCookie("PortalLinkIntent", intent.id));
+      reply.header(
+        "set-cookie",
+        buildSignedAccessCookie("PortalLinkIntent", intent.id, {
+          sameSite: "Lax"
+        })
+      );
 
       return {
         intent: responseBody
