@@ -18,11 +18,20 @@ export const apiEndpointCatalog = [
     purpose: "Return the caller's resolved identity, role summary, and approval state."
   },
   {
+    access: "anonymous",
+    audience: "public",
+    id: "portal.session.retry",
+    method: "GET",
+    path: "/portal/session/complete",
+    purpose:
+      "Restart the branded auth entry when a browser lands on the raw session-completion URL directly."
+  },
+  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.session.complete",
     method: "POST",
-    path: "/portal/session/complete",
+    path: "/portal/session/finalize",
     purpose:
       "Finish the Cloudflare Access login handoff on the API audience and return the browser to the static portal host."
   },

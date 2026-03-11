@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { AppIcon } from "../components/app-icon";
-import { buildApiSessionCompleteUrl } from "../lib/surface";
+import { buildApiSessionFinalizeUrl } from "../lib/surface";
 
 type AccessCompletionProps = {
   provider: "github" | "google";
@@ -12,7 +12,7 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
     const form = document.createElement("form");
 
     form.method = "POST";
-    form.action = buildApiSessionCompleteUrl(redirectPath);
+    form.action = buildApiSessionFinalizeUrl(redirectPath);
     form.style.display = "none";
     document.body.append(form);
     form.submit();

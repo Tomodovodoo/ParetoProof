@@ -1,5 +1,12 @@
+import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
-import { buildAccessStartUrl, buildPublicUrl, isLocalHostname } from "../lib/surface";
+import { getApiBaseUrl } from "../lib/api-base-url";
+import {
+  buildAccessStartUrl,
+  buildPortalUrl,
+  buildPublicUrl,
+  isLocalHostname
+} from "../lib/surface";
 
 type AuthEntryProps = {
   redirectPath: string;
@@ -15,6 +22,50 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const githubStartUrl = buildAccessStartUrl("github", redirectPath);
   const googleStartUrl = buildAccessStartUrl("google", redirectPath);
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
+  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const portalUrl = useMemo(() => buildPortalUrl(redirectPath), [redirectPath]);
+  const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
+  const handoffMode = new URLSearchParams(window.location.search).get("handoff");
+  const showRetryNotice = handoffMode === "retry";
+
+  useEffect(() => {
+    if (isLocal) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function resolveExistingSession() {
+      try {
+        const response = await fetch(`${apiBaseUrl}/portal/me`, {
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          },
+          signal: controller.signal
+        });
+
+        if (response.ok) {
+          window.location.replace(portalUrl);
+          return;
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+      }
+
+      if (!controller.signal.aborted) {
+        setIsCheckingSession(false);
+      }
+    }
+
+    void resolveExistingSession();
+
+    return () => {
+      controller.abort();
+    };
+  }, [apiBaseUrl, isLocal, portalUrl]);
 
   return (
     <main className="auth-shell">
@@ -31,6 +82,17 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
             Provider choice, account linking, and contributor approval belong in one
             deliberate handoff instead of a stack of awkward intermediary screens.
           </p>
+          {showRetryNotice ? (
+            <p className="auth-panel-copy">
+              The secure API handoff URL only works after sign-in. Restart from this auth
+              entry and already-authenticated browsers will be sent straight to the portal.
+            </p>
+          ) : null}
+          {isCheckingSession ? (
+            <p className="auth-panel-copy">
+              Checking whether this browser already has a valid portal session.
+            </p>
+          ) : null}
         </div>
 
         <div className="auth-provider-layout">
