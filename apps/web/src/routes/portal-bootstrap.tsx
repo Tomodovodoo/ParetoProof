@@ -146,8 +146,14 @@ export function PortalBootstrap() {
           headers: {
             Accept: "application/json"
           },
+          redirect: "manual",
           signal: controller.signal
         });
+
+        if (response.type === "opaqueredirect") {
+          setState({ status: "unauthenticated" });
+          return;
+        }
 
         if (response.status === 401) {
           setState({ status: "unauthenticated" });
