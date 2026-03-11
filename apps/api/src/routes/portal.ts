@@ -301,6 +301,16 @@ export function registerPortalRoutes(
     }
 
     reply.header("set-cookie", responseCookies);
+
+    if (
+      typeof request.headers.accept === "string" &&
+      request.headers.accept.includes("application/json")
+    ) {
+      return reply.send({
+        redirectTo: portalUrl.toString()
+      });
+    }
+
     reply.redirect(portalUrl.toString());
   };
 

@@ -2,8 +2,7 @@ import { useEffect } from "react";
 import { AppIcon } from "../components/app-icon";
 import {
   buildApiSessionFinalizeUrl,
-  buildAuthUrl,
-  buildPortalUrl
+  buildAuthUrl
 } from "../lib/surface";
 
 type AccessCompletionProps = {
@@ -13,80 +12,48 @@ type AccessCompletionProps = {
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
   useEffect(() => {
-    const iframeName = `portal-session-finalize-${provider}`;
-    const iframe = document.createElement("iframe");
-    const form = document.createElement("form");
+    const finalizeAbortController = new AbortController();
     const retryUrl = new URL(buildAuthUrl(redirectPath));
-    const portalUrl = buildPortalUrl(redirectPath);
-    const portalSessionUrl = new URL("/portal/me", "https://api.paretoproof.com").toString();
-    let isDisposed = false;
-    let isCheckingSession = false;
-
-    iframe.name = iframeName;
-    iframe.style.display = "none";
-
-    form.target = iframeName;
-    form.method = "POST";
-    form.action = buildApiSessionFinalizeUrl(redirectPath);
-    form.style.display = "none";
+    const finalizeDeadlineTimeoutId = window.setTimeout(() => {
+      finalizeAbortController.abort();
+    }, 12000);
 
     retryUrl.searchParams.set("handoff", "retry");
 
-    const disposeAndRedirect = (targetUrl: string) => {
-      if (isDisposed) {
-        return;
-      }
-
-      isDisposed = true;
-      window.clearInterval(sessionPollIntervalId);
-      window.clearTimeout(sessionDeadlineTimeoutId);
-      window.location.replace(targetUrl);
-    };
-
-    const checkPortalSession = async () => {
-      if (isDisposed || isCheckingSession) {
-        return;
-      }
-
-      isCheckingSession = true;
-
+    const finalizePortalSession = async () => {
       try {
-        const response = await fetch(portalSessionUrl, {
-          credentials: "include"
+        const response = await fetch(buildApiSessionFinalizeUrl(redirectPath), {
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          },
+          method: "POST",
+          signal: finalizeAbortController.signal
         });
+        const payload =
+          (await response.json().catch(() => null)) as { redirectTo?: string } | null;
 
-        if (!response.ok) {
-          return;
+        if (!response.ok || !payload?.redirectTo) {
+          throw new Error("finalize_failed");
         }
 
-        disposeAndRedirect(portalUrl);
+        window.location.replace(payload.redirectTo);
       } catch {
-        return;
+        if (!finalizeAbortController.signal.aborted) {
+          window.location.replace(retryUrl.toString());
+        }
       } finally {
-        isCheckingSession = false;
+        window.clearTimeout(finalizeDeadlineTimeoutId);
       }
     };
 
-    const sessionPollIntervalId = window.setInterval(() => {
-      void checkPortalSession();
-    }, 1000);
-    const sessionDeadlineTimeoutId = window.setTimeout(() => {
-      disposeAndRedirect(retryUrl.toString());
-    }, 12000);
-
-    document.body.append(iframe);
-    document.body.append(form);
-    form.submit();
-    void checkPortalSession();
+    void finalizePortalSession();
 
     return () => {
-      isDisposed = true;
-      window.clearInterval(sessionPollIntervalId);
-      window.clearTimeout(sessionDeadlineTimeoutId);
-      iframe.remove();
-      form.remove();
+      finalizeAbortController.abort();
+      window.clearTimeout(finalizeDeadlineTimeoutId);
     };
-  }, [provider, redirectPath]);
+  }, [redirectPath]);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";
 
