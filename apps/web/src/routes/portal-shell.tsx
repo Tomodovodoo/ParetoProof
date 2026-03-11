@@ -1,12 +1,14 @@
 import {
   appRouteAccessMatrix,
   getPortalActionsForRoles,
+  getPortalLiveViewFreshness,
   getPortalSectionsForRoles,
   type PortalActionDefinition,
   type PortalRole,
   type PortalSectionDefinition
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
+import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
 import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
@@ -95,6 +97,11 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     [matchedPortalRoute, sections]
   );
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
+  const activeRouteId = matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
+  const activeFreshnessPolicy = useMemo(
+    () => getPortalLiveViewFreshness(activeRouteId),
+    [activeRouteId]
+  );
 
   useEffect(() => {
     const pathname = window.location.pathname;
@@ -211,6 +218,9 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 <p className="eyebrow">Current section</p>
                 <h2>{activeSection?.navLabel ?? "Portal section"}</h2>
                 <p>{activeSection?.summary}</p>
+                {activeFreshnessPolicy ? (
+                  <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+                ) : null}
                 <div className="portal-section-notes">
                   <p className="portal-panel-muted">
                     This surface is structurally ready and can be filled in as backend

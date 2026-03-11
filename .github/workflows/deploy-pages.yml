@@ -9,6 +9,7 @@ on:
       - "packages/shared/**"
       - "package.json"
       - "bun.lock"
+      - "tsconfig.base.json"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
