@@ -90,7 +90,8 @@ async function resolveRequestAccess(
   identity = {
     ...identity,
     provider: verifyAccessProviderHint(
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined,
+      identity.subject
     ) ?? identity.provider
   };
 
