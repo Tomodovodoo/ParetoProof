@@ -325,7 +325,9 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
           isRefreshing={isPolling || isMutatingId !== null}
           lastUpdatedAt={lastUpdatedAt}
           onRefresh={() => {
-            void pollNow();
+            void pollNow().catch(() => {
+              // refreshRequests already surfaces the error to the panel state
+            });
           }}
           routeId="portal.admin.access-requests"
         />
