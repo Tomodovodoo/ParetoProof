@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { createApiFormBody } from "../lib/api-form";
 import { isLocalHostname } from "../lib/surface";
 
 type PortalProfilePanelProps = {
@@ -222,10 +223,12 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       }
 
       const response = await fetch(`${apiBaseUrl}/portal/profile/link-intents`, {
-        body: JSON.stringify(parsed.data),
+        body: createApiFormBody({
+          provider: parsed.data.provider,
+          redirectPath: parsed.data.redirectPath ?? ""
+        }),
         credentials: "include",
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json"
         },
         method: "POST"
@@ -275,13 +278,14 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       }
 
       const response = await fetch(`${apiBaseUrl}/portal/profile`, {
-        body: JSON.stringify(parsed.data satisfies PortalProfileUpdateInput),
+        body: createApiFormBody({
+          displayName: parsed.data.displayName ?? ""
+        }),
         credentials: "include",
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json"
         },
-        method: "PATCH"
+        method: "POST"
       });
 
       if (!response.ok) {
