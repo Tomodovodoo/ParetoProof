@@ -28,7 +28,7 @@ export const portalSectionDefinitions = [
   },
   {
     description:
-      "Signed-in profile details, linked Access identities, and the small MVP contributor fields the portal already supports.",
+      "Signed-in profile details, linked Access identities, and the supported contributor fields the portal already exposes.",
     id: "profile",
     navLabel: "Profile",
     routeId: "portal.profile",

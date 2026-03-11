@@ -149,7 +149,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
         <div className="auth-card-footer">
           <p>
             {isLocal
-              ? "Local development can jump straight into an approved portal session so the UI can be tested without Cloudflare Access in the loop."
+              ? "This development build can open a seeded approved portal session without Cloudflare Access."
               : "If you are not approved yet, sign in first and submit your contributor request from inside the portal."}
           </p>
           <a className="button button-secondary" href={buildPublicUrl("/")}>

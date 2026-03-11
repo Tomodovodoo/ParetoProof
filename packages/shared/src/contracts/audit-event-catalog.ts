@@ -1,6 +1,5 @@
 import type { AuditEventCatalogEntry } from "../types/audit-event.js";
 
-// These are the minimum privileged events the MVP backend must be able to record before manual approvals and run control expand.
 export const auditEventCatalog = [
   {
     actor: "portal_user",
@@ -51,6 +50,35 @@ export const auditEventCatalog = [
     requiredFields: ["actorUserId", "revokedRole", "targetUserId"],
     severity: "critical",
     subject: "role_grant"
+  },
+  {
+    actor: "portal_user",
+    id: "user_identity.link_intent_created",
+    rationale:
+      "Creating a short-lived identity-link intent starts a privileged handoff that should retain who initiated it, which provider it targeted, and when it expires.",
+    requiredFields: [
+      "actorUserId",
+      "intentId",
+      "targetProvider",
+      "targetUserId",
+      "expiresAt"
+    ],
+    severity: "info",
+    subject: "user_identity"
+  },
+  {
+    actor: "portal_user",
+    id: "user_identity.linked",
+    rationale:
+      "Attaching another sign-in identity changes who can authenticate as an approved user and must preserve the actor, provider, and linked subject.",
+    requiredFields: [
+      "actorUserId",
+      "identityProvider",
+      "identitySubject",
+      "targetUserId"
+    ],
+    severity: "critical",
+    subject: "user_identity"
   },
   {
     actor: "portal_user",

@@ -12,12 +12,12 @@ export const portalLiveViewFreshnessCatalog = [
   },
   {
     description:
-      "Profile data only changes when the caller saves details or completes a linking handoff, so MVP keeps it manual instead of polling in the background.",
+      "Profile data only changes when the caller saves details or completes a linking handoff, so it stays manual instead of polling in the background.",
     mode: "manual",
     pollIntervalMs: null,
     routeId: "portal.profile",
     staleAfterMs: null,
-    title: "Manual refresh in MVP"
+    title: "Refresh on demand"
   },
   {
     description:
@@ -39,12 +39,12 @@ export const portalLiveViewFreshnessCatalog = [
   },
   {
     description:
-      "Run launch remains form-driven in MVP and only needs explicit refresh after submit or navigation because no live launch queue is exposed yet.",
+      "Run launch stays form-driven and only needs explicit refresh after submit or navigation because no live launch queue is exposed yet.",
     mode: "manual",
     pollIntervalMs: null,
     routeId: "portal.launch-run",
     staleAfterMs: null,
-    title: "Manual refresh in MVP"
+    title: "Refresh on demand"
   },
   {
     description:
@@ -66,12 +66,12 @@ export const portalLiveViewFreshnessCatalog = [
   },
   {
     description:
-      "User-management data is intentionally non-live in MVP until the admin maintenance workflows exist beyond the initial portal shell.",
+      "User-management data stays manual until the admin maintenance workflows exist beyond the initial portal shell.",
     mode: "manual",
     pollIntervalMs: null,
     routeId: "portal.admin.users",
     staleAfterMs: null,
-    title: "Manual refresh in MVP"
+    title: "Refresh on demand"
   }
 ] satisfies PortalLiveViewFreshnessEntry[];
 

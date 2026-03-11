@@ -84,7 +84,8 @@ const overviewRuns = [
 
 const overviewTimeline = [
   {
-    detail: "Tom linked GitHub and entered the contributor portal without the Access handoff breaking.",
+    detail:
+      "A contributor linked GitHub and entered the portal without the Access handoff breaking.",
     meta: "11:24 UTC",
     title: "Access request approved"
   },
@@ -398,12 +399,12 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                   ) : null}
                   <div className="portal-section-notes">
                     <p className="portal-panel-muted">
-                      This surface is structurally ready and can be filled in as backend
-                      features land.
+                      This section already follows the shell, access rules, and freshness
+                      model used across the portal.
                     </p>
                     <ul className="portal-note-list">
                       <li>Navigation and route access already reflect the approved role model.</li>
-                      <li>Live data can replace the placeholder content without another shell rewrite.</li>
+                      <li>Live data can fill this section without another shell rewrite.</li>
                       <li>The rail stays fixed while each deeper workflow grows independently.</li>
                     </ul>
                   </div>

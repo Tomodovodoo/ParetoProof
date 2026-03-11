@@ -20,11 +20,20 @@ export const apiEndpointCatalog = [
   {
     access: "anonymous",
     audience: "public",
-    id: "portal.session.retry",
+    id: "portal.session.retry.complete",
     method: "GET",
     path: "/portal/session/complete",
     purpose:
-      "Restart the branded auth entry when a browser lands on the raw session-completion URL directly."
+      "Restart the branded auth entry when a browser lands on the legacy session-completion URL directly."
+  },
+  {
+    access: "anonymous",
+    audience: "public",
+    id: "portal.session.retry.finalize",
+    method: "GET",
+    path: "/portal/session/finalize",
+    purpose:
+      "Restart the branded auth entry when a browser lands on the raw session-finalize URL directly."
   },
   {
     access: "authenticated_access_identity",
@@ -74,7 +83,16 @@ export const apiEndpointCatalog = [
     id: "portal.profile.update",
     method: "PATCH",
     path: "/portal/profile",
-    purpose: "Update the caller's MVP portal profile fields without changing role grants."
+    purpose: "Update the caller's portal profile fields without changing role grants."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.profile.link-intent.create",
+    method: "POST",
+    path: "/portal/profile/link-intents",
+    purpose:
+      "Create a short-lived identity-link handoff so an approved user can attach another sign-in method."
   },
   {
     access: "admin_only",
