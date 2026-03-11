@@ -13,8 +13,11 @@ type AccessCompletionProps = {
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
   useEffect(() => {
     const finalizeAbortController = new AbortController();
+    let finalizeTimedOut = false;
+    let wasUnmounted = false;
     const retryUrl = new URL(buildAuthUrl(redirectPath));
     const finalizeDeadlineTimeoutId = window.setTimeout(() => {
+      finalizeTimedOut = true;
       finalizeAbortController.abort();
     }, 12000);
 
@@ -39,7 +42,7 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
 
         window.location.replace(payload.redirectTo);
       } catch {
-        if (!finalizeAbortController.signal.aborted) {
+        if (!wasUnmounted && (finalizeTimedOut || !finalizeAbortController.signal.aborted)) {
           window.location.replace(retryUrl.toString());
         }
       } finally {
@@ -50,6 +53,7 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
     void finalizePortalSession();
 
     return () => {
+      wasUnmounted = true;
       finalizeAbortController.abort();
       window.clearTimeout(finalizeDeadlineTimeoutId);
     };
