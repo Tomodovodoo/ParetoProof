@@ -44,7 +44,7 @@ export function PortalFreshnessCard({
     <section className="portal-freshness-card">
       <div>
         <p className="eyebrow">View freshness</p>
-        <h3>{policy?.title ?? "Manual refresh in MVP"}</h3>
+        <h3>{policy?.title ?? "Refresh on demand"}</h3>
         <p className="portal-panel-muted">
           {describePortalFreshness(policy, lastUpdatedAt, clockNow)}
         </p>

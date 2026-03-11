@@ -32,7 +32,7 @@ function createLocalRequest(
     email,
     id,
     requestKind: "access_request",
-    rationale: `Local development request for ${email}.`,
+    rationale: `Contributor access request for ${email}.`,
     requestedRole,
     reviewedAt: null,
     status: "pending"

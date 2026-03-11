@@ -39,7 +39,7 @@ const portalActionBlueprints = [
     collaboratorState: "enabled",
     collaboratorVisible: true,
     description: "Inspect worker availability and execution posture once worker surfaces are live.",
-    disabledReason: "Worker operations stay outside helper permissions in MVP.",
+    disabledReason: "Worker operations stay outside helper permissions.",
     helperState: "disabled",
     helperVisible: true,
     id: "inspect_workers",

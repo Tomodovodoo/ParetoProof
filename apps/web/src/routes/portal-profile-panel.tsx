@@ -217,7 +217,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
 
         setProfile(buildLocalProfile(email));
         setLastUpdatedAt(new Date().toISOString());
-        setLinkMessage("The new sign-in method has been linked to your local development profile.");
+        setLinkMessage("The new sign-in method has been linked to this local profile.");
         return;
       }
 
@@ -334,8 +334,8 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         <p className="eyebrow">Contributor profile</p>
         <h2>Your details</h2>
         <p>
-          Update the small contributor details the MVP already supports and attach an extra
-          GitHub or Google sign-in method without changing your approved portal account.
+          Update the supported contributor details and attach an extra GitHub or Google
+          sign-in method without changing your approved portal account.
         </p>
         <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
         <form className="auth-form" onSubmit={handleSave}>

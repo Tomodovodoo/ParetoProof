@@ -1,7 +1,6 @@
 import {
   portalAdminAccessRequestApproveInputSchema,
-  portalAdminAccessRequestRejectInputSchema,
-  type PortalAccessRequestSummary
+  portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -12,24 +11,9 @@ import {
   userIdentities,
   users
 } from "../db/schema.js";
+import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
-
-function toAccessRequestSummary(
-  requestRow: typeof accessRequests.$inferSelect
-): PortalAccessRequestSummary {
-  return {
-    createdAt: requestRow.createdAt.toISOString(),
-    decisionNote: requestRow.decisionNote,
-    email: requestRow.email,
-    id: requestRow.id,
-    requestKind: requestRow.requestKind,
-    rationale: requestRow.rationale,
-    requestedRole: requestRow.requestedRole,
-    reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
-    status: requestRow.status
-  };
-}
 
 function getAdminActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
@@ -52,7 +36,6 @@ export function registerAdminRoutes(
       preHandler: requireAccess("admin_only")
     },
     async () => {
-      // Until the queue exposes pagination, returning all pending requests keeps every actionable review reachable.
       const requests = await db.query.accessRequests.findMany({
         orderBy: [asc(accessRequests.createdAt)],
         where: eq(accessRequests.status, "pending")
