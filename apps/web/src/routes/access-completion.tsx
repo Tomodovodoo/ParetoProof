@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { AppIcon } from "../components/app-icon";
-import { buildApiSessionFinalizeUrl } from "../lib/surface";
+import {
+  buildApiSessionFinalizeUrl,
+  buildAuthUrl
+} from "../lib/surface";
 
 type AccessCompletionProps = {
   provider: "github" | "google";
@@ -9,16 +12,50 @@ type AccessCompletionProps = {
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
   useEffect(() => {
-    const form = document.createElement("form");
+    const finalizeAbortController = new AbortController();
+    let finalizeTimedOut = false;
+    let wasUnmounted = false;
+    const retryUrl = new URL(buildAuthUrl(redirectPath));
+    const finalizeDeadlineTimeoutId = window.setTimeout(() => {
+      finalizeTimedOut = true;
+      finalizeAbortController.abort();
+    }, 12000);
 
-    form.method = "POST";
-    form.action = buildApiSessionFinalizeUrl(redirectPath);
-    form.style.display = "none";
-    document.body.append(form);
-    form.submit();
+    retryUrl.searchParams.set("handoff", "retry");
+
+    const finalizePortalSession = async () => {
+      try {
+        const response = await fetch(buildApiSessionFinalizeUrl(redirectPath), {
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          },
+          method: "POST",
+          signal: finalizeAbortController.signal
+        });
+        const payload =
+          (await response.json().catch(() => null)) as { redirectTo?: string } | null;
+
+        if (!response.ok || !payload?.redirectTo) {
+          throw new Error("finalize_failed");
+        }
+
+        window.location.replace(payload.redirectTo);
+      } catch {
+        if (!wasUnmounted && (finalizeTimedOut || !finalizeAbortController.signal.aborted)) {
+          window.location.replace(retryUrl.toString());
+        }
+      } finally {
+        window.clearTimeout(finalizeDeadlineTimeoutId);
+      }
+    };
+
+    void finalizePortalSession();
 
     return () => {
-      form.remove();
+      wasUnmounted = true;
+      finalizeAbortController.abort();
+      window.clearTimeout(finalizeDeadlineTimeoutId);
     };
   }, [redirectPath]);
 
