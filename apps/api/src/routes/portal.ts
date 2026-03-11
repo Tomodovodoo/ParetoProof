@@ -216,7 +216,7 @@ export function registerPortalRoutes(
     );
     const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
     const linkIntent = verifyAccessLinkIntent(cookieHeader);
-    const providerHint = verifyAccessProviderHint(cookieHeader);
+    const providerHint = verifyAccessProviderHint(cookieHeader, identity?.subject);
 
     if (identity && linkIntent) {
       const linkStatus = await db.transaction(async (tx) => {
@@ -343,8 +343,24 @@ export function registerPortalRoutes(
     reply.redirect(buildPortalAuthRetryUrl(redirectPath));
   });
 
+  app.get(
+    "/portal/session/finalize/submit",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    handlePortalSessionCompletion
+  );
+
   app.post(
     "/portal/session/complete",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    handlePortalSessionCompletion
+  );
+
+  app.post(
+    "/portal/session/finalize",
     {
       preHandler: requireAccess("authenticated_access_identity")
     },

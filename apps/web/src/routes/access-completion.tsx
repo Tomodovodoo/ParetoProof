@@ -11,53 +11,14 @@ type AccessCompletionProps = {
 };
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
+  const finalizeUrl = buildApiSessionFinalizeUrl(redirectPath);
+  const retryUrl = new URL(buildAuthUrl(redirectPath));
+
+  retryUrl.searchParams.set("handoff", "retry");
+
   useEffect(() => {
-    const finalizeAbortController = new AbortController();
-    let finalizeTimedOut = false;
-    let wasUnmounted = false;
-    const retryUrl = new URL(buildAuthUrl(redirectPath));
-    const finalizeDeadlineTimeoutId = window.setTimeout(() => {
-      finalizeTimedOut = true;
-      finalizeAbortController.abort();
-    }, 12000);
-
-    retryUrl.searchParams.set("handoff", "retry");
-
-    const finalizePortalSession = async () => {
-      try {
-        const response = await fetch(buildApiSessionFinalizeUrl(redirectPath), {
-          credentials: "include",
-          headers: {
-            Accept: "application/json"
-          },
-          method: "POST",
-          signal: finalizeAbortController.signal
-        });
-        const payload =
-          (await response.json().catch(() => null)) as { redirectTo?: string } | null;
-
-        if (!response.ok || !payload?.redirectTo) {
-          throw new Error("finalize_failed");
-        }
-
-        window.location.replace(payload.redirectTo);
-      } catch {
-        if (!wasUnmounted && (finalizeTimedOut || !finalizeAbortController.signal.aborted)) {
-          window.location.replace(retryUrl.toString());
-        }
-      } finally {
-        window.clearTimeout(finalizeDeadlineTimeoutId);
-      }
-    };
-
-    void finalizePortalSession();
-
-    return () => {
-      wasUnmounted = true;
-      finalizeAbortController.abort();
-      window.clearTimeout(finalizeDeadlineTimeoutId);
-    };
-  }, [redirectPath]);
+    window.location.replace(finalizeUrl);
+  }, [finalizeUrl]);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";
 
@@ -73,6 +34,11 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
         <h1>Completing {providerLabel} sign in</h1>
         <p>
           Your Cloudflare Access session is active. Finishing the portal handoff now.
+        </p>
+        <p>
+          If you are not redirected automatically,{" "}
+          <a href={finalizeUrl}>continue to the portal</a> or{" "}
+          <a href={retryUrl.toString()}>retry sign in</a>.
         </p>
       </section>
     </main>

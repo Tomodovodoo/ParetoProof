@@ -21,8 +21,8 @@ export type VerifiedAccessLinkIntent = {
   intentId: string;
 };
 
-function createSignedAccessValue(value: string, secret: string) {
-  const expiresAt = Math.floor(Date.now() / 1000) + 10 * 60;
+function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 600) {
+  const expiresAt = Math.floor(Date.now() / 1000) + maxAgeSeconds;
   const payload = `${value}.${expiresAt}`;
   const signature = createHmac("sha256", secret).update(payload).digest("base64url");
 
@@ -167,12 +167,14 @@ export function buildSignedAccessCookie(
     throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
   }
 
+  const maxAgeSeconds = options?.maxAgeSeconds ?? 600;
+
   return [
-    `${name}=${createSignedAccessValue(value, secret)}`,
+    `${name}=${createSignedAccessValue(value, secret, maxAgeSeconds)}`,
     "Domain=.paretoproof.com",
     "Path=/",
     "SameSite=Strict",
-    `Max-Age=${options?.maxAgeSeconds ?? 600}`,
+    `Max-Age=${maxAgeSeconds}`,
     "Secure",
     "HttpOnly"
   ].join("; ");
