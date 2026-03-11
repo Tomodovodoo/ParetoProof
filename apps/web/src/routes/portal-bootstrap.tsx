@@ -41,6 +41,12 @@ type PortalMeResponse = {
   };
 };
 
+function readRouteDeniedReason(search = window.location.search) {
+  const reason = new URLSearchParams(search).get("reason");
+
+  return reason === "insufficient_role" ? reason : null;
+}
+
 function readLocalAccessOverride(): PortalAccessState | null {
   if (!isLocalHostname(window.location.hostname)) {
     return null;
@@ -88,6 +94,7 @@ export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
+  const routeDeniedReason = readRouteDeniedReason();
   const routeRedirectTarget = useMemo(() => {
     if (
       state.status === "loading" ||
@@ -99,11 +106,15 @@ export function PortalBootstrap() {
 
     return resolvePortalRouteRedirect({
       pathname: window.location.pathname,
-      reason: state.status === "denied" ? state.reason : undefined,
+      reason:
+        state.status === "denied"
+          ? state.reason
+          : routeDeniedReason ?? undefined,
       roles: state.status === "approved" ? state.roles : [],
+      search: window.location.search,
       status: state.status
     });
-  }, [state]);
+  }, [routeDeniedReason, state]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -323,6 +334,21 @@ export function PortalBootstrap() {
               }
             : undefined
         }
+      />
+    );
+  }
+
+  if (
+    state.status === "approved" &&
+    window.location.pathname === "/denied" &&
+    routeDeniedReason === "insufficient_role"
+  ) {
+    return (
+      <PortalStatusCard
+        eyebrow="Portal"
+        title="Permission denied"
+        body={`Signed in${state.email ? ` as ${state.email}` : ""}, but your current portal role does not allow this area.`}
+        action={{ href: buildPortalUrl("/"), label: "Return to portal home" }}
       />
     );
   }

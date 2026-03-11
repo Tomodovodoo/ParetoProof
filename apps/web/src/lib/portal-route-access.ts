@@ -9,9 +9,11 @@ type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
 
 type PortalRouteAccessContext = {
   pathname: string;
+  search?: string;
   reason?:
     | "access_request_required"
     | "identity_recovery_required"
+    | "insufficient_role"
     | "rejected_or_withdrawn"
     | "unknown_identity";
   roles: string[];
@@ -113,36 +115,47 @@ function preserveLocalPortalState(targetPath: string, location = window.location
   return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
 }
 
-function resolveRedirectTarget(redirectTarget: RouteRedirectTarget) {
-  if (redirectTarget === "portal_home") {
-    return preserveLocalPortalState("/");
+function readRouteDeniedReason(
+  search = window.location.search
+): PortalRouteAccessContext["reason"] | undefined {
+  const reason = new URLSearchParams(search).get("reason");
+
+  if (
+    reason === "access_request_required" ||
+    reason === "identity_recovery_required" ||
+    reason === "insufficient_role" ||
+    reason === "rejected_or_withdrawn" ||
+    reason === "unknown_identity"
+  ) {
+    return reason;
   }
 
-  if (redirectTarget === "portal_pending") {
-    return preserveLocalPortalState("/pending");
-  }
-
-  if (redirectTarget === "portal_denied") {
-    return preserveLocalPortalState("/denied");
-  }
-
-  return buildPublicUrl("/");
+  return undefined;
 }
 
-function getLoopSafeFallbackTarget(context: PortalRouteAccessContext) {
+function isCurrentRedirectTarget(
+  targetPath: string,
+  context: PortalRouteAccessContext
+) {
+  const targetUrl = new URL(targetPath, window.location.origin);
+  return (
+    targetUrl.pathname === context.pathname &&
+    targetUrl.search === (context.search ?? "")
+  );
+}
+
+function resolveCanonicalStateTarget(context: PortalRouteAccessContext) {
   if (context.status === "pending") {
     return preserveLocalPortalState("/pending");
   }
 
-  if (context.status === "approved") {
-    return preserveLocalPortalState("/");
-  }
-
   if (context.status === "denied") {
-    return preserveLocalPortalState("/denied");
+    return context.reason === "access_request_required"
+      ? preserveLocalPortalState("/access-request")
+      : preserveLocalPortalState("/denied");
   }
 
-  return buildPublicUrl("/");
+  return null;
 }
 
 export function findMatchedPortalRoute(pathname: string) {
@@ -151,17 +164,47 @@ export function findMatchedPortalRoute(pathname: string) {
 
 export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
   const matchedRoute = findPortalRoute(context.pathname);
+  const routeDeniedReason = readRouteDeniedReason(context.search);
+
+  if (context.status === "approved" && matchedRoute?.id === "portal.pending") {
+    return preserveLocalPortalState("/");
+  }
+
+  if (context.status === "approved" && matchedRoute?.id === "portal.access-request") {
+    return preserveLocalPortalState("/");
+  }
+
+  if (context.status === "approved" && matchedRoute?.id === "portal.denied") {
+    return routeDeniedReason === "insufficient_role"
+      ? null
+      : preserveLocalPortalState("/");
+  }
+
+  const canonicalStateTarget = resolveCanonicalStateTarget(context);
+
+  if (canonicalStateTarget && !isCurrentRedirectTarget(canonicalStateTarget, context)) {
+    return canonicalStateTarget;
+  }
 
   if (!matchedRoute || canAccessRoute(matchedRoute, context)) {
     return null;
   }
 
-  const redirectTarget = resolveRedirectTarget(matchedRoute.redirectIfDenied);
-  const redirectPathname = new URL(redirectTarget, window.location.origin).pathname;
-
-  if (redirectPathname === context.pathname) {
-    return getLoopSafeFallbackTarget(context);
+  if (context.status === "approved") {
+    return preserveLocalPortalState("/denied?reason=insufficient_role");
   }
 
-  return redirectTarget;
+  if (context.status === "pending") {
+    return preserveLocalPortalState("/pending");
+  }
+
+  if (context.status === "denied") {
+    return context.reason === "access_request_required"
+      ? preserveLocalPortalState("/access-request")
+      : preserveLocalPortalState("/denied");
+  }
+
+  return matchedRoute.redirectIfDenied === "public_home"
+    ? buildPublicUrl("/")
+    : preserveLocalPortalState("/");
 }
