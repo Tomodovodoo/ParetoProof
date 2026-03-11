@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AppIcon } from "../components/app-icon";
 import { buildApiSessionCompleteUrl } from "../lib/surface";
 
 type AccessCompletionProps = {
@@ -26,7 +27,12 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
   return (
     <main className="auth-shell auth-shell-compact">
       <section className="auth-inline-status">
-        <p className="eyebrow">ParetoProof Portal</p>
+        <p className="eyebrow">
+          <span className="inline-icon" aria-hidden="true">
+            <AppIcon name="shield" />
+          </span>
+          ParetoProof Portal
+        </p>
         <h1>Completing {providerLabel} sign in</h1>
         <p>
           Your Cloudflare Access session is active. Finishing the portal handoff now.

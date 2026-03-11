@@ -1,5 +1,6 @@
 import type { PortalAccessRequestInput } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
+import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import { AccessRequestScreen } from "./access-request-screen";
@@ -355,8 +356,13 @@ type PortalStatusCardProps = {
 function PortalStatusCard({ action, body, eyebrow, title }: PortalStatusCardProps) {
   return (
     <main className="auth-shell">
-      <section className="auth-card">
-        <p className="eyebrow">{eyebrow}</p>
+      <section className="auth-card auth-card-polished auth-status-card">
+        <p className="eyebrow">
+          <span className="inline-icon" aria-hidden="true">
+            <AppIcon name="shield" />
+          </span>
+          {eyebrow}
+        </p>
         <h1>{title}</h1>
         <p>{body}</p>
         {action ? (
