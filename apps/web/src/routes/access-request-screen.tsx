@@ -5,6 +5,7 @@ import {
   type PortalAccessRequestInput
 } from "@paretoproof/shared";
 import { useState } from "react";
+import { AppIcon } from "../components/app-icon";
 
 type AccessRequestScreenProps =
   | {
@@ -78,8 +79,13 @@ export function AccessRequestScreen({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card">
-        <p className="eyebrow">Portal access</p>
+      <section className="auth-card auth-card-polished auth-status-card">
+        <p className="eyebrow">
+          <span className="inline-icon" aria-hidden="true">
+            <AppIcon name="key" />
+          </span>
+          Portal access
+        </p>
         <h1>
           {mode === "identity_recovery"
             ? "Recover approved access"
