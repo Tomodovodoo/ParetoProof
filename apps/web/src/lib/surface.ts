@@ -186,6 +186,17 @@ export function buildApiSessionCompleteUrl(targetPath = "/") {
   return completionUrl.toString();
 }
 
+export function buildApiSessionFinalizeUrl(targetPath = "/") {
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+  const completionUrl = new URL("/portal/session/finalize", "https://api.paretoproof.com");
+
+  if (normalizedTargetPath !== "/") {
+    completionUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  return completionUrl.toString();
+}
+
 export function resolveAccessProviderHost(hostname = window.location.hostname): AccessProvider | null {
   if (hostname === "github.auth.paretoproof.com") {
     return "github";

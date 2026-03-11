@@ -8,7 +8,7 @@ import {
   type PortalAccessRequestSummary
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   accessRequests,
   auditEvents,
@@ -133,6 +133,18 @@ function buildPortalAuthStartUrl(options: {
   return authUrl.toString();
 }
 
+function buildPortalAuthRetryUrl(redirectPath: string) {
+  const authUrl = new URL("https://auth.paretoproof.com");
+
+  if (redirectPath !== "/") {
+    authUrl.searchParams.set("redirect", redirectPath);
+  }
+
+  authUrl.searchParams.set("handoff", "retry");
+
+  return authUrl.toString();
+}
+
 function toPortalProfile(options: {
   currentSubject: string;
   fallbackEmail: string | null;
@@ -186,6 +198,112 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard
 ) {
+  const handlePortalSessionCompletion = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const cookieHeader =
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+    const identity = request.accessIdentity;
+    const parsedBody =
+      typeof request.body === "object" && request.body !== null
+        ? (request.body as { redirect?: string })
+        : undefined;
+    const redirectPath = sanitizePortalRedirectPath(
+      parsedBody?.redirect ??
+        (request.query as { redirect?: string } | undefined)?.redirect ??
+        null
+    );
+    const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
+    const linkIntent = verifyAccessLinkIntent(cookieHeader);
+    const providerHint = verifyAccessProviderHint(cookieHeader);
+
+    if (identity && linkIntent) {
+      const linkStatus = await db.transaction(async (tx) => {
+        const intentRow = await tx.query.identityLinkIntents.findFirst({
+          where: eq(identityLinkIntents.id, linkIntent.intentId)
+        });
+
+        if (!intentRow || intentRow.usedAt || intentRow.expiresAt.getTime() <= Date.now()) {
+          return "invalid";
+        }
+
+        const existingSubjectOwner = await tx.query.userIdentities.findFirst({
+          where: eq(userIdentities.providerSubject, identity.subject)
+        });
+
+        if (existingSubjectOwner && existingSubjectOwner.userId !== intentRow.userId) {
+          return "conflict";
+        }
+
+        if (providerHint !== intentRow.targetProvider) {
+          return "provider_mismatch";
+        }
+
+        const now = new Date();
+
+        if (!existingSubjectOwner) {
+          await tx.insert(userIdentities).values({
+            provider: intentRow.targetProvider,
+            providerEmail: normalizeOptionalEmail(identity.email),
+            providerSubject: identity.subject,
+            userId: intentRow.userId
+          });
+        } else {
+          await tx
+            .update(userIdentities)
+            .set({
+              lastSeenAt: now,
+              providerEmail: normalizeOptionalEmail(identity.email)
+            })
+            .where(eq(userIdentities.id, existingSubjectOwner.id));
+        }
+
+        await tx
+          .update(identityLinkIntents)
+          .set({
+            usedAt: now
+          })
+          .where(eq(identityLinkIntents.id, intentRow.id));
+
+        await tx.insert(auditEvents).values({
+          actorKind: "portal_user",
+          actorUserId: intentRow.userId,
+          eventId: "user_identity.linked",
+          payload: {
+            identityProvider: intentRow.targetProvider,
+            identitySubject: identity.subject,
+            targetUserId: intentRow.userId
+          },
+          severity: "critical",
+          subjectKind: "user_identity",
+          targetUserId: intentRow.userId
+        });
+
+        return "linked";
+      });
+
+      portalUrl.searchParams.set("link", linkStatus);
+    }
+
+    const responseCookies = [clearSignedAccessCookie("PortalLinkIntent")];
+
+    if (identity && providerHint) {
+      responseCookies.unshift(
+        buildSignedAccessCookie(
+          "PortalAccessProvider",
+          `${providerHint}|${identity.subject}`,
+          { maxAgeSeconds: 24 * 60 * 60 }
+        )
+      );
+    } else {
+      responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
+    }
+
+    reply.header("set-cookie", responseCookies);
+    reply.redirect(portalUrl.toString());
+  };
+
   app.get(
     "/portal/me",
     {
@@ -199,113 +317,28 @@ export function registerPortalRoutes(
     }
   );
 
+  app.get("/portal/session/complete", async (request, reply) => {
+    const redirectPath = sanitizePortalRedirectPath(
+      (request.query as { redirect?: string } | undefined)?.redirect ?? null
+    );
+
+    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+  });
+
   app.post(
     "/portal/session/complete",
     {
       preHandler: requireAccess("authenticated_access_identity")
     },
-    async (request, reply) => {
-      const cookieHeader =
-        typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
-      const identity = request.accessIdentity;
-      const parsedBody =
-        typeof request.body === "object" && request.body !== null
-          ? (request.body as { redirect?: string })
-          : undefined;
-      const redirectPath = sanitizePortalRedirectPath(
-        parsedBody?.redirect ??
-            (request.query as { redirect?: string } | undefined)?.redirect ??
-            null
-      );
-      const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
-      const linkIntent = verifyAccessLinkIntent(cookieHeader);
-      const providerHint = verifyAccessProviderHint(cookieHeader);
+    handlePortalSessionCompletion
+  );
 
-      if (identity && linkIntent) {
-        const linkStatus = await db.transaction(async (tx) => {
-          const intentRow = await tx.query.identityLinkIntents.findFirst({
-            where: eq(identityLinkIntents.id, linkIntent.intentId)
-          });
-
-          if (!intentRow || intentRow.usedAt || intentRow.expiresAt.getTime() <= Date.now()) {
-            return "invalid";
-          }
-
-          const existingSubjectOwner = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, identity.subject)
-          });
-
-          if (existingSubjectOwner && existingSubjectOwner.userId !== intentRow.userId) {
-            return "conflict";
-          }
-
-          if (providerHint !== intentRow.targetProvider) {
-            return "provider_mismatch";
-          }
-
-          const now = new Date();
-
-          if (!existingSubjectOwner) {
-            await tx.insert(userIdentities).values({
-              provider: intentRow.targetProvider,
-              providerEmail: normalizeOptionalEmail(identity.email),
-              providerSubject: identity.subject,
-              userId: intentRow.userId
-            });
-          } else {
-            await tx
-              .update(userIdentities)
-              .set({
-                lastSeenAt: now,
-                providerEmail: normalizeOptionalEmail(identity.email)
-              })
-              .where(eq(userIdentities.id, existingSubjectOwner.id));
-          }
-
-          await tx
-            .update(identityLinkIntents)
-            .set({
-              usedAt: now
-            })
-            .where(eq(identityLinkIntents.id, intentRow.id));
-
-          await tx.insert(auditEvents).values({
-            actorKind: "portal_user",
-            actorUserId: intentRow.userId,
-            eventId: "user_identity.linked",
-            payload: {
-              identityProvider: intentRow.targetProvider,
-              identitySubject: identity.subject,
-              targetUserId: intentRow.userId
-            },
-            severity: "critical",
-            subjectKind: "user_identity",
-            targetUserId: intentRow.userId
-          });
-
-          return "linked";
-        });
-
-        portalUrl.searchParams.set("link", linkStatus);
-      }
-
-      const responseCookies = [clearSignedAccessCookie("PortalLinkIntent")];
-
-      if (identity && providerHint) {
-        responseCookies.unshift(
-          buildSignedAccessCookie(
-            "PortalAccessProvider",
-            `${providerHint}|${identity.subject}`,
-            { maxAgeSeconds: 24 * 60 * 60 }
-          )
-        );
-      } else {
-        responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
-      }
-
-      reply.header("set-cookie", responseCookies);
-      reply.redirect(portalUrl.toString());
-    }
+  app.post(
+    "/portal/session/finalize",
+    {
+      preHandler: requireAccess("authenticated_access_identity")
+    },
+    handlePortalSessionCompletion
   );
 
   app.get(
