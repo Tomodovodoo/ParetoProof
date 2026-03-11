@@ -32,16 +32,32 @@ const linkableProviders: {
   }
 ];
 
-function formatIdentityProviderLabel(provider: PortalProfile["identities"][number]["provider"]) {
-  if (provider === "cloudflare_github") {
+function formatIdentityProviderLabel(provider: string) {
+  if (provider === "cloudflare_github" || provider === "github") {
     return "GitHub";
   }
 
-  if (provider === "cloudflare_google") {
+  if (provider === "cloudflare_google" || provider === "google") {
     return "Google";
   }
 
+  if (provider === "cloudflare_one_time_pin" || provider === "one_time_pin") {
+    return "One-time pin";
+  }
+
   return "One-time pin";
+}
+
+function normalizeIdentityProvider(provider: string) {
+  if (provider === "cloudflare_github" || provider === "github") {
+    return "cloudflare_github";
+  }
+
+  if (provider === "cloudflare_google" || provider === "google") {
+    return "cloudflare_google";
+  }
+
+  return "cloudflare_one_time_pin";
 }
 
 function getLocalProfileStorageKey(email: string | null) {
@@ -393,8 +409,9 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         </div>
         <div className="portal-link-actions">
           {linkableProviders.map((provider) => {
+            const providerCanonical = normalizeIdentityProvider(provider.key);
             const alreadyLinked = profile.identities.some(
-              (identity) => identity.provider === provider.key
+              (identity) => normalizeIdentityProvider(identity.provider) === providerCanonical
             );
 
             return (
