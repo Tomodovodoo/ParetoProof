@@ -31,7 +31,7 @@ export const apiEndpointCatalog = [
     audience: "portal",
     id: "portal.session.complete",
     method: "POST",
-    path: "/portal/session/finalize",
+    path: "/portal/session/finalize/submit",
     purpose:
       "Finish the Cloudflare Access login handoff on the API audience and return the browser to the static portal host."
   },
