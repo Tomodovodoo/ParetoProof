@@ -7,18 +7,70 @@ type AccessCompletionProps = {
   redirectPath: string;
 };
 
+function isLocalAuthHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function buildAuthRetryUrl(redirectPath: string) {
+  const authOrigin = isLocalAuthHost(window.location.hostname)
+    ? window.location.origin
+    : `${window.location.protocol}//auth.paretoproof.com`;
+  const retryUrl = new URL("/", authOrigin);
+
+  retryUrl.searchParams.set("handoff", "retry");
+
+  if (redirectPath !== "/") {
+    retryUrl.searchParams.set("redirect", redirectPath);
+  }
+
+  return retryUrl.toString();
+}
+
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
   useEffect(() => {
-    const form = document.createElement("form");
+    const abortController = new AbortController();
+    let isCancelled = false;
 
-    form.method = "POST";
-    form.action = buildApiSessionFinalizeUrl(redirectPath);
-    form.style.display = "none";
-    document.body.append(form);
-    form.submit();
+    void (async () => {
+      try {
+        const response = await fetch(buildApiSessionFinalizeUrl(redirectPath), {
+          body: JSON.stringify({ redirect: redirectPath }),
+          credentials: "include",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json"
+          },
+          method: "POST",
+          redirect: "error",
+          signal: abortController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Finalize failed with status ${response.status}.`);
+        }
+
+        const payload = (await response.json()) as { redirectUrl?: string };
+
+        if (typeof payload.redirectUrl !== "string") {
+          throw new Error("Finalize response did not include a redirect URL.");
+        }
+
+        if (!isCancelled) {
+          window.location.replace(payload.redirectUrl);
+        }
+      } catch (error) {
+        if (isCancelled || abortController.signal.aborted) {
+          return;
+        }
+
+        console.error("Provider sign-in completion failed.", error);
+        window.location.replace(buildAuthRetryUrl(redirectPath));
+      }
+    })();
 
     return () => {
-      form.remove();
+      isCancelled = true;
+      abortController.abort();
     };
   }, [redirectPath]);
 

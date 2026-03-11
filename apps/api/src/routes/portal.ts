@@ -300,7 +300,18 @@ export function registerPortalRoutes(
       responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
     }
 
+    const requestAcceptHeader =
+      typeof request.headers.accept === "string" ? request.headers.accept : "";
+    const wantsJsonCompletion = requestAcceptHeader.includes("application/json");
+
     reply.header("set-cookie", responseCookies);
+
+    if (wantsJsonCompletion) {
+      return {
+        redirectUrl: portalUrl.toString()
+      };
+    }
+
     reply.redirect(portalUrl.toString());
   };
 
