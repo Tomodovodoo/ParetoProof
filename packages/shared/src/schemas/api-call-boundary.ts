@@ -10,7 +10,9 @@ export const apiCallBoundaryModeSchema = z.enum([
 export const apiCallCredentialSchema = z.enum([
   "none",
   "cloudflare_access_jwt",
-  "cloudflare_service_token"
+  "cloudflare_service_token",
+  "worker_bootstrap_token",
+  "worker_job_token"
 ]);
 
 export const apiCallOriginSchema = z.enum([

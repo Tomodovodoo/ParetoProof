@@ -112,5 +112,53 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "Rejection stays on the authenticated portal audience while the backend still enforces admin-only RBAC and audit logging."
+  },
+  {
+    credential: "worker_bootstrap_token",
+    endpointId: "internal.worker.claim",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Idle workers use their environment-scoped bootstrap credential only to claim work and receive a short-lived per-job token."
+  },
+  {
+    credential: "worker_job_token",
+    endpointId: "internal.worker.heartbeat",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Heartbeats belong to a single leased job and therefore use the short-lived per-job credential instead of the bootstrap token."
+  },
+  {
+    credential: "worker_job_token",
+    endpointId: "internal.worker.event.report",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Structured execution events must stay scoped to the active assignment that emitted them."
+  },
+  {
+    credential: "worker_job_token",
+    endpointId: "internal.worker.artifact-manifest.submit",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Artifact registration is part of one job's execution authority and should not be available through the broader bootstrap credential."
+  },
+  {
+    credential: "worker_job_token",
+    endpointId: "internal.worker.result.submit",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Final results are job-scoped terminal messages and must be authorized only for the leased assignment that produced them."
+  },
+  {
+    credential: "worker_job_token",
+    endpointId: "internal.worker.failure.submit",
+    mode: "internal_service_only",
+    origin: "worker_service",
+    rationale:
+      "Terminal failure submission must stay bound to the job lease so one worker cannot fail unrelated assignments."
   }
 ] satisfies ApiCallBoundaryEntry[];

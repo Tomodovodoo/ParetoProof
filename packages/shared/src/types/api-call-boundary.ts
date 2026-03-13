@@ -7,7 +7,9 @@ export type ApiCallBoundaryMode =
 export type ApiCallCredential =
   | "none"
   | "cloudflare_access_jwt"
-  | "cloudflare_service_token";
+  | "cloudflare_service_token"
+  | "worker_bootstrap_token"
+  | "worker_job_token";
 
 export type ApiCallOrigin =
   | "public_browser"
