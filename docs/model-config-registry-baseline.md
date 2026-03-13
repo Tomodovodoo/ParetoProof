@@ -242,7 +242,7 @@ The following changes require a new `modelConfigId`:
 
 - changing the upstream model id
 - changing the pinned snapshot or release date
-- changing the auth-mode set in a way that affects execution semantics
+- changing the auth-mode set
 - changing default reasoning mode or reasoning budget
 - changing the benchmark-authoritative sampling profile
 - changing hard limits in a way that could alter run outcomes
