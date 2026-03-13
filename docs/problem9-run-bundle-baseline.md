@@ -165,6 +165,12 @@ At minimum it must record:
 - `status`: `success`, `failure`, or `incomplete`
 - `stopReason`
 
+The root-manifest rule is special on purpose:
+
+- `run-bundle.json` may store `artifactManifestDigest` and `bundleDigest`
+- `artifact-manifest.json` must not try to hash either `artifact-manifest.json` itself or `run-bundle.json`
+- root-manifest integrity is instead carried by `artifactManifestDigest` and by the canonical field set in `run-bundle.json`
+
 ### `verification/verdict.json`
 
 At minimum it must record:
@@ -230,9 +236,9 @@ Mandatory root digests are:
 - `artifactManifestDigest`
   - digest of `artifact-manifest.json`
 - `bundleDigest`
-  - digest of the normalized bundle file inventory, excluding the `bundleDigest` field itself
+  - digest of the normalized bundle file inventory plus canonical summary fields from `run-bundle.json`, excluding digest fields and excluding the two root manifests as direct inventory members
 
-`artifact-manifest.json` must include one entry for every file present in the bundle with:
+`artifact-manifest.json` must include one entry for every bundled file except `artifact-manifest.json` and `run-bundle.json`, which are handled as special root manifests. Each entry must record:
 
 - relative path
 - SHA-256 digest
@@ -242,6 +248,13 @@ Mandatory root digests are:
 - required versus optional flag
 
 Normalization must ignore local extraction timestamps, filesystem metadata, and archive-wrapper variance. Two bundles with identical logical files and contents should produce the same `bundleDigest` regardless of where they were generated.
+
+The digest finalization order is:
+
+1. hash all non-root bundle files and write `artifact-manifest.json`
+2. hash `artifact-manifest.json` and set `artifactManifestDigest` in `run-bundle.json`
+3. compute `bundleDigest` from the normalized non-root inventory plus canonical non-digest fields in `run-bundle.json`
+4. write the final `run-bundle.json`
 
 ## Ingest boundary
 
