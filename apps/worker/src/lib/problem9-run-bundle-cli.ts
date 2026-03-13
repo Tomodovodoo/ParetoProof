@@ -1,5 +1,6 @@
 import path from "node:path";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
+import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 function parseBooleanFlag(rawValue: string, flag: string): boolean {
   if (rawValue === "true") {
@@ -14,6 +15,17 @@ function parseBooleanFlag(rawValue: string, flag: string): boolean {
 }
 
 export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
+  if (args.includes("--help")) {
+    console.error(
+      "Usage: tsx src/index.ts materialize-problem9-run-bundle --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]"
+    );
+    return;
+  }
+
+  await parseWorkerRuntimeEnv({
+    commandFamily: "materializer"
+  });
+
   const getRequiredValue = (flag: string): string => {
     const index = args.findIndex((argument) => argument === flag);
 

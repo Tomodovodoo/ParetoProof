@@ -2,6 +2,13 @@ import path from "node:path";
 import { runProblem9Attempt } from "./problem9-attempt.js";
 
 export async function runProblem9AttemptCli(args: string[]): Promise<void> {
+  if (args.includes("--help")) {
+    console.error(
+      "Usage: tsx src/index.ts run-problem9-attempt --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family <family>] [--auth-mode <mode>] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]"
+    );
+    return;
+  }
+
   const getRequiredValue = (flag: string): string => {
     const index = args.findIndex((argument) => argument === flag);
 
