@@ -48,13 +48,13 @@ Package materialization:
 - the run-bundle command is a supported standalone materializer for fixture generation and later offline-ingest prep; it derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or any bundle input file
 - use `bun --cwd apps/worker test:run-bundle` to run the fixture-backed standalone verification path, which materializes canonical benchmark and prompt inputs, runs the bundle CLI twice on identical fixture evidence, and checks that the resulting digests and root manifests are identical
 
-Offline ingest contract:
+Offline ingest:
 
-- `ingest-problem9-run-bundle` is still a reserved follow-up command; it is not implemented in `apps/worker` yet
-- when it lands, MVP offline ingest targets `POST /portal/admin/offline-ingest/problem9-run-bundles`, not `/internal/*`
-- the operator must supply a fresh portal-audience Access assertion explicitly at runtime, and the CLI must forward it as `Cf-Access-Jwt-Assertion: <token>`
-- that assertion is a short-lived human-admin control-plane credential, not a worker bootstrap secret, provider key, trusted-local `auth.json`, or ambient browser cookie jar
-- if the assertion is missing, expired, or rejected, the CLI should fail as an auth or setup error rather than broadening permissions or mutating auth mode
+- use `bun --cwd apps/worker ingest:problem9-run-bundle -- --bundle-root <directory> --access-jwt <token>` to submit one canonical `problem9-run-bundle/` tree to the existing admin ingest API
+- the command expects `API_BASE_URL` in the environment and always targets `POST /portal/admin/offline-ingest/problem9-run-bundles`
+- the command loads the local bundle root, validates the required ingest files and request shape before any network call, and prints machine-readable JSON for both accepted and rejected outcomes
+- the only approved ingest auth input is a short-lived human-admin portal Access assertion passed explicitly with `--access-jwt`; do not use `WORKER_BOOTSTRAP_TOKEN`, `CODEX_API_KEY`, trusted-local `CODEX_HOME/auth.json`, or stored browser cookies for this command
+- rejected responses preserve the API error code and issue list when the server rejects the bundle after submission
 - unattended machine-only ingest remains out of scope for MVP; later automation needs a separate scope before a dedicated non-human auth surface can exist
 
 Local attempt execution:

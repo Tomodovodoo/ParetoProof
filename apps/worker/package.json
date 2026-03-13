@@ -10,6 +10,7 @@
     "materialize:problem9-run-bundle": "tsx src/index.ts materialize-problem9-run-bundle",
     "test:run-bundle": "node --import tsx --test src/lib/problem9-run-bundle.test.ts",
     "run:problem9-attempt": "tsx src/index.ts run-problem9-attempt",
+    "ingest:problem9-run-bundle": "tsx src/index.ts ingest-problem9-run-bundle",
     "run:worker-claim-loop": "tsx src/index.ts run-worker-claim-loop",
     "run:problem9-attempt:trusted-local": "tsx src/index.ts run-problem9-attempt-in-devbox",
     "start": "node dist/index.js",
