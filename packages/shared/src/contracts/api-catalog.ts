@@ -109,7 +109,17 @@ export const apiEndpointCatalog = [
     id: "admin.access-request.list",
     method: "GET",
     path: "/portal/admin/access-requests",
-    purpose: "List recent contributor access requests for manual admin review."
+    purpose:
+      "List contributor access requests with reviewer, matched-user, and recovery-conflict posture for admin review."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.access-request.detail",
+    method: "GET",
+    path: "/portal/admin/access-requests/:accessRequestId",
+    purpose:
+      "Return the full admin review context for one access request, including linked identities, request history, and audit echoes."
   },
   {
     access: "admin_only",
@@ -126,6 +136,24 @@ export const apiEndpointCatalog = [
     method: "POST",
     path: "/portal/admin/access-requests/:accessRequestId/reject",
     purpose: "Reject an access request and record the admin decision note."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.user.list",
+    method: "GET",
+    path: "/portal/admin/users",
+    purpose:
+      "List contributor accounts with active-role posture, linked identity providers, and pending-request markers."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.user.detail",
+    method: "GET",
+    path: "/portal/admin/users/:userId",
+    purpose:
+      "Return one contributor's admin detail view, including linked identities, request history, audit history, and session posture."
   },
   {
     access: "service_token",

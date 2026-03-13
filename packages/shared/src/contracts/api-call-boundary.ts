@@ -99,6 +99,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "admin.access-request.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "The admin review workspace needs a route-local detail fetch for one request without introducing a second admin backend."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.access-request.approve",
     mode: "browser_direct",
     origin: "portal_browser",
@@ -112,6 +120,22 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "Rejection stays on the authenticated portal audience while the backend still enforces admin-only RBAC and audit logging."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.user.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "The admin users workspace is a browser-owned portal surface, so admins fetch contributor posture directly from the protected API."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.user.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Admin user inspection stays on the same portal audience while the backend enforces admin-only access and bounded read models."
   },
   {
     credential: "worker_bootstrap_token",

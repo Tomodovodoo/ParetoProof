@@ -1,19 +1,72 @@
+import type {
+  PortalAdminAccessPosture,
+  PortalAdminAccessRequestDetail,
+  PortalAdminAccessRequestListItem,
+  PortalAdminActorSummary,
+  PortalAdminAuditEcho,
+  PortalAdminIdentitySummary,
+  PortalAdminMatchedUserSummary,
+  PortalAdminRoleGrantSummary,
+  PortalAdminSessionPosture,
+  PortalAdminUserDetail,
+  PortalAdminUserListItem,
+  PortalAdminUserPendingRequestSummary,
+  PortalAdminUserPostureSummary
+} from "@paretoproof/shared";
 import {
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   accessRequests,
   auditEvents,
   roleGrants,
+  sessions,
   userIdentities,
   users
 } from "../db/schema.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
+
+type DbUserRow = typeof users.$inferSelect;
+type DbAccessRequestRow = typeof accessRequests.$inferSelect;
+type DbUserIdentityRow = typeof userIdentities.$inferSelect;
+type DbSessionRow = typeof sessions.$inferSelect;
+type DbAuditEventRow = typeof auditEvents.$inferSelect;
+type DbRoleGrantRow = typeof roleGrants.$inferSelect;
+
+type AccessRequestWithReviewer = DbAccessRequestRow & {
+  reviewedByUser: DbUserRow | null;
+};
+
+type RoleGrantWithActors = DbRoleGrantRow & {
+  grantedByUser: DbUserRow | null;
+  revokedByUser: DbUserRow | null;
+};
+
+type AuditEventWithActor = DbAuditEventRow & {
+  actorUser: DbUserRow | null;
+};
+
+type AdminUserRelations = DbUserRow & {
+  accessRequests: AccessRequestWithReviewer[];
+  auditEventsAsTarget: AuditEventWithActor[];
+  identities: DbUserIdentityRow[];
+  roleGrants: RoleGrantWithActors[];
+  sessions: DbSessionRow[];
+};
+
+const adminAuditEchoEventIds = new Set([
+  "access_request.approved",
+  "access_request.rejected",
+  "access_request.submitted",
+  "role_grant.granted",
+  "role_grant.revoked",
+  "user_identity.linked"
+]);
 
 function getAdminActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
@@ -23,6 +76,471 @@ function getAdminActorUserId(request: FastifyRequest) {
   }
 
   return context.userId;
+}
+
+function toAdminActorSummary(userRow: DbUserRow | null | undefined): PortalAdminActorSummary | null {
+  if (!userRow) {
+    return null;
+  }
+
+  return {
+    displayName: userRow.displayName,
+    email: userRow.email,
+    label: userRow.displayName ?? userRow.email ?? userRow.id,
+    userId: userRow.id
+  };
+}
+
+function toAdminMatchedUserSummary(
+  userRow: DbUserRow | null | undefined
+): PortalAdminMatchedUserSummary | null {
+  if (!userRow) {
+    return null;
+  }
+
+  return {
+    displayName: userRow.displayName,
+    email: userRow.email,
+    userId: userRow.id
+  };
+}
+
+function toAdminIdentitySummary(identityRow: DbUserIdentityRow): PortalAdminIdentitySummary {
+  return {
+    createdAt: identityRow.createdAt.toISOString(),
+    id: identityRow.id,
+    lastSeenAt: identityRow.lastSeenAt.toISOString(),
+    provider: identityRow.provider,
+    providerEmail: identityRow.providerEmail,
+    providerSubject: identityRow.providerSubject
+  };
+}
+
+function findActiveRoleGrant(roleGrantRows: RoleGrantWithActors[]) {
+  return roleGrantRows.find((roleGrantRow) => roleGrantRow.revokedAt === null) ?? null;
+}
+
+function toAdminRoleGrantSummary(
+  roleGrantRow: RoleGrantWithActors | null | undefined
+): PortalAdminRoleGrantSummary | null {
+  if (!roleGrantRow) {
+    return null;
+  }
+
+  return {
+    grantedAt: roleGrantRow.grantedAt.toISOString(),
+    grantedBy: toAdminActorSummary(roleGrantRow.grantedByUser),
+    revokedAt: roleGrantRow.revokedAt?.toISOString() ?? null,
+    revokedBy: toAdminActorSummary(roleGrantRow.revokedByUser),
+    role: roleGrantRow.role
+  };
+}
+
+function toAdminPendingRequestSummary(
+  requestRow: AccessRequestWithReviewer | null | undefined
+): PortalAdminUserPendingRequestSummary | null {
+  if (!requestRow) {
+    return null;
+  }
+
+  return {
+    createdAt: requestRow.createdAt.toISOString(),
+    id: requestRow.id,
+    requestKind: requestRow.requestKind
+  };
+}
+
+function sortAccessRequestRows(rows: AccessRequestWithReviewer[]) {
+  return [...rows].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+}
+
+function buildSessionPosture(sessionRows: DbSessionRow[]): PortalAdminSessionPosture {
+  const now = Date.now();
+  const activeSessionRows = sessionRows
+    .filter(
+      (sessionRow) =>
+        sessionRow.revokedAt === null && sessionRow.expiresAt.getTime() > now
+    )
+    .sort((left, right) => right.expiresAt.getTime() - left.expiresAt.getTime());
+
+  return {
+    activeSessionCount: activeSessionRows.length,
+    latestSessionExpiresAt: activeSessionRows[0]?.expiresAt.toISOString() ?? null
+  };
+}
+
+function deriveAccessPosture(
+  activeRole: PortalAdminRoleGrantSummary | null,
+  pendingRequest: AccessRequestWithReviewer | null,
+  reviewedRequest: AccessRequestWithReviewer | null
+): PortalAdminAccessPosture {
+  if (activeRole) {
+    return "approved";
+  }
+
+  if (pendingRequest) {
+    return "pending_request";
+  }
+
+  if (reviewedRequest) {
+    return "review_history_only";
+  }
+
+  return "no_active_role";
+}
+
+function buildUserPostureSummary(userRow: AdminUserRelations): PortalAdminUserPostureSummary {
+  const sortedRequests = sortAccessRequestRows(userRow.accessRequests);
+  const activeRole = toAdminRoleGrantSummary(findActiveRoleGrant(userRow.roleGrants));
+  const pendingRequest =
+    sortedRequests.find((requestRow) => requestRow.status === "pending") ?? null;
+  const reviewedRequest =
+    sortedRequests.find((requestRow) => requestRow.status !== "pending") ?? null;
+
+  return {
+    accessPosture: deriveAccessPosture(activeRole, pendingRequest, reviewedRequest),
+    activeRole,
+    lastReviewedRequestStatus: reviewedRequest?.status ?? null,
+    linkedIdentityCount: userRow.identities.length,
+    pendingRequestId: pendingRequest?.id ?? null
+  };
+}
+
+function toAdminAuditEcho(auditEventRow: AuditEventWithActor): PortalAdminAuditEcho {
+  return {
+    actor: toAdminActorSummary(auditEventRow.actorUser),
+    createdAt: auditEventRow.createdAt.toISOString(),
+    eventId: auditEventRow.eventId,
+    id: auditEventRow.id,
+    payload: auditEventRow.payload,
+    severity: auditEventRow.severity,
+    subjectKind: auditEventRow.subjectKind,
+    targetUserId: auditEventRow.targetUserId
+  };
+}
+
+async function loadAdminUserById(
+  db: ReturnTypeOfCreateDbClient,
+  userId: string | null | undefined
+) {
+  if (!userId) {
+    return null;
+  }
+
+  return db.query.users.findFirst({
+    where: eq(users.id, userId),
+    with: {
+      accessRequests: {
+        orderBy: [desc(accessRequests.createdAt)],
+        with: {
+          reviewedByUser: true
+        }
+      },
+      auditEventsAsTarget: {
+        orderBy: [desc(auditEvents.createdAt)],
+        with: {
+          actorUser: true
+        }
+      },
+      identities: {
+        orderBy: [asc(userIdentities.createdAt)]
+      },
+      roleGrants: {
+        orderBy: [desc(roleGrants.grantedAt)],
+        with: {
+          grantedByUser: true,
+          revokedByUser: true
+        }
+      },
+      sessions: {
+        orderBy: [desc(sessions.expiresAt)]
+      }
+    }
+  }) as Promise<AdminUserRelations | null>;
+}
+
+async function loadAdminUserByEmail(
+  db: ReturnTypeOfCreateDbClient,
+  email: string
+) {
+  return db.query.users.findFirst({
+    where: eq(users.email, email),
+    with: {
+      accessRequests: {
+        orderBy: [desc(accessRequests.createdAt)],
+        with: {
+          reviewedByUser: true
+        }
+      },
+      auditEventsAsTarget: {
+        orderBy: [desc(auditEvents.createdAt)],
+        with: {
+          actorUser: true
+        }
+      },
+      identities: {
+        orderBy: [asc(userIdentities.createdAt)]
+      },
+      roleGrants: {
+        orderBy: [desc(roleGrants.grantedAt)],
+        with: {
+          grantedByUser: true,
+          revokedByUser: true
+        }
+      },
+      sessions: {
+        orderBy: [desc(sessions.expiresAt)]
+      }
+    }
+  }) as Promise<AdminUserRelations | null>;
+}
+
+async function loadMatchedUserForRequest(
+  db: ReturnTypeOfCreateDbClient,
+  requestRow: DbAccessRequestRow
+) {
+  return requestRow.requestedByUserId
+    ? loadAdminUserById(db, requestRow.requestedByUserId)
+    : loadAdminUserByEmail(db, requestRow.email);
+}
+
+async function buildRecoveryContext(
+  db: ReturnTypeOfCreateDbClient,
+  requestRow: DbAccessRequestRow,
+  matchedUser: AdminUserRelations | null
+) {
+  if (requestRow.requestKind !== "identity_recovery") {
+    return null;
+  }
+
+  const existingIdentity = requestRow.requestedIdentitySubject
+    ? await db.query.userIdentities.findFirst({
+        where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject),
+        with: {
+          user: true
+        }
+      })
+    : null;
+  const activeRole = matchedUser
+    ? toAdminRoleGrantSummary(findActiveRoleGrant(matchedUser.roleGrants))
+    : null;
+
+  return {
+    conflictingUser:
+      existingIdentity && existingIdentity.userId !== matchedUser?.id
+        ? toAdminMatchedUserSummary(existingIdentity.user)
+        : null,
+    preserveExistingRole: activeRole?.role ?? requestRow.requestedRole,
+    requestedIdentityAlreadyLinked: existingIdentity?.userId === matchedUser?.id,
+    requestedIdentityProvider: requestRow.requestedIdentityProvider,
+    requestedIdentitySubject: requestRow.requestedIdentitySubject
+  };
+}
+
+async function toAdminAccessRequestListItem(
+  db: ReturnTypeOfCreateDbClient,
+  requestRow: AccessRequestWithReviewer,
+  matchedUserOverride?: AdminUserRelations | null
+): Promise<PortalAdminAccessRequestListItem> {
+  const matchedUser =
+    matchedUserOverride === undefined
+      ? await loadMatchedUserForRequest(db, requestRow)
+      : matchedUserOverride;
+
+  return {
+    createdAt: requestRow.createdAt.toISOString(),
+    decisionNote: requestRow.decisionNote,
+    email: requestRow.email,
+    id: requestRow.id,
+    matchedUser: toAdminMatchedUserSummary(matchedUser),
+    matchedUserPosture: matchedUser ? buildUserPostureSummary(matchedUser) : null,
+    rationale: requestRow.rationale,
+    recovery: await buildRecoveryContext(db, requestRow, matchedUser),
+    requestKind: requestRow.requestKind,
+    requestedRole: requestRow.requestedRole,
+    reviewedAt: requestRow.reviewedAt?.toISOString() ?? null,
+    reviewer: toAdminActorSummary(requestRow.reviewedByUser),
+    status: requestRow.status
+  };
+}
+
+function sortAdminAccessRequestItems(
+  items: PortalAdminAccessRequestListItem[]
+) {
+  return [...items].sort((left, right) => {
+    if (left.status === "pending" && right.status !== "pending") {
+      return -1;
+    }
+
+    if (left.status !== "pending" && right.status === "pending") {
+      return 1;
+    }
+
+    if (left.status === "pending" && right.status === "pending") {
+      return (
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      );
+    }
+
+    return (
+      new Date(right.reviewedAt ?? right.createdAt).getTime() -
+      new Date(left.reviewedAt ?? left.createdAt).getTime()
+    );
+  });
+}
+
+async function loadAdminAccessRequestList(
+  db: ReturnTypeOfCreateDbClient
+) {
+  const requestRows = (await db.query.accessRequests.findMany({
+    orderBy: [desc(accessRequests.createdAt)],
+    with: {
+      reviewedByUser: true
+    }
+  })) as AccessRequestWithReviewer[];
+
+  const items = await Promise.all(
+    requestRows.map((requestRow) => toAdminAccessRequestListItem(db, requestRow))
+  );
+
+  return sortAdminAccessRequestItems(items);
+}
+
+async function loadAdminAccessRequestDetail(
+  db: ReturnTypeOfCreateDbClient,
+  accessRequestId: string
+) {
+  const requestRow = (await db.query.accessRequests.findFirst({
+    where: eq(accessRequests.id, accessRequestId),
+    with: {
+      reviewedByUser: true
+    }
+  })) as AccessRequestWithReviewer | null;
+
+  if (!requestRow) {
+    return null;
+  }
+
+  const matchedUser = await loadMatchedUserForRequest(db, requestRow);
+  const relatedRequestRows =
+    matchedUser?.accessRequests ??
+    ((await db.query.accessRequests.findMany({
+      orderBy: [desc(accessRequests.createdAt)],
+      where: eq(accessRequests.email, requestRow.email),
+      with: {
+        reviewedByUser: true
+      }
+    })) as AccessRequestWithReviewer[]);
+  const listItem = await toAdminAccessRequestListItem(db, requestRow, matchedUser);
+
+  return {
+    ...listItem,
+    activeRole: matchedUser
+      ? toAdminRoleGrantSummary(findActiveRoleGrant(matchedUser.roleGrants))
+      : null,
+    auditEchoes: (matchedUser?.auditEventsAsTarget ?? [])
+      .filter((auditEventRow) => adminAuditEchoEventIds.has(auditEventRow.eventId))
+      .slice(0, 10)
+      .map((auditEventRow) => toAdminAuditEcho(auditEventRow)),
+    linkedIdentities: (matchedUser?.identities ?? []).map((identityRow) =>
+      toAdminIdentitySummary(identityRow)
+    ),
+    relatedRequests: await Promise.all(
+      relatedRequestRows.map((relatedRequestRow) =>
+        toAdminAccessRequestListItem(db, relatedRequestRow, matchedUser)
+      )
+    ),
+    sessionPosture: buildSessionPosture(matchedUser?.sessions ?? [])
+  } satisfies PortalAdminAccessRequestDetail;
+}
+
+function toAdminUserListItem(userRow: AdminUserRelations): PortalAdminUserListItem {
+  const posture = buildUserPostureSummary(userRow);
+  const pendingRequest =
+    userRow.accessRequests.find((requestRow) => requestRow.status === "pending") ?? null;
+
+  return {
+    accessPosture: posture.accessPosture,
+    activeRole: posture.activeRole,
+    displayName: userRow.displayName,
+    email: userRow.email,
+    lastReviewedRequestStatus: posture.lastReviewedRequestStatus,
+    linkedIdentityProviders: [...new Set(userRow.identities.map((identity) => identity.provider))],
+    pendingRequest: toAdminPendingRequestSummary(pendingRequest),
+    userId: userRow.id
+  };
+}
+
+function sortAdminUsers(items: PortalAdminUserListItem[]) {
+  return [...items].sort((left, right) => left.email.localeCompare(right.email));
+}
+
+async function loadAdminUserList(
+  db: ReturnTypeOfCreateDbClient
+) {
+  const userRows = (await db.query.users.findMany({
+    orderBy: [asc(users.email)],
+    with: {
+      accessRequests: {
+        orderBy: [desc(accessRequests.createdAt)],
+        with: {
+          reviewedByUser: true
+        }
+      },
+      auditEventsAsTarget: {
+        orderBy: [desc(auditEvents.createdAt)],
+        with: {
+          actorUser: true
+        }
+      },
+      identities: {
+        orderBy: [asc(userIdentities.createdAt)]
+      },
+      roleGrants: {
+        orderBy: [desc(roleGrants.grantedAt)],
+        with: {
+          grantedByUser: true,
+          revokedByUser: true
+        }
+      },
+      sessions: {
+        orderBy: [desc(sessions.expiresAt)]
+      }
+    }
+  })) as AdminUserRelations[];
+
+  return sortAdminUsers(userRows.map((userRow) => toAdminUserListItem(userRow)));
+}
+
+async function loadAdminUserDetail(
+  db: ReturnTypeOfCreateDbClient,
+  userId: string
+) {
+  const userRow = await loadAdminUserById(db, userId);
+
+  if (!userRow) {
+    return null;
+  }
+
+  return {
+    ...toAdminUserListItem(userRow),
+    auditHistory: userRow.auditEventsAsTarget
+      .filter((auditEventRow) => adminAuditEchoEventIds.has(auditEventRow.eventId))
+      .slice(0, 12)
+      .map((auditEventRow) => toAdminAuditEcho(auditEventRow)),
+    linkedIdentities: userRow.identities.map((identityRow) =>
+      toAdminIdentitySummary(identityRow)
+    ),
+    requestHistory: await Promise.all(
+      userRow.accessRequests.map((requestRow) =>
+        toAdminAccessRequestListItem(db, requestRow, userRow)
+      )
+    ),
+    roleGrantHistory: userRow.roleGrants.map((roleGrantRow) =>
+      toAdminRoleGrantSummary(roleGrantRow)
+    ).filter((roleGrantRow): roleGrantRow is PortalAdminRoleGrantSummary => roleGrantRow !== null),
+    sessionPosture: buildSessionPosture(userRow.sessions)
+  } satisfies PortalAdminUserDetail;
 }
 
 export function registerAdminRoutes(
@@ -36,14 +554,63 @@ export function registerAdminRoutes(
       preHandler: requireAccess("admin_only")
     },
     async () => {
-      const requests = await db.query.accessRequests.findMany({
-        orderBy: [asc(accessRequests.createdAt)],
-        where: eq(accessRequests.status, "pending")
-      });
-
       return {
-        items: requests.map((requestRow) => toAccessRequestSummary(requestRow))
+        items: await loadAdminAccessRequestList(db)
       };
+    }
+  );
+
+  app.get(
+    "/portal/admin/access-requests/:accessRequestId",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async (request, reply) => {
+      const accessRequestId = (request.params as { accessRequestId?: string }).accessRequestId;
+      const item = accessRequestId
+        ? await loadAdminAccessRequestDetail(db, accessRequestId)
+        : null;
+
+      if (!item) {
+        reply.code(404).send({
+          error: "access_request_not_found"
+        });
+        return;
+      }
+
+      return { item };
+    }
+  );
+
+  app.get(
+    "/portal/admin/users",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async () => {
+      return {
+        items: await loadAdminUserList(db)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/admin/users/:userId",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async (request, reply) => {
+      const userId = (request.params as { userId?: string }).userId;
+      const item = userId ? await loadAdminUserDetail(db, userId) : null;
+
+      if (!item) {
+        reply.code(404).send({
+          error: "admin_user_not_found"
+        });
+        return;
+      }
+
+      return { item };
     }
   );
 
@@ -97,18 +664,21 @@ export function registerAdminRoutes(
 
         if (!targetUser) {
           return {
-            kind: "not_found" as const
+            kind: "target_user_missing" as const,
+            requestRow
           };
         }
 
         const now = new Date();
+        let linkedIdentityAuditEvent: typeof auditEvents.$inferInsert | null = null;
+
         if (requestRow.requestKind === "identity_recovery") {
           const requestedIdentitySubject = requestRow.requestedIdentitySubject;
           const requestedIdentityProvider = requestRow.requestedIdentityProvider;
 
           if (!requestedIdentitySubject || !requestedIdentityProvider) {
             return {
-              kind: "conflict" as const,
+              kind: "recovery_identity_missing" as const,
               requestRow
             };
           }
@@ -119,7 +689,8 @@ export function registerAdminRoutes(
 
           if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
             return {
-              kind: "conflict" as const,
+              conflictUserId: existingSubjectOwner.userId,
+              kind: "recovery_identity_conflict" as const,
               requestRow
             };
           }
@@ -156,6 +727,20 @@ export function registerAdminRoutes(
               providerSubject: requestRow.requestedIdentitySubject!,
               userId: targetUser.id
             });
+            linkedIdentityAuditEvent = {
+              actorKind: "portal_user" as const,
+              actorUserId,
+              eventId: "user_identity.linked",
+              payload: {
+                actorUserId,
+                identityProvider: requestRow.requestedIdentityProvider!,
+                identitySubject: requestRow.requestedIdentitySubject!,
+                targetUserId: targetUser.id
+              },
+              severity: "critical" as const,
+              subjectKind: "user_identity" as const,
+              targetUserId: targetUser.id
+            };
           } else {
             await tx
               .update(userIdentities)
@@ -205,7 +790,7 @@ export function registerAdminRoutes(
           };
         }
 
-        await tx.insert(auditEvents).values([
+        const auditEventRows: Array<typeof auditEvents.$inferInsert> = [
           {
             actorKind: "portal_user" as const,
             actorUserId,
@@ -225,7 +810,9 @@ export function registerAdminRoutes(
             targetUserId: targetUser.id
           },
           ...(requestRow.requestKind === "identity_recovery"
-            ? []
+            ? linkedIdentityAuditEvent
+              ? [linkedIdentityAuditEvent]
+              : []
             : [
                 {
                   actorKind: "portal_user" as const,
@@ -241,7 +828,9 @@ export function registerAdminRoutes(
                   targetUserId: targetUser.id
                 }
               ])
-        ]);
+        ];
+
+        await tx.insert(auditEvents).values(auditEventRows);
 
         return {
           item: reviewedRequest,
@@ -256,9 +845,34 @@ export function registerAdminRoutes(
         return;
       }
 
+      if (result.kind === "target_user_missing") {
+        reply.code(409).send({
+          error: "access_request_target_user_missing",
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
+        });
+        return;
+      }
+
       if (result.kind === "conflict") {
         reply.code(409).send({
           error: "access_request_not_pending",
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
+        });
+        return;
+      }
+
+      if (result.kind === "recovery_identity_missing") {
+        reply.code(409).send({
+          error: "identity_recovery_identity_missing",
+          item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
+        });
+        return;
+      }
+
+      if (result.kind === "recovery_identity_conflict") {
+        reply.code(409).send({
+          conflictUserId: result.conflictUserId,
+          error: "identity_recovery_identity_conflict",
           item: result.requestRow ? toAccessRequestSummary(result.requestRow) : null
         });
         return;
