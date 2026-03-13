@@ -26,6 +26,7 @@
     "build:worker": "bun --cwd apps/worker build",
     "materialize:problem9-package": "bun --cwd apps/worker materialize:problem9-package",
     "materialize:problem9-prompt-package": "bun --cwd apps/worker materialize:problem9-prompt-package",
+    "materialize:problem9-run-bundle": "bun --cwd apps/worker materialize:problem9-run-bundle",
     "build:shared": "bun --cwd packages/shared build",
     "test:api": "bun run build:shared && bun --cwd apps/api test",
     "typecheck:web": "bun --cwd apps/web typecheck",

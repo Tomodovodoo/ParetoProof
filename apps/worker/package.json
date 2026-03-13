@@ -7,6 +7,7 @@
     "build": "bunx tsc -p tsconfig.json",
     "materialize:problem9-package": "tsx src/index.ts materialize-problem9-package",
     "materialize:problem9-prompt-package": "tsx src/index.ts materialize-problem9-prompt-package",
+    "materialize:problem9-run-bundle": "tsx src/index.ts materialize-problem9-run-bundle",
     "start": "node dist/index.js",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
