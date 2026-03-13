@@ -138,6 +138,11 @@ export const artifactLifecycleStateEnum = pgEnum("artifact_lifecycle_state", [
   "deleted"
 ]);
 
+export const workerRuntimeEnum = pgEnum("worker_runtime", [
+  "local_docker",
+  "modal"
+]);
+
 export const users = pgTable(
   "users",
   {
@@ -531,6 +536,54 @@ export const artifacts = pgTable(
       table.artifactManifestDigest
     ),
     sha256Index: index("artifacts_sha256_idx").on(table.sha256)
+  })
+);
+
+export const workerJobLeases = pgTable(
+  "worker_job_leases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    workerId: text("worker_id").notNull(),
+    workerPool: text("worker_pool").notNull(),
+    workerRuntime: workerRuntimeEnum("worker_runtime").notNull(),
+    workerVersion: text("worker_version").notNull(),
+    heartbeatIntervalSeconds: integer("heartbeat_interval_seconds").notNull(),
+    heartbeatTimeoutSeconds: integer("heartbeat_timeout_seconds").notNull(),
+    lastEventSequence: integer("last_event_sequence").default(0).notNull(),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
+    jobTokenHash: text("job_token_hash").notNull(),
+    jobTokenExpiresAt: timestamp("job_token_expires_at", { withTimezone: true }).notNull(),
+    jobTokenScopes: jsonb("job_token_scopes").$type<string[]>().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    activeJobUnique: uniqueIndex("worker_job_leases_active_job_unique")
+      .on(table.jobId)
+      .where(sql`${table.revokedAt} is null`),
+    activeAttemptUnique: uniqueIndex("worker_job_leases_active_attempt_unique")
+      .on(table.attemptId)
+      .where(sql`${table.revokedAt} is null`),
+    tokenHashUnique: uniqueIndex("worker_job_leases_job_token_hash_unique").on(table.jobTokenHash),
+    runIndex: index("worker_job_leases_run_id_idx").on(table.runId),
+    jobIndex: index("worker_job_leases_job_id_idx").on(table.jobId),
+    attemptIndex: index("worker_job_leases_attempt_id_idx").on(table.attemptId),
+    leaseExpiryIndex: index("worker_job_leases_lease_expires_at_idx").on(table.leaseExpiresAt)
   })
 );
 
