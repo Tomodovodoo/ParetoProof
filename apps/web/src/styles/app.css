@@ -899,7 +899,7 @@ a.button-secondary {
 .portal-metric-cell span,
 .portal-metric-cell small,
 .portal-table-head,
-.portal-table-row span:not(.portal-state-badge) {
+.portal-table-row span:not(.portal-state-badge):not(.portal-verdict-badge) {
   color: var(--ink-soft);
 }
 
@@ -1045,6 +1045,7 @@ a.button-secondary {
 }
 
 .portal-filter-grid {
+  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   padding-top: 12px;
@@ -1063,6 +1064,7 @@ a.button-secondary {
 }
 
 .portal-results-contract-grid {
+  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
