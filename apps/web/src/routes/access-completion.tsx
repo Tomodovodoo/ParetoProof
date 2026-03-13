@@ -40,7 +40,7 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           If you are not redirected automatically, use the secure handoff below or{" "}
           <a href={retryUrl.toString()}>retry sign in</a>.
         </p>
-        <form ref={finalizeFormRef} action={finalizeUrl} method="post" className="auth-form">
+        <form ref={finalizeFormRef} action={finalizeUrl} method="get" className="auth-form">
           {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
           <button type="submit" className="button">
             Continue to the portal

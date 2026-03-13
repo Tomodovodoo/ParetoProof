@@ -187,7 +187,14 @@ export function readAccessJwtAssertion(
 ) {
   const assertion = request.headers["cf-access-jwt-assertion"];
 
-  return typeof assertion === "string" && assertion.length > 0 ? assertion : null;
+  if (typeof assertion === "string" && assertion.length > 0) {
+    return assertion;
+  }
+
+  const cookieHeader = typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+  const cookieAssertion = readCookieValue(cookieHeader, "CF_Authorization");
+
+  return cookieAssertion && cookieAssertion.length > 0 ? cookieAssertion : null;
 }
 
 export function createCloudflareAccessVerifier(options: {

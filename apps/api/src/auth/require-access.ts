@@ -28,6 +28,10 @@ class AccessAssertionVerificationError extends Error {
   }
 }
 
+export function isAccessAssertionVerificationError(error: unknown) {
+  return error instanceof AccessAssertionVerificationError;
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     accessIdentity: CloudflareAccessIdentity | null;
@@ -103,9 +107,15 @@ async function resolveRequestAccess(
   return context;
 }
 
+export function createAccessResolver(db: ReturnTypeOfCreateDbClient) {
+  const verifiers = createCloudflareAccessVerifierSetFromEnv();
+
+  return (request: FastifyRequest) => resolveRequestAccess(db, verifiers, request);
+}
+
 // Access proves identity at the edge, but the backend still decides whether that caller may use its DB-backed routes.
 export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
-  const verifiers = createCloudflareAccessVerifierSetFromEnv();
+  const resolveAccess = createAccessResolver(db);
 
   return (requirement: RouteAccessRequirement) => {
     return (
@@ -113,7 +123,7 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
       reply: FastifyReply,
       done: HookHandlerDoneFunction
     ) => {
-      void resolveRequestAccess(db, verifiers, request)
+      void resolveAccess(request)
         .then((context) => {
           if (!context) {
             reply.code(401).send({
