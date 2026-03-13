@@ -251,6 +251,11 @@ export type WorkerExecutionEvent = {
   summary: string;
 };
 
+export type WorkerExecutionEventResponse = {
+  acceptedAt: string;
+  acknowledgedSequence: number;
+};
+
 export type WorkerArtifactManifestEntry = {
   artifactRole: WorkerBundleArtifactRole;
   byteSize: number;
@@ -298,6 +303,13 @@ export type WorkerResultMessageRequest = {
   verdictDigest: string;
 };
 
+export type WorkerResultMessageResponse = {
+  acceptedAt: string;
+  attemptState: "succeeded";
+  jobState: "completed";
+  runState: "succeeded";
+};
+
 export type WorkerTerminalFailureRequest = {
   artifactIds?: string[];
   artifactManifestDigest: string | null;
@@ -313,6 +325,13 @@ export type WorkerTerminalFailureRequest = {
   terminalState: "failed" | "cancelled";
   verifierVerdict: WorkerVerifierVerdict | null;
   verdictDigest: string | null;
+};
+
+export type WorkerTerminalFailureResponse = {
+  acceptedAt: string;
+  attemptState: "failed" | "cancelled";
+  jobState: "failed" | "cancelled";
+  runState: "failed" | "cancelled";
 };
 
 export type WorkerExecutionEventCatalogEntry = {
