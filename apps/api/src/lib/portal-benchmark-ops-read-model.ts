@@ -263,13 +263,20 @@ export async function loadPortalLaunchView(
 export async function loadPortalWorkersView(
   db: ReturnTypeOfCreateDbClient
 ): Promise<PortalWorkersView> {
-  const [queueJobRows, terminalJobRows, leaseRows] = await Promise.all([
+  const [queueJobRows, terminalJobRows, failedIncidentJobRows, leaseRows] = await Promise.all([
     db.query.jobs.findMany({
       where: or(
         eq(jobs.state, "queued"),
         eq(jobs.state, "claimed"),
         eq(jobs.state, "running"),
         eq(jobs.state, "cancel_requested")
+      )
+    }),
+    db.query.jobs.findMany({
+      where: or(
+        eq(jobs.state, "completed"),
+        eq(jobs.state, "failed"),
+        eq(jobs.state, "cancelled")
       )
     }),
     db.query.jobs.findMany({
@@ -355,7 +362,7 @@ export async function loadPortalWorkersView(
     })),
     incidents: [
       ...staleLeaseIncidents,
-      ...terminalJobRows.map((jobRow) => ({
+      ...failedIncidentJobRows.map((jobRow) => ({
         jobId: jobRow.id,
         kind: "failed_job" as const,
         leaseId: null,

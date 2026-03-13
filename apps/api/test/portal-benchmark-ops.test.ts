@@ -412,22 +412,30 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
     workerId: "worker-b"
   });
   let jobsFindManyCallCount = 0;
+  const terminalJobs = Array.from({ length: 12 }, (_, index) =>
+    buildJob({
+      id: `10000000-0000-4000-8000-0000000001${String(index).padStart(2, "0")}`,
+      primaryFailureSummary: index < 9 ? `failed job ${index}` : null,
+      runId: `00000000-0000-4000-8000-0000000001${String(index).padStart(2, "0")}`,
+      state: index < 9 ? "failed" : index < 11 ? "completed" : "cancelled",
+      stopReason: index < 9 ? "failed" : index < 11 ? "completed" : "cancelled",
+      updatedAt: new Date(`2026-03-13T19:${String(index).padStart(2, "0")}:00.000Z`),
+      verdictClass: index < 9 ? "invalid_result" : "pass"
+    })
+  );
   const db = {
     query: {
       jobs: {
         findMany: async () => {
           jobsFindManyCallCount += 1;
           if (jobsFindManyCallCount === 2) {
-            return [
-              buildJob({
-                id: "10000000-0000-4000-8000-000000000003",
-                primaryFailureSummary: "worker lost lease",
-                runId: "00000000-0000-4000-8000-000000000003",
-                state: "failed",
-                updatedAt: new Date("2026-03-13T19:10:00.000Z"),
-                verdictClass: "invalid_result"
-              })
-            ];
+            return terminalJobs;
+          }
+
+          if (jobsFindManyCallCount === 3) {
+            return terminalJobs
+              .filter((jobRow) => jobRow.state === "failed")
+              .slice(0, 10);
           }
 
           return [
@@ -485,8 +493,13 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
   );
   assert.equal(payload.item.queue.queuedJobs, 1);
   assert.equal(payload.item.queue.runningJobs, 1);
+  assert.equal(payload.item.queue.terminalJobs, 12);
   assert.equal(payload.item.pools[0]?.staleLeaseCount, 1);
   assert.equal(payload.item.activeLeases.length, 2);
+  assert.equal(
+    payload.item.incidents.filter((incident: { kind: string }) => incident.kind === "failed_job").length,
+    9
+  );
   assert.equal(
     payload.item.incidents.some((incident: { kind: string }) => incident.kind === "stale_lease"),
     true
