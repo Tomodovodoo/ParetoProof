@@ -202,6 +202,7 @@ For MVP:
 ## Relationship to adjacent frontend scopes
 
 - issue `#52` should define sort, filter, and export behavior for richer result views
+- [release-notes-and-updates-baseline.md](release-notes-and-updates-baseline.md) defines the canonical public update surfaces and external announcement-link rules that sit beside benchmark release pages
 - [results-drilldown-ux-baseline.md](results-drilldown-ux-baseline.md) defines the authenticated portal drilldown behavior once users move beyond the public release summary
 - [frontend-design-system-baseline.md](frontend-design-system-baseline.md) defines the component and styling rules this reporting surface should use
 
