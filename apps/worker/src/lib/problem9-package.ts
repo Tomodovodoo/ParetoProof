@@ -4,6 +4,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile
@@ -85,7 +86,7 @@ export async function materializeProblem9Package(
   const outputRoot = path.resolve(options.outputRoot);
   const materializedPackageRoot = path.join(outputRoot, "firstproof", "Problem9");
 
-  assertNoPathOverlap(problem9SourceRoot, materializedPackageRoot);
+  await assertNoPathOverlap(problem9SourceRoot, materializedPackageRoot);
   await rm(materializedPackageRoot, { force: true, recursive: true });
   await mkdir(materializedPackageRoot, { recursive: true });
 
@@ -229,9 +230,12 @@ async function collectFileHashes(
   return Object.fromEntries(fileHashes.sort(([left], [right]) => left.localeCompare(right)));
 }
 
-function assertNoPathOverlap(sourceRoot: string, materializedRoot: string): void {
-  const normalizedSourceRoot = normalizePathForComparison(sourceRoot);
-  const normalizedMaterializedRoot = normalizePathForComparison(materializedRoot);
+async function assertNoPathOverlap(
+  sourceRoot: string,
+  materializedRoot: string
+): Promise<void> {
+  const normalizedSourceRoot = await resolvePathForComparison(sourceRoot);
+  const normalizedMaterializedRoot = await resolvePathForComparison(materializedRoot);
 
   const sourceContainsMaterialized =
     normalizedMaterializedRoot === normalizedSourceRoot ||
@@ -268,8 +272,26 @@ function normalizePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
-function normalizePathForComparison(filePath: string): string {
-  return normalizePath(path.resolve(filePath)).toLowerCase();
+async function resolvePathForComparison(filePath: string): Promise<string> {
+  const absolutePath = path.resolve(filePath);
+  const unresolvedSegments: string[] = [];
+  let currentPath = absolutePath;
+
+  while (true) {
+    try {
+      const resolvedPath = await realpath(currentPath);
+      return normalizePath(path.join(resolvedPath, ...unresolvedSegments.reverse())).toLowerCase();
+    } catch {
+      const parentPath = path.dirname(currentPath);
+
+      if (parentPath === currentPath) {
+        throw new Error(`Could not resolve filesystem path for comparison: ${filePath}`);
+      }
+
+      unresolvedSegments.push(path.basename(currentPath));
+      currentPath = parentPath;
+    }
+  }
 }
 
 function shouldIgnoreSourcePath(relativePath: string): boolean {
