@@ -21,6 +21,7 @@ function createAdminOnlyGuard() {
 
 test("GET /portal/admin/access-requests returns enriched admin queue items", async (t) => {
   const app = Fastify();
+  let usersFindManyCallCount = 0;
   const targetUser = {
     accessRequests: [
       {
@@ -40,7 +41,7 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
         status: "pending"
       },
       {
-        createdAt: new Date("2026-03-12T09:00:00.000Z"),
+        createdAt: new Date("2026-03-10T09:00:00.000Z"),
         decisionNote: "Approved yesterday",
         email: "helper@example.com",
         id: "00000000-0000-4000-8000-000000000102",
@@ -50,7 +51,7 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
         requestedIdentityProvider: null,
         requestedIdentitySubject: null,
         requestedRole: "helper",
-        reviewedAt: new Date("2026-03-12T10:00:00.000Z"),
+        reviewedAt: new Date("2026-03-13T12:30:00.000Z"),
         reviewedByUserId: "00000000-0000-4000-8000-000000000001",
         reviewedByUser: {
           createdAt: new Date("2026-03-01T00:00:00.000Z"),
@@ -145,6 +146,27 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
     sessions: [],
     updatedAt: new Date("2026-03-02T00:00:00.000Z")
   };
+  const conflictingIdentityOwner = {
+    accessRequests: [],
+    createdAt: new Date("2026-03-03T00:00:00.000Z"),
+    displayName: "Conflict Owner",
+    email: "owner@example.com",
+    id: "00000000-0000-4000-8000-000000000203",
+    identities: [
+      {
+        createdAt: new Date("2026-03-03T00:00:00.000Z"),
+        id: "00000000-0000-4000-8000-000000000303",
+        lastSeenAt: new Date("2026-03-13T06:00:00.000Z"),
+        provider: "cloudflare_google",
+        providerEmail: "owner@example.com",
+        providerSubject: "subject-conflict",
+        userId: "00000000-0000-4000-8000-000000000203"
+      }
+    ],
+    roleGrants: [],
+    sessions: [],
+    updatedAt: new Date("2026-03-03T00:00:00.000Z")
+  };
   const requestRows = [
     {
       createdAt: new Date("2026-03-13T09:00:00.000Z"),
@@ -171,7 +193,7 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
       requestKind: "identity_recovery",
       requestedByUserId: "00000000-0000-4000-8000-000000000202",
       requestedIdentityProvider: "cloudflare_google",
-      requestedIdentitySubject: "subject-recover",
+      requestedIdentitySubject: "subject-conflict",
       requestedRole: "collaborator",
       reviewedAt: new Date("2026-03-13T12:00:00.000Z"),
       reviewedByUserId: "00000000-0000-4000-8000-000000000001",
@@ -197,8 +219,26 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
         accessRequests: {
           findMany: async () => requestRows
         },
+        userIdentities: {
+          findMany: async () => [
+            {
+              createdAt: new Date("2026-03-03T00:00:00.000Z"),
+              id: "00000000-0000-4000-8000-000000000303",
+              lastSeenAt: new Date("2026-03-13T06:00:00.000Z"),
+              provider: "cloudflare_google",
+              providerEmail: "owner@example.com",
+              providerSubject: "subject-conflict",
+              userId: "00000000-0000-4000-8000-000000000203"
+            }
+          ]
+        },
         users: {
-          findMany: async () => [targetUser, recoveryUser]
+          findMany: async () => {
+            usersFindManyCallCount += 1;
+            return usersFindManyCallCount === 1
+              ? [targetUser, recoveryUser]
+              : [conflictingIdentityOwner];
+          }
         }
       }
     } as never,
@@ -211,6 +251,7 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
   });
 
   assert.equal(response.statusCode, 200);
+  assert.equal(usersFindManyCallCount, 2);
   assert.deepEqual(response.json(), {
     items: [
       {
@@ -258,8 +299,8 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
           pendingRequestId: null
         },
         rationale: "Need relink",
-        recoveryRequestedIdentityAlreadyLinked: true,
-        recoveryRequestedIdentityConflicts: false,
+        recoveryRequestedIdentityAlreadyLinked: false,
+        recoveryRequestedIdentityConflicts: true,
         recoveryRequestedIdentityProvider: "cloudflare_google",
         requestKind: "identity_recovery",
         requestedRole: "collaborator",
@@ -424,6 +465,9 @@ test("GET /portal/admin/access-requests/:id returns the scoped detail payload", 
         auditEvents: {
           findMany: async () => auditRows
         },
+        userIdentities: {
+          findMany: async () => []
+        },
         users: {
           findMany: async () => [userRow]
         }
@@ -553,6 +597,50 @@ test("GET /portal/admin/users and /portal/admin/users/:userId return admin user 
         reviewedByUserId: null,
         reviewedByUser: null,
         status: "pending"
+      },
+      {
+        createdAt: new Date("2026-03-12T09:00:00.000Z"),
+        decisionNote: "Reviewed earlier",
+        email: "helper@example.com",
+        id: "00000000-0000-4000-8000-000000000102",
+        rationale: null,
+        requestKind: "access_request",
+        requestedByUserId: "00000000-0000-4000-8000-000000000201",
+        requestedIdentityProvider: null,
+        requestedIdentitySubject: null,
+        requestedRole: "helper",
+        reviewedAt: new Date("2026-03-12T11:00:00.000Z"),
+        reviewedByUserId: "00000000-0000-4000-8000-000000000001",
+        reviewedByUser: {
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+          displayName: "Admin",
+          email: "admin@paretoproof.com",
+          id: "00000000-0000-4000-8000-000000000001",
+          updatedAt: new Date("2026-03-01T00:00:00.000Z")
+        },
+        status: "approved"
+      },
+      {
+        createdAt: new Date("2026-03-10T09:00:00.000Z"),
+        decisionNote: "Reviewed later",
+        email: "helper@example.com",
+        id: "00000000-0000-4000-8000-000000000103",
+        rationale: null,
+        requestKind: "access_request",
+        requestedByUserId: "00000000-0000-4000-8000-000000000201",
+        requestedIdentityProvider: null,
+        requestedIdentitySubject: null,
+        requestedRole: "helper",
+        reviewedAt: new Date("2026-03-13T12:00:00.000Z"),
+        reviewedByUserId: "00000000-0000-4000-8000-000000000001",
+        reviewedByUser: {
+          createdAt: new Date("2026-03-01T00:00:00.000Z"),
+          displayName: "Admin",
+          email: "admin@paretoproof.com",
+          id: "00000000-0000-4000-8000-000000000001",
+          updatedAt: new Date("2026-03-01T00:00:00.000Z")
+        },
+        status: "rejected"
       }
     ],
     createdAt: new Date("2026-03-01T00:00:00.000Z"),
@@ -667,8 +755,8 @@ test("GET /portal/admin/users and /portal/admin/users/:userId return admin user 
         displayName: "Helpful Person",
         email: "helper@example.com",
         id: "00000000-0000-4000-8000-000000000201",
-        latestReviewedAt: null,
-        latestReviewedRequestStatus: null,
+        latestReviewedAt: "2026-03-13T12:00:00.000Z",
+        latestReviewedRequestStatus: "rejected",
         linkedIdentityProviders: ["cloudflare_github"],
         pendingRequestCreatedAt: "2026-03-13T09:00:00.000Z",
         pendingRequestId: "00000000-0000-4000-8000-000000000101",
@@ -686,8 +774,8 @@ test("GET /portal/admin/users and /portal/admin/users/:userId return admin user 
       displayName: "Helpful Person",
       email: "helper@example.com",
       id: "00000000-0000-4000-8000-000000000201",
-      latestReviewedAt: null,
-      latestReviewedRequestStatus: null,
+      latestReviewedAt: "2026-03-13T12:00:00.000Z",
+      latestReviewedRequestStatus: "rejected",
       linkedIdentities: [
         {
           createdAt: "2026-03-01T00:00:00.000Z",
@@ -726,6 +814,28 @@ test("GET /portal/admin/users and /portal/admin/users/:userId return admin user 
           requestedRole: "helper",
           reviewedAt: null,
           status: "pending"
+        },
+        {
+          createdAt: "2026-03-12T09:00:00.000Z",
+          decisionNote: "Reviewed earlier",
+          email: "helper@example.com",
+          id: "00000000-0000-4000-8000-000000000102",
+          rationale: null,
+          requestKind: "access_request",
+          requestedRole: "helper",
+          reviewedAt: "2026-03-12T11:00:00.000Z",
+          status: "approved"
+        },
+        {
+          createdAt: "2026-03-10T09:00:00.000Z",
+          decisionNote: "Reviewed later",
+          email: "helper@example.com",
+          id: "00000000-0000-4000-8000-000000000103",
+          rationale: null,
+          requestKind: "access_request",
+          requestedRole: "helper",
+          reviewedAt: "2026-03-13T12:00:00.000Z",
+          status: "rejected"
         }
       ],
       roleGrantHistory: [

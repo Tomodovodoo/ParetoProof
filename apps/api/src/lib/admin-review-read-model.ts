@@ -193,40 +193,93 @@ async function loadMatchedUsersForRequests(
         .filter((value): value is string => value.length > 0)
     )
   ];
+  const requestedIdentitySubjects = [
+    ...new Set(
+      requestRows
+        .map((requestRow) => requestRow.requestedIdentitySubject)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )
+  ];
 
-  if (requestedByUserIds.length === 0 && emails.length === 0) {
+  if (
+    requestedByUserIds.length === 0 &&
+    emails.length === 0 &&
+    requestedIdentitySubjects.length === 0
+  ) {
     return new Map<string, UserWithAdminRelations>();
   }
 
-  const userRows = (await db.query.users.findMany({
-    where:
-      requestedByUserIds.length > 0 && emails.length > 0
-        ? or(inArray(users.id, requestedByUserIds), inArray(users.email, emails))
-        : requestedByUserIds.length > 0
-          ? inArray(users.id, requestedByUserIds)
-          : inArray(users.email, emails),
-    with: {
-      accessRequests: {
-        with: {
-          reviewedByUser: true
-        }
-      },
-      identities: true,
-      roleGrants: {
-        with: {
-          grantedByUser: true,
-          revokedByUser: true
-        }
-      },
-      sessions: true
-    }
-  })) as UserWithAdminRelations[];
+  const userRows =
+    requestedByUserIds.length > 0 || emails.length > 0
+      ? ((await db.query.users.findMany({
+          where:
+            requestedByUserIds.length > 0 && emails.length > 0
+              ? or(inArray(users.id, requestedByUserIds), inArray(users.email, emails))
+              : requestedByUserIds.length > 0
+                ? inArray(users.id, requestedByUserIds)
+                : inArray(users.email, emails),
+          with: {
+            accessRequests: {
+              with: {
+                reviewedByUser: true
+              }
+            },
+            identities: true,
+            roleGrants: {
+              with: {
+                grantedByUser: true,
+                revokedByUser: true
+              }
+            },
+            sessions: true
+          }
+        })) as UserWithAdminRelations[])
+      : [];
+  const recoveryIdentityRows =
+    requestedIdentitySubjects.length > 0
+      ? await db.query.userIdentities.findMany({
+          where: inArray(userIdentities.providerSubject, requestedIdentitySubjects)
+        })
+      : [];
+  const recoveryIdentityOwnerIds = [
+    ...new Set(recoveryIdentityRows.map((identityRow) => identityRow.userId))
+  ].filter((userId) => !userRows.some((userRow) => userRow.id === userId));
+  const recoveryIdentityOwners =
+    recoveryIdentityOwnerIds.length > 0
+      ? ((await db.query.users.findMany({
+          where: inArray(users.id, recoveryIdentityOwnerIds),
+          with: {
+            accessRequests: {
+              with: {
+                reviewedByUser: true
+              }
+            },
+            identities: true,
+            roleGrants: {
+              with: {
+                grantedByUser: true,
+                revokedByUser: true
+              }
+            },
+            sessions: true
+          }
+        })) as UserWithAdminRelations[])
+      : [];
 
   const matchedUsers = new Map<string, UserWithAdminRelations>();
+  const allUserRows = [...userRows, ...recoveryIdentityOwners];
 
-  for (const userRow of userRows) {
+  for (const userRow of allUserRows) {
     matchedUsers.set(userRow.id, userRow);
     matchedUsers.set(`email:${userRow.email}`, userRow);
+  }
+
+  for (const identityRow of recoveryIdentityRows) {
+    const identityOwner = allUserRows.find((userRow) => userRow.id === identityRow.userId);
+
+    if (identityOwner) {
+      matchedUsers.set(`subject:${identityRow.providerSubject}`, identityOwner);
+    }
   }
 
   return matchedUsers;
@@ -301,9 +354,7 @@ function toPortalAdminMatchedUserSummary(
   userRow: UserWithAdminRelations
 ): PortalAdminMatchedUserSummary {
   const latestPendingRequest = getLatestRequestByStatus(userRow.accessRequests ?? [], "pending");
-  const latestReviewedRequest = [...(userRow.accessRequests ?? [])]
-    .filter((requestRow) => requestRow.status !== "pending")
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+  const latestReviewedRequest = getLatestReviewedRequest(userRow.accessRequests ?? []);
 
   return {
     activeRole: getActiveRole(userRow.roleGrants ?? []),
@@ -325,9 +376,7 @@ function toPortalAdminUserListItem(
   );
   const activeRoleGrant = sortedRoleGrants.find((roleGrant) => roleGrant.revokedAt === null) ?? null;
   const latestPendingRequest = getLatestRequestByStatus(userRow.accessRequests ?? [], "pending");
-  const latestReviewedRequest = [...(userRow.accessRequests ?? [])]
-    .filter((requestRow) => requestRow.status !== "pending")
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+  const latestReviewedRequest = getLatestReviewedRequest(userRow.accessRequests ?? []);
 
   return {
     activeRole: activeRoleGrant?.role ?? null,
@@ -468,11 +517,11 @@ function findIdentityOwner(
   matchedUsers: Map<string, UserWithAdminRelations>,
   providerSubject: string
 ) {
-  for (const matchedUser of new Set(matchedUsers.values())) {
-    if ((matchedUser.identities ?? []).some((identity) => identity.providerSubject === providerSubject)) {
-      return matchedUser;
-    }
-  }
+  return matchedUsers.get(`subject:${providerSubject}`) ?? null;
+}
 
-  return null;
+function getLatestReviewedRequest(requestRows: Array<typeof accessRequests.$inferSelect>) {
+  return [...requestRows]
+    .filter((requestRow) => requestRow.status !== "pending" && requestRow.reviewedAt !== null)
+    .sort((left, right) => right.reviewedAt!.getTime() - left.reviewedAt!.getTime())[0];
 }
