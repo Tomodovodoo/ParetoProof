@@ -246,7 +246,7 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
   if (!parsedRequest.success) {
     throw new Problem9OfflineIngestValidationError({
       code: "invalid_problem9_offline_ingest_payload",
-      issues: parsedRequest.error.issues.map((issue) => ({
+      issues: parsedRequest.error.issues.map((issue: { message: string; path: (string | number)[] }) => ({
         message: issue.message,
         path: issue.path.join(".")
       })),
