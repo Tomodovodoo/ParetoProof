@@ -2,6 +2,24 @@
 
 `apps/worker` holds the control code that remote worker runtimes will execute. The exact image contents and Lean toolchain policy remain a separate scope, but the worker service boundary is now fixed.
 
+Docker targets:
+
+- `apps/worker/Dockerfile` now exposes the repository-owned Problem 9 target graph:
+  - `problem9-os-base`
+  - `problem9-toolchain-base`
+  - `problem9-app-build`
+  - `problem9-benchmark-base`
+  - `problem9-execution`
+  - `problem9-devbox`
+  - `paretoproof-worker`
+- `problem9-execution` is the canonical non-interactive verdict environment and includes the built worker runtime, prompt templates, and checked-in `benchmarks/firstproof/problem9` source tree at the repo-root paths the CLI materializers resolve at runtime
+- `problem9-devbox` extends `problem9-execution` with Bun `1.3.10`, Python `3.11`, Codex CLI, and `lean-lsp-mcp` for trusted-local contributor workflows
+- `paretoproof-worker` remains the narrower hosted wrapper target and is intentionally the final Dockerfile stage so current publish automation still builds the worker image by default
+- local verification commands for the named runtime targets:
+  - `docker build --target problem9-execution -f apps/worker/Dockerfile .`
+  - `docker build --target problem9-devbox -f apps/worker/Dockerfile .`
+  - `docker build --target paretoproof-worker -f apps/worker/Dockerfile .`
+
 Runtime env guidance:
 
 - use [docs/runtime-env-contract-baseline.md](../../docs/runtime-env-contract-baseline.md) as the authoritative source for required versus optional worker variables by mode

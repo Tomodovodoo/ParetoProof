@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "apps/worker/**"
+      - "benchmarks/firstproof/problem9/**"
       - "packages/shared/**"
       - "package.json"
       - "bun.lock"
