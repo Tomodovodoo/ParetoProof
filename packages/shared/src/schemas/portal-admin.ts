@@ -129,6 +129,10 @@ export const portalAdminUserDetailSchema = portalAdminUserListItemSchema.extend(
   sessionPosture: portalAdminSessionPostureSchema
 });
 
+export const portalAdminUserRevokeInputSchema = z.object({
+  reason: z.string().trim().min(1).max(500)
+});
+
 export const portalAdminAccessRequestListResponseSchema = z.object({
   items: z.array(portalAdminAccessRequestListItemSchema)
 });

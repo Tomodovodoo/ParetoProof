@@ -138,6 +138,14 @@ export const apiCallBoundaryCatalog = [
       "Admin user inspection stays on the same portal audience while the backend enforces admin-only access and bounded read models."
   },
   {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.user.revoke",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Role revocation is an admin-only corrective action performed from the portal users workspace on the existing Access cookie boundary."
+  },
+  {
     credential: "worker_bootstrap_token",
     endpointId: "internal.worker.claim",
     mode: "internal_service_only",

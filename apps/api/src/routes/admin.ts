@@ -14,10 +14,11 @@ import type {
   PortalAdminUserPostureSummary
 } from "@paretoproof/shared";
 import {
+  portalAdminReadModelsContract,
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   accessRequests,
@@ -155,18 +156,19 @@ function sortAccessRequestRows(rows: AccessRequestWithReviewer[]) {
 }
 
 function buildSessionPosture(sessionRows: DbSessionRow[]): PortalAdminSessionPosture {
-  const now = Date.now();
+  const now = new Date();
   const activeSessionRows = sessionRows
-    .filter(
-      (sessionRow) =>
-        sessionRow.revokedAt === null && sessionRow.expiresAt.getTime() > now
-    )
+    .filter((sessionRow) => isActiveSession(sessionRow, now))
     .sort((left, right) => right.expiresAt.getTime() - left.expiresAt.getTime());
 
   return {
     activeSessionCount: activeSessionRows.length,
     latestSessionExpiresAt: activeSessionRows[0]?.expiresAt.toISOString() ?? null
   };
+}
+
+function isActiveSession(sessionRow: DbSessionRow, now: Date) {
+  return sessionRow.revokedAt === null && sessionRow.expiresAt.getTime() > now.getTime();
 }
 
 function deriveAccessPosture(
@@ -616,6 +618,152 @@ export function registerAdminRoutes(
       }
 
       return { item };
+    }
+  );
+
+  app.post(
+    "/portal/admin/users/:userId/revoke-role",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async (request, reply) => {
+      const parsedBody = portalAdminReadModelsContract.userRevokeInput.safeParse(
+        request.body ?? {}
+      );
+
+      if (!parsedBody.success) {
+        reply.code(400).send({
+          error: "invalid_admin_user_revoke_payload",
+          issues: parsedBody.error.issues
+        });
+        return;
+      }
+
+      const actorUserId = getAdminActorUserId(request);
+      const userId = (request.params as { userId?: string }).userId;
+
+      const result = await db.transaction(async (tx) => {
+        const targetUser = await tx.query.users.findFirst({
+          where: eq(users.id, userId ?? "")
+        });
+
+        if (!targetUser) {
+          return {
+            kind: "not_found" as const
+          };
+        }
+
+        const activeRoleGrant = await tx.query.roleGrants.findFirst({
+          orderBy: [desc(roleGrants.grantedAt)],
+          where: and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt))
+        });
+
+        if (!activeRoleGrant) {
+          return {
+            kind: "no_active_role" as const
+          };
+        }
+
+        if (activeRoleGrant.role === "admin") {
+          return {
+            kind: "admin_role_not_revocable" as const
+          };
+        }
+
+        const now = new Date();
+        const [revokedRoleGrant] = await tx
+          .update(roleGrants)
+          .set({
+            revokedAt: now,
+            revokedByUserId: actorUserId
+          })
+          .where(and(eq(roleGrants.id, activeRoleGrant.id), isNull(roleGrants.revokedAt)))
+          .returning();
+
+        if (!revokedRoleGrant) {
+          return {
+            kind: "conflict" as const
+          };
+        }
+
+        const activeSessionRows = await tx.query.sessions.findMany({
+          where: and(eq(sessions.userId, targetUser.id), isNull(sessions.revokedAt))
+        });
+        const activeSessionsToRevoke = activeSessionRows.filter((sessionRow) =>
+          isActiveSession(sessionRow, now)
+        );
+
+        if (activeSessionsToRevoke.length > 0) {
+          await tx
+            .update(sessions)
+            .set({
+              revokedAt: now
+            })
+            .where(
+              and(
+                eq(sessions.userId, targetUser.id),
+                gt(sessions.expiresAt, now),
+                isNull(sessions.revokedAt)
+              )
+            );
+        }
+
+        await tx.insert(auditEvents).values({
+          actorKind: "portal_user",
+          actorUserId,
+          eventId: "role_grant.revoked",
+          payload: {
+            actorUserId,
+            revokedRole: activeRoleGrant.role,
+            revokedSessionCount: activeSessionsToRevoke.length,
+            revocationReason: parsedBody.data.reason,
+            roleGrantId: activeRoleGrant.id,
+            targetUserId: targetUser.id
+          },
+          severity: "critical",
+          subjectKind: "role_grant",
+          targetUserId: targetUser.id
+        });
+
+        return {
+          kind: "revoked" as const,
+          userId: targetUser.id
+        };
+      });
+
+      if (result.kind === "not_found") {
+        reply.code(404).send({
+          error: "admin_user_not_found"
+        });
+        return;
+      }
+
+      if (result.kind === "no_active_role") {
+        reply.code(409).send({
+          error: "admin_user_no_active_role"
+        });
+        return;
+      }
+
+      if (result.kind === "admin_role_not_revocable") {
+        reply.code(409).send({
+          error: "admin_user_role_not_revocable"
+        });
+        return;
+      }
+
+      if (result.kind === "conflict") {
+        reply.code(409).send({
+          error: "admin_user_role_revocation_conflict"
+        });
+        return;
+      }
+
+      const item = await loadAdminUserDetail(db, result.userId);
+
+      return {
+        item
+      };
     }
   );
 

@@ -69,6 +69,40 @@ test("trusted mutation origin hook rejects state-changing portal requests from u
   });
 });
 
+test("trusted mutation origin hook also protects admin role revocation mutations", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOrigins: ["https://portal.paretoproof.com"]
+    })
+  );
+
+  app.post("/portal/admin/users/user_123/revoke-role", async () => ({ ok: true }));
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "test"
+    },
+    url: "/portal/admin/users/user_123/revoke-role",
+    headers: {
+      origin: "https://evil.example"
+    }
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.json(), {
+    error: "trusted_origin_not_allowed"
+  });
+});
+
 test("trusted mutation origin hook allows trusted portal origins and safe GET redirects", async (t) => {
   const app = Fastify();
 

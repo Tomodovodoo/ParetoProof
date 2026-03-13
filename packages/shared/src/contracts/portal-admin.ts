@@ -1,6 +1,7 @@
 import {
   portalAdminAccessRequestDetailResponseSchema,
   portalAdminAccessRequestListResponseSchema,
+  portalAdminUserRevokeInputSchema,
   portalAdminUserDetailResponseSchema,
   portalAdminUserListResponseSchema
 } from "../schemas/portal-admin.js";
@@ -8,6 +9,7 @@ import {
 export const portalAdminReadModelsContract = {
   accessRequestDetailResponse: portalAdminAccessRequestDetailResponseSchema,
   accessRequestListResponse: portalAdminAccessRequestListResponseSchema,
+  userRevokeInput: portalAdminUserRevokeInputSchema,
   userDetailResponse: portalAdminUserDetailResponseSchema,
   userListResponse: portalAdminUserListResponseSchema
 };
