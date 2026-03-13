@@ -1,0 +1,6 @@
+name = "firstproof-problem9"
+version = "0.1.0"
+defaultTargets = ["FirstProof.Problem9.Gold"]
+
+[[lean_lib]]
+name = "FirstProof"

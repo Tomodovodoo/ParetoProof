@@ -1,0 +1,23 @@
+{
+  "sourceSchemaVersion": "1",
+  "packageId": "firstproof/Problem9",
+  "packageVersion": "2026.03.13",
+  "benchmarkFamily": "firstproof",
+  "benchmarkItemId": "Problem9",
+  "canonicalModules": {
+    "statement": "FirstProof.Problem9.Statement",
+    "support": "FirstProof.Problem9.Support",
+    "gold": "FirstProof.Problem9.Gold"
+  },
+  "lanePolicy": {
+    "primaryLane": "lean422_exact",
+    "supportedLanes": [
+      "lean422_exact",
+      "lean424_interop"
+    ]
+  },
+  "materialization": {
+    "generatedManifestPath": "benchmark-package.json",
+    "packageRoot": "firstproof/Problem9"
+  }
+}
