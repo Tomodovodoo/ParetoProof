@@ -63,7 +63,7 @@ Worker staging promotion must reuse an already-built digest. Do not rebuild a se
 
 ## Manual promotion to production
 
-Production promotion begins only after staging validation is complete for the affected surfaces.
+Production promotion begins only after staging validation is complete for the affected surfaces. The final production go/no-go checklist, explicit approval gates, and rollback handoff record are defined in `production-release-checklist-baseline.md`.
 
 Minimum promotion checklist:
 
