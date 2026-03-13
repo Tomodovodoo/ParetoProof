@@ -14,6 +14,8 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
   const finalizeUrl = buildApiSessionFinalizeUrl();
   const finalizeFormRef = useRef<HTMLFormElement>(null);
   const retryUrl = new URL(buildAuthUrl(redirectPath));
+  const flow = new URLSearchParams(window.location.search).get("flow");
+  const finalizeMethod = flow === "link" ? "post" : "get";
 
   retryUrl.searchParams.set("handoff", "retry");
 
@@ -40,7 +42,12 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           If you are not redirected automatically, use the secure handoff below or{" "}
           <a href={retryUrl.toString()}>retry sign in</a>.
         </p>
-        <form ref={finalizeFormRef} action={finalizeUrl} method="post" className="auth-form">
+        <form
+          ref={finalizeFormRef}
+          action={finalizeUrl}
+          method={finalizeMethod}
+          className="auth-form"
+        >
           {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
           <button type="submit" className="button">
             Continue to the portal

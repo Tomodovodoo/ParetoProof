@@ -23,6 +23,10 @@ import {
   verifyAccessProviderHint,
   verifyAccessLinkIntent
 } from "../auth/cloudflare-access.js";
+import {
+  createAccessResolver,
+  isAccessAssertionVerificationError
+} from "../auth/require-access.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -180,8 +184,13 @@ async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
 export function registerPortalRoutes(
   app: FastifyInstance,
   db: ReturnTypeOfCreateDbClient,
-  requireAccess: ReturnTypeOfCreateAccessGuard
+  requireAccess: ReturnTypeOfCreateAccessGuard,
+  options?: {
+    resolvePortalAccess?: ReturnType<typeof createAccessResolver>;
+  }
 ) {
+  const resolvePortalAccess = options?.resolvePortalAccess ?? createAccessResolver(db);
+
   const handlePortalSessionRetryRedirect = (
     request: FastifyRequest,
     reply: FastifyReply
@@ -309,6 +318,38 @@ export function registerPortalRoutes(
     reply.redirect(portalUrl.toString());
   };
 
+  const handlePortalSessionFinalizeGet = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const cookieHeader =
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+
+    // Cross-site GETs must not be enough to consume a pending identity-link intent.
+    if (verifyAccessLinkIntent(cookieHeader)) {
+      handlePortalSessionRetryRedirect(request, reply);
+      return;
+    }
+
+    try {
+      const accessContext = await resolvePortalAccess(request);
+
+      if (!accessContext) {
+        handlePortalSessionRetryRedirect(request, reply);
+        return;
+      }
+    } catch (error) {
+      if (isAccessAssertionVerificationError(error)) {
+        handlePortalSessionRetryRedirect(request, reply);
+        return;
+      }
+
+      throw error;
+    }
+
+    return handlePortalSessionCompletion(request, reply);
+  };
+
   app.get(
     "/portal/me",
     {
@@ -324,9 +365,7 @@ export function registerPortalRoutes(
 
   app.get("/portal/session/complete", handlePortalSessionRetryRedirect);
   app.get("/portal/session/finalize", handlePortalSessionRetryRedirect);
-  // Finalize stays POST-only so link-intent cookies alone cannot mutate portal identity state
-  // from a cross-site top-level GET after SameSite=Lax was enabled for auth return flows.
-  app.get("/portal/session/finalize/submit", handlePortalSessionRetryRedirect);
+  app.get("/portal/session/finalize/submit", handlePortalSessionFinalizeGet);
 
   app.post(
     "/portal/session/complete",
