@@ -227,6 +227,7 @@ Every run bundle and downstream result record that references a model configurat
 
 - `modelConfigId`
 - `providerFamily`
+- `authMode`
 - `upstreamModelId`
 - `snapshotPolicy` summary
 - normalized reasoning mode
