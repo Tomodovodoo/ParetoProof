@@ -134,6 +134,17 @@ const promptDefaults = {
   promptProtocolVersion: "problem9-prompt-protocol.v1"
 } as const;
 const benchmarkPackageSourceSchemaVersion = "1";
+const expectedBenchmarkHashPaths = [
+  "FirstProof/Problem9/Gold.lean",
+  "FirstProof/Problem9/Statement.lean",
+  "FirstProof/Problem9/Support.lean",
+  "LICENSE",
+  "README.md",
+  "lake-manifest.json",
+  "lakefile.toml",
+  "lean-toolchain",
+  "statements/problem.md"
+] as const;
 
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
 
@@ -315,6 +326,19 @@ async function validateBenchmarkPackageInput(
   benchmarkPackageRoot: string,
   benchmarkManifest: BenchmarkPackageManifest
 ): Promise<void> {
+  const declaredHashPaths = Object.keys(benchmarkManifest.hashes).sort();
+  const expectedHashPaths = [...expectedBenchmarkHashPaths].sort();
+
+  if (stableStringify(declaredHashPaths) !== stableStringify(expectedHashPaths)) {
+    throw new Error(
+      [
+        "Benchmark package hash coverage does not match the required immutable file set.",
+        `Expected: ${expectedHashPaths.join(", ")}`,
+        `Found: ${declaredHashPaths.join(", ")}`
+      ].join(" ")
+    );
+  }
+
   const validatedHashes: Array<[string, string]> = [];
 
   for (const [relativePath, expectedHash] of Object.entries(benchmarkManifest.hashes).sort(
