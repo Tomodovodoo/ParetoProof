@@ -97,6 +97,15 @@ export const apiEndpointCatalog = [
   {
     access: "admin_only",
     audience: "portal",
+    id: "admin.problem9-offline-ingest.create",
+    method: "POST",
+    path: "/portal/admin/offline-ingest/problem9-run-bundles",
+    purpose:
+      "Import one completed canonical Problem 9 offline run bundle into terminal run, job, attempt, and artifact metadata records."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
     id: "admin.access-request.list",
     method: "GET",
     path: "/portal/admin/access-requests",

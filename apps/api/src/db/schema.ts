@@ -1,7 +1,9 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -52,6 +54,88 @@ export const auditSeverityEnum = pgEnum("audit_severity", [
   "info",
   "warning",
   "critical"
+]);
+
+export const runKindEnum = pgEnum("run_kind", [
+  "full_benchmark",
+  "benchmark_slice",
+  "single_run",
+  "repeated_n"
+]);
+
+export const runStateEnum = pgEnum("run_state", [
+  "created",
+  "queued",
+  "running",
+  "cancel_requested",
+  "succeeded",
+  "failed",
+  "cancelled"
+]);
+
+export const jobStateEnum = pgEnum("job_state", [
+  "queued",
+  "claimed",
+  "running",
+  "cancel_requested",
+  "completed",
+  "failed",
+  "cancelled"
+]);
+
+export const attemptStateEnum = pgEnum("attempt_state", [
+  "prepared",
+  "active",
+  "succeeded",
+  "failed",
+  "cancelled"
+]);
+
+export const evaluationVerdictClassEnum = pgEnum("evaluation_verdict_class", [
+  "pass",
+  "fail",
+  "invalid_result"
+]);
+
+export const artifactClassEnum = pgEnum("artifact_class", [
+  "run_manifest",
+  "package_reference",
+  "prompt_package",
+  "candidate_source",
+  "verdict_record",
+  "compiler_output",
+  "compiler_diagnostics",
+  "verifier_output",
+  "environment_snapshot",
+  "usage_summary",
+  "execution_trace"
+]);
+
+export const artifactOwnerScopeEnum = pgEnum("artifact_owner_scope", [
+  "run_attempt",
+  "benchmark_version",
+  "run_export"
+]);
+
+export const artifactStorageProviderEnum = pgEnum("artifact_storage_provider", [
+  "cloudflare_r2"
+]);
+
+export const artifactPrefixFamilyEnum = pgEnum("artifact_prefix_family", [
+  "run_artifacts",
+  "run_logs",
+  "run_traces",
+  "run_bundles",
+  "benchmark_source",
+  "benchmark_reports"
+]);
+
+export const artifactLifecycleStateEnum = pgEnum("artifact_lifecycle_state", [
+  "registered",
+  "available",
+  "missing",
+  "quarantined",
+  "deleted"
 ]);
 
 export const users = pgTable(
@@ -247,6 +331,206 @@ export const auditEvents = pgTable(
     createdAtIndex: index("audit_events_created_at_idx").on(table.createdAt),
     eventIdIndex: index("audit_events_event_id_idx").on(table.eventId),
     targetUserIdIndex: index("audit_events_target_user_id_idx").on(table.targetUserId)
+  })
+);
+
+export const runs = pgTable(
+  "runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceRunId: text("source_run_id").notNull(),
+    runKind: runKindEnum("run_kind").default("single_run").notNull(),
+    state: runStateEnum("state").notNull(),
+    verdictClass: evaluationVerdictClassEnum("verdict_class").notNull(),
+    benchmarkPackageId: text("benchmark_package_id").notNull(),
+    benchmarkPackageVersion: text("benchmark_package_version").notNull(),
+    benchmarkPackageDigest: text("benchmark_package_digest").notNull(),
+    benchmarkItemId: text("benchmark_item_id").notNull(),
+    laneId: text("lane_id").notNull(),
+    promptProtocolVersion: text("prompt_protocol_version").notNull(),
+    promptPackageDigest: text("prompt_package_digest").notNull(),
+    runMode: text("run_mode").notNull(),
+    toolProfile: text("tool_profile").notNull(),
+    harnessRevision: text("harness_revision").notNull(),
+    verifierVersion: text("verifier_version").notNull(),
+    providerFamily: text("provider_family").notNull(),
+    authMode: text("auth_mode").notNull(),
+    modelConfigId: text("model_config_id").notNull(),
+    modelSnapshotId: text("model_snapshot_id").notNull(),
+    environmentDigest: text("environment_digest").notNull(),
+    runConfigDigest: text("run_config_digest").notNull(),
+    bundleDigest: text("bundle_digest").notNull(),
+    stopReason: text("stop_reason").notNull(),
+    primaryFailureFamily: text("primary_failure_family"),
+    primaryFailureCode: text("primary_failure_code"),
+    primaryFailureSummary: text("primary_failure_summary"),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    sourceRunIdUnique: uniqueIndex("runs_source_run_id_unique").on(table.sourceRunId),
+    bundleDigestUnique: uniqueIndex("runs_bundle_digest_unique").on(table.bundleDigest),
+    stateIndex: index("runs_state_idx").on(table.state),
+    verdictClassIndex: index("runs_verdict_class_idx").on(table.verdictClass),
+    benchmarkDigestIndex: index("runs_benchmark_digest_idx").on(table.benchmarkPackageDigest),
+    runConfigDigestIndex: index("runs_run_config_digest_idx").on(table.runConfigDigest)
+  })
+);
+
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    sourceJobId: text("source_job_id"),
+    state: jobStateEnum("state").notNull(),
+    verdictClass: evaluationVerdictClassEnum("verdict_class").notNull(),
+    stopReason: text("stop_reason").notNull(),
+    primaryFailureFamily: text("primary_failure_family"),
+    primaryFailureCode: text("primary_failure_code"),
+    primaryFailureSummary: text("primary_failure_summary"),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    runIndex: index("jobs_run_id_idx").on(table.runId),
+    stateIndex: index("jobs_state_idx").on(table.state),
+    sourceJobIdIndex: index("jobs_source_job_id_idx").on(table.sourceJobId)
+  })
+);
+
+export const attempts = pgTable(
+  "attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    sourceAttemptId: text("source_attempt_id").notNull(),
+    state: attemptStateEnum("state").notNull(),
+    verdictClass: evaluationVerdictClassEnum("verdict_class").notNull(),
+    verifierResult: text("verifier_result").notNull(),
+    benchmarkPackageDigest: text("benchmark_package_digest").notNull(),
+    laneId: text("lane_id").notNull(),
+    promptPackageDigest: text("prompt_package_digest").notNull(),
+    promptProtocolVersion: text("prompt_protocol_version").notNull(),
+    providerFamily: text("provider_family").notNull(),
+    authMode: text("auth_mode").notNull(),
+    modelConfigId: text("model_config_id").notNull(),
+    modelSnapshotId: text("model_snapshot_id").notNull(),
+    runMode: text("run_mode").notNull(),
+    toolProfile: text("tool_profile").notNull(),
+    harnessRevision: text("harness_revision").notNull(),
+    verifierVersion: text("verifier_version").notNull(),
+    stopReason: text("stop_reason").notNull(),
+    candidateDigest: text("candidate_digest").notNull(),
+    verdictDigest: text("verdict_digest").notNull(),
+    environmentDigest: text("environment_digest").notNull(),
+    artifactManifestDigest: text("artifact_manifest_digest").notNull(),
+    bundleDigest: text("bundle_digest").notNull(),
+    primaryFailureFamily: text("primary_failure_family"),
+    primaryFailureCode: text("primary_failure_code"),
+    primaryFailureSummary: text("primary_failure_summary"),
+    failureClassification: jsonb("failure_classification").$type<Record<string, unknown> | null>(),
+    verifierVerdict: jsonb("verifier_verdict").$type<Record<string, unknown>>().notNull(),
+    usageSummary: jsonb("usage_summary").$type<Record<string, unknown> | null>(),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    runIndex: index("attempts_run_id_idx").on(table.runId),
+    jobIndex: index("attempts_job_id_idx").on(table.jobId),
+    stateIndex: index("attempts_state_idx").on(table.state),
+    sourceAttemptUnique: uniqueIndex("attempts_source_attempt_id_unique").on(
+      table.sourceAttemptId
+    ),
+    bundleDigestUnique: uniqueIndex("attempts_bundle_digest_unique").on(table.bundleDigest)
+  })
+);
+
+export const artifacts = pgTable(
+  "artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    artifactClassId: artifactClassEnum("artifact_class_id").notNull(),
+    ownerScope: artifactOwnerScopeEnum("owner_scope").notNull(),
+    runId: uuid("run_id").references(() => runs.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id").references(() => attempts.id, { onDelete: "cascade" }),
+    benchmarkVersionId: text("benchmark_version_id"),
+    exportId: text("export_id"),
+    relativePath: text("relative_path").notNull(),
+    requiredForIngest: boolean("required_for_ingest").notNull(),
+    artifactManifestDigest: text("artifact_manifest_digest"),
+    storageProvider: artifactStorageProviderEnum("storage_provider").notNull(),
+    bucketName: text("bucket_name").notNull(),
+    objectKey: text("object_key").notNull(),
+    prefixFamily: artifactPrefixFamilyEnum("prefix_family").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    mediaType: text("media_type"),
+    contentEncoding: text("content_encoding"),
+    providerEtag: text("provider_etag"),
+    lifecycleState: artifactLifecycleStateEnum("lifecycle_state").notNull(),
+    registeredAt: timestamp("registered_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+    missingDetectedAt: timestamp("missing_detected_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
+  },
+  (table) => ({
+    storageLocatorUnique: uniqueIndex("artifacts_storage_locator_unique").on(
+      table.storageProvider,
+      table.bucketName,
+      table.objectKey
+    ),
+    attemptRelativePathUnique: uniqueIndex("artifacts_attempt_relative_path_unique")
+      .on(table.attemptId, table.artifactClassId, table.relativePath)
+      .where(sql`${table.attemptId} is not null`),
+    runIndex: index("artifacts_run_id_idx").on(table.runId),
+    attemptStateIndex: index("artifacts_attempt_id_lifecycle_state_idx").on(
+      table.attemptId,
+      table.lifecycleState
+    ),
+    runClassIndex: index("artifacts_run_id_artifact_class_idx").on(
+      table.runId,
+      table.artifactClassId
+    ),
+    manifestDigestIndex: index("artifacts_manifest_digest_idx").on(
+      table.artifactManifestDigest
+    ),
+    sha256Index: index("artifacts_sha256_idx").on(table.sha256)
   })
 );
 
