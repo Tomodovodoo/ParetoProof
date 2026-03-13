@@ -1,121 +1,193 @@
-# Docker Image Baseline
+# Offline Problem 9 Devbox and Execution Image Policy
 
-This document resolves the MVP image-content scope for the API and worker services. It defines exactly what belongs in each image, what is pinned, and what must stay runtime-only.
+This document defines the MVP image policy for the offline `firstproof/Problem9` slice. The goal is to support one defensible local benchmark kernel now without locking ParetoProof into the wrong long-term worker shape.
 
-## Image policy summary
+The policy intentionally distinguishes between:
 
-- API and worker images use multi-stage Docker builds.
-- Bun is the workspace/build tool. Node.js is the production runtime in both images.
-- Python is not part of the default MVP API or worker base image.
-- Lean and Mathlib are worker-only toolchains and must be pinned.
-- Images must be reproducible and secret-free.
+- a trusted local devbox image used by contributors to materialize the benchmark package, run local harness commands, and use interactive tools such as Codex CLI and `lean-lsp-mcp`
+- a narrower execution image used for benchmark-verdict runs and as the direct parent for later worker images
 
-## API image baseline (`apps/api`)
+That split keeps the local workflow practical while preserving a clean migration path toward non-interactive worker execution.
 
-The API currently deploys to Railway from source, and the repository does not yet carry a checked-in `apps/api/Dockerfile`. This scope still fixes the API image contract now so a later container execution issue inherits a stable baseline instead of reopening runtime choices.
+## Policy summary
 
-### Build stage
+- MVP starts with both a local/offline devbox image and a separate benchmark execution image.
+- The devbox is the default contributor environment for the Problem 9 slice.
+- The execution image is the canonical verdict environment and the base contract for later worker images.
+- Lean `4.22.0` is required as the exact-reproduction lane for `firstproof`.
+- Lean `4.24.0` is required as the main interoperability lane.
+- Lean `4.26.0` and `4.28.0` are experiment-only lanes and are excluded from required CI and canonical verdicts.
+- Python `3.11` is required in the devbox for Aristotle-adapter compatibility, but not in the MVP execution image.
+- Node `22` is the only supported runtime for harness execution.
+- Bun remains a monorepo install and build tool, not the runtime authority for benchmark verdicts.
+- All images must stay secret-free and reproducibility-oriented.
 
-- Base image: `oven/bun:1.3.10`
-- Inputs:
-  - repository `package.json`, `bun.lock`, and workspace package manifests
-  - `apps/api` source
-  - `packages/shared` source
-- Build outputs:
-  - `apps/api/dist`
-  - `packages/shared/dist`
-  - production dependency tree
+## Image targets
 
-### Runtime stage
+The repository should treat the Problem 9 image family as two named targets derived from one pinned build definition:
 
-- Base image: `node:22-bookworm-slim`
-- Runtime process: `node apps/api/dist/index.js`
-- Included files:
-  - built `apps/api/dist`
-  - built `packages/shared/dist`
-  - runtime `package.json` metadata and production dependencies
-- Excluded from runtime image:
-  - Bun, `tsx`, TypeScript, and other build-only tools
-  - TypeScript sources not needed at runtime
-  - test fixtures and local-only scripts
-  - Git metadata and CI-only tooling
+- `problem9-devbox`: broader local image for trusted interactive use
+- `problem9-execution`: narrower runtime image for canonical benchmark runs
 
-## Worker image baseline (`apps/worker`)
+The two targets should share the same pinned base OS family and verifier toolchain policy so a devbox-produced result can be rerun in the execution target without semantic drift caused by a different foundation.
 
-The worker image is execution-oriented and must include the Lean toolchain contract for reproducible formal-math runs.
+## Devbox target (`problem9-devbox`)
 
-### Build stage
+The devbox exists to support trusted local iteration on the offline slice. It is allowed to include interactive tooling that would be inappropriate in a hosted worker image, but those tools still operate under local runtime-mounted auth only.
 
-- Base image: `oven/bun:1.3.10`
-- Inputs:
-  - repository `package.json`, `bun.lock`, and workspace package manifests
-  - `apps/worker` source
-  - `packages/shared` source
-- Build outputs:
-  - `apps/worker/dist`
-  - `packages/shared/dist`
-  - production dependency tree
+### Base and system packages
 
-### Runtime stage
+- base image family: Debian Bookworm with Node `22`
+- required system packages:
+  - `ca-certificates`
+  - `curl`
+  - `git`
+  - `openssh-client`
+  - `python3.11`
+  - `python3.11-venv`
+  - `python3-pip`
+  - `unzip`
+  - `xz-utils`
+  - `zstd`
+  - build helpers only if required by pinned verifier or adapter dependencies
 
-- Base image: `node:22-bookworm-slim`
-- Required system packages:
+### Required toolchains and tools
+
+- Bun `1.3.10` for monorepo install/build commands
+- `elan`
+- Lean `4.22.0`
+- Lean `4.24.0`
+- pinned Lake and Mathlib snapshots resolved from the benchmark package and committed manifests
+- Codex CLI for trusted local interactive runs only
+- `lean-lsp-mcp` for local proof-state inspection and Lean-assisted workflows
+- verifier tooling required to prove:
+  - no `sorry` or `admit`
+  - theorem-target equality checks
+  - axiom allowlist enforcement
+  - compiler-diagnostic gating
+
+### Benchmark package handling
+
+The devbox should be able to materialize the immutable `firstproof/Problem9` benchmark package from a pinned repository snapshot, archive, or digest-defined local source. The package version remains a distinct reproducibility axis from the image digest itself.
+
+The devbox may cache the benchmark package locally for speed, but benchmark inputs must be mounted or copied into the execution sandbox as read-only material. Editing the canonical package in place is not part of the allowed workflow.
+
+## Execution target (`problem9-execution`)
+
+The execution image is the canonical environment for benchmark verdicts. It should stay narrower than the devbox and be suitable for later reuse by local Docker runs, CI verifier jobs, and future worker execution.
+
+### Base and system packages
+
+- base image family: Debian Bookworm slim with Node `22`
+- required system packages:
   - `ca-certificates`
   - `curl`
   - `git`
   - `xz-utils`
   - `zstd`
-- Runtime-installed toolchains:
-  - `elan`
-  - Lean toolchain resolved from `apps/worker/lean-toolchain`
-- Runtime process: `node apps/worker/dist/index.js`
-- Excluded from runtime image by default:
-  - Python
-  - browser runtimes
-  - compiler/build-essential packages not required by the checked-in worker flow
-  - model-specific harness binaries that are not part of the core worker contract
 
-### Lean and Mathlib pinning
+### Required toolchains and runtime contents
 
-- Lean must be installed via `elan` in the worker image.
-- Lean version must be pinned by `apps/worker/lean-toolchain` to an exact stable release string (no floating channels such as `stable` or `nightly`).
-- Mathlib and related Lake dependencies must be pinned by committed lock/manifests (`lake-manifest.json`) to exact revisions.
-- Any change to Lean or Mathlib versions must be committed in source control and called out in the PR summary.
+- `elan`
+- Lean `4.22.0`
+- Lean `4.24.0`
+- pinned Lake and Mathlib state for the selected benchmark package version
+- verifier binaries and scripts needed for strict offline verdicts
+- the immutable benchmark package snapshot for the selected `firstproof/Problem9` version, or a deterministic materialization step that resolves to the same pinned contents before execution starts
+- built TypeScript or Node harness code needed to run the offline loop
 
-## Python decision
+### Explicit exclusions
 
-Python is out of the default MVP worker image baseline.
+- Bun as a runtime dependency
+- Python and Python-based adapter stacks
+- Codex CLI
+- `lean-lsp-mcp`
+- browser runtimes
+- interactive shell tooling that is not required for benchmark execution
 
-- Rationale: current worker control-plane/runtime code is TypeScript-first, and adding Python by default increases attack surface and rebuild cost without a required MVP use case.
-- If a specific benchmark harness later requires Python, add it in a dedicated execution issue with an explicit package/version list.
+This image should be capable of replaying the canonical offline run with machine-authenticated providers or provider stubs, but it should not depend on trusted interactive user auth.
 
-## Bun runtime decision
+## Lean lane policy
 
-Bun remains a build/workspace tool for MVP.
+The Problem 9 slice supports four named lanes, but only two are mandatory:
 
-- Bun is used to install dependencies and build workspace packages.
-- Production containers run with Node.js (`node:22-bookworm-slim`) for runtime compatibility and operational predictability.
+- `lean422_exact`: required canonical lane for exact reproduction of the `firstproof` benchmark environment
+- `lean424_interop`: required canonical lane for main interoperability testing
+- `lean426_experiment`: optional forward-compatibility lane; not required in default CI
+- `lean428_experiment`: optional forward-compatibility lane; not required in default CI
 
-## Never-in-image policy
+The MVP devbox must include `4.22.0` and `4.24.0`. The execution image must include those same two lanes. `4.26.0` and `4.28.0` may be introduced later as opt-in image variants or extra verifier jobs, but they must not become required merge gates for the first offline slice.
 
-The following values must never be present in Dockerfiles, image `ARG`/`ENV`, copied files, or baked config:
+## Python policy
 
-- `DATABASE_URL`
-- `MIGRATION_DATABASE_URL`
-- `ACCESS_PROVIDER_STATE_SECRET`
-- `CF_ACCESS_PORTAL_AUD`, `CF_ACCESS_AUD`, `CF_ACCESS_INTERNAL_AUD`
-- `CF_INTERNAL_API_SERVICE_TOKEN_ID`, `CF_INTERNAL_API_SERVICE_TOKEN_SECRET`
-- `WORKER_BOOTSTRAP_TOKEN`
-- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
-- `GH_TOKEN`, `RAILWAY_API_TOKEN`, `NEON_API_KEY`, `CLOUDFLARE_API_TOKEN`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
-- model-provider API keys
+Python is required only in the devbox target for MVP, with minimum supported version `3.11`.
 
-All secret material is runtime-injected by the hosting platform (Railway for API, Modal for workers) or by local uncommitted `.env` files for development.
+Rationale:
 
-## Change control
+- Aristotle adapter work may require Python in trusted local development before the machine-auth execution path is fully stabilized.
+- forcing Python into the canonical execution image would widen the benchmark-verdict surface before the adapter contract is settled in issue `#43`
+- keeping Python out of the execution image preserves a narrower worker-image baseline for later hosted execution
 
-Any future image baseline change should include:
+If a future non-interactive execution path truly depends on Python, that should be introduced as a follow-up image-policy update with an explicit package list and runtime justification.
 
-- the exact file and version change
-- compatibility impact (API runtime, worker runtime, or both)
-- rollback note (which prior image or toolchain pin remains valid)
+## Node and Bun policy
+
+Node `22` is the only supported runtime for harness execution in both the devbox and the execution target.
+
+Bun is allowed only for repository tooling:
+
+- dependency installation
+- workspace builds
+- local script orchestration where Node runtime compatibility is not the authority being tested
+
+Benchmark verdicts, verifier invocations, and emitted result bundles must be reproducible under the Node-based execution target, not merely under a developer's Bun-powered shell workflow.
+
+## Reproducibility tuple
+
+Every canonical offline Problem 9 result must be attributable to one explicit tuple:
+
+- benchmark package version or digest
+- lane id (`lean422_exact` or `lean424_interop`)
+- Lean toolchain version
+- Mathlib or Lake dependency snapshot
+- verifier version
+- harness revision
+- model configuration id and provider snapshot metadata
+- execution image digest
+
+The devbox digest may be recorded for contributor traceability, but the execution image digest is the authoritative environment identifier for benchmark verdicts.
+
+## Auth and secret boundary
+
+No image may contain:
+
+- provider API keys
+- ChatGPT or Codex auth caches
+- SSH keys
+- GitHub, Railway, Neon, Cloudflare, Modal, or R2 credentials
+- long-lived database credentials
+- environment-specific `.env` files
+- contributor-specific shell history, MCP caches, or editor state
+
+Trusted local Codex or provider auth is allowed only as a runtime mount or local environment injection into the devbox. It is not allowed in committed Dockerfiles, build args, copied files, image layers, or published cache artifacts.
+
+The execution image must assume non-interactive auth only. If a provider cannot be used without a human-authenticated local session, that path belongs in the devbox workflow and is not the canonical benchmark-verdict path.
+
+## Boundary between devbox and later worker images
+
+The devbox is a contributor tool. The execution image is the contract that later worker images inherit.
+
+That means:
+
+- benchmark-verdict rules must be valid in the execution image without relying on devbox-only tools
+- future Modal or container workers may derive from `problem9-execution` or reproduce its contents exactly
+- devbox-only conveniences must not become hidden benchmark dependencies
+
+The migration rule is simple: if removing an interactive tool from the devbox would change benchmark correctness, then that tool belongs in the execution image or the verifier contract instead of remaining a local-only convenience.
+
+## Out of scope
+
+- final provider framework API details from issue `#43`
+- final agent-loop stop conditions from issue `#44`
+- final reproducibility schema fields from issue `#34`
+- hosted worker deployment mechanics beyond the execution-image contract
