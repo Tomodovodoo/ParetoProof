@@ -57,8 +57,10 @@ Local attempt execution:
 
 Trusted-local devbox wrapper:
 
-- use `bun run run:problem9-attempt:trusted-local -- --image paretoproof-problem9-devbox:local --preflight-only` to run the trusted-local host-side plus in-container auth preflight without starting an attempt
-- use `bun run run:problem9-attempt:trusted-local -- --image paretoproof-problem9-devbox:local --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through a local Docker/devbox wrapper
+- use `node infra/scripts/run-problem9-trusted-local-attempt.mjs --preflight-only` to run the repo-owned trusted-local host-side plus in-container auth preflight without starting an attempt
+- use `bun run run:problem9-attempt:trusted-local -- --preflight-only` for the same repo-owned launcher through the root script alias
+- use `node infra/scripts/run-problem9-trusted-local-attempt.mjs --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through the canonical local Docker/devbox wrapper
+- the repo-owned launcher defaults to `--image paretoproof-problem9-devbox:local`; pass `--image <docker-image>` only when you intentionally need a different local devbox tag
 - the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
