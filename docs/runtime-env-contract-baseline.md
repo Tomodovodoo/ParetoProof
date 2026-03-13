@@ -127,7 +127,6 @@ The API runtime requires:
 - `ACCESS_PROVIDER_STATE_SECRET`
 - `CF_ACCESS_TEAM_DOMAIN`
 - one of `CF_ACCESS_PORTAL_AUD` or `CF_ACCESS_AUD`
-- `WORKER_BOOTSTRAP_TOKEN`
 
 The API runtime may optionally use:
 

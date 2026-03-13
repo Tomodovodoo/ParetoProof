@@ -45,8 +45,7 @@ const rawApiRuntimeEnvSchema = z
     DATABASE_URL: requiredTrimmedStringSchema,
     HOST: trimmedOptionalStringSchema,
     NODE_ENV: trimmedOptionalStringSchema,
-    PORT: portSchema,
-    WORKER_BOOTSTRAP_TOKEN: requiredTrimmedStringSchema
+    PORT: portSchema
   })
   .superRefine((env, context) => {
     if (!(env.CF_ACCESS_PORTAL_AUD ?? env.CF_ACCESS_AUD)) {
@@ -69,7 +68,6 @@ export type ApiRuntimeEnv = {
   port: number;
   portalAccessAudience: string;
   teamDomain: string;
-  workerBootstrapToken: string;
 };
 
 function formatApiRuntimeEnvIssues(issues: z.ZodIssue[]) {
@@ -120,8 +118,7 @@ export function parseApiRuntimeEnv(
     DATABASE_URL,
     HOST,
     NODE_ENV,
-    PORT,
-    WORKER_BOOTSTRAP_TOKEN
+    PORT
   } = parsed.data;
 
   const portalAccessAudience = CF_ACCESS_PORTAL_AUD ?? CF_ACCESS_AUD!;
@@ -136,8 +133,7 @@ export function parseApiRuntimeEnv(
     nodeEnv: NODE_ENV,
     port: PORT === undefined ? 3000 : Number(PORT),
     portalAccessAudience,
-    teamDomain: CF_ACCESS_TEAM_DOMAIN,
-    workerBootstrapToken: WORKER_BOOTSTRAP_TOKEN
+    teamDomain: CF_ACCESS_TEAM_DOMAIN
   };
 }
 

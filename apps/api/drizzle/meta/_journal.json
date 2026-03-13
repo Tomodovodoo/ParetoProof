@@ -71,13 +71,6 @@
       "when": 1773404400000,
       "tag": "0009_deep_prodigy",
       "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1773416536825,
-      "tag": "0010_plain_franklin_storm",
-      "breakpoints": true
     }
   ]
 }
