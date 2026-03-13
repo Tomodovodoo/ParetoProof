@@ -34,3 +34,11 @@ Local attempt execution:
 - `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
+
+Trusted-local Docker launcher:
+
+- build the local devbox image with `bun run build:problem9-devbox`
+- run the host-side plus in-container trusted-local preflight only with `bun run run:problem9-attempt:trusted-local -- --preflight-only`
+- launch a trusted-local containerized Problem 9 attempt with `bun run run:problem9-attempt:trusted-local -- --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--image <image>]`
+- the trusted-local launcher resolves host `CODEX_HOME`, requires a readable host `auth.json`, runs host `codex login status`, mounts only `auth.json` read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs the in-container auth preflight, and only then starts `run-problem9-attempt`
+- the launcher always forces `providerFamily=openai` and `authMode=trusted_local_user`; it does not downgrade to `machine_api_key` if trusted-local auth fails

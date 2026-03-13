@@ -27,11 +27,14 @@ export type Problem9AuthPreflight =
     };
 
 export async function preflightProblem9AuthMode(
-  authMode: Problem9AuthMode
+  authMode: Problem9AuthMode,
+  options?: {
+    expectedCodexHome?: string;
+  }
 ): Promise<Problem9AuthPreflight> {
   switch (authMode) {
     case "trusted_local_user":
-      return preflightTrustedLocalUser();
+      return preflightTrustedLocalUser(options?.expectedCodexHome);
     case "machine_api_key":
       return preflightMachineApiKey();
     case "local_stub":
@@ -41,13 +44,26 @@ export async function preflightProblem9AuthMode(
   }
 }
 
-async function preflightTrustedLocalUser(): Promise<Problem9AuthPreflight> {
+async function preflightTrustedLocalUser(
+  expectedCodexHome?: string
+): Promise<Problem9AuthPreflight> {
   const codexHome = resolveCodexHome();
   const authJsonPath = path.join(codexHome, "auth.json");
 
+  if (expectedCodexHome && !pathsEqual(codexHome, expectedCodexHome)) {
+    throw new Error(
+      [
+        "Trusted-local Codex auth preflight resolved an unexpected CODEX_HOME.",
+        `Expected: ${expectedCodexHome}`,
+        `Resolved: ${codexHome}`
+      ].join(" ")
+    );
+  }
+
   await assertReadableFile(authJsonPath, "Trusted-local Codex auth.json is missing or unreadable.");
 
-  const loginStatusResult = await runCommand("codex", ["login", "status"], {
+  const loginStatusInvocation = resolveCodexInvocation(["login", "status"]);
+  const loginStatusResult = await runCommand(loginStatusInvocation.command, loginStatusInvocation.args, {
     env: {
       ...process.env,
       CODEX_HOME: codexHome
@@ -100,6 +116,41 @@ function resolveCodexHome(): string {
   }
 
   return path.join(os.homedir(), ".codex");
+}
+
+export function resolveCodexInvocation(args: string[]): {
+  args: string[];
+  command: string;
+} {
+  if (process.platform !== "win32") {
+    return {
+      args,
+      command: "codex"
+    };
+  }
+
+  const appData = process.env.APPDATA;
+
+  if (!appData) {
+    return {
+      args,
+      command: "codex"
+    };
+  }
+
+  return {
+    args: [path.join(appData, "npm", "node_modules", "@openai", "codex", "bin", "codex.js"), ...args],
+    command: process.execPath
+  };
+}
+
+function pathsEqual(leftPath: string, rightPath: string): boolean {
+  const normalize = (value: string): string => {
+    const resolved = path.resolve(value).replace(/\\/g, "/");
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+
+  return normalize(leftPath) === normalize(rightPath);
 }
 
 async function assertReadableFile(filePath: string, failureMessage: string): Promise<void> {

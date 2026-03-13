@@ -6,7 +6,8 @@ import { z } from "zod";
 import {
   type Problem9AuthMode,
   type Problem9AuthPreflight,
-  preflightProblem9AuthMode
+  preflightProblem9AuthMode,
+  resolveCodexInvocation
 } from "./problem9-auth.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 
@@ -543,24 +544,25 @@ async function generateCandidate(options: {
     options.workspaceRoot,
     `.provider-output-${options.providerTurnsUsed}.txt`
   );
+  const codexInvocation = resolveCodexInvocation([
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "--color",
+    "never",
+    "-C",
+    options.workspaceRoot,
+    "-s",
+    "read-only",
+    "-m",
+    options.providerModel,
+    "-o",
+    outputFilePath,
+    "-"
+  ]);
   const execution = await runCommand(
-    "codex",
-    [
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "--color",
-      "never",
-      "-C",
-      options.workspaceRoot,
-      "-s",
-      "read-only",
-      "-m",
-      options.providerModel,
-      "-o",
-      outputFilePath,
-      "-"
-    ],
+    codexInvocation.command,
+    codexInvocation.args,
     {
       cwd: options.workspaceRoot,
       env: await buildCodexExecutionEnv(
