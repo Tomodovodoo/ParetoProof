@@ -105,6 +105,9 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     }
 
     let cancelled = false;
+    setDetailItem(null);
+    setDetailError(null);
+    setRevocationReason("");
 
     async function loadDetail() {
       const currentUserId = selectedUserId;
@@ -122,7 +125,6 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
 
         setDetailError(null);
         setDetailItem(nextDetail);
-        setRevocationReason("");
       } catch (error) {
         if (cancelled) {
           return;
@@ -169,23 +171,32 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
       return;
     }
 
-    setActionMessage(null);
-    setIsMutating(true);
-    const result = await revokePortalAdminUserRole(apiBaseUrl, detailItem.userId, {
-      reason: revocationReason
-    });
-    setIsMutating(false);
+    try {
+      setActionMessage(null);
+      setIsMutating(true);
+      const result = await revokePortalAdminUserRole(apiBaseUrl, detailItem.userId, {
+        reason: revocationReason
+      });
 
-    if (!result.ok) {
-      setActionMessage(result.message);
-      return;
+      if (!result.ok) {
+        setActionMessage(result.message);
+        return;
+      }
+
+      await refreshUsers();
+      const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, detailItem.userId);
+      setDetailItem(nextDetail);
+      setRevocationReason("");
+      setActionMessage("Active contributor role revoked and current sessions cleared.");
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error
+          ? error.message
+          : "The role revocation could not be completed."
+      );
+    } finally {
+      setIsMutating(false);
     }
-
-    await refreshUsers();
-    const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, detailItem.userId);
-    setDetailItem(nextDetail);
-    setRevocationReason("");
-    setActionMessage("Active contributor role revoked and current sessions cleared.");
   }
 
   if (isLoading) {
