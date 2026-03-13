@@ -305,6 +305,55 @@ test("ingestProblem9RunBundle emits machine-readable auth failures", async (t) =
   );
 });
 
+test("ingestProblem9RunBundle preserves structured API validation issues", async (t) => {
+  const fixture = await buildOfflineIngestBundleFixture({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(fixture.tempRoot, { force: true, recursive: true });
+  });
+
+  await assert.rejects(
+    () =>
+      ingestProblem9RunBundle({
+        accessJwt: "portal-access-token",
+        apiBaseUrl: "https://api.paretoproof.com",
+        bundleRoot: fixture.bundleRoot,
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              error: "invalid_problem9_offline_ingest_payload",
+              issues: [
+                {
+                  message: "Digest mismatch for candidate source",
+                  path: ["bundle", "candidateSource"]
+                }
+              ]
+            }),
+            {
+              headers: {
+                "Content-Type": "application/json"
+              },
+              status: 400
+            }
+          )
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Problem9OfflineIngestCliError);
+      assert.equal(error.result.ok, false);
+      assert.equal(error.result.kind, "unexpected_response");
+      assert.deepEqual(error.result.issues, [
+        {
+          message: "Digest mismatch for candidate source",
+          path: ["bundle", "candidateSource"]
+        }
+      ]);
+      return true;
+    }
+  );
+});
+
 test("ingestProblem9RunBundle keeps compiler output text intact in the request payload", async (t) => {
   const fixture = await buildOfflineIngestBundleFixture({
     result: "pass"

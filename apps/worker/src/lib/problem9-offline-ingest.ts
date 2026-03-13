@@ -37,7 +37,7 @@ export type Problem9OfflineIngestFailure = {
     | "transport_error"
     | "unexpected_response";
   message: string;
-  issues?: string[];
+  issues?: unknown[];
   responseBody?: unknown;
   statusCode?: number;
 };
@@ -237,7 +237,7 @@ export async function ingestProblem9RunBundle(options: {
       typeof responseBody === "object" &&
       "issues" in responseBody &&
       Array.isArray(responseBody.issues)
-        ? responseBody.issues.filter((issue): issue is string => typeof issue === "string")
+        ? responseBody.issues
         : undefined;
     const responseError =
       responseBody &&
