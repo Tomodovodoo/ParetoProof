@@ -52,6 +52,22 @@ The MVP contributor approval path is intentionally manual. While the portal is s
 
 The machine-identity model should stay narrower than the human bootstrap model. GitHub Actions may publish code and images but should not get direct production database credentials. The Railway API runtime should hold only the application credential that serves normal reads and writes, while migrations use a separate credential that never sits in the live API service. Modal workers should authenticate to the backend with their own worker bootstrap identity and then receive per-job scoped tokens rather than broad backend secrets. Cloudflare Access service tokens should exist only for internal API surfaces that need machine callers, and any future R2 access keys should be separated by environment so one compromised non-production principal cannot read or mutate production artifacts.
 
+## Worker bootstrap-token and per-job token flow
+
+The worker authentication model should split machine identity from job authority. A worker deployment starts with one environment-scoped bootstrap credential such as `WORKER_BOOTSTRAP_TOKEN`, injected at runtime through Modal Secrets or a local developer-managed `.env` file. That bootstrap token identifies the worker deployment or pool, not any specific benchmark run, and it must never be baked into the worker image, committed to the repository, or reused as a general API bearer for artifact upload, heartbeat, or result submission.
+
+The bootstrap token exists only to let an idle worker ask the backend for work and prove which worker pool is calling. The intended MVP flow is:
+- the idle worker calls the internal worker claim surface with its bootstrap token and worker metadata
+- the API verifies the bootstrap token against the configured worker identity and environment
+- if no job is available, the API returns no assignment and the worker keeps only its bootstrap credential
+- if a job is assigned, the API returns the job payload together with a short-lived per-job token scoped to that one assignment
+
+The per-job token is the credential that authorizes actual work. It should be bound to exactly one claimed job and carry only the capabilities needed to execute that job: heartbeat, artifact registration or upload coordination, log or trace submission, status transition, and final result submission for that assignment. It should not authorize a second claim, broad worker administration, unrelated run access, or general database reads. If a worker needs storage access for artifacts, the API should mint job-scoped upload material from the per-job token rather than handing the worker a long-lived bucket credential.
+
+Per-job credentials should stay short-lived and renewable only through the normal leased-job flow. A heartbeat from a still-valid worker-job lease may return a fresh short-lived token or extend the current lease window, but cancellation, reassignment, timeout, or explicit lease revocation must invalidate further use of the old token. That keeps long-running jobs possible without turning one issued credential into an unlimited bearer that survives job loss or worker compromise.
+
+Rotation should also stay simple. Bootstrap tokens are rotated at the worker deployment level with overlap only long enough to roll a new worker revision safely. Per-job tokens are rotated naturally by lease renewal and disappear when the job completes. The result is one stable machine bootstrap secret per worker deployment environment and one ephemeral credential per active job, which is the narrowest model that still supports local Docker runs, Modal execution, and future internal worker routes without widening the trust boundary.
+
 At the backend origin, Cloudflare Access is treated as identity proof rather than final authorization. The API validates `Cf-Access-Jwt-Assertion` against the team certs and expected audience, resolves the caller through `user_identities` by the Access subject claim, and only uses email matching as a pending-state fallback. Effective authorization still comes from active `role_grants` rows in Postgres. The human portal Access application now covers both `portal.paretoproof.com` and `api.paretoproof.com/portal/*`, so browser-facing portal API routes stay on the human Access audience instead of borrowing the internal service boundary.
 
 ### Live portal access levels
