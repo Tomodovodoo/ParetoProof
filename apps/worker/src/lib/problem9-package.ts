@@ -4,6 +4,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  rm,
   stat,
   writeFile
 } from "node:fs/promises";
@@ -46,6 +47,13 @@ const requiredRelativePaths = [
 ] as const;
 
 const generatedManifestRelativePath = "benchmark-package.json";
+const ignoredSourcePathSegments = new Set([
+  ".DS_Store",
+  ".git",
+  ".lake",
+  ".tmp",
+  "Thumbs.db"
+]);
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -76,6 +84,7 @@ export async function materializeProblem9Package(
   const outputRoot = path.resolve(options.outputRoot);
   const materializedPackageRoot = path.join(outputRoot, "firstproof", "Problem9");
 
+  await rm(materializedPackageRoot, { force: true, recursive: true });
   await mkdir(materializedPackageRoot, { recursive: true });
 
   for (const relativePath of requiredRelativePaths) {
@@ -173,6 +182,11 @@ async function walkDirectory(
 
   for (const entry of entries) {
     const fullPath = path.join(currentDirectory, entry.name);
+    const normalizedRelativePath = normalizePath(path.relative(root, fullPath));
+
+    if (shouldIgnoreSourcePath(normalizedRelativePath)) {
+      continue;
+    }
 
     if (entry.isDirectory()) {
       await walkDirectory(root, fullPath, results);
@@ -183,7 +197,7 @@ async function walkDirectory(
       throw new Error(`Unsupported non-file package source entry: ${fullPath}`);
     }
 
-    results.push(normalizePath(path.relative(root, fullPath)));
+    results.push(normalizedRelativePath);
   }
 }
 
@@ -225,6 +239,16 @@ function sha256Text(text: string): string {
 
 function normalizePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
+}
+
+function shouldIgnoreSourcePath(relativePath: string): boolean {
+  if (!relativePath) {
+    return false;
+  }
+
+  return normalizePath(relativePath)
+    .split("/")
+    .some((segment) => ignoredSourcePathSegments.has(segment) || segment.startsWith(".#"));
 }
 
 async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
