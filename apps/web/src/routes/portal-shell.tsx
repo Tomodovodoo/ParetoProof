@@ -31,6 +31,12 @@ type PortalShellProps = {
   roles: string[];
 };
 
+type PortalNavGroup = {
+  id: "account" | "benchmark_ops" | "admin";
+  label: string;
+  sections: PortalSectionDefinition[];
+};
+
 const portalRoutePathById = new Map(
   appRouteAccessMatrix.map((entry) => [entry.id, entry.path])
 );
@@ -119,17 +125,17 @@ const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
     "Review contributor requests, resolve stale identities, and leave decision notes that other admins can trust.",
   launch:
-    "Launch benchmark runs from one controlled workflow once execution is wired into the backend.",
+    "Create benchmark execution intent here, then move into run detail once the run exists.",
   overview:
-    "See approval state, run activity, and service posture in one scan.",
+    "Use the landing summary to enter the benchmark-operations cluster without turning overview into a second run index.",
   profile:
     "Confirm your linked sign-in methods, update the supported profile fields, and recover access when something drifts.",
   runs:
-    "Browse recent and historical benchmark runs with enough detail to inspect status quickly.",
+    "Treat Runs as the canonical private index, then move into /runs/:runId for one run's evidence.",
   users:
     "Manage contributor accounts and roles from the same authenticated workspace.",
   workers:
-    "Track worker availability and execution posture once orchestration is live."
+    "Inspect worker and queue posture here, then jump back into run detail for concrete evidence."
 };
 
 function coercePortalRoles(rawRoles: string[]): PortalRole[] {
@@ -138,6 +144,53 @@ function coercePortalRoles(rawRoles: string[]): PortalRole[] {
 
 function getSectionHref(section: PortalSectionDefinition) {
   return buildPortalUrl(portalRoutePathById.get(section.routeId) ?? "/");
+}
+
+function buildRunDetailHref(runId: string) {
+  return buildPortalUrl(`/runs/${encodeURIComponent(runId)}`);
+}
+
+function readActiveRunId(pathname: string) {
+  if (!pathname.startsWith("/runs/")) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(pathname.slice("/runs/".length));
+  } catch {
+    return pathname.slice("/runs/".length);
+  }
+}
+
+function getPortalNavGroups(sections: PortalSectionDefinition[]): PortalNavGroup[] {
+  const accountSections = sections.filter(
+    (section) => section.id === "overview" || section.id === "profile"
+  );
+  const benchmarkOpsSections = sections.filter(
+    (section) =>
+      section.id === "runs" || section.id === "launch" || section.id === "workers"
+  );
+  const adminSections = sections.filter(
+    (section) => section.id === "access_requests" || section.id === "users"
+  );
+
+  return [
+    {
+      id: "account" as const,
+      label: "Portal",
+      sections: accountSections
+    },
+    {
+      id: "benchmark_ops" as const,
+      label: "Benchmark Ops",
+      sections: benchmarkOpsSections
+    },
+    {
+      id: "admin" as const,
+      label: "Admin",
+      sections: adminSections
+    }
+  ].filter((group) => group.sections.length > 0);
 }
 
 function resolveActiveSection(
@@ -171,19 +224,23 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     () => getPortalSectionsForRoles(approvedRoles),
     [approvedRoles]
   );
+  const navGroups = useMemo(() => getPortalNavGroups(sections), [sections]);
+  const helperOnlyView =
+    approvedRoles.length === 1 && approvedRoles[0] === "helper";
   const overviewActions = useMemo(
     () => getPortalActionsForRoles(approvedRoles),
     [approvedRoles]
   );
-  const matchedPortalRoute = findMatchedPortalRoute(window.location.pathname);
+  const visibleOverviewActions = useMemo(
+    () => (helperOnlyView ? overviewActions.filter((action) => action.state === "enabled") : overviewActions),
+    [helperOnlyView, overviewActions]
+  );
+  const pathname = window.location.pathname;
+  const matchedPortalRoute = findMatchedPortalRoute(pathname);
+  const activeRunId = readActiveRunId(pathname);
   const activeSection = useMemo(
-    () =>
-      resolveActiveSection(
-        window.location.pathname,
-        matchedPortalRoute?.id ?? null,
-        sections
-      ),
-    [matchedPortalRoute, sections]
+    () => resolveActiveSection(pathname, matchedPortalRoute?.id ?? null, sections),
+    [matchedPortalRoute, pathname, sections]
   );
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
   const activeRouteId = matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
@@ -193,14 +250,12 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   );
 
   useEffect(() => {
-    const pathname = window.location.pathname;
-
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
       return;
     }
 
     window.history.replaceState({}, "", activeSectionHref);
-  }, [activeSectionHref, matchedPortalRoute]);
+  }, [activeSectionHref, matchedPortalRoute, pathname]);
 
   return (
     <main className="portal-shell">
@@ -241,30 +296,37 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         </div>
 
         <nav className="portal-nav">
-          {sections.map((section) => {
-            const href = getSectionHref(section);
-            const isActive = activeSection?.id === section.id;
+          {navGroups.map((group) => (
+            <div className="portal-nav-group" key={group.id}>
+              {!navigationCollapsed ? (
+                <p className="portal-nav-group-label">{group.label}</p>
+              ) : null}
+              {group.sections.map((section) => {
+                const href = getSectionHref(section);
+                const isActive = activeSection?.id === section.id;
 
-            return (
-              <a
-                aria-current={isActive ? "page" : undefined}
-                className={`portal-nav-link${isActive ? " portal-nav-link-active" : ""}`}
-                href={href}
-                key={section.id}
-                title={section.navLabel}
-              >
-                <span className="portal-nav-link-icon" aria-hidden="true">
-                  <AppIcon name={portalSectionIconById[section.id]} />
-                </span>
-                {!navigationCollapsed ? (
-                  <span className="portal-nav-copy">
-                    <span className="portal-nav-label">{section.navLabel}</span>
-                    <span className="portal-nav-summary">{section.summary}</span>
-                  </span>
-                ) : null}
-              </a>
-            );
-          })}
+                return (
+                  <a
+                    aria-current={isActive ? "page" : undefined}
+                    className={`portal-nav-link${isActive ? " portal-nav-link-active" : ""}`}
+                    href={href}
+                    key={section.id}
+                    title={section.navLabel}
+                  >
+                    <span className="portal-nav-link-icon" aria-hidden="true">
+                      <AppIcon name={portalSectionIconById[section.id]} />
+                    </span>
+                    {!navigationCollapsed ? (
+                      <span className="portal-nav-copy">
+                        <span className="portal-nav-label">{section.navLabel}</span>
+                        <span className="portal-nav-summary">{section.summary}</span>
+                      </span>
+                    ) : null}
+                  </a>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {!navigationCollapsed ? (
@@ -327,18 +389,18 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 <p className="section-tag">Portal overview</p>
                 <h2>Start from the current state of the portal.</h2>
                 <p>
-                  This landing view is where approved contributors should see service
-                  health, recent benchmark activity, and approval posture without decoding
-                  the system first.
+                  Overview is the landing summary for approved contributors. Use it to scan
+                  service posture, spot active benchmark work, and move into Runs, Launch,
+                  or Workers without treating this page like a second queue.
                 </p>
                 {activeFreshnessPolicy ? (
                   <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
                 ) : null}
                 <div className="portal-section-notes">
                   <ul className="portal-note-list">
-                    <li>Keep recent runs, approval posture, and API state visible in one pass.</li>
-                    <li>Make the next useful actions obvious for the current role.</li>
-                    <li>Reserve strong color for state changes, not for every container.</li>
+                    <li>Keep recent runs, approval posture, and service health visible in one pass.</li>
+                    <li>Use Runs as the canonical private index and /runs/:runId as the evidence destination.</li>
+                    <li>Keep Launch for new execution intent and Workers for execution posture only.</li>
                   </ul>
                 </div>
               </article>
@@ -347,7 +409,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 <p className="section-tag">Role-aware controls</p>
                 <h2>Next actions</h2>
                 <div className="portal-action-list">
-                  {overviewActions.map((action) => (
+                  {visibleOverviewActions.map((action) => (
                     <PortalActionRow action={action} key={action.id} />
                   ))}
                 </div>
@@ -358,8 +420,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <article className="portal-panel-table-flat">
                 <div className="portal-panel-header">
                   <div>
-                    <p className="section-tag">Run queue</p>
-                    <h2>Recent benchmark activity</h2>
+                    <p className="section-tag">Benchmark operations</p>
+                    <h2>Recent runs route back into the canonical cluster.</h2>
                   </div>
                   <a className="button button-secondary" href={buildPortalUrl("/runs")}>
                     View all runs
@@ -377,13 +439,15 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                   </div>
                   {overviewRuns.map((row) => (
                     <div className="portal-table-row" key={row.id} role="row">
-                      <span>{row.id}</span>
+                      <span>
+                        <a className="portal-inline-link" href={buildRunDetailHref(row.id)}>
+                          {row.id}
+                        </a>
+                      </span>
                       <span>{row.model}</span>
                       <span>{row.target}</span>
                       <span>{row.branch}</span>
-                      <span
-                        className={`portal-state-badge portal-state-${row.runState}`}
-                      >
+                      <span className={`portal-state-badge portal-state-${row.runState}`}>
                         {formatRunLifecycleState(row.runState)}
                       </span>
                       <span
@@ -419,19 +483,58 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <PortalAccessRequestPanel email={email} />
             ) : activeSection?.id === "profile" ? (
               <PortalProfilePanel email={email} />
+            ) : activeSection?.id === "runs" && activeRunId ? (
+              <section className="portal-workspace-grid">
+                <article className="portal-panel portal-surface-main">
+                  <p className="section-tag">Canonical run detail</p>
+                  <h2>{activeRunId} is routed through `/runs/:runId`.</h2>
+                  <p>
+                    This shell exists so one run has a stable evidence destination. Keep
+                    cross-run filtering and history on `/runs`, and use this route for
+                    timeline, attempt posture, failure details, artifacts, and rerun context.
+                  </p>
+                  {activeFreshnessPolicy ? (
+                    <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+                  ) : null}
+                  <div className="portal-section-notes">
+                    <ul className="portal-note-list">
+                      <li>Use `/runs` for discovery and `/runs/:runId` for concrete evidence.</li>
+                      <li>Run-specific control actions belong here once backend support arrives.</li>
+                      <li>Launch and Workers should link into this detail route rather than duplicating it.</li>
+                    </ul>
+                  </div>
+                </article>
+                <aside className="portal-surface-rail">
+                  <p className="section-tag">Route ownership</p>
+                  <h2>Where to go next</h2>
+                  <div className="portal-action-list">
+                    <PortalActionRow
+                      action={{
+                        description: "Return to the canonical private run index and broader filtered slice.",
+                        id: "review_runs",
+                        routeId: "portal.runs",
+                        state: "enabled",
+                        title: "Back to Runs",
+                        visibleTo: approvedRoles
+                      }}
+                    />
+                  </div>
+                </aside>
+              </section>
             ) : activeSection?.id === "runs" ? (
               <section className="portal-grid portal-grid-stack">
                 <article className="portal-panel portal-results-panel">
                   <div className="portal-panel-header">
                     <div>
-                      <p className="section-tag">Canonical query state</p>
-                      <h2>Run filters and exports now track the approved vocabulary.</h2>
+                      <p className="section-tag">Canonical private index</p>
+                      <h2>Runs is the shared benchmark-operations home for approved users.</h2>
                     </div>
                     <span className="role-chip role-chip-tonal">CSV only</span>
                   </div>
                   <p className="portal-panel-muted">
-                    Lifecycle, verdict, and export fields stay separate here so the portal
-                    does not collapse control-plane state into benchmark outcome labels.
+                    This route is the private index for benchmark runs. Keep filtering,
+                    export state, and run discovery here, then move into `/runs/:runId`
+                    for one run&apos;s evidence and control context.
                   </p>
                   <div className="portal-filter-grid">
                     {portalResultsLifecycleBuckets.map((bucket) => (
@@ -481,7 +584,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                   <div className="portal-panel-header">
                     <div>
                       <p className="section-tag">Run slice</p>
-                      <h2>Current vocabulary example rows</h2>
+                      <h2>Example rows route into canonical detail pages</h2>
                     </div>
                     <a className="button button-secondary" href={buildPortalUrl("/")}>
                       Back to overview
@@ -502,13 +605,15 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     </div>
                     {overviewRuns.map((row) => (
                       <div className="portal-table-row" key={`${row.id}-runs`} role="row">
-                        <span>{row.id}</span>
+                        <span>
+                          <a className="portal-inline-link" href={buildRunDetailHref(row.id)}>
+                            {row.id}
+                          </a>
+                        </span>
                         <span>{row.model}</span>
                         <span>{row.target}</span>
                         <span>{row.branch}</span>
-                        <span
-                          className={`portal-state-badge portal-state-${row.runState}`}
-                        >
+                        <span className={`portal-state-badge portal-state-${row.runState}`}>
                           {formatRunLifecycleState(row.runState)}
                         </span>
                         <span
@@ -522,6 +627,68 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     ))}
                   </div>
                 </article>
+              </section>
+            ) : activeSection?.id === "launch" ? (
+              <section className="portal-workspace-grid">
+                <article className="portal-panel portal-surface-main">
+                  <p className="section-tag">Create run intent</p>
+                  <h2>Launch is the only top-level route for new benchmark execution.</h2>
+                  <p>
+                    Use this workspace to choose an approved benchmark version, pick a run
+                    shape, review budget-sensitive settings, and create the queued run.
+                    It should not become a second run history view or a benchmark-authoring page.
+                  </p>
+                  {activeFreshnessPolicy ? (
+                    <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+                  ) : null}
+                  <div className="portal-section-notes">
+                    <ul className="portal-note-list">
+                      <li>Benchmark selection belongs inside launch, not on a separate math-input route.</li>
+                      <li>Successful submit flows should route back into `/runs/:runId`.</li>
+                      <li>Historical investigation stays in Runs, not here.</li>
+                    </ul>
+                  </div>
+                </article>
+                <aside className="portal-surface-rail">
+                  <p className="section-tag">Cluster map</p>
+                  <h2>Benchmark operations</h2>
+                  <div className="portal-action-list">
+                    {visibleOverviewActions.map((action) => (
+                      <PortalActionRow action={action} key={action.id} />
+                    ))}
+                  </div>
+                </aside>
+              </section>
+            ) : activeSection?.id === "workers" ? (
+              <section className="portal-workspace-grid">
+                <article className="portal-panel portal-surface-main">
+                  <p className="section-tag">Execution posture</p>
+                  <h2>Workers owns queue and worker health, not benchmark history.</h2>
+                  <p>
+                    Use this route to inspect worker availability, queue pressure, lease posture,
+                    and execution incidents. When one run needs evidence, route back into
+                    `/runs/:runId` instead of turning Workers into a second detail console.
+                  </p>
+                  {activeFreshnessPolicy ? (
+                    <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+                  ) : null}
+                  <div className="portal-section-notes">
+                    <ul className="portal-note-list">
+                      <li>Worker posture is collaborator-plus operational context, not the canonical run table.</li>
+                      <li>Use run detail for artifacts, failure evidence, and per-run control context.</li>
+                      <li>Keep benchmark authoring and public reporting out of this route family.</li>
+                    </ul>
+                  </div>
+                </article>
+                <aside className="portal-surface-rail">
+                  <p className="section-tag">Cluster map</p>
+                  <h2>Benchmark operations</h2>
+                  <div className="portal-action-list">
+                    {visibleOverviewActions.map((action) => (
+                      <PortalActionRow action={action} key={action.id} />
+                    ))}
+                  </div>
+                </aside>
               </section>
             ) : (
               <section className="portal-workspace-grid">
@@ -548,7 +715,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                   <p className="section-tag">Available actions</p>
                   <h2>Role-aware controls</h2>
                   <div className="portal-action-list">
-                    {overviewActions.map((action) => (
+                    {visibleOverviewActions.map((action) => (
                       <PortalActionRow action={action} key={action.id} />
                     ))}
                   </div>
@@ -588,4 +755,3 @@ function PortalActionRow({ action }: PortalActionRowProps) {
     </article>
   );
 }
-

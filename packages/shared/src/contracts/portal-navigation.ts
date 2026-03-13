@@ -19,11 +19,11 @@ const minimumRoleByVisibility: Record<PortalSectionVisibility, PortalRole> = {
 export const portalSectionDefinitions = [
   {
     description:
-      "Landing view for recently active runs, approval state, and high-level benchmark health.",
+      "Portal landing summary for current run activity, service posture, and the next route in the benchmark-operations cluster.",
     id: "overview",
     navLabel: "Overview",
     routeId: "portal.home",
-    summary: "Default portal dashboard for every approved portal user.",
+    summary: "Landing summary before deeper benchmark operations.",
     visibility: "approved_helper_or_higher"
   },
   {
@@ -37,29 +37,29 @@ export const portalSectionDefinitions = [
   },
   {
     description:
-      "Read-only run listings and detail links for approved helpers, collaborators, and admins.",
+      "Canonical private run index for approved users, with run detail living under /runs/:runId.",
     id: "runs",
     navLabel: "Runs",
     routeId: "portal.runs",
-    summary: "Shared run history and status surface.",
+    summary: "Primary benchmark-operations workspace for all approved users.",
     visibility: "approved_helper_or_higher"
   },
   {
     description:
-      "Run launch controls for benchmark execution once the caller is trusted to spend compute budget.",
+      "Create-new-run workspace for collaborators and admins once benchmark execution is allowed.",
     id: "launch",
     navLabel: "Launch",
     routeId: "portal.launch-run",
-    summary: "Collaborator and admin run launch workflow.",
+    summary: "Benchmark execution intent and launch preflight.",
     visibility: "approved_collaborator_or_higher"
   },
   {
     description:
-      "Worker fleet and queue posture for contributors who can operate benchmark execution.",
+      "Execution operations view for worker, queue, and lease posture after runs have been launched.",
     id: "workers",
     navLabel: "Workers",
     routeId: "portal.workers",
-    summary: "Collaborator and admin worker overview surface.",
+    summary: "Execution capacity and worker-health workspace.",
     visibility: "approved_collaborator_or_higher"
   },
   {
