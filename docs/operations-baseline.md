@@ -58,6 +58,25 @@ The live backend currently enforces `authenticated_access_identity`, `approved_h
 
 That same split is planned for the internal API path. `api.paretoproof.com/internal/*` will move behind its own Cloudflare Access application and service-token boundary once the worker/control-plane routes exist. Until then, the live API contract is only the health, portal, and admin surface that the Fastify server actually registers.
 
+## Backup and restore ownership matrix
+
+The MVP should treat backup ownership as a per-system responsibility, not one generic disaster-recovery bucket. Each critical data class has one platform that owns its durable copy or version history and one human owner who decides when a restore is appropriate. For now that human owner is the repository owner, even when the underlying restore mechanism is provided by a hosted platform.
+
+- Neon database state:
+  the durable history belongs to Neon through its managed branch history, backup, and restore features rather than through ad hoc SQL dumps committed elsewhere
+  the owner is responsible for deciding whether to restore, which branch or point in time is acceptable, and how to coordinate application compatibility after the restore
+- R2 artifacts and export objects:
+  the durable copy belongs to Cloudflare R2 in the environment-specific buckets, with retention and recovery governed by bucket policy rather than by the git repository
+  the owner is responsible for bucket-level recovery actions, validating that the restored object set matches the intended run or benchmark scope, and recording any manual artifact loss when recovery is not possible
+- GHCR worker images:
+  the durable published image history belongs to GHCR by tag and digest, while the source of truth for rebuilding an image remains the git repository
+  the owner is responsible for package retention, retagging or redeploying a known good digest, and republishing from a known repository revision if a needed image is no longer present in the registry
+- GitHub repository state:
+  the durable source of truth for code, workflow files, issue history, and pull-request history belongs to GitHub
+  the owner is responsible for repository administration, branch and tag protection, and recovery actions that rely on git history, pull requests, releases, or exported repository metadata rather than on application-runtime platforms
+
+The operational rule is to restore from the platform that already owns the canonical copy instead of inventing a second unofficial backup path. Neon restores database state, R2 restores artifacts, GHCR restores image availability, and GitHub restores repository history. Cross-system recovery should only happen when one platform’s restore path is insufficient, and any such exception should be documented explicitly rather than treated as the new default.
+
 R2 should follow one naming scheme across all environments. Private run data lives in `paretoproof-dev-artifacts`, `paretoproof-staging-artifacts`, and `paretoproof-production-artifacts`. Generated bundles that may later need different access policy live in `paretoproof-dev-exports`, `paretoproof-staging-exports`, and `paretoproof-production-exports`. That keeps lifecycle and credentials scoped per environment without creating a separate bucket for every artifact class.
 
 Prefixes stay stable inside those buckets. The artifacts buckets use `runs/<run_id>/artifacts/`, `runs/<run_id>/logs/`, and `runs/<run_id>/traces/` for execution outputs, with any later benchmark-source payloads placed under `benchmarks/<benchmark_version_id>/source/`. The exports buckets use `runs/<run_id>/bundles/` for downloadable run packages and `benchmarks/<benchmark_version_id>/reports/` for published result bundles. Buckets should be created with EU jurisdiction so storage residency matches the current hosting bias, because Cloudflare treats jurisdiction choice as immutable once a bucket exists.
