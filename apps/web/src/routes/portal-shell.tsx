@@ -103,19 +103,19 @@ const overviewTimeline = [
 
 const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
-    "The approval queue, stale identity recovery, and decision notes need to stay calm and readable under real admin load.",
+    "Review contributor requests, resolve stale identities, and leave decision notes that other admins can trust.",
   launch:
-    "Launch should become a checklist-driven control surface once benchmark execution is wired through the backend.",
+    "Launch benchmark runs from one controlled workflow once execution is wired into the backend.",
   overview:
-    "The default view should show benchmark posture, approval state, and recent operational movement in one scan.",
+    "See approval state, run activity, and service posture in one scan.",
   profile:
-    "Profile is where contributors confirm linked identities, edit the small supported fields, and recover broken auth state.",
+    "Confirm your linked sign-in methods, update the supported profile fields, and recover access when something drifts.",
   runs:
-    "Runs should read like an audit log with dense but legible state instead of decorative tiles.",
+    "Browse recent and historical benchmark runs with enough detail to inspect status quickly.",
   users:
-    "This surface will grow into contributor and role management without forcing a shell redesign.",
+    "Manage contributor accounts and roles from the same authenticated workspace.",
   workers:
-    "Worker posture belongs in the same serious shell even before orchestration is fully live."
+    "Track worker availability and execution posture once orchestration is live."
 };
 
 function coercePortalRoles(rawRoles: string[]): PortalRole[] {
@@ -302,22 +302,21 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
             <section className="portal-overview-grid">
               <article className="portal-panel portal-overview-lead">
-                <p className="section-tag">Control plane overview</p>
-                <h2>One stable canvas for auth, approvals, and benchmark posture.</h2>
+                <p className="section-tag">Portal overview</p>
+                <h2>Start from the current state of the portal.</h2>
                 <p>
-                  The shell should read like an operational workspace. Navigation stays
-                  structural on the left, the content pane carries the dense information,
-                  and the visual hierarchy comes from seams and typography rather than
-                  oversized rounded cards.
+                  This landing view is where approved contributors should see service
+                  health, recent benchmark activity, and approval posture without decoding
+                  the system first.
                 </p>
                 {activeFreshnessPolicy ? (
                   <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
                 ) : null}
                 <div className="portal-section-notes">
                   <ul className="portal-note-list">
-                    <li>Keep recent runs, approval posture, and launch state visible in one pass.</li>
-                    <li>Use symbols and labels in the rail instead of two-letter abbreviations.</li>
-                    <li>Reserve strong color for state, not for every container.</li>
+                    <li>Keep recent runs, approval posture, and API state visible in one pass.</li>
+                    <li>Make the next useful actions obvious for the current role.</li>
+                    <li>Reserve strong color for state changes, not for every container.</li>
                   </ul>
                 </div>
               </article>
@@ -399,13 +398,13 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                   ) : null}
                   <div className="portal-section-notes">
                     <p className="portal-panel-muted">
-                      This section already follows the shell, access rules, and freshness
-                      model used across the portal.
+                      This section is ready for live data and task-specific workflows as
+                      backend features come online.
                     </p>
                     <ul className="portal-note-list">
-                      <li>Navigation and route access already reflect the approved role model.</li>
-                      <li>Live data can fill this section without another shell rewrite.</li>
-                      <li>The rail stays fixed while each deeper workflow grows independently.</li>
+                      <li>Navigation and route access already follow the approved role model.</li>
+                      <li>Live data can replace the placeholder content without a shell rewrite.</li>
+                      <li>The rail stays fixed while each deeper workflow grows in place.</li>
                     </ul>
                   </div>
                 </article>
