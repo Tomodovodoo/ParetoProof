@@ -141,7 +141,6 @@ export const workerFailureCodeSchema = z.enum([
   "candidate_file_outside_contract",
   "forbidden_placeholder_token",
   "theorem_reference_missing",
-  "theorem_surface_drift_only",
   "theorem_semantic_mismatch",
   "extra_theorem_assumptions",
   "wrong_theorem_target",
@@ -330,7 +329,7 @@ export const workerResultMessageRequestSchema = z.object({
 });
 
 export const workerTerminalFailureRequestSchema = z.object({
-  artifactIds: z.array(z.string().min(1)),
+  artifactIds: z.array(z.string().min(1)).optional(),
   artifactManifestDigest: sha256Schema.nullable(),
   attemptId: z.string().min(1),
   bundleDigest: sha256Schema.nullable(),

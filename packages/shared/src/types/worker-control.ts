@@ -116,7 +116,6 @@ export type WorkerFailureCode =
   | "candidate_file_outside_contract"
   | "forbidden_placeholder_token"
   | "theorem_reference_missing"
-  | "theorem_surface_drift_only"
   | "theorem_semantic_mismatch"
   | "extra_theorem_assumptions"
   | "wrong_theorem_target"
@@ -300,7 +299,7 @@ export type WorkerResultMessageRequest = {
 };
 
 export type WorkerTerminalFailureRequest = {
-  artifactIds: string[];
+  artifactIds?: string[];
   artifactManifestDigest: string | null;
   attemptId: string;
   bundleDigest: string | null;

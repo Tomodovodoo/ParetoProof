@@ -234,11 +234,6 @@ export const workerTerminalFailureCatalog = [
       "The candidate failed to reference the expected theorem target required by the benchmark package."
   },
   {
-    id: "theorem_surface_drift_only",
-    purpose:
-      "The verifier observed surface drift without the semantic theorem identity required for acceptance."
-  },
-  {
     id: "theorem_semantic_mismatch",
     purpose:
       "The candidate proved a semantically different statement than the benchmark target."
