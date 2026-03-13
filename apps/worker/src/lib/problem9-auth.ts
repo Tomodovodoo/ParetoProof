@@ -3,6 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
+export const trustedLocalCodexContainerHome = "/run/paretoproof/codex-home";
+export const trustedLocalCodexContainerAuthJsonPath = `${trustedLocalCodexContainerHome}/auth.json`;
+
 export const problem9AuthModes = [
   "trusted_local_user",
   "machine_api_key",
@@ -122,11 +125,22 @@ async function runCommand(
   stdout: string;
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      env: options.env,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true
-    });
+    const child =
+      process.platform === "win32"
+        ? spawn(
+            options.env.ComSpec ?? "cmd.exe",
+            ["/d", "/s", "/c", buildWindowsShellCommand(command, args)],
+            {
+              env: options.env,
+              stdio: ["ignore", "pipe", "pipe"],
+              windowsHide: true
+            }
+          )
+        : spawn(command, args, {
+            env: options.env,
+            stdio: ["ignore", "pipe", "pipe"],
+            windowsHide: true
+          });
 
     let stdout = "";
     let stderr = "";
@@ -148,4 +162,16 @@ async function runCommand(
       });
     });
   });
+}
+
+function buildWindowsShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map((argument) => windowsQuote(argument)).join(" ");
+}
+
+function windowsQuote(value: string): string {
+  if (!/[\s"]/u.test(value)) {
+    return value;
+  }
+
+  return `"${value.replace(/"/g, '""')}"`;
 }

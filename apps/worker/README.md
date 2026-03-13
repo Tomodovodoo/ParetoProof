@@ -34,3 +34,12 @@ Local attempt execution:
 - `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
+
+Trusted-local devbox wrapper:
+
+- use `bun run run:problem9-attempt:trusted-local -- --image <docker-image> --preflight-only` to run the trusted-local host-side plus in-container auth preflight without starting an attempt
+- use `bun run run:problem9-attempt:trusted-local -- --image <docker-image> --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through a local Docker/devbox wrapper
+- the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
+- the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
+- benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
+- the supplied Docker image must already include the Codex CLI and the worker runtime; if it cannot run `codex login status`, trusted-local preflight fails before any attempt starts
