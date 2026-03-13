@@ -14,6 +14,7 @@ import {
   type PortalRunsSortId,
   type PortalWorkerIncidentSeverity,
   type PortalWorkersViewResponse,
+  runKindSchema,
   type RunLifecycleState
 } from "@paretoproof/shared";
 import { getApiBaseUrl } from "./api-base-url";
@@ -702,6 +703,15 @@ function parseNullableParam(value: string | null) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function parseQueryField<TValue>(
+  parser: { safeParse: (value: unknown) => { success: true; data: TValue } | { success: false } },
+  value: unknown,
+  fallback: TValue
+) {
+  const result = parser.safeParse(value);
+  return result.success ? result.data : fallback;
+}
+
 function createRunsListResponse(query: PortalRunsListQuery): PortalRunsListResponse {
   const filteredItems = sortPortalRuns(
     localRunItems.filter((item) => matchesPortalRunsQuery(item, query)),
@@ -870,8 +880,13 @@ export function parsePortalRunsQuery(search: string): PortalRunsListQuery {
   const params = new URLSearchParams(search);
   const sortCandidate = params.get("sort");
   const lifecycleCandidate = params.get("lifecycleBucket");
-
-  return portalRunsListQuerySchema.parse({
+  const lifecycleBucket = portalRunsLifecycleBuckets.some((bucket) => bucket.id === lifecycleCandidate)
+    ? (lifecycleCandidate as PortalRunsListQuery["lifecycleBucket"])
+    : null;
+  const sort = portalRunsSortIds.includes((sortCandidate ?? "") as PortalRunsSortId)
+    ? (sortCandidate as PortalRunsSortId)
+    : defaultPortalRunsQuery.sort;
+  const candidateQuery = {
     attemptId: parseNullableParam(params.get("attemptId")),
     authMode: parseNullableParam(params.get("authMode")),
     benchmarkPackageDigest: parseNullableParam(params.get("benchmarkPackageDigest")),
@@ -880,23 +895,38 @@ export function parsePortalRunsQuery(search: string): PortalRunsListQuery {
     failureCode: parseNullableParam(params.get("failureCode")),
     failureFamily: parseNullableParam(params.get("failureFamily")),
     jobId: parseNullableParam(params.get("jobId")),
-    lifecycleBucket: portalRunsLifecycleBuckets.some((bucket) => bucket.id === lifecycleCandidate)
-      ? lifecycleCandidate
-      : null,
-    limit: parseNullableParam(params.get("limit")) ?? defaultPortalRunsQuery.limit,
+    lifecycleBucket,
+    limit: parseQueryField(
+      portalRunsListQuerySchema.shape.limit,
+      parseNullableParam(params.get("limit")) ?? undefined,
+      defaultPortalRunsQuery.limit
+    ),
     modelConfigId: parseNullableParam(params.get("modelConfigId")),
     providerFamily: parseNullableParam(params.get("providerFamily")),
     q: parseNullableParam(params.get("q")),
     runId: parseNullableParam(params.get("runId")),
-    runKind: parseNullableParam(params.get("runKind")),
-    runLifecycle: params.get("runLifecycle") ?? undefined,
+    runKind: parseQueryField(
+      runKindSchema.nullable(),
+      parseNullableParam(params.get("runKind")),
+      defaultPortalRunsQuery.runKind
+    ),
+    runLifecycle: parseQueryField(
+      portalRunsListQuerySchema.shape.runLifecycle,
+      params.get("runLifecycle") ?? undefined,
+      defaultPortalRunsQuery.runLifecycle
+    ),
     runMode: parseNullableParam(params.get("runMode")),
-    sort: portalRunsSortIds.includes((sortCandidate ?? "") as PortalRunsSortId)
-      ? sortCandidate
-      : defaultPortalRunsQuery.sort,
+    sort,
     toolProfile: parseNullableParam(params.get("toolProfile")),
-    verdict: params.get("verdict") ?? undefined
-  });
+    verdict: parseQueryField(
+      portalRunsListQuerySchema.shape.verdict,
+      params.get("verdict") ?? undefined,
+      defaultPortalRunsQuery.verdict
+    )
+  } satisfies PortalRunsListQuery;
+
+  const parsedQuery = portalRunsListQuerySchema.safeParse(candidateQuery);
+  return parsedQuery.success ? parsedQuery.data : defaultPortalRunsQuery;
 }
 
 export function buildPortalRunsQueryString(query: PortalRunsListQuery) {
