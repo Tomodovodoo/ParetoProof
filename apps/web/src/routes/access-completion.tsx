@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppIcon } from "../components/app-icon";
 import {
   buildApiSessionFinalizeUrl,
@@ -11,14 +11,15 @@ type AccessCompletionProps = {
 };
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
-  const finalizeUrl = buildApiSessionFinalizeUrl(redirectPath);
+  const finalizeUrl = buildApiSessionFinalizeUrl();
+  const finalizeFormRef = useRef<HTMLFormElement>(null);
   const retryUrl = new URL(buildAuthUrl(redirectPath));
 
   retryUrl.searchParams.set("handoff", "retry");
 
   useEffect(() => {
-    window.location.replace(finalizeUrl);
-  }, [finalizeUrl]);
+    finalizeFormRef.current?.requestSubmit();
+  }, []);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";
 
@@ -36,10 +37,15 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           Your Cloudflare Access session is active. Finishing the portal handoff now.
         </p>
         <p>
-          If you are not redirected automatically,{" "}
-          <a href={finalizeUrl}>continue to the portal</a> or{" "}
+          If you are not redirected automatically, use the secure handoff below or{" "}
           <a href={retryUrl.toString()}>retry sign in</a>.
         </p>
+        <form ref={finalizeFormRef} action={finalizeUrl} method="post" className="auth-form">
+          {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
+          <button type="submit" className="button">
+            Continue to the portal
+          </button>
+        </form>
       </section>
     </main>
   );

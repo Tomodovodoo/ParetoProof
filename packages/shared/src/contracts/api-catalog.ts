@@ -42,7 +42,7 @@ export const apiEndpointCatalog = [
     method: "POST",
     path: "/portal/session/finalize/submit",
     purpose:
-      "Finish the Cloudflare Access login handoff on the API audience and return the browser to the static portal host."
+      "Finish the Cloudflare Access login handoff with a first-party POST on the API audience and return the browser to the static portal host."
   },
   {
     access: "authenticated_access_identity",

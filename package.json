@@ -23,6 +23,7 @@
     "start:api:railway": "node apps/api/dist/index.js",
     "build:worker": "bun --cwd apps/worker build",
     "build:shared": "bun --cwd packages/shared build",
+    "test:api": "bun run build:shared && bun --cwd apps/api test",
     "typecheck:web": "bun --cwd apps/web typecheck",
     "typecheck:api": "bun --cwd apps/api typecheck",
     "typecheck:worker": "bun --cwd apps/worker typecheck",
