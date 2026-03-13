@@ -121,7 +121,7 @@ async function buildOfflineIngestRequest(options: {
 
   await materializeProblem9PromptPackage({
     attemptId: `attempt-${idSuffix}-1`,
-    authMode: "trusted_local_codex",
+    authMode: "trusted_local_user",
     benchmarkPackageRoot,
     harnessRevision: "harness-test-rev",
     jobId: `job-${idSuffix}-1`,

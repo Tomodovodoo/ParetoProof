@@ -104,7 +104,11 @@ export type Problem9PackageRef = {
 };
 
 export type Problem9PromptPackageManifest = {
-  authMode: "machine" | "trusted_local_codex" | "trusted_local_provider";
+  authMode:
+    | "trusted_local_user"
+    | "machine_api_key"
+    | "machine_oauth"
+    | "local_stub";
   benchmarkItemId: "Problem9";
   benchmarkPackageDigest: string;
   benchmarkPackageId: "firstproof/Problem9";
