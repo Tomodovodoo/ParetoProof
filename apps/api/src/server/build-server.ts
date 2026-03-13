@@ -6,10 +6,11 @@ import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { registerPortalRoutes } from "../routes/portal.js";
-
-function normalizeOrigin(value: string) {
-  return value.replace(/\/+$/, "");
-}
+import {
+  createTrustedMutationOriginHook,
+  isAllowedLocalOrigin,
+  normalizeOrigin
+} from "./trusted-mutation-origin.js";
 
 function readAllowedCorsOrigins() {
   const baselineOrigins = [
@@ -25,10 +26,6 @@ function readAllowedCorsOrigins() {
   return [...new Set([...baselineOrigins, ...(configuredOrigins ?? [])].map(normalizeOrigin))];
 }
 
-function isAllowedLocalOrigin(origin: string) {
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/u.test(origin);
-}
-
 function shouldAllowLocalhostCors() {
   return process.env.CORS_ALLOW_LOCALHOST === "true";
 }
@@ -40,6 +37,7 @@ export async function buildServer() {
   const db = createDbClient();
   const requireAccess = createAccessGuard(db);
   const allowedOrigins = readAllowedCorsOrigins();
+  const allowLocalhostCors = shouldAllowLocalhostCors();
 
   await app.register(cors, {
     credentials: true,
@@ -50,7 +48,6 @@ export async function buildServer() {
       }
 
       const normalizedOrigin = normalizeOrigin(origin);
-      const allowLocalhostCors = shouldAllowLocalhostCors();
 
       if (
         allowedOrigins.includes(normalizedOrigin) ||
@@ -64,6 +61,13 @@ export async function buildServer() {
     }
   });
   await app.register(formbody);
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: allowLocalhostCors,
+      allowedOrigins
+    })
+  );
 
   registerHealthRoute(app);
   registerPortalRoutes(app, db, requireAccess);

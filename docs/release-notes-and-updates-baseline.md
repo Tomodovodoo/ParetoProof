@@ -153,6 +153,7 @@ This prevents external posts from becoming the only discoverable release record.
 
 ## Separation from adjacent scopes
 
+- [product-surface-boundary-baseline.md](product-surface-boundary-baseline.md) defines why canonical updates live on the public apex site instead of in the portal or a separate math surface
 - [public-benchmark-reporting-ux-baseline.md](public-benchmark-reporting-ux-baseline.md) defines how released benchmark numbers and data-quality states are shown on public benchmark pages
 - [results-drilldown-ux-baseline.md](results-drilldown-ux-baseline.md) defines authenticated portal drilldown and export behavior
 - [production-release-checklist-baseline.md](production-release-checklist-baseline.md) defines the internal approval packet and release-governance gate, not the public-facing update UX

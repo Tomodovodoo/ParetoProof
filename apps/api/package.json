@@ -10,7 +10,7 @@
     "db:migrate": "tsx scripts/apply-drizzle-migrations.ts",
     "start": "node dist/index.js",
     "start:railway": "node dist/index.js",
-    "test": "node --import tsx --test test/portal-session-finalize.test.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

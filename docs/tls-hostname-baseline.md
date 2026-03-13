@@ -26,7 +26,7 @@ This document defines the MVP TLS termination owner and Cloudflare proxy mode fo
 - `api.paretoproof.com/internal/*` is an internal route namespace on the existing API hostname, not a second hostname. It inherits the `api.paretoproof.com` TLS and proxy rule.
 - No public worker hostname exists in the MVP. Modal workers are outbound callers and must not receive a browsable or DNS-resolvable public ingress surface.
 - No dedicated staging hostname exists in the MVP. Pre-production validation happens through local development and owner-controlled hosted configuration, not through a second public edge.
-- `math.paretoproof.com` remains out of scope and should not receive DNS or TLS setup during the MVP.
+- `math.paretoproof.com` remains out of scope under `math-surface-mvp-baseline.md` and should not receive DNS or TLS setup during the MVP.
 - A future `ops.paretoproof.com` surface remains deferred. If it is ever introduced, it should start from the same default rule as other admin-sensitive surfaces: Cloudflare-terminated TLS and proxied ingress, not direct origin exposure.
 
 ## Operational implications
