@@ -4,7 +4,9 @@ import {
   asc,
   eq,
   gt,
+  inArray,
   isNull,
+  lte,
   or,
   type SQL
 } from "drizzle-orm";
@@ -50,6 +52,7 @@ const issuedJobTokenScopes = [
 
 type DbClient = ReturnTypeOfCreateDbClient;
 type SelectExecutor = Pick<DbClient, "select">;
+type RequeueExecutor = Pick<DbClient, "select" | "update">;
 
 type CandidateClaimRow = {
   attemptId: string;
@@ -69,6 +72,7 @@ export type InternalWorkerJobAuthContext = {
   attemptRowId: string;
   heartbeatTimeoutSeconds: number;
   jobId: string;
+  jobToken: string;
   jobRowId: string;
   lastEventSequence: number;
   leaseExpiresAt: Date;
@@ -207,6 +211,60 @@ function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
 }
 
+async function requeueExpiredUnstartedLeases(tx: RequeueExecutor, now: Date) {
+  const staleLeases = await tx
+    .select({
+      jobRowId: jobs.id,
+      leaseRowId: workerJobLeases.id,
+      runRowId: runs.id
+    })
+    .from(workerJobLeases)
+    .innerJoin(jobs, eq(workerJobLeases.jobId, jobs.id))
+    .innerJoin(runs, eq(workerJobLeases.runId, runs.id))
+    .innerJoin(attempts, eq(workerJobLeases.attemptId, attempts.id))
+    .where(
+      and(
+        eq(jobs.state, "claimed"),
+        eq(attempts.state, "prepared"),
+        or(eq(runs.state, "queued"), eq(runs.state, "running")),
+        lte(workerJobLeases.leaseExpiresAt, now),
+        isNull(workerJobLeases.revokedAt)
+      )
+    );
+
+  if (staleLeases.length === 0) {
+    return;
+  }
+
+  const leaseRowIds = staleLeases.map((lease) => lease.leaseRowId);
+  const jobRowIds = staleLeases.map((lease) => lease.jobRowId);
+  const runRowIds = [...new Set(staleLeases.map((lease) => lease.runRowId))];
+
+  await tx
+    .update(workerJobLeases)
+    .set({
+      revokedAt: now,
+      updatedAt: now
+    })
+    .where(inArray(workerJobLeases.id, leaseRowIds));
+
+  await tx
+    .update(jobs)
+    .set({
+      state: "queued",
+      updatedAt: now
+    })
+    .where(inArray(jobs.id, jobRowIds));
+
+  await tx
+    .update(runs)
+    .set({
+      state: "queued",
+      updatedAt: now
+    })
+    .where(and(inArray(runs.id, runRowIds), eq(runs.state, "running")));
+}
+
 export function createInternalWorkerControlService(db: DbClient) {
   return {
     async authenticateJobToken(
@@ -256,6 +314,7 @@ export function createInternalWorkerControlService(db: DbClient) {
         attemptState: lease.attemptState,
         heartbeatTimeoutSeconds: lease.heartbeatTimeoutSeconds,
         jobId: lease.jobId,
+        jobToken,
         jobRowId: lease.jobRowId,
         jobState: lease.jobState,
         lastEventSequence: lease.lastEventSequence,
@@ -274,13 +333,14 @@ export function createInternalWorkerControlService(db: DbClient) {
       }
 
       return db.transaction(async (tx) => {
+        const now = new Date();
+        await requeueExpiredUnstartedLeases(tx, now);
         const candidate = await selectNextClaimCandidate(tx);
 
         if (!candidate) {
           return buildIdleClaimResponse();
         }
 
-        const now = new Date();
         const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
         const jobTokenExpiresAt = createJobTokenExpiry(now);
         const { token, tokenHash } = issueJobToken();
@@ -459,13 +519,11 @@ export function createInternalWorkerControlService(db: DbClient) {
 
         const nextLeaseExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
         const nextJobTokenExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
-        const { token, tokenHash } = issueJobToken();
 
         await tx
           .update(workerJobLeases)
           .set({
             jobTokenExpiresAt: nextJobTokenExpiresAt,
-            jobTokenHash: tokenHash,
             lastEventSequence: acknowledgedEventSequence,
             lastHeartbeatAt: now,
             leaseExpiresAt: nextLeaseExpiresAt,
@@ -506,7 +564,7 @@ export function createInternalWorkerControlService(db: DbClient) {
         return {
           acknowledgedEventSequence,
           cancelRequested: false,
-          jobToken: token,
+          jobToken: authContext.jobToken,
           jobTokenExpiresAt: nextJobTokenExpiresAt.toISOString(),
           leaseExpiresAt: nextLeaseExpiresAt.toISOString(),
           leaseStatus: "active"

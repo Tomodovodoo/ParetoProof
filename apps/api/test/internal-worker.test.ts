@@ -8,6 +8,7 @@ import type {
   WorkerHeartbeatResponse
 } from "@paretoproof/shared";
 import { parseApiRuntimeEnv } from "../src/config/runtime.ts";
+import { createInternalWorkerControlService } from "../src/lib/internal-worker-control.ts";
 import { registerInternalWorkerRoutes } from "../src/routes/internal-worker.ts";
 import type { InternalWorkerJobAuthContext } from "../src/lib/internal-worker-control.ts";
 
@@ -69,6 +70,7 @@ function buildJobAuthContext(): InternalWorkerJobAuthContext {
     attemptState: "active",
     heartbeatTimeoutSeconds: 180,
     jobId: "job-1",
+    jobToken: "job-token-1",
     jobRowId: "job-row-1",
     jobState: "running",
     lastEventSequence: 2,
@@ -372,4 +374,182 @@ test("POST /internal/worker/jobs/:jobId/heartbeat rejects invalid job auth", asy
     error: "invalid_worker_job_token"
   });
   assert.equal(heartbeatCalled, false);
+});
+
+test("claim requeues stale unstarted leases before assigning work", async () => {
+  const updateCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        jobRowId: "job-row-1",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      attemptId: "attempt-1",
+                      attemptRowId: "attempt-row-1",
+                      benchmarkItemId: "Problem9",
+                      jobId: "job-1",
+                      jobRowId: "job-row-1",
+                      modelConfigId: "openai/gpt-5",
+                      runId: "run-1",
+                      runKind: "single_run",
+                      runRowId: "run-row-1",
+                      runState: "queued"
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "job-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return {
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-2" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.equal(response.leaseStatus, "active");
+  assert.equal(response.workerJob?.jobId, "job-1");
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].values.state, "queued");
+  assert.equal(updateCalls[2].values.state, "queued");
+  assert.equal(updateCalls[3].values.state, "claimed");
+  assert.equal(updateCalls[4].values.state, "running");
+});
+
+test("heartbeat preserves the current job token while extending the lease", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
+      const tx = {
+        select() {
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      attemptState: "prepared",
+                      heartbeatTimeoutSeconds: 180,
+                      jobState: "claimed",
+                      lastEventSequence: 2,
+                      leaseExpiresAt: new Date(Date.now() + 60_000),
+                      revokedAt: null,
+                      runState: "queued"
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return Promise.resolve();
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.heartbeat(buildHeartbeatRequest(), buildJobAuthContext());
+
+  assert.equal(response.cancelRequested, false);
+  assert.equal(response.jobToken, "job-token-1");
+  assert.ok(response.jobTokenExpiresAt);
+  assert.equal(updateCalls[0].jobTokenHash, undefined);
+  assert.equal(updateCalls[1].state, "running");
+  assert.equal(updateCalls[2].state, "active");
+  assert.equal(updateCalls[3].state, "running");
 });
