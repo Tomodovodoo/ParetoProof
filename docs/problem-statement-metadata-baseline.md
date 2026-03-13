@@ -153,7 +153,7 @@ The metadata contract does not require every item to be publicly redistributable
 - `retired`
 - `superseded`
 
-Only `active` items should be used for benchmark runs. Visibility and hold-out policy stay downstream of this baseline and should be defined separately rather than overloaded into `statementStatus`.
+Only `active` items should be used for benchmark runs. Visibility and hold-out policy stay downstream of this baseline and should be defined separately in [public-disclosure-holdout-policy-baseline.md](public-disclosure-holdout-policy-baseline.md) rather than overloaded into `statementStatus`.
 
 ## Expected output type rule
 
@@ -198,7 +198,7 @@ The benchmark package and later database model may expose additional fields, but
 
 This baseline does not decide:
 
-- public disclosure versus private hold-out policy for benchmark statements
+- the exact disclosure state fields or workflow used to implement [public-disclosure-holdout-policy-baseline.md](public-disclosure-holdout-policy-baseline.md)
 - exact database column names or JSON schema code
 - multilingual statement support
 - public API response shape for listing benchmark items

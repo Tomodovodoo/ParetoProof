@@ -143,7 +143,7 @@ That makes Problem 9 a `public_gold` style benchmark item for MVP.
 - `problem-statement-metadata-baseline.md` defines the canonical statement pair and metadata contract that this policy builds on
 - `lean-formalization-standards-baseline.md` defines how benchmark-owned gold proofs and statement modules should be authored
 - `problem9-benchmark-package-baseline.md` defines where the gold artifact lives inside the immutable package
-- issue `#77` should later define the broader public disclosure and hold-out policy across statements, solutions, and discussion norms
+- [public-disclosure-holdout-policy-baseline.md](public-disclosure-holdout-policy-baseline.md) defines the broader public disclosure and hold-out policy across statements, solutions, and discussion norms
 
 This document is the source of truth for whether a benchmark item must have a gold or reference solution before ParetoProof treats it as an active benchmark target.
 
