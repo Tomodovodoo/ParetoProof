@@ -1,0 +1,12 @@
+[
+  {
+    "name": "ascii-with-tabs",
+    "path": "docs/allowed.txt",
+    "text": "plain text\\twith tabs\\nand visible unicode π"
+  },
+  {
+    "name": "crlf-line-endings",
+    "path": "infra/examples/allowed-crlf.txt",
+    "text": "first line\\r\\nsecond line\\r\\n"
+  }
+]
