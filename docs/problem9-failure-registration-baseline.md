@@ -101,6 +101,7 @@ The MVP baseline fixes these primary failure codes.
 - `provider_refusal`
 - `provider_unsupported_request`
 - `provider_malformed_response`
+- `provider_tool_contract_error`
 - `provider_internal_error`
 
 These codes must align with the provider error model already defined in `provider-framework-api-baseline.md`.
@@ -228,6 +229,7 @@ These failures end the current attempt and should not trigger an automatic whole
 - `proof_policy_failed`
 - `provider_unsupported_request`
 - `provider_malformed_response`
+- `provider_tool_contract_error`
 - `tool_permission_violation`
 - `tool_use_outside_policy`
 - `benchmark_input_digest_mismatch`
@@ -344,9 +346,9 @@ Each failure record must point to concrete evidence. At minimum:
 
 ### Compile
 
-- `verification/compiler-output.txt`
-- `verification/compiler-diagnostics.json`
-- candidate artifact presence or absence
+- candidate artifact presence, absence, or malformed-output marker
+- `verification/compiler-output.txt` when authoritative Lean compilation actually started
+- `verification/compiler-diagnostics.json` when authoritative Lean compilation actually started
 
 ### Verification
 
