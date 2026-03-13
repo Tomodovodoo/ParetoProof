@@ -172,9 +172,9 @@ The request workflow must surface these decision-blocking conditions explicitly:
 - request not found
 - request already reviewed or withdrawn
 - matched user missing for the pending request
-- identity link required before first approval can succeed
 - requested recovery identity already belongs to another user
-- request is stale because the matched user already has an active role
+- an `access_request` needs an existing linked identity before first approval can succeed
+- an `access_request` is stale because the matched user already has an active role
 
 These conditions must appear as visible admin outcomes, not generic transport failures.
 
