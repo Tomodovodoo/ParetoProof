@@ -259,6 +259,7 @@ Every adapter must map failures into one shared error class set:
 - `provider_rate_limited`
 - `provider_transport_error`
 - `provider_timeout`
+- `provider_cancelled`
 - `provider_refusal`
 - `provider_unsupported_request`
 - `provider_malformed_response`
