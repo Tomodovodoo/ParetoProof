@@ -12,7 +12,7 @@ This document resolves the MVP image-content scope for the API and worker servic
 
 ## API image baseline (`apps/api`)
 
-The API currently deploys to Railway from source, but the MVP image contract is fixed now so runtime behavior does not drift if container deployment is enabled.
+The API currently deploys to Railway from source, and the repository does not yet carry a checked-in `apps/api/Dockerfile`. This scope still fixes the API image contract now so a later container execution issue inherits a stable baseline instead of reopening runtime choices.
 
 ### Build stage
 
@@ -35,6 +35,7 @@ The API currently deploys to Railway from source, but the MVP image contract is 
   - built `packages/shared/dist`
   - runtime `package.json` metadata and production dependencies
 - Excluded from runtime image:
+  - Bun, `tsx`, TypeScript, and other build-only tools
   - TypeScript sources not needed at runtime
   - test fixtures and local-only scripts
   - Git metadata and CI-only tooling
@@ -64,7 +65,15 @@ The worker image is execution-oriented and must include the Lean toolchain contr
   - `git`
   - `xz-utils`
   - `zstd`
+- Runtime-installed toolchains:
+  - `elan`
+  - Lean toolchain resolved from `apps/worker/lean-toolchain`
 - Runtime process: `node apps/worker/dist/index.js`
+- Excluded from runtime image by default:
+  - Python
+  - browser runtimes
+  - compiler/build-essential packages not required by the checked-in worker flow
+  - model-specific harness binaries that are not part of the core worker contract
 
 ### Lean and Mathlib pinning
 
