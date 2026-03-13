@@ -75,10 +75,11 @@ Allowed `source.kind` values for MVP are:
 - `paper`
 - `olympiad_archive`
 - `competition_set`
+- `formalized_corpus`
 - `community_curated`
 - `other_published`
 
-The exact list may expand later, but MVP should keep it coarse and explicit instead of allowing arbitrary free-form provenance categories.
+The exact list may expand later, but MVP should keep it coarse and explicit instead of allowing arbitrary free-form provenance categories. The selection and contamination rules behind these source families are defined in `source-problem-selection-baseline.md`.
 
 ## Topic, difficulty, and tag rules
 
