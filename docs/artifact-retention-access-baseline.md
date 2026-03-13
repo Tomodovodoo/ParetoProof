@@ -192,7 +192,7 @@ The artifact row or a closely related policy record should expose these effectiv
 - `publishedAt`
   - nullable timestamp
 - `publicDownloadAllowed`
-  - boolean derived from `effectiveVisibility=public_release` plus `lifecycleState=available`
+  - boolean derived from `effectiveVisibility=public_release`, `lifecycleState=available`, and no active legal-hold or incident restriction
 
 The exact schema implementation may normalize these differently, but the policy semantics should remain stable.
 
@@ -217,10 +217,8 @@ For artifacts needed to understand and verify benchmark outcomes during normal c
 Typical artifacts:
 
 - candidate source
-- verdict records
 - compiler diagnostics
 - verifier outputs
-- environment snapshots
 - usage summaries when present
 
 ### `published_release`
