@@ -50,6 +50,20 @@ const requestStatusPriority: Record<PortalAdminAccessRequestListItem["status"], 
   withdrawn: 3
 };
 
+export function resolveSelectedAccessRequestId(
+  selectedRequestId: string | null,
+  filteredRequests: PortalAdminAccessRequestListItem[]
+) {
+  if (
+    selectedRequestId &&
+    filteredRequests.some((requestItem) => requestItem.id === selectedRequestId)
+  ) {
+    return selectedRequestId;
+  }
+
+  return filteredRequests[0]?.id ?? null;
+}
+
 export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProps) {
   const [detail, setDetail] = useState<PortalAdminAccessRequestDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, RequestDraftState>>({});
@@ -126,9 +140,8 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const selectedRequest = useMemo(
     () =>
       filteredRequests.find((requestItem) => requestItem.id === selectedRequestId) ??
-      requests.find((requestItem) => requestItem.id === selectedRequestId) ??
       null,
-    [filteredRequests, requests, selectedRequestId]
+    [filteredRequests, selectedRequestId]
   );
 
   useEffect(() => {
@@ -168,16 +181,17 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   }, [apiBaseUrl]);
 
   useEffect(() => {
-    if (selectedRequestId) {
-      const requestExists = requests.some((requestItem) => requestItem.id === selectedRequestId);
+    const nextSelectedRequestId = resolveSelectedAccessRequestId(
+      selectedRequestId,
+      filteredRequests
+    );
 
-      if (requestExists) {
-        return;
-      }
+    if (nextSelectedRequestId === selectedRequestId) {
+      return;
     }
 
-    setSelectedRequestId(filteredRequests[0]?.id ?? requests[0]?.id ?? null);
-  }, [filteredRequests, requests, selectedRequestId]);
+    setSelectedRequestId(nextSelectedRequestId);
+  }, [filteredRequests, selectedRequestId]);
 
   useEffect(() => {
     if (!selectedRequestId) {
