@@ -308,22 +308,22 @@ export async function materializeProblem9RunBundle(
 
   assertOutputRootIsNotFilesystemRoot(outputParentRoot);
 
-  await assertNoPathOverlap(benchmarkPackageRoot, bundleRoot, "benchmark package input");
-  await assertNoPathOverlap(promptPackageRoot, bundleRoot, "prompt package input");
-  await assertNoPathOverlap(candidateSourcePath, bundleRoot, "candidate source input");
+  await assertNoPathOverlap(benchmarkPackageRoot, outputParentRoot, "benchmark package input");
+  await assertNoPathOverlap(promptPackageRoot, outputParentRoot, "prompt package input");
+  await assertNoPathOverlap(candidateSourcePath, outputParentRoot, "candidate source input");
   await assertNoPathOverlap(
     compilerDiagnosticsPath,
-    bundleRoot,
+    outputParentRoot,
     "compiler diagnostics input"
   );
-  await assertNoPathOverlap(compilerOutputPath, bundleRoot, "compiler output input");
-  await assertNoPathOverlap(verifierOutputPath, bundleRoot, "verifier output input");
-  await assertNoPathOverlap(environmentInputPath, bundleRoot, "environment input");
+  await assertNoPathOverlap(compilerOutputPath, outputParentRoot, "compiler output input");
+  await assertNoPathOverlap(verifierOutputPath, outputParentRoot, "verifier output input");
+  await assertNoPathOverlap(environmentInputPath, outputParentRoot, "environment input");
 
   if (failureClassificationPath !== null) {
     await assertNoPathOverlap(
       failureClassificationPath,
-      bundleRoot,
+      outputParentRoot,
       "failure classification input"
     );
   }
