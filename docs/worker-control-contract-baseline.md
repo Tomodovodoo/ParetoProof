@@ -168,6 +168,8 @@ Each artifact entry carries:
 
 The response returns the accepted manifest digest and the API-owned artifact ids that later terminal submissions reference. Worker-control should reference artifact roles and digests. It should not duplicate file bodies inside control messages.
 
+The signed upload and download flow that sits around those artifact ids now lives in `artifact-signed-transfer-baseline.md`.
+
 ## Verifier verdict contract
 
 Hosted workers and offline runs must converge on the same structured verifier verdict.

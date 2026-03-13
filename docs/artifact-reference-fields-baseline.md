@@ -297,9 +297,9 @@ Selected summary fields may still be copied into dedicated run-result or evaluat
 
 ## Downstream implications
 
-### Issue `#124`
+### Signed transfer flow
 
-Signed upload and download work should treat:
+The signed upload and download contract now lives in `artifact-signed-transfer-baseline.md`. That flow should treat:
 
 - `storageProvider`
 - `bucketName`
