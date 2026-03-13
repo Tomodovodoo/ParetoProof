@@ -56,7 +56,12 @@ export const problem9PackageRefSchema = z.object({
 });
 
 export const problem9PromptPackageManifestSchema = z.object({
-  authMode: z.enum(["machine", "trusted_local_codex", "trusted_local_provider"]),
+  authMode: z.enum([
+    "trusted_local_user",
+    "machine_api_key",
+    "machine_oauth",
+    "local_stub"
+  ]),
   benchmarkItemId: z.literal("Problem9"),
   benchmarkPackageDigest: sha256Schema,
   benchmarkPackageId: z.literal("firstproof/Problem9"),
