@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   mkdir,
+  readdir,
   readFile,
   realpath,
   rm,
@@ -134,6 +135,7 @@ const promptDefaults = {
   promptProtocolVersion: "problem9-prompt-protocol.v1"
 } as const;
 const benchmarkPackageSourceSchemaVersion = "1";
+const benchmarkPackageManifestRelativePath = "benchmark-package.json";
 const expectedBenchmarkHashPaths = [
   "FirstProof/Problem9/Gold.lean",
   "FirstProof/Problem9/Statement.lean",
@@ -144,6 +146,10 @@ const expectedBenchmarkHashPaths = [
   "lakefile.toml",
   "lean-toolchain",
   "statements/problem.md"
+] as const;
+const requiredBenchmarkPackagePaths = [
+  benchmarkPackageManifestRelativePath,
+  ...expectedBenchmarkHashPaths
 ] as const;
 
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
@@ -328,6 +334,18 @@ async function validateBenchmarkPackageInput(
 ): Promise<void> {
   const declaredHashPaths = Object.keys(benchmarkManifest.hashes).sort();
   const expectedHashPaths = [...expectedBenchmarkHashPaths].sort();
+  const discoveredPaths = await listRelativeFiles(benchmarkPackageRoot);
+  const expectedPaths = [...requiredBenchmarkPackagePaths].sort();
+
+  if (stableStringify(discoveredPaths) !== stableStringify(expectedPaths)) {
+    throw new Error(
+      [
+        "Benchmark package tree does not match the required path set.",
+        `Expected: ${expectedPaths.join(", ")}`,
+        `Found: ${discoveredPaths.join(", ")}`
+      ].join(" ")
+    );
+  }
 
   if (stableStringify(declaredHashPaths) !== stableStringify(expectedHashPaths)) {
     throw new Error(
@@ -374,6 +392,36 @@ async function validateBenchmarkPackageInput(
     throw new Error(
       `Benchmark package digest mismatch: expected ${benchmarkManifest.packageDigest}, got ${recomputedPackageDigest}.`
     );
+  }
+}
+
+async function listRelativeFiles(root: string): Promise<string[]> {
+  const paths: string[] = [];
+  await walkDirectory(root, root, paths);
+  return paths.sort();
+}
+
+async function walkDirectory(
+  root: string,
+  currentDirectory: string,
+  results: string[]
+): Promise<void> {
+  const entries = await readdir(currentDirectory, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(currentDirectory, entry.name);
+    const normalizedRelativePath = normalizePath(path.relative(root, fullPath));
+
+    if (entry.isDirectory()) {
+      await walkDirectory(root, fullPath, results);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      throw new Error(`Unsupported non-file benchmark package entry: ${fullPath}`);
+    }
+
+    results.push(normalizedRelativePath);
   }
 }
 
