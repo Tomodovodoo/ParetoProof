@@ -101,7 +101,15 @@ The MVP should treat backup ownership as a per-system responsibility, not one ge
   the durable source of truth for code, workflow files, issue history, and pull-request history belongs to GitHub
   the owner is responsible for repository administration, branch and tag protection, and recovery actions that rely on git history, pull requests, releases, or exported repository metadata rather than on application-runtime platforms
 
-The operational rule is to restore from the platform that already owns the canonical copy instead of inventing a second unofficial backup path. Neon restores database state, R2 restores artifacts, GHCR restores image availability, and GitHub restores repository history. Cross-system recovery should only happen when one platform’s restore path is insufficient, and any such exception should be documented explicitly rather than treated as the new default.
+The operational rule is to restore from the platform that already owns the canonical copy instead of inventing a second unofficial backup path. Neon restores database state, R2 restores artifacts, GHCR restores image availability, and GitHub restores repository history. Cross-system recovery should only happen when one platform's restore path is insufficient, and any such exception should be documented explicitly rather than treated as the new default.
+
+## Neon backup and restore ownership
+
+Neon is the system that provides database-side durability for ParetoProof. Branch history, managed backup behavior, and restore or recovery operations should come from Neon itself rather than from repository-managed SQL dump files or informal workstation exports. The project should treat Neon as the canonical place where database recoverability lives.
+
+The project owner still owns the restore decision and the application consequences. If a restore is needed, the owner decides which branch or recovery point is acceptable, whether the restore should happen in place or in a validation branch first, and whether the current API and migration state remain compatible with the recovered database state. Neon can restore the stored data, but it does not decide whether that recovered state is safe for the live auth, approval, and benchmark-control-plane contract.
+
+After a Neon restore, the project side is still responsible for follow-through: validating schema compatibility, checking that the API can boot and serve authenticated traffic, reissuing or rotating any branch-scoped credentials that should no longer remain valid, and recording what was restored and why. In short, Neon owns the database recovery mechanism, while ParetoProof still owns restore approval, application validation, and the incident record around that recovery.
 
 R2 should follow one naming scheme across all environments. Private run data lives in `paretoproof-dev-artifacts`, `paretoproof-staging-artifacts`, and `paretoproof-production-artifacts`. Generated bundles that may later need different access policy live in `paretoproof-dev-exports`, `paretoproof-staging-exports`, and `paretoproof-production-exports`. That keeps lifecycle and credentials scoped per environment without creating a separate bucket for every artifact class.
 
