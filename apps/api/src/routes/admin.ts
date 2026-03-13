@@ -18,7 +18,7 @@ import {
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   accessRequests,
@@ -699,7 +699,13 @@ export function registerAdminRoutes(
             .set({
               revokedAt: now
             })
-            .where(and(eq(sessions.userId, targetUser.id), isNull(sessions.revokedAt)));
+            .where(
+              and(
+                eq(sessions.userId, targetUser.id),
+                gt(sessions.expiresAt, now),
+                isNull(sessions.revokedAt)
+              )
+            );
         }
 
         await tx.insert(auditEvents).values({

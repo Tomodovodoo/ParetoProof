@@ -1226,7 +1226,9 @@ test("POST /portal/admin/users/:id/revoke-role revokes the role, invalidates act
                   if (table === sessions) {
                     const patch = value as Partial<typeof sessions.$inferSelect>;
                     userDetail.sessions = userDetail.sessions.map((sessionRow) =>
-                      sessionRow.revokedAt === null
+                      sessionRow.revokedAt === null &&
+                      patch.revokedAt &&
+                      sessionRow.expiresAt.getTime() > patch.revokedAt.getTime()
                         ? {
                             ...sessionRow,
                             revokedAt: patch.revokedAt ?? null
@@ -1265,6 +1267,8 @@ test("POST /portal/admin/users/:id/revoke-role revokes the role, invalidates act
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().item.activeRole, null);
   assert.equal(response.json().item.sessionPosture.activeSessionCount, 0);
+  assert.notEqual(userDetail.sessions[0]?.revokedAt, null);
+  assert.equal(userDetail.sessions[1]?.revokedAt, null);
   assert.equal(insertedAuditEvents[0]?.eventId, "role_grant.revoked");
   assert.equal(
     (insertedAuditEvents[0]?.payload as { revokedSessionCount: number }).revokedSessionCount,
