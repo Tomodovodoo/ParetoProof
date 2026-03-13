@@ -103,6 +103,7 @@ type LeaseSession = {
   currentProgressMessage: string | null;
   currentToken: string;
   heartbeatLoop: Promise<void>;
+  heartbeatStopController: AbortController;
   job: ActiveWorkerJob;
   leaseTermination: LeaseTermination | null;
   nextSequence: number;
@@ -190,172 +191,202 @@ async function runClaimedJob(
   await rm(attemptRoot, { force: true, recursive: true });
   await mkdir(attemptRoot, { recursive: true });
   const session = startLeaseSession(job, apiClient, dependencies);
+  let attemptResult: Problem9AttemptResult | null = null;
+  let bundle: BundleSubmissionData | null = null;
 
   try {
-    setLeaseProgress(session, "prepare", "Materializing canonical Problem 9 inputs");
-    const benchmarkPackage = await materializeProblem9Package({ outputRoot: packageOutputRoot });
-    throwIfLeaseTerminated(session);
-    const laneId = await resolvePrimaryLaneId(benchmarkPackage.outputRoot);
-    const providerFamily = resolveProviderFamily(job.target, options.providerFamily);
+    try {
+      setLeaseProgress(session, "prepare", "Materializing canonical Problem 9 inputs");
+      const benchmarkPackage = await materializeProblem9Package({ outputRoot: packageOutputRoot });
+      throwIfLeaseTerminated(session);
+      const laneId = await resolvePrimaryLaneId(benchmarkPackage.outputRoot);
+      const providerFamily = resolveProviderFamily(job.target, options.providerFamily);
 
-    await materializeProblem9PromptPackage({
-      ...getDefaultProblem9PromptPackageOptions(),
-      attemptId: job.attemptId,
-      authMode: options.authMode,
-      benchmarkPackageRoot: benchmarkPackage.outputRoot,
-      harnessRevision: await resolveHarnessRevision(options.harnessRevision),
-      jobId: job.jobId,
-      laneId,
-      modelConfigId: job.target.modelConfigId,
-      outputRoot: promptPackageRoot,
-      passKCount: null,
-      passKIndex: null,
-      providerFamily,
-      runId: job.runId,
-      runMode: "bounded_agentic_attempt",
-      toolProfile: "workspace_edit_limited"
-    });
-    throwIfLeaseTerminated(session);
+      await materializeProblem9PromptPackage({
+        ...getDefaultProblem9PromptPackageOptions(),
+        attemptId: job.attemptId,
+        authMode: options.authMode,
+        benchmarkPackageRoot: benchmarkPackage.outputRoot,
+        harnessRevision: await resolveHarnessRevision(options.harnessRevision),
+        jobId: job.jobId,
+        laneId,
+        modelConfigId: job.target.modelConfigId,
+        outputRoot: promptPackageRoot,
+        passKCount: null,
+        passKIndex: null,
+        providerFamily,
+        runId: job.runId,
+        runMode: "bounded_agentic_attempt",
+        toolProfile: "workspace_edit_limited"
+      });
+      throwIfLeaseTerminated(session);
 
-    await appendEvent(session, apiClient, dependencies, {
-      details: { benchmarkItemId: resolveBenchmarkItemId(job.target), modelConfigId: job.target.modelConfigId, runKind: job.target.runKind },
-      eventKind: "attempt_started",
-      phase: "prepare",
-      summary: "Claimed a hosted Problem 9 assignment and materialized prompt inputs."
-    });
+      await appendEvent(session, apiClient, dependencies, {
+        details: { benchmarkItemId: resolveBenchmarkItemId(job.target), modelConfigId: job.target.modelConfigId, runKind: job.target.runKind },
+        eventKind: "attempt_started",
+        phase: "prepare",
+        summary: "Claimed a hosted Problem 9 assignment and materialized prompt inputs."
+      });
 
-    setLeaseProgress(session, "generate", "Executing the shared Problem 9 attempt runner");
-    const attemptResult = await dependencies.executeAttempt({
-      authMode: options.authMode,
-      benchmarkPackageRoot: benchmarkPackage.outputRoot,
-      outputRoot,
-      promptPackageRoot,
-      providerFamily,
-      providerModel: resolveProviderModel(job.target, options.providerModel),
-      signal: session.abortController.signal,
-      stubScenario: "exact_canonical",
-      workspaceRoot
-    });
-    throwIfLeaseTerminated(session);
+      setLeaseProgress(session, "generate", "Executing the shared Problem 9 attempt runner");
+      attemptResult = await dependencies.executeAttempt({
+        authMode: options.authMode,
+        benchmarkPackageRoot: benchmarkPackage.outputRoot,
+        outputRoot,
+        promptPackageRoot,
+        providerFamily,
+        providerModel: resolveProviderModel(job.target, options.providerModel),
+        signal: session.abortController.signal,
+        stubScenario: "exact_canonical",
+        workspaceRoot
+      });
+      throwIfLeaseTerminated(session);
 
-    setLeaseProgress(session, "finalize", "Registering artifacts and terminal state");
-    const bundle = await loadBundleSubmissionData(attemptResult.outputRoot);
+      setLeaseProgress(session, "finalize", "Registering artifacts and terminal state");
+      bundle = await loadBundleSubmissionData(attemptResult.outputRoot);
+    } catch (error) {
+      if (session.leaseTermination) {
+        dependencies.logInfo({ message: "lease_terminated", data: { attemptId: job.attemptId, jobId: job.jobId, leaseId: job.leaseId, leaseStatus: session.leaseTermination.type } });
+        return buildLeaseTerminationOutcome(session.leaseTermination);
+      }
 
-    await appendEvent(session, apiClient, dependencies, {
-      details: { artifactManifestDigest: bundle.artifactManifestDigest, bundleDigest: bundle.bundleDigest, status: bundle.runBundleStatus, stopReason: bundle.stopReason },
-      eventKind: "bundle_finalized",
-      phase: "finalize",
-      summary: `Finalized the canonical Problem 9 bundle with stopReason=${bundle.stopReason}.`
-    });
+      const fallbackBundle = bundle ?? await tryLoadBundleSubmissionData(outputRoot);
+      const fallbackFailure = classifyHostedLoopFailure(error);
+      const failure = fallbackBundle?.verdict.primaryFailure ?? fallbackFailure;
 
-    const artifactManifestResponse = await apiClient.submitArtifactManifest(session.currentToken, {
-      artifactManifestDigest: bundle.artifactManifestDigest,
-      artifacts: bundle.artifacts,
-      attemptId: job.attemptId,
-      jobId: job.jobId,
-      leaseId: job.leaseId,
-      recordedAt: dependencies.now().toISOString()
-    });
+      try {
+        const failureResponse = await apiClient.submitFailure(session.currentToken, {
+          artifactIds: [],
+          artifactManifestDigest: fallbackBundle?.artifactManifestDigest ?? null,
+          attemptId: job.attemptId,
+          bundleDigest: fallbackBundle?.bundleDigest ?? null,
+          candidateDigest: fallbackBundle?.candidateDigest ?? null,
+          failedAt: dependencies.now().toISOString(),
+          failure,
+          jobId: job.jobId,
+          leaseId: job.leaseId,
+          runId: job.runId,
+          summary: error instanceof Error ? error.message : String(error),
+          terminalState: failure.terminality === "cancelled" ? "cancelled" : "failed",
+          verifierVerdict: fallbackBundle?.verdict ?? null,
+          verdictDigest: fallbackBundle?.verdictDigest ?? null
+        });
 
-    await appendEvent(session, apiClient, dependencies, {
-      details: { artifactCount: artifactManifestResponse.artifacts.length, artifactManifestDigest: artifactManifestResponse.artifactManifestDigest },
-      eventKind: "artifact_manifest_written",
-      phase: "finalize",
-      summary: "Registered the canonical Problem 9 artifact manifest."
-    });
+        dependencies.logInfo({ message: "terminal_failure", data: { attemptState: failureResponse.attemptState, failureCode: failure.failureCode, jobId: job.jobId, runId: job.runId } });
+        return { status: "failed", terminalSummary: failure.failureCode };
+      } catch (submitError) {
+        const leaseTerminationOutcome = getLeaseLossSubmissionOutcome(session, submitError, dependencies);
+        if (leaseTerminationOutcome) {
+          return leaseTerminationOutcome;
+        }
 
-    const artifactIds = artifactManifestResponse.artifacts.map(
-      (artifact: WorkerArtifactManifestResponse["artifacts"][number]) => artifact.artifactId
-    );
+        throw submitError;
+      }
+    }
 
-    if (attemptResult.result === "pass") {
-      const resultResponse = await apiClient.submitResult(session.currentToken, {
+    if (attemptResult === null || bundle === null) {
+      throw new Error("Hosted worker attempt did not produce a terminal bundle.");
+    }
+
+    try {
+      await appendEvent(session, apiClient, dependencies, {
+        details: {
+          artifactManifestDigest: bundle.artifactManifestDigest,
+          bundleDigest: bundle.bundleDigest,
+          status: bundle.runBundleStatus,
+          stopReason: bundle.stopReason
+        },
+        eventKind: "bundle_finalized",
+        phase: "finalize",
+        summary: `Finalized the canonical Problem 9 bundle with stopReason=${bundle.stopReason}.`
+      });
+
+      const artifactManifestResponse = await apiClient.submitArtifactManifest(session.currentToken, {
+        artifactManifestDigest: bundle.artifactManifestDigest,
+        artifacts: bundle.artifacts,
+        attemptId: job.attemptId,
+        jobId: job.jobId,
+        leaseId: job.leaseId,
+        recordedAt: dependencies.now().toISOString()
+      });
+
+      await appendEvent(session, apiClient, dependencies, {
+        details: {
+          artifactCount: artifactManifestResponse.artifacts.length,
+          artifactManifestDigest: artifactManifestResponse.artifactManifestDigest
+        },
+        eventKind: "artifact_manifest_written",
+        phase: "finalize",
+        summary: "Registered the canonical Problem 9 artifact manifest."
+      });
+
+      const artifactIds = artifactManifestResponse.artifacts.map(
+        (artifact: WorkerArtifactManifestResponse["artifacts"][number]) => artifact.artifactId
+      );
+
+      if (attemptResult.result === "pass") {
+        const resultResponse = await apiClient.submitResult(session.currentToken, {
+          artifactIds,
+          artifactManifestDigest: bundle.artifactManifestDigest,
+          attemptId: job.attemptId,
+          bundleDigest: bundle.bundleDigest,
+          candidateDigest: bundle.candidateDigest,
+          completedAt: dependencies.now().toISOString(),
+          environmentDigest: bundle.environmentDigest,
+          jobId: job.jobId,
+          leaseId: job.leaseId,
+          offlineBundleCompatible: true,
+          runId: job.runId,
+          summary: `Problem 9 attempt succeeded with stopReason=${bundle.stopReason}.`,
+          usageSummary: { compileRepairCount: attemptResult.compileRepairCount, providerTurnsUsed: attemptResult.providerTurnsUsed, verifierRepairCount: attemptResult.verifierRepairCount },
+          verifierVerdict: bundle.verdict,
+          verdictDigest: bundle.verdictDigest
+        });
+
+        dependencies.logInfo({ message: "terminal_result", data: { attemptState: resultResponse.attemptState, jobId: job.jobId, runId: job.runId, runState: resultResponse.runState } });
+        return { status: "succeeded", terminalSummary: resultResponse.runState };
+      }
+
+      const failureClassification = bundle.verdict.primaryFailure;
+      if (!failureClassification) {
+        throw new Error("Failing hosted run bundle was missing primaryFailure.");
+      }
+
+      const failureResponse = await apiClient.submitFailure(session.currentToken, {
         artifactIds,
         artifactManifestDigest: bundle.artifactManifestDigest,
         attemptId: job.attemptId,
         bundleDigest: bundle.bundleDigest,
         candidateDigest: bundle.candidateDigest,
-        completedAt: dependencies.now().toISOString(),
-        environmentDigest: bundle.environmentDigest,
+        failedAt: dependencies.now().toISOString(),
+        failure: failureClassification,
         jobId: job.jobId,
         leaseId: job.leaseId,
-        offlineBundleCompatible: true,
         runId: job.runId,
-        summary: `Problem 9 attempt succeeded with stopReason=${bundle.stopReason}.`,
-        usageSummary: { compileRepairCount: attemptResult.compileRepairCount, providerTurnsUsed: attemptResult.providerTurnsUsed, verifierRepairCount: attemptResult.verifierRepairCount },
+        summary: `Problem 9 attempt failed with stopReason=${bundle.stopReason}.`,
+        terminalState: failureClassification.terminality === "cancelled" ? "cancelled" : "failed",
         verifierVerdict: bundle.verdict,
         verdictDigest: bundle.verdictDigest
       });
 
-      dependencies.logInfo({ message: "terminal_result", data: { attemptState: resultResponse.attemptState, jobId: job.jobId, runId: job.runId, runState: resultResponse.runState } });
-      return { status: "succeeded", terminalSummary: resultResponse.runState };
-    }
-
-    const failureClassification = bundle.verdict.primaryFailure;
-    if (!failureClassification) {
-      throw new Error("Failing hosted run bundle was missing primaryFailure.");
-    }
-
-    const failureResponse = await apiClient.submitFailure(session.currentToken, {
-      artifactIds,
-      artifactManifestDigest: bundle.artifactManifestDigest,
-      attemptId: job.attemptId,
-      bundleDigest: bundle.bundleDigest,
-      candidateDigest: bundle.candidateDigest,
-      failedAt: dependencies.now().toISOString(),
-      failure: failureClassification,
-      jobId: job.jobId,
-      leaseId: job.leaseId,
-      runId: job.runId,
-      summary: `Problem 9 attempt failed with stopReason=${bundle.stopReason}.`,
-      terminalState: failureClassification.terminality === "cancelled" ? "cancelled" : "failed",
-      verifierVerdict: bundle.verdict,
-      verdictDigest: bundle.verdictDigest
-    });
-
-    dependencies.logInfo({ message: "terminal_failure", data: { attemptState: failureResponse.attemptState, failureCode: failureClassification.failureCode, jobId: job.jobId, runId: job.runId } });
-    return { status: "failed", terminalSummary: failureClassification.failureCode };
-  } catch (error) {
-    if (session.leaseTermination) {
-      dependencies.logInfo({ message: "lease_terminated", data: { attemptId: job.attemptId, jobId: job.jobId, leaseId: job.leaseId, leaseStatus: session.leaseTermination.type } });
-      return { status: session.leaseTermination.type === "expired" ? "lease_expired" : "lease_lost", terminalSummary: session.leaseTermination.summary };
-    }
-
-    const bundle = await tryLoadBundleSubmissionData(outputRoot);
-    const fallbackFailure = classifyHostedLoopFailure(error);
-    const failure = bundle?.verdict.primaryFailure ?? fallbackFailure;
-
-    try {
-      const failureResponse = await apiClient.submitFailure(session.currentToken, {
-        artifactIds: [],
-        artifactManifestDigest: bundle?.artifactManifestDigest ?? null,
-        attemptId: job.attemptId,
-        bundleDigest: bundle?.bundleDigest ?? null,
-        candidateDigest: bundle?.candidateDigest ?? null,
-        failedAt: dependencies.now().toISOString(),
-        failure,
-        jobId: job.jobId,
-        leaseId: job.leaseId,
-        runId: job.runId,
-        summary: error instanceof Error ? error.message : String(error),
-        terminalState: failure.terminality === "cancelled" ? "cancelled" : "failed",
-        verifierVerdict: bundle?.verdict ?? null,
-        verdictDigest: bundle?.verdictDigest ?? null
-      });
-
-      dependencies.logInfo({ message: "terminal_failure", data: { attemptState: failureResponse.attemptState, failureCode: failure.failureCode, jobId: job.jobId, runId: job.runId } });
-    } catch (submitError) {
-      if (submitError instanceof WorkerControlClientError && submitError.code === "worker_lease_not_active") {
-        dependencies.logInfo({ message: "lease_lost_during_failure_submit", data: { attemptId: job.attemptId, jobId: job.jobId, leaseId: job.leaseId } });
-        return { status: "lease_lost", terminalSummary: "Worker lease was lost before failure submission completed." };
+      dependencies.logInfo({ message: "terminal_failure", data: { attemptState: failureResponse.attemptState, failureCode: failureClassification.failureCode, jobId: job.jobId, runId: job.runId } });
+      return { status: "failed", terminalSummary: failureClassification.failureCode };
+    } catch (error) {
+      if (session.leaseTermination) {
+        dependencies.logInfo({ message: "lease_terminated", data: { attemptId: job.attemptId, jobId: job.jobId, leaseId: job.leaseId, leaseStatus: session.leaseTermination.type } });
+        return buildLeaseTerminationOutcome(session.leaseTermination);
       }
 
-      throw submitError;
-    }
+      const leaseTerminationOutcome = getLeaseLossSubmissionOutcome(session, error, dependencies);
+      if (leaseTerminationOutcome) {
+        return leaseTerminationOutcome;
+      }
 
-    return { status: "failed", terminalSummary: failure.failureCode };
+      throw error;
+    }
   } finally {
     session.stopHeartbeatLoop = true;
+    session.heartbeatStopController.abort();
     await session.heartbeatLoop;
   }
 }
@@ -376,7 +407,18 @@ function buildClaimRequest(options: RunWorkerClaimLoopOptions): WorkerClaimReque
 }
 
 function startLeaseSession(job: ActiveWorkerJob, apiClient: WorkerControlApiClient, dependencies: ClaimLoopDependencies): LeaseSession {
-  const session: LeaseSession = { abortController: new AbortController(), currentPhase: "prepare", currentProgressMessage: "Preparing worker assignment", currentToken: job.jobToken, heartbeatLoop: Promise.resolve(), job, leaseTermination: null, nextSequence: 1, stopHeartbeatLoop: false };
+  const session: LeaseSession = {
+    abortController: new AbortController(),
+    currentPhase: "prepare",
+    currentProgressMessage: "Preparing worker assignment",
+    currentToken: job.jobToken,
+    heartbeatLoop: Promise.resolve(),
+    heartbeatStopController: new AbortController(),
+    job,
+    leaseTermination: null,
+    nextSequence: 1,
+    stopHeartbeatLoop: false
+  };
   session.heartbeatLoop = runHeartbeatLoop(session, apiClient, dependencies);
   return session;
 }
@@ -385,8 +427,8 @@ async function runHeartbeatLoop(session: LeaseSession, apiClient: WorkerControlA
   const intervalMs = Math.max(1, session.job.heartbeatIntervalSeconds) * 1000;
 
   while (!session.stopHeartbeatLoop) {
-    await dependencies.sleep(intervalMs);
-    if (session.stopHeartbeatLoop) return;
+    const shouldContinue = await waitForHeartbeatInterval(intervalMs, dependencies, session.heartbeatStopController.signal);
+    if (!shouldContinue || session.stopHeartbeatLoop) return;
 
     try {
       const heartbeatResponse = await apiClient.heartbeat(session.currentToken, session.job.jobId, {
@@ -436,6 +478,53 @@ function setLeaseProgress(session: LeaseSession, phase: WorkerExecutionPhase, pr
 }
 function throwIfLeaseTerminated(session: LeaseSession) {
   if (session.leaseTermination) throw new Error(session.leaseTermination.summary);
+}
+
+function buildLeaseTerminationOutcome(leaseTermination: LeaseTermination): ClaimedJobOutcome {
+  return {
+    status: leaseTermination.type === "expired" ? "lease_expired" : "lease_lost",
+    terminalSummary: leaseTermination.summary
+  };
+}
+
+function getLeaseLossSubmissionOutcome(
+  session: LeaseSession,
+  error: unknown,
+  dependencies: ClaimLoopDependencies
+): ClaimedJobOutcome | null {
+  if (error instanceof WorkerControlClientError && error.code === "worker_lease_not_active") {
+    dependencies.logInfo({
+      message: "lease_lost_during_terminal_submit",
+      data: { attemptId: session.job.attemptId, jobId: session.job.jobId, leaseId: session.job.leaseId }
+    });
+    session.leaseTermination = {
+      summary: "Worker lease was lost before terminal submission completed.",
+      type: "expired"
+    };
+    return {
+      status: "lease_lost",
+      terminalSummary: session.leaseTermination.summary
+    };
+  }
+
+  return null;
+}
+
+async function waitForHeartbeatInterval(
+  milliseconds: number,
+  dependencies: ClaimLoopDependencies,
+  signal: AbortSignal
+): Promise<boolean> {
+  if (signal.aborted) {
+    return false;
+  }
+
+  const waited = dependencies.sleep(milliseconds).then(() => true);
+  const stopped = new Promise<boolean>((resolve) => {
+    signal.addEventListener("abort", () => resolve(false), { once: true });
+  });
+
+  return Promise.race([waited, stopped]);
 }
 
 async function appendEvent(

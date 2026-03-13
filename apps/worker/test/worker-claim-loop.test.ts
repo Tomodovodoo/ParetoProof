@@ -557,3 +557,241 @@ test("runWorkerClaimLoop stops when heartbeat reports cancellation", async (t) =
   assert.equal(failures.length, 0);
   assert.equal(results.length, 0);
 });
+
+test("runWorkerClaimLoop stops heartbeats immediately after terminal submission", async (t) => {
+  const app = Fastify();
+  let heartbeatSeen = false;
+  let blockedHeartbeatSleepStarted = false;
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.post("/internal/worker/claims", async () => buildActiveClaim());
+  app.post("/internal/worker/jobs/:jobId/heartbeat", async () => {
+    heartbeatSeen = true;
+    return {
+      acknowledgedEventSequence: 0,
+      cancelRequested: false,
+      jobToken: "job-token-1",
+      jobTokenExpiresAt: "2026-03-13T15:06:00.000Z",
+      leaseExpiresAt: "2026-03-13T15:06:00.000Z",
+      leaseStatus: "active"
+    };
+  });
+  app.post("/internal/worker/jobs/:jobId/events", async ({ body }) => ({
+    acceptedAt: "2026-03-13T15:00:11.000Z",
+    acknowledgedSequence: (body as WorkerExecutionEvent).sequence
+  }));
+  app.post("/internal/worker/jobs/:jobId/artifacts", async ({ body }) => {
+    const payload = body as WorkerArtifactManifestRequest;
+    return {
+      acceptedAt: "2026-03-13T15:02:01.000Z",
+      artifactManifestDigest: payload.artifactManifestDigest,
+      artifacts: payload.artifacts.map((artifact, index) => ({
+        artifactId: `artifact-${index + 1}`,
+        artifactRole: artifact.artifactRole,
+        relativePath: artifact.relativePath
+      }))
+    };
+  });
+  app.post("/internal/worker/jobs/:jobId/result", async () => ({
+    acceptedAt: "2026-03-13T15:05:01.000Z",
+    attemptState: "succeeded",
+    jobState: "completed",
+    runState: "succeeded"
+  }));
+
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  process.env.API_BASE_URL = `http://127.0.0.1:${(app.server.address() as { port: number }).port}`;
+  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+  process.env.CODEX_API_KEY = "test-key";
+  const tempRoot = await createTempRoot();
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const claimLoopPromise = runWorkerClaimLoop(
+    {
+      authMode: "machine_api_key",
+      baseWorkingRoot: tempRoot,
+      once: true,
+      providerModel: "gpt-5",
+      workerId: "worker-1",
+      workerPool: "test-pool",
+      workerRuntime: "modal",
+      workerVersion: "worker.v1"
+    },
+    {
+      executeAttempt: async (attemptOptions) => {
+        while (!heartbeatSeen || !blockedHeartbeatSleepStarted) {
+          await nextTick();
+        }
+
+        const bundle = await materializeFixtureBundle({
+          benchmarkPackageRoot: attemptOptions.benchmarkPackageRoot,
+          outputRoot: attemptOptions.outputRoot,
+          promptPackageRoot: attemptOptions.promptPackageRoot,
+          result: "pass"
+        });
+
+        return {
+          artifactManifestDigest: bundle.artifactManifestDigest,
+          attemptId: "attempt-1",
+          authMode: "machine_api_key",
+          bundleDigest: bundle.bundleDigest,
+          compileRepairCount: 0,
+          outputRoot: bundle.outputRoot,
+          promptPackageDigest: bundle.promptPackageDigest,
+          providerFamily: "openai",
+          providerTurnsUsed: 1,
+          result: "pass",
+          runConfigDigest: bundle.runConfigDigest,
+          runId: "run-1",
+          stopReason: "verification_passed",
+          verifierRepairCount: 0,
+          verdictDigest: bundle.verdictDigest
+        };
+      },
+      logError: () => {},
+      logInfo: () => {},
+      sleep: async () => {
+        if (!heartbeatSeen) {
+          await nextTick();
+          return;
+        }
+
+        blockedHeartbeatSleepStarted = true;
+        await new Promise<void>(() => {});
+      }
+    }
+  );
+
+  const result = await Promise.race([
+    claimLoopPromise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Heartbeat shutdown stalled on a sleeping interval.")), 500);
+    })
+  ]);
+
+  assert.equal(result.lastJobOutcome, "succeeded");
+});
+
+test("runWorkerClaimLoop does not rewrite a successful attempt into failure when result submission errors", async (t) => {
+  const app = Fastify();
+  const failures: WorkerTerminalFailureRequest[] = [];
+  let heartbeatSeen = false;
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.post("/internal/worker/claims", async () => buildActiveClaim());
+  app.post("/internal/worker/jobs/:jobId/heartbeat", async () => {
+    heartbeatSeen = true;
+    return {
+      acknowledgedEventSequence: 0,
+      cancelRequested: false,
+      jobToken: "job-token-1",
+      jobTokenExpiresAt: "2026-03-13T15:06:00.000Z",
+      leaseExpiresAt: "2026-03-13T15:06:00.000Z",
+      leaseStatus: "active"
+    };
+  });
+  app.post("/internal/worker/jobs/:jobId/events", async ({ body }) => ({
+    acceptedAt: "2026-03-13T15:00:11.000Z",
+    acknowledgedSequence: (body as WorkerExecutionEvent).sequence
+  }));
+  app.post("/internal/worker/jobs/:jobId/artifacts", async ({ body }) => {
+    const payload = body as WorkerArtifactManifestRequest;
+    return {
+      acceptedAt: "2026-03-13T15:02:01.000Z",
+      artifactManifestDigest: payload.artifactManifestDigest,
+      artifacts: payload.artifacts.map((artifact, index) => ({
+        artifactId: `artifact-${index + 1}`,
+        artifactRole: artifact.artifactRole,
+        relativePath: artifact.relativePath
+      }))
+    };
+  });
+  app.post("/internal/worker/jobs/:jobId/result", async (_, reply) => {
+    reply.status(500);
+    return {
+      error: "transient_failure"
+    };
+  });
+  app.post("/internal/worker/jobs/:jobId/failure", async ({ body }) => {
+    failures.push(body as WorkerTerminalFailureRequest);
+    return {
+      acceptedAt: "2026-03-13T15:06:01.000Z",
+      attemptState: "failed",
+      jobState: "failed",
+      runState: "failed"
+    };
+  });
+
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  process.env.API_BASE_URL = `http://127.0.0.1:${(app.server.address() as { port: number }).port}`;
+  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+  process.env.CODEX_API_KEY = "test-key";
+  const tempRoot = await createTempRoot();
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  await assert.rejects(async () =>
+    runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        baseWorkingRoot: tempRoot,
+        once: true,
+        providerModel: "gpt-5",
+        workerId: "worker-1",
+        workerPool: "test-pool",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1"
+      },
+      {
+        executeAttempt: async (attemptOptions) => {
+          while (!heartbeatSeen) {
+            await nextTick();
+          }
+
+          const bundle = await materializeFixtureBundle({
+            benchmarkPackageRoot: attemptOptions.benchmarkPackageRoot,
+            outputRoot: attemptOptions.outputRoot,
+            promptPackageRoot: attemptOptions.promptPackageRoot,
+            result: "pass"
+          });
+
+          return {
+            artifactManifestDigest: bundle.artifactManifestDigest,
+            attemptId: "attempt-1",
+            authMode: "machine_api_key",
+            bundleDigest: bundle.bundleDigest,
+            compileRepairCount: 0,
+            outputRoot: bundle.outputRoot,
+            promptPackageDigest: bundle.promptPackageDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 1,
+            result: "pass",
+            runConfigDigest: bundle.runConfigDigest,
+            runId: "run-1",
+            stopReason: "verification_passed",
+            verifierRepairCount: 0,
+            verdictDigest: bundle.verdictDigest
+          };
+        },
+        logError: () => {},
+        logInfo: () => {},
+        sleep: async () => {
+          await nextTick();
+        }
+      }
+    )
+  );
+
+  assert.equal(failures.length, 0);
+});
