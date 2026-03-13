@@ -28,6 +28,17 @@ const initialFilters: UserFilters = {
   search: ""
 };
 
+export function resolveSelectedAdminUserId(
+  selectedUserId: string | null,
+  visibleUsers: PortalAdminUserListItem[]
+) {
+  if (selectedUserId && visibleUsers.some((user) => user.userId === selectedUserId)) {
+    return selectedUserId;
+  }
+
+  return visibleUsers[0]?.userId ?? null;
+}
+
 function formatTimestamp(timestamp: string | null) {
   if (!timestamp) {
     return "None";
@@ -73,6 +84,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   const [detailItem, setDetailItem] = useState<Awaited<
     ReturnType<typeof loadPortalAdminUserDetail>
   > | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [filters, setFilters] = useState<UserFilters>(initialFilters);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
@@ -101,6 +113,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     if (!selectedUserId) {
       setDetailItem(null);
       setDetailError(null);
+      setIsDetailLoading(false);
       return;
     }
 
@@ -108,6 +121,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     setDetailItem(null);
     setDetailError(null);
     setRevocationReason("");
+    setIsDetailLoading(true);
 
     async function loadDetail() {
       const currentUserId = selectedUserId;
@@ -132,6 +146,10 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
 
         setDetailItem(null);
         setDetailError(error instanceof Error ? error.message : "The user detail could not be loaded.");
+      } finally {
+        if (!cancelled) {
+          setIsDetailLoading(false);
+        }
       }
     }
 
@@ -147,13 +165,6 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
       const nextItems = await loadPortalAdminUsers(apiBaseUrl);
       setUsers(nextItems);
       setListError(null);
-      setSelectedUserId((current) => {
-        if (current && nextItems.some((item) => item.userId === current)) {
-          return current;
-        }
-
-        return nextItems[0]?.userId ?? null;
-      });
       markUpdated();
     } catch (error) {
       setListError(
@@ -165,6 +176,16 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
       }
     }
   }
+
+  useEffect(() => {
+    const nextSelectedUserId = resolveSelectedAdminUserId(selectedUserId, visibleUsers);
+
+    if (nextSelectedUserId === selectedUserId) {
+      return;
+    }
+
+    setSelectedUserId(nextSelectedUserId);
+  }, [selectedUserId, visibleUsers]);
 
   async function handleRevoke() {
     if (!detailItem || isMutating) {
