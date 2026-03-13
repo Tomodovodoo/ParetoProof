@@ -56,7 +56,7 @@ Shows one row per run attempt with:
 
 Table interactions:
 
-- sort by newest, pass rate, duration, failure count
+- sort by newest, duration, lifecycle state, verdict bucket, or failure family
 - filter by pivot set above
 - export current filtered selection (CSV baseline)
 - open run detail on row click
