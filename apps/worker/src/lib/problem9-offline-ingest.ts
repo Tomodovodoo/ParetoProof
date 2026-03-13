@@ -87,14 +87,31 @@ export async function runProblem9OfflineIngest(
   }
 
   const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
-  const response = await fetchImpl(endpoint, {
-    body: JSON.stringify(localRequest),
-    headers: {
-      "Cf-Access-Jwt-Assertion": options.accessJwt,
-      "Content-Type": "application/json"
-    },
-    method: "POST"
-  });
+  let response: Response;
+
+  try {
+    response = await fetchImpl(endpoint, {
+      body: JSON.stringify(localRequest),
+      headers: {
+        "Cf-Access-Jwt-Assertion": options.accessJwt,
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    });
+  } catch (error) {
+    return {
+      bundleRoot,
+      endpoint,
+      error: "offline_ingest_transport_error",
+      issues: [
+        {
+          message: error instanceof Error ? error.message : String(error)
+        }
+      ],
+      stage: "remote_rejection",
+      status: "rejected"
+    };
+  }
 
   const responseBody = await readJsonResponse(response);
 

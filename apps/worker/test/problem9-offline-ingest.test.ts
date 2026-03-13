@@ -337,3 +337,41 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
     status: "rejected"
   });
 });
+
+test("runProblem9OfflineIngest converts transport failures into rejected output", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const result = await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      fetchImpl: async () => {
+        throw new Error("connect ECONNREFUSED 127.0.0.1");
+      },
+      runtimeEnv: {
+        API_BASE_URL: "https://api.paretoproof.com"
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    bundleRoot,
+    endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
+    error: "offline_ingest_transport_error",
+    issues: [
+      {
+        message: "connect ECONNREFUSED 127.0.0.1"
+      }
+    ],
+    stage: "remote_rejection",
+    status: "rejected"
+  });
+});
