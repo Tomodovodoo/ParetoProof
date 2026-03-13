@@ -16,6 +16,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     concurrency:
       group: pages-production-deploy
       cancel-in-progress: true

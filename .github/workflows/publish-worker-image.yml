@@ -23,6 +23,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: production
     concurrency:
       group: worker-image-publish
       cancel-in-progress: true
