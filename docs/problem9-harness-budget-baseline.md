@@ -193,13 +193,13 @@ The candidate compiled, but the Lean verification policy still rejected it after
 The attempt crossed one of the active budget ceilings:
 
 - `provider_turns`
-- `compile_repairs`
-- `verifier_repairs`
 - `wall_clock`
 - `provider_spend`
 - `provider_tokens`
 
 The run bundle must record which dimension actually stopped the attempt.
+
+Compile-repair and verifier-repair ceiling hits do not emit `budget_exhausted`. They emit `compile_failed` and `verifier_failed` respectively.
 
 ### `cancelled`
 
@@ -219,16 +219,24 @@ The stop-condition policy distinguishes deterministic benchmark failures from re
 
 ### Deterministic terminal conditions
 
-These are terminal for the attempt and should not be retried automatically inside the same run:
+These are deterministic benchmark-side stop conditions. They should not be retried automatically inside the same run once the harness reaches the corresponding terminal outcome:
 
-- compile-repair ceiling exhausted
-- verifier-repair ceiling exhausted
-- forbidden placeholder findings
-- theorem-statement drift
-- forbidden-axiom findings
-- hard provider-turn ceiling exhaustion
-- wall-clock ceiling exhaustion
-- explicit cancellation
+- compile-repair ceiling exhausted, which emits `compile_failed`
+- verifier-repair ceiling exhausted, which emits `verifier_failed`
+- hard provider-turn ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `provider_turns`
+- wall-clock ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `wall_clock`
+- explicit cancellation, which emits `cancelled`
+
+### Deterministic verifier findings before repair budget exhaustion
+
+Theorem-statement drift, forbidden placeholders, and forbidden-axiom findings are deterministic Lean-policy failures, but they are not immediate terminal outcomes by themselves when verifier-repair budget remains.
+
+The required rule is:
+
+- route those findings into verifier repair while verifier-repair budget remains
+- emit `verifier_failed` only after the verifier-repair ceiling is exhausted or when the policy baseline explicitly marks a finding as non-repairable in a later scope decision
+
+This keeps the budget baseline aligned with `problem9-lean-run-strategy-baseline.md`.
 
 ### Retryable outer failures
 
