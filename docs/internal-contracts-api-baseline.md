@@ -227,6 +227,8 @@ Allowed run transitions are:
 - `created -> queued`
 - `created -> cancelled`
 - `queued -> running`
+- `queued -> failed`
+- `queued -> cancelled`
 - `running -> succeeded`
 - `running -> failed`
 - `queued -> cancel_requested`
