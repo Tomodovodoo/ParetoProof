@@ -664,6 +664,12 @@ export function registerAdminRoutes(
           };
         }
 
+        if (activeRoleGrant.role === "admin") {
+          return {
+            kind: "admin_role_not_revocable" as const
+          };
+        }
+
         const now = new Date();
         const [revokedRoleGrant] = await tx
           .update(roleGrants)
@@ -729,6 +735,13 @@ export function registerAdminRoutes(
       if (result.kind === "no_active_role") {
         reply.code(409).send({
           error: "admin_user_no_active_role"
+        });
+        return;
+      }
+
+      if (result.kind === "admin_role_not_revocable") {
+        reply.code(409).send({
+          error: "admin_user_role_not_revocable"
         });
         return;
       }

@@ -1323,6 +1323,56 @@ test("POST /portal/admin/users/:id/revoke-role returns a conflict when no active
   assert.equal(response.json().error, "admin_user_no_active_role");
 });
 
+test("POST /portal/admin/users/:id/revoke-role rejects active admin grants", async (t) => {
+  const targetUser = buildUser();
+  const adminRoleGrant = buildRoleGrant({
+    role: "admin"
+  });
+  const db = {
+    query: {
+      users: {
+        findFirst: async () => null
+      }
+    },
+    transaction: async (
+      callback: (tx: {
+        query: {
+          roleGrants: { findFirst: () => Promise<typeof adminRoleGrant> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          roleGrants: {
+            findFirst: async () => adminRoleGrant
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "Should not revoke admin access here"
+    },
+    url: `/portal/admin/users/${targetUser.id}/revoke-role`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "admin_user_role_not_revocable");
+});
+
 test("admin-only mutation routes reject non-admin callers before touching the database", async (t) => {
   let touchedDatabase = false;
   const db = {
