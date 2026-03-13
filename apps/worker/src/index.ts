@@ -5,8 +5,7 @@ import { runProblem9PromptPackageCli } from "./lib/problem9-prompt-package-cli.j
 import { runProblem9RunBundleCli } from "./lib/problem9-run-bundle-cli.js";
 
 const [command, ...args] = process.argv.slice(2);
-
-if (!command) {
+const showWorkerUsage = () => {
   console.error(
     [
       "Usage:",
@@ -17,7 +16,11 @@ if (!command) {
       "  tsx src/index.ts run-problem9-attempt-in-devbox --image <docker-image> [--preflight-only] [--print-docker-command] [--benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model>]"
     ].join("\n")
   );
-  process.exitCode = 1;
+};
+
+if (!command || command === "--help") {
+  showWorkerUsage();
+  process.exitCode = command === "--help" ? 0 : 1;
 } else if (command === "materialize-problem9-package") {
   void runProblem9PackageCli(args).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);

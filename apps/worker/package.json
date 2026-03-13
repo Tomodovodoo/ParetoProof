@@ -11,6 +11,7 @@
     "run:problem9-attempt": "tsx src/index.ts run-problem9-attempt",
     "run:problem9-attempt:trusted-local": "tsx src/index.ts run-problem9-attempt-in-devbox",
     "start": "node dist/index.js",
+    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

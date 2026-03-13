@@ -3,8 +3,20 @@ import {
   getDefaultProblem9PromptPackageOptions,
   materializeProblem9PromptPackage
 } from "./problem9-prompt-package.js";
+import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 export async function runProblem9PromptPackageCli(args: string[]): Promise<void> {
+  if (args.includes("--help")) {
+    console.error(
+      "Usage: tsx src/index.ts materialize-problem9-prompt-package --output <directory> --benchmark-package-root <directory> --run-id <id> --attempt-id <id> --lane-id <id> --run-mode <mode> --tool-profile <profile> --provider-family <family> --auth-mode <mode> --model-config-id <id> --harness-revision <revision>"
+    );
+    return;
+  }
+
+  await parseWorkerRuntimeEnv({
+    commandFamily: "materializer"
+  });
+
   const getRequiredValue = (flag: string): string => {
     const index = args.findIndex((argument) => argument === flag);
 
