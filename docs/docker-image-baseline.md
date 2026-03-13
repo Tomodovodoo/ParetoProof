@@ -14,8 +14,7 @@ That split keeps the local workflow practical while preserving a clean migration
 - MVP starts with both a local/offline devbox image and a separate benchmark execution image.
 - The devbox is the default contributor environment for the Problem 9 slice.
 - The execution image is the canonical verdict environment and the base contract for later worker images.
-- Lean `4.22.0` is required as the exact-reproduction lane for `firstproof`.
-- Lean `4.24.0` is required as the main interoperability lane.
+- the required Lean lanes are defined in `lean-mathlib-version-baseline.md`
 - Lean `4.26.0` and `4.28.0` are experiment-only lanes and are excluded from required CI and canonical verdicts.
 - Python `3.11` is required in the devbox for Aristotle-adapter compatibility, but not in the MVP execution image.
 - Node `22` is the only supported runtime for harness execution.
@@ -109,14 +108,15 @@ This image should be capable of replaying the canonical offline run with machine
 
 ## Lean lane policy
 
-The Problem 9 slice supports four named lanes, but only two are mandatory:
+The image policy follows `lean-mathlib-version-baseline.md`.
 
-- `lean422_exact`: required canonical lane for exact reproduction of the `firstproof` benchmark environment
-- `lean424_interop`: required canonical lane for main interoperability testing
-- `lean426_experiment`: optional forward-compatibility lane; not required in default CI
-- `lean428_experiment`: optional forward-compatibility lane; not required in default CI
+For MVP, the image contract is:
 
-The MVP devbox must include `4.22.0` and `4.24.0`. The execution image must include those same two lanes. `4.26.0` and `4.28.0` may be introduced later as opt-in image variants or extra verifier jobs, but they must not become required merge gates for the first offline slice.
+- the devbox must include the two required lanes: `lean422_exact` and `lean424_interop`
+- the execution image must also include those same two required lanes
+- experiment lanes such as `lean426_experiment` and `lean428_experiment` are optional and must not become required merge gates by image drift alone
+
+This document does not decide which lanes exist or when they change. It only requires the image family to carry the lanes that the version-policy baseline marks as required.
 
 ## Python policy
 
