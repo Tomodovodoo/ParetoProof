@@ -19,6 +19,7 @@
     "build:api": "bun --cwd apps/api build",
     "build:api:railway": "bun run build:shared && bun run build:api",
     "bootstrap:github:env-secrets": "node infra/scripts/configure-github-environment-secrets.mjs",
+    "bootstrap:modal:worker-secrets": "node infra/scripts/configure-modal-worker-secrets.mjs",
     "bootstrap:owner-admin:api": "bun --cwd apps/api bootstrap:owner-admin",
     "db:migrate:api": "bun --cwd apps/api db:migrate",
     "start:api:railway": "node apps/api/dist/index.js",

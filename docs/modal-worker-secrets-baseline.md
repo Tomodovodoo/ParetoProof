@@ -122,6 +122,16 @@ That means:
 
 The broader local-versus-Modal injection story, including trusted local Codex handling, belongs to issue `#148`. This document only fixes the hosted Modal worker secret inventory and attachment model.
 
+## Bootstrap helper
+
+The repository bootstrap helper for the base worker identity secret is:
+
+```bash
+bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply
+```
+
+By default the script targets Modal environment `main`, reads `apps/worker/.env`, and creates or updates the base secret object for the selected worker environment. It refuses the checked-in placeholder bootstrap token so a copied-but-unedited `.env` file cannot clobber a live Modal secret.
+
 ## Rotation rules
 
 - rotate `WORKER_BOOTSTRAP_TOKEN` at the worker deployment or pool level
