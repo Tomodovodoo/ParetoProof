@@ -117,5 +117,59 @@ export const apiEndpointCatalog = [
     method: "POST",
     path: "/portal/admin/access-requests/:accessRequestId/reject",
     purpose: "Reject an access request and record the admin decision note."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.claim",
+    method: "POST",
+    path: "/internal/worker/claims",
+    purpose:
+      "Lease the next runnable worker assignment to an authenticated worker and return a short-lived per-job token when work is available."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.heartbeat",
+    method: "POST",
+    path: "/internal/worker/jobs/:jobId/heartbeat",
+    purpose:
+      "Renew or invalidate an active worker lease and communicate whether execution should continue or cancel."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.event.report",
+    method: "POST",
+    path: "/internal/worker/jobs/:jobId/events",
+    purpose:
+      "Store structured worker execution events such as start, progress, warnings, and checkpoints."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.artifact-manifest.submit",
+    method: "POST",
+    path: "/internal/worker/jobs/:jobId/artifacts",
+    purpose:
+      "Register the artifact manifest for one worker assignment before or alongside upload completion."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.result.submit",
+    method: "POST",
+    path: "/internal/worker/jobs/:jobId/result",
+    purpose:
+      "Submit the terminal success payload for one worker assignment, including result summary data and referenced artifacts."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.worker.failure.submit",
+    method: "POST",
+    path: "/internal/worker/jobs/:jobId/failure",
+    purpose:
+      "Submit a terminal failure payload for one worker assignment when execution cannot produce a valid success result."
   }
 ] satisfies ApiEndpointCatalogEntry[];
