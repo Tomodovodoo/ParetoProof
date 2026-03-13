@@ -225,6 +225,8 @@ These are deterministic benchmark-side stop conditions. They should not be retri
 - verifier-repair ceiling exhausted, which emits `verifier_failed`
 - hard provider-turn ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `provider_turns`
 - wall-clock ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `wall_clock`
+- provider spend ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `provider_spend`
+- provider token ceiling exhaustion, which emits `budget_exhausted` with exhausted dimension `provider_tokens`
 - explicit cancellation, which emits `cancelled`
 
 ### Deterministic verifier findings before repair budget exhaustion
