@@ -10,7 +10,15 @@ import {
   type PortalWorkersViewResponse,
   type RunKind
 } from "@paretoproof/shared";
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import {
   buildPortalRunsQueryString,
@@ -134,6 +142,7 @@ export function PortalBenchmarkOpsSurface({
   const [runDetailState, setRunDetailState] = useState<LoadState<PortalRunDetailResponse>>(createLoadState);
   const [launchState, setLaunchState] = useState<LoadState<PortalLaunchViewResponse>>(createLoadState);
   const [workersState, setWorkersState] = useState<LoadState<PortalWorkersViewResponse>>(createLoadState);
+  const runDetailRequestIdRef = useRef(0);
   const [launchSelection, setLaunchSelection] = useState<LaunchSelectionState>({
     benchmarkVersionId: "",
     modelConfigId: "",
@@ -165,8 +174,16 @@ export function PortalBenchmarkOpsSurface({
     }
 
     setRunDetailState((current) => ({ ...current, error: null, isLoading: true }));
+    runDetailRequestIdRef.current += 1;
+    const requestId = runDetailRequestIdRef.current;
+
     try {
       const data = await fetchPortalRunDetail(activeRunId);
+
+      if (requestId !== runDetailRequestIdRef.current) {
+        return;
+      }
+
       setRunDetailState({
         data,
         error: null,
@@ -174,6 +191,10 @@ export function PortalBenchmarkOpsSurface({
         lastUpdatedAt: new Date().toISOString()
       });
     } catch (error) {
+      if (requestId !== runDetailRequestIdRef.current) {
+        return;
+      }
+
       setRunDetailState((current) => ({
         ...current,
         error: toDisplayError(error),
@@ -915,12 +936,16 @@ function PortalWorkersSurface({
                         {incident.workerPool ?? "all pools"} · {formatTimestamp(incident.observedAt)}
                       </p>
                     </div>
-                    <a
-                      className="button button-secondary"
-                      href={buildRunDetailHref(incident.affectedRunIds[0] ?? "PP-318")}
-                    >
-                      Open run
-                    </a>
+                    {incident.affectedRunIds[0] ? (
+                      <a
+                        className="button button-secondary"
+                        href={buildRunDetailHref(incident.affectedRunIds[0])}
+                      >
+                        Open run
+                      </a>
+                    ) : (
+                      <span className="portal-action-badge">No run linked</span>
+                    )}
                   </article>
                 ))}
               </div>
