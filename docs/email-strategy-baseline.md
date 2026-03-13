@@ -38,6 +38,8 @@ This is owner-managed human communication such as:
 
 For MVP, support mail stays outside the application and should be handled through a normal human mailbox provider rather than an app-integrated inbound mail flow.
 
+The current public-site contact decision is even narrower: [public-contact-channel-baseline.md](public-contact-channel-baseline.md) keeps the apex public contact entry on GitHub Discussions and does not publish a general support mailbox on the site during MVP.
+
 ## Provider decision
 
 When ParetoProof eventually adds transactional product email, the default outbound provider should be `Resend`.

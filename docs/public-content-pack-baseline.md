@@ -81,11 +81,13 @@ It must not promise:
 
 The contact section should exist to help a reader reach the right human-owned next step without creating an accidental product-support system.
 
-MVP contact guidance may expose:
+MVP contact guidance should expose the exact public contact destination defined by [public-contact-channel-baseline.md](public-contact-channel-baseline.md).
 
-- one primary human-managed contact destination for general public or contributor inquiries
-- one optional public repository or discussion destination when a public technical conversation is more appropriate than private contact
-- one narrow direction for access or identity problems that belong in the auth or portal recovery flow instead of a generic public message
+That currently means:
+
+- the repository GitHub Discussions index is the canonical public contact entry
+- access or identity problems still route into the auth or portal flow instead of public discussion
+- the apex site should not publish a general support mailbox or contact form for MVP
 
 The contact section should set conservative expectations:
 
@@ -165,6 +167,7 @@ The older split scoping issues for About, Contact, and Contribution should be cl
 ## Relationship to adjacent baselines
 
 - [product-surface-boundary-baseline.md](product-surface-boundary-baseline.md) defines why this pack belongs on the apex site rather than on the auth or portal surfaces.
+- [public-contact-channel-baseline.md](public-contact-channel-baseline.md) defines the exact public contact destination and manual handling rules that this pack should reference.
 - [public-benchmark-reporting-ux-baseline.md](public-benchmark-reporting-ux-baseline.md) defines the public benchmark-release flow that sits beside this pack on the apex surface.
 - [release-notes-and-updates-baseline.md](release-notes-and-updates-baseline.md) defines the canonical update and release-note surfaces that also live on the public site.
 - [email-strategy-baseline.md](email-strategy-baseline.md) defines why public contact handling stays human-managed and outside the application runtime for MVP.
