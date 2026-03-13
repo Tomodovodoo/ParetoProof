@@ -218,6 +218,52 @@ test("GET /portal/admin/access-requests returns the richer admin read model", as
   assert.equal(payload.items[0]?.recovery?.requestedIdentityAlreadyLinked, false);
 });
 
+test("GET /portal/admin/access-requests keeps orphaned recovery requests unlinked", async (t) => {
+  const orphanedRecoveryRequest = {
+    ...buildAccessRequest({
+      createdAt: new Date("2026-03-13T18:00:00.000Z"),
+      email: "recover@paretoproof.com",
+      id: "12121212-1212-4212-8212-121212121212",
+      requestKind: "identity_recovery",
+      requestedByUserId: null,
+      requestedIdentityProvider: "cloudflare_google",
+      requestedIdentitySubject: "missing-subject",
+      status: "pending"
+    }),
+    reviewedByUser: null
+  };
+  const db = {
+    query: {
+      accessRequests: {
+        findMany: async () => [orphanedRecoveryRequest]
+      },
+      userIdentities: {
+        findFirst: async () => null
+      },
+      users: {
+        findFirst: async () => null
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/admin/access-requests"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(payload.items[0]?.matchedUser, null);
+  assert.equal(payload.items[0]?.recovery?.requestedIdentityAlreadyLinked, false);
+});
+
 test("GET /portal/admin/users and detail expose user posture, history, and audit echoes", async (t) => {
   const reviewer = buildUser({
     displayName: "Admin Reviewer",

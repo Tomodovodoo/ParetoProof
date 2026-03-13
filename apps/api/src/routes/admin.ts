@@ -331,7 +331,9 @@ async function buildRecoveryContext(
         ? toAdminMatchedUserSummary(existingIdentity.user)
         : null,
     preserveExistingRole: activeRole?.role ?? requestRow.requestedRole,
-    requestedIdentityAlreadyLinked: existingIdentity?.userId === matchedUser?.id,
+    requestedIdentityAlreadyLinked: Boolean(
+      existingIdentity && matchedUser && existingIdentity.userId === matchedUser.id
+    ),
     requestedIdentityProvider: requestRow.requestedIdentityProvider,
     requestedIdentitySubject: requestRow.requestedIdentitySubject
   };
@@ -487,12 +489,6 @@ async function loadAdminUserList(
           reviewedByUser: true
         }
       },
-      auditEventsAsTarget: {
-        orderBy: [desc(auditEvents.createdAt)],
-        with: {
-          actorUser: true
-        }
-      },
       identities: {
         orderBy: [asc(userIdentities.createdAt)]
       },
@@ -502,9 +498,6 @@ async function loadAdminUserList(
           grantedByUser: true,
           revokedByUser: true
         }
-      },
-      sessions: {
-        orderBy: [desc(sessions.expiresAt)]
       }
     }
   })) as AdminUserRelations[];
