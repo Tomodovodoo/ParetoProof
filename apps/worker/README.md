@@ -19,3 +19,4 @@ Package materialization:
   digest-filled `benchmark-package.json`
 - use `bun --cwd apps/worker materialize:problem9-prompt-package -- --output <directory> --benchmark-package-root <directory> --run-id <id> --attempt-id <id> --lane-id <id> --run-mode <mode> --tool-profile <profile> --provider-family <family> --auth-mode <mode> --model-config-id <id> --harness-revision <revision>` to emit the canonical prompt package for one Problem 9 attempt
 - the prompt package writes `prompt-package.json` plus the reviewable raw prompt layers `system.md`, `benchmark.md`, `item.md`, and `run-envelope.json`
+- the current offline-spine status is summarized in `docs/problem9-offline-spine-baseline.md`; package and prompt-package materialization are implemented, but the single local runner that performs provider execution, verification, and final run-bundle emission is still missing
