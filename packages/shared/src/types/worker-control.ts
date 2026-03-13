@@ -74,6 +74,7 @@ export type WorkerClaimResponse =
         attemptId: string;
         heartbeatIntervalSeconds: number;
         jobId: string;
+        leaseId: string;
         leaseExpiresAt: string;
         jobToken: string;
         jobTokenExpiresAt: string;

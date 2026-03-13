@@ -99,6 +99,7 @@ export const workerClaimResponseSchema = z.union([
       attemptId: z.string().min(1),
       heartbeatIntervalSeconds: z.number().int().positive(),
       jobId: z.string().min(1),
+      leaseId: z.string().min(1),
       jobToken: z.string().min(1),
       jobTokenExpiresAt: timestampSchema,
       leaseExpiresAt: timestampSchema,
