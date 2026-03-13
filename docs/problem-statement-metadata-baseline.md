@@ -108,7 +108,7 @@ If a problem spans several areas, choose one primary topic and place the rest in
 - `challenging`
 - `research_like`
 
-This tier is meant for filtering and dataset composition, not for making claims of psychometric precision.
+This tier is meant for filtering and dataset composition, not for making claims of psychometric precision. The curation standard for assigning these tiers is defined in `benchmark-curation-criteria-baseline.md`.
 
 ### `tags`
 
