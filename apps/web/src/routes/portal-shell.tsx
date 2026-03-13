@@ -10,6 +10,16 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
+import {
+  buildPortalResultsCsvPreview,
+  getRunStateLabel,
+  getVerdictLabel,
+  portalResultsExportHeaders,
+  portalResultsFilterPresets,
+  portalRunResults,
+  serializePortalResultsQuery,
+  type PortalRunResultRow
+} from "../lib/portal-results";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
 import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
@@ -48,37 +58,13 @@ const overviewMetrics = [
   },
   {
     label: "Recent runs",
-    note: "2 pending review, 1 blocked",
+    note: "canonical lifecycle and verdict split",
     value: "08"
   },
   {
     label: "Identity links",
     note: "GitHub and Google attached",
     value: "02"
-  }
-];
-
-const overviewRuns = [
-  {
-    branch: "main",
-    id: "PP-318",
-    model: "gpt-oss",
-    state: "passed",
-    target: "mathlib4 / simplification"
-  },
-  {
-    branch: "auth-fix",
-    id: "PP-319",
-    model: "claude",
-    state: "running",
-    target: "proof search / induction"
-  },
-  {
-    branch: "railway-host",
-    id: "PP-320",
-    model: "gemini",
-    state: "blocked",
-    target: "worker smoke / queue handoff"
   }
 ];
 
@@ -350,16 +336,16 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     <span>Model</span>
                     <span>Target</span>
                     <span>Branch</span>
-                    <span>Status</span>
+                    <span>Lifecycle</span>
                   </div>
-                  {overviewRuns.map((row) => (
-                    <div className="portal-table-row" key={row.id} role="row">
-                      <span>{row.id}</span>
-                      <span>{row.model}</span>
+                  {portalRunResults.slice(0, 3).map((row) => (
+                    <div className="portal-table-row" key={row.runId} role="row">
+                      <span>{row.runId}</span>
+                      <span>{row.modelLabel}</span>
                       <span>{row.target}</span>
                       <span>{row.branch}</span>
-                      <span className={`portal-state-badge portal-state-${row.state}`}>
-                        {row.state}
+                      <span className={`portal-state-badge portal-state-${row.runState}`}>
+                        {getRunStateLabel(row.runState)}
                       </span>
                     </div>
                   ))}
@@ -387,6 +373,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <PortalAccessRequestPanel email={email} />
             ) : activeSection?.id === "profile" ? (
               <PortalProfilePanel email={email} />
+            ) : activeSection?.id === "runs" ? (
+              <PortalRunsPanel />
             ) : (
               <section className="portal-workspace-grid">
                 <article className="portal-panel portal-surface-main">
@@ -450,6 +438,139 @@ function PortalActionRow({ action }: PortalActionRowProps) {
         <span className="portal-action-badge">Unavailable</span>
       )}
     </article>
+  );
+}
+
+const runSummaryMetrics = [
+  {
+    label: "Active",
+    note: "running or cancel requested",
+    value: String(
+      portalRunResults.filter((row) => row.runLifecycleBucket === "active").length
+    )
+  },
+  {
+    label: "Completed",
+    note: "succeeded lifecycle state",
+    value: String(
+      portalRunResults.filter((row) => row.runState === "succeeded").length
+    )
+  },
+  {
+    label: "Invalid results",
+    note: "verdict kept separate from lifecycle",
+    value: String(
+      portalRunResults.filter((row) => row.verdictClass === "invalid_result").length
+    )
+  },
+  {
+    label: "CSV columns",
+    note: "canonical export headers",
+    value: String(portalResultsExportHeaders.length)
+  }
+];
+
+function PortalRunsPanel() {
+  const csvPreview = buildPortalResultsCsvPreview();
+
+  return (
+    <>
+      <section className="portal-metric-strip" aria-label="Run result metrics">
+        {runSummaryMetrics.map((metric) => (
+          <article className="portal-metric-cell" key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small>{metric.note}</small>
+          </article>
+        ))}
+      </section>
+
+      <section className="portal-overview-grid portal-runs-grid">
+        <article className="portal-panel portal-runs-main">
+          <div className="portal-panel-header">
+            <div>
+              <p className="section-tag">Canonical result filters</p>
+              <h2>Result state stays split across lifecycle, verdict, and export fields.</h2>
+            </div>
+            <span className="role-chip role-chip-tonal">
+              URL state is the source of truth
+            </span>
+          </div>
+
+          <p className="portal-panel-muted">
+            The portal keeps `runState`, `jobState`, `attemptState`, and `verdictClass`
+            distinct so filters, shared links, and CSV exports do not collapse control-plane
+            lifecycle into mathematical outcome.
+          </p>
+
+          <div className="portal-filter-chip-row" aria-label="Run filter presets">
+            {portalResultsFilterPresets.map((preset) => (
+              <article className="portal-filter-chip" key={preset.id}>
+                <strong>{preset.label}</strong>
+                <span>{preset.description}</span>
+                <code>{serializePortalResultsQuery(preset.queryState)}</code>
+              </article>
+            ))}
+          </div>
+
+          <div
+            className="portal-table-shell portal-results-table"
+            role="table"
+            aria-label="Run results"
+          >
+            <div className="portal-results-head" role="row">
+              <span>Run</span>
+              <span>Model</span>
+              <span>Lifecycle</span>
+              <span>Verdict</span>
+              <span>Rerun</span>
+              <span>Failure</span>
+            </div>
+            {portalRunResults.map((row) => (
+              <PortalRunResultRowView key={row.runId} row={row} />
+            ))}
+          </div>
+        </article>
+
+        <aside className="portal-surface-rail portal-runs-rail">
+          <p className="section-tag">Export contract</p>
+          <h2>Canonical query and CSV examples</h2>
+          <div className="portal-code-block">
+            <p className="portal-code-label">Preferred grouped-filter query</p>
+            <code>{serializePortalResultsQuery(portalResultsFilterPresets[0].queryState)}</code>
+          </div>
+          <div className="portal-code-block">
+            <p className="portal-code-label">CSV headers</p>
+            <code>{portalResultsExportHeaders.join(", ")}</code>
+          </div>
+          <div className="portal-code-block">
+            <p className="portal-code-label">CSV preview</p>
+            <pre>{csvPreview}</pre>
+          </div>
+        </aside>
+      </section>
+    </>
+  );
+}
+
+function PortalRunResultRowView({ row }: { row: PortalRunResultRow }) {
+  return (
+    <div className="portal-results-row" role="row">
+      <span>{row.runId}</span>
+      <span>{row.modelLabel}</span>
+      <span className={`portal-state-badge portal-state-${row.runState}`}>
+        {getRunStateLabel(row.runState)}
+      </span>
+      <span
+        className={`portal-state-badge portal-verdict-badge${
+          row.verdictClass ? ` portal-verdict-${row.verdictClass}` : " portal-verdict-pending"
+        }`}
+      >
+        {getVerdictLabel(row.verdictClass)}
+      </span>
+      <span>{row.rerunLineage}</span>
+      <span>{row.failureCode ?? "none"}</span>
+    </div>
   );
 }
 
