@@ -265,5 +265,5 @@ Even in that exceptional mode:
 - multipart or resumable upload protocols
 - CDN caching strategy for artifact downloads
 - public or anonymous artifact links
-- final visibility and retention policy decisions from issue `#125`
+- final visibility and retention policy decisions now live in `artifact-retention-access-baseline.md`
 - exact Fastify route shapes or implementation code
