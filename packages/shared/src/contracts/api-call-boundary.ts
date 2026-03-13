@@ -75,6 +75,38 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.runs.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "The canonical private run index is a browser-owned portal surface, so approved users fetch bounded run read models directly from the protected API."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.run-detail.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Run evidence stays on the same authenticated portal audience while the backend restricts the payload to bounded read-only detail fields."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.launch.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Collaborators and admins read launch preflight metadata directly from the portal without introducing a second launch-only backend surface."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.workers.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Worker posture is a browser-facing portal read model, but the backend still keeps control-plane mutation routes off this surface."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.profile.update",
     mode: "browser_direct",
     origin: "portal_browser",
