@@ -14,35 +14,35 @@ const workerSrcDir = join(repoRoot, "apps", "worker", "src");
 const deniedPatterns = [
   {
     hint: "http.createServer(...)",
-    regex: /\bcreateServer\s*\(/g
+    regex: /\bcreateServer\s*\(/
   },
   {
     hint: "server.listen(...)",
-    regex: /\blisten\s*\(/g
+    regex: /\blisten\s*\(/
   },
   {
     hint: "import fastify",
-    regex: /\bfrom\s+["']fastify["']/g
+    regex: /\bfrom\s+["']fastify["']/
   },
   {
     hint: "import express",
-    regex: /\bfrom\s+["']express["']/g
+    regex: /\bfrom\s+["']express["']/
   },
   {
     hint: "import koa",
-    regex: /\bfrom\s+["']koa["']/g
+    regex: /\bfrom\s+["']koa["']/
   },
   {
     hint: "import hono",
-    regex: /\bfrom\s+["']hono["']/g
+    regex: /\bfrom\s+["']hono["']/
   },
   {
     hint: "Deno.serve(...)",
-    regex: /\bDeno\.serve\s*\(/g
+    regex: /\bDeno\.serve\s*\(/
   },
   {
     hint: "Bun.serve(...)",
-    regex: /\bBun\.serve\s*\(/g
+    regex: /\bBun\.serve\s*\(/
   }
 ];
 
