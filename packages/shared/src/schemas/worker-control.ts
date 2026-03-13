@@ -168,9 +168,21 @@ export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
     sliceDefinition: z.string().min(1)
   }),
   z.object({
+    authMode: z.enum(["trusted_local_user", "machine_api_key", "machine_oauth", "local_stub"]),
     benchmarkItemId: z.string().min(1),
+    benchmarkPackageDigest: sha256Schema,
+    benchmarkPackageId: z.string().min(1),
+    benchmarkPackageVersion: z.string().min(1),
+    harnessRevision: z.string().min(1),
+    laneId: z.string().min(1),
     modelConfigId: z.string().min(1),
-    runKind: z.literal("single_run")
+    modelSnapshotId: z.string().min(1),
+    promptPackageDigest: sha256Schema,
+    promptProtocolVersion: z.string().min(1),
+    providerFamily: z.enum(["openai", "anthropic", "google", "aristotle", "axle", "custom"]),
+    runKind: z.literal("single_run"),
+    runMode: z.enum(["single_pass_probe", "pass_k_probe", "bounded_agentic_attempt"]),
+    toolProfile: z.enum(["no_tools", "lean_mcp_readonly", "workspace_edit_limited"])
   }),
   z.object({
     benchmarkTargetId: z.string().min(1),

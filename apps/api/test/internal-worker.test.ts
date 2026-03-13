@@ -267,9 +267,21 @@ test("POST /internal/worker/claims returns an active lease when work is availabl
           runBundleSchemaVersion: "1",
           runId: "run-1",
           target: {
+            authMode: "machine_api_key",
             benchmarkItemId: "Problem9",
+            benchmarkPackageDigest: "a".repeat(64),
+            benchmarkPackageId: "firstproof/Problem9",
+            benchmarkPackageVersion: "2026.03.13",
+            harnessRevision: "worker-harness.v1",
+            laneId: "lean422_exact",
             modelConfigId: "openai/gpt-5",
-            runKind: "single_run"
+            modelSnapshotId: "openai/gpt-5.2026-03-13",
+            promptPackageDigest: "b".repeat(64),
+            promptProtocolVersion: "problem9-prompt-protocol.v1",
+            providerFamily: "openai",
+            runKind: "single_run",
+            runMode: "bounded_agentic_attempt",
+            toolProfile: "workspace_edit_limited"
           }
         }
       } satisfies WorkerClaimResponse;

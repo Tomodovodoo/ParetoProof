@@ -1,177 +1,491 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type {
-  WorkerClaimResponse,
-  WorkerExecutionEvent,
-  WorkerFailureClassification
+  WorkerArtifactManifestEntry,
+  WorkerClaimRequest,
+  WorkerResultMessageRequest,
+  WorkerTerminalFailureRequest
 } from "@paretoproof/shared";
 import { runWorkerClaimLoop } from "../src/lib/worker-claim-loop.ts";
 
-type RecordedRequest = {
-  headers: Headers;
-  json: any;
-  method: string;
+const fixedNow = new Date("2026-03-13T18:00:00.000Z");
+const benchmarkDigest = "a".repeat(64);
+const promptDigest = "b".repeat(64);
+const artifactManifestDigest = "c".repeat(64);
+const bundleDigest = "d".repeat(64);
+const candidateDigest = "e".repeat(64);
+const environmentDigest = "f".repeat(64);
+const verdictDigest = "1".repeat(64);
+
+type ApiCall = {
+  body: unknown;
   path: string;
+  token: string;
 };
 
-type ResponseSpec = {
+type ApiMockResponse = {
+  body: unknown;
   path: string;
-  response: any | ((request: RecordedRequest) => any);
   status?: number;
 };
 
-function buildActiveClaimResponse(): Extract<WorkerClaimResponse, { leaseStatus: "active" }> {
-  return {
-    leaseStatus: "active",
-    pollAfterSeconds: 0,
-    workerJob: {
-      attemptId: "attempt-1",
-      heartbeatIntervalSeconds: 1,
-      heartbeatTimeoutSeconds: 180,
-      jobId: "job-1",
-      jobToken: "job-token-1",
-      jobTokenExpiresAt: "2026-03-13T15:03:00.000Z",
-      jobTokenScopes: [
-        "heartbeat",
-        "event_append",
-        "artifact_manifest_write",
-        "verifier_verdict_write",
-        "result_finalize",
-        "failure_finalize"
-      ],
-      leaseExpiresAt: "2026-03-13T15:03:00.000Z",
-      leaseId: "lease-1",
-      offlineBundleCompatible: true,
-      requiredArtifactRoles: ["candidate_source", "verdict_record"],
-      runBundleSchemaVersion: "1",
-      runId: "run-1",
-      target: {
-        authMode: "machine_api_key",
-        benchmarkItemId: "Problem9",
-        benchmarkPackageDigest: "a".repeat(64),
-        benchmarkPackageId: "firstproof/Problem9",
-        benchmarkPackageVersion: "2026.03.13",
-        harnessRevision: "worker-harness.v1",
-        laneId: "lean422_exact",
-        modelConfigId: "openai/gpt-5",
-        modelSnapshotId: "openai/gpt-5.2026-03-13",
-        promptPackageDigest: "b".repeat(64),
-        promptProtocolVersion: "problem9-prompt-protocol.v1",
-        providerFamily: "openai",
-        runKind: "single_run",
-        runMode: "bounded_agentic_attempt",
-        toolProfile: "workspace_edit_limited"
-      }
-    }
-  };
-}
+test("runWorkerClaimLoop submits manifest and terminal result for a claimed single_run", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-success-"));
 
-function createFetchStub(responseSpecs: ResponseSpec[]) {
-  const requests: RecordedRequest[] = [];
-  const queue = [...responseSpecs];
-
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const next = queue.shift();
-    assert.ok(next, `Unexpected fetch for ${String(input)}`);
-
-    const url = new URL(typeof input === "string" ? input : input.toString());
-    const headers = new Headers(init?.headers);
-    const bodyText = typeof init?.body === "string" ? init.body : "";
-    const recordedRequest = {
-      headers,
-      json: bodyText ? JSON.parse(bodyText) : null,
-      method: init?.method ?? "GET",
-      path: url.pathname
-    };
-
-    requests.push(recordedRequest);
-    assert.equal(recordedRequest.path, next.path);
-
-    const responseBody =
-      typeof next.response === "function" ? next.response(recordedRequest) : next.response;
-
-    return new Response(JSON.stringify(responseBody), {
-      headers: {
-        "content-type": "application/json"
-      },
-      status: next.status ?? 200
-    });
-  };
-
-  return {
-    fetchImpl,
-    requests,
-    assertExhausted() {
-      assert.equal(queue.length, 0, `Unconsumed fetch responses remain: ${queue.length}`);
-    }
-  };
-}
-
-async function writeBundleFixture(options: {
-  outputRoot: string;
-  result: "pass" | "fail";
-}): Promise<{
-  artifactManifestDigest: string;
-  bundleDigest: string;
-  candidateDigest: string;
-  environmentDigest: string;
-  verdictDigest: string;
-}> {
-  const bundleRoot = path.join(options.outputRoot, "problem9-run-bundle");
-  await mkdir(path.join(bundleRoot, "verification"), { recursive: true });
-
-  const artifactManifestDigest = "c".repeat(64);
-  const bundleDigest = "d".repeat(64);
-  const candidateDigest = "e".repeat(64);
-  const environmentDigest = "f".repeat(64);
-  const verdictDigest = "1".repeat(64);
-  const failure: WorkerFailureClassification = {
-    evidenceArtifactRefs: ["candidate/Candidate.lean"],
-    failureCode: "compile_failed",
-    failureFamily: "compile",
-    phase: "compile",
-    retryEligibility: "manual_retry_only",
-    summary: "Lean compile failed",
-    terminality: "terminal_attempt",
-    userVisibility: "user_visible"
-  };
-
-  await writeFile(
-    path.join(bundleRoot, "artifact-manifest.json"),
-    JSON.stringify(
-      {
-        artifacts: [
-          {
-            artifactRole: "candidate_source",
-            byteSize: 128,
-            contentEncoding: null,
-            mediaType: "text/plain",
-            relativePath: "candidate/Candidate.lean",
-            requiredForIngest: true,
-            sha256: "2".repeat(64)
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    const artifactEntries = buildArtifactEntries();
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
           },
-          {
-            artifactRole: "verdict_record",
-            byteSize: 64,
-            contentEncoding: null,
-            mediaType: "application/json",
-            relativePath: "verification/verdict.json",
-            requiredForIngest: true,
-            sha256: "3".repeat(64)
-          }
-        ]
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 0,
+            jobToken: "job-token-2"
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 1
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            artifactManifestDigest,
+            artifacts: artifactEntries.map((artifact, index) => ({
+              artifactId: `artifact-${index + 1}`,
+              artifactRole: artifact.artifactRole,
+              relativePath: artifact.relativePath
+            }))
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/artifacts`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 2
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 3
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "succeeded",
+            jobState: "completed",
+            runState: "succeeded"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/result`
+        }
+      ],
+      calls
+    );
+    const attemptCalls: Array<Record<string, unknown>> = [];
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
       },
-      null,
-      2
-    ),
+      {
+        attemptRunner: async (options) => {
+          attemptCalls.push(options);
+          await writeBundleOutputs(options.outputRoot, artifactEntries);
+
+          return {
+            artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            authMode: "machine_api_key",
+            bundleDigest,
+            compileRepairCount: 1,
+            outputRoot: options.outputRoot,
+            promptPackageDigest: promptDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 2,
+            result: "pass",
+            runConfigDigest: "2".repeat(64),
+            runId: workerJob.runId,
+            stopReason: "verification_passed",
+            verifierRepairCount: 0,
+            verdictDigest
+          };
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+    assert.equal(attemptCalls.length, 1);
+    assert.equal(attemptCalls[0]?.providerModel, "gpt-5");
+    assert.equal(attemptCalls[0]?.stubScenario, "exact_canonical");
+
+    const claimBody = calls[0]?.body as WorkerClaimRequest;
+    assert.equal(calls[0]?.path, "/internal/worker/claims");
+    assert.equal(calls[0]?.token, "bootstrap-token");
+    assert.deepEqual(claimBody, {
+      activeJobCount: 0,
+      availableRunKinds: ["single_run"],
+      maxConcurrentJobs: 1,
+      supportedArtifactRoles: [
+        "run_manifest",
+        "package_reference",
+        "prompt_package",
+        "candidate_source",
+        "verdict_record",
+        "compiler_output",
+        "compiler_diagnostics",
+        "verifier_output",
+        "environment_snapshot",
+        "usage_summary",
+        "execution_trace"
+      ],
+      supportsOfflineBundleContract: true,
+      supportsTraceUploads: false,
+      workerId: "worker-1",
+      workerPool: "modal-dev",
+      workerRuntime: "modal",
+      workerVersion: "worker.v1"
+    });
+
+    const resultBody = calls.at(-1)?.body as WorkerResultMessageRequest;
+    assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/result`);
+    assert.equal(calls.at(-1)?.token, "job-token-2");
+    assert.deepEqual(resultBody.artifactIds, ["artifact-1", "artifact-2"]);
+    assert.deepEqual(resultBody.usageSummary, {
+      compileRepairCount: 1,
+      providerTurnsUsed: 2,
+      stopReason: "verification_passed",
+      verifierRepairCount: 0
+    });
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("runWorkerClaimLoop exits explicitly when the first heartbeat requests cancellation", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-cancel-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    let attemptRunnerCalled = false;
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: {
+            acknowledgedEventSequence: 0,
+            cancelRequested: true,
+            jobToken: null,
+            jobTokenExpiresAt: fixedNow.toISOString(),
+            leaseExpiresAt: fixedNow.toISOString(),
+            leaseStatus: "cancel_requested"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async () => {
+          attemptRunnerCalled = true;
+          throw new Error("attempt runner should not have executed");
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.equal(attemptRunnerCalled, false);
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 0,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+    assert.deepEqual(
+      calls.map((call) => call.path),
+      ["/internal/worker/claims", `/internal/worker/jobs/${workerJob.jobId}/heartbeat`]
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("runWorkerClaimLoop submits a canonical pre-bundle failure when the inner attempt runner fails", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-failure-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse(),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/failure`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async () => {
+          throw new Error("provider auth failed for hosted attempt");
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/failure`);
+    assert.equal(failureBody.failure.failureCode, "provider_auth_error");
+    assert.deepEqual(failureBody.failure.evidenceArtifactRefs, [
+      "worker-control/pre-bundle-failure"
+    ]);
+    assert.equal(failureBody.bundleDigest, null);
+    assert.equal(failureBody.verifierVerdict, null);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+function buildWorkerJob() {
+  return {
+    attemptId: "attempt-1",
+    heartbeatIntervalSeconds: 30,
+    heartbeatTimeoutSeconds: 90,
+    jobId: "job-1",
+    jobToken: "job-token-1",
+    jobTokenExpiresAt: fixedNow.toISOString(),
+    jobTokenScopes: [
+      "heartbeat",
+      "event_append",
+      "artifact_manifest_write",
+      "result_finalize",
+      "failure_finalize"
+    ],
+    leaseExpiresAt: fixedNow.toISOString(),
+    leaseId: "lease-1",
+    offlineBundleCompatible: true as const,
+    requiredArtifactRoles: ["run_manifest", "verdict_record"],
+    runBundleSchemaVersion: "problem9-run-bundle.v1",
+    runId: "run-1",
+    target: {
+      authMode: "machine_api_key" as const,
+      benchmarkItemId: "Problem9",
+      benchmarkPackageDigest: benchmarkDigest,
+      benchmarkPackageId: "firstproof/Problem9",
+      benchmarkPackageVersion: "2026.03.13",
+      harnessRevision: "worker-harness.v1",
+      laneId: "lean422_exact",
+      modelConfigId: "openai/gpt-5",
+      modelSnapshotId: "openai/gpt-5.2026-03-13",
+      promptPackageDigest: promptDigest,
+      promptProtocolVersion: "problem9-prompt-protocol.v1",
+      providerFamily: "openai" as const,
+      runKind: "single_run" as const,
+      runMode: "bounded_agentic_attempt" as const,
+      toolProfile: "workspace_edit_limited" as const
+    }
+  };
+}
+
+function buildHeartbeatResponse(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    acknowledgedEventSequence: 0,
+    cancelRequested: false,
+    jobToken: null,
+    jobTokenExpiresAt: fixedNow.toISOString(),
+    leaseExpiresAt: fixedNow.toISOString(),
+    leaseStatus: "active",
+    ...overrides
+  };
+}
+
+function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
+  return [
+    {
+      artifactRole: "run_manifest",
+      byteSize: 128,
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "run-bundle.json",
+      requiredForIngest: true,
+      sha256: "3".repeat(64)
+    },
+    {
+      artifactRole: "verdict_record",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "verification/verdict.json",
+      requiredForIngest: true,
+      sha256: "4".repeat(64)
+    }
+  ];
+}
+
+async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArtifactManifestEntry[]) {
+  await mkdir(path.join(outputRoot, "verification"), { recursive: true });
+  await writeFile(
+    path.join(outputRoot, "artifact-manifest.json"),
+    JSON.stringify({ artifacts: artifactEntries }, null, 2),
     "utf8"
   );
-
   await writeFile(
-    path.join(bundleRoot, "run-bundle.json"),
+    path.join(outputRoot, "run-bundle.json"),
     JSON.stringify(
       {
         artifactManifestDigest,
@@ -186,494 +500,60 @@ async function writeBundleFixture(options: {
     ),
     "utf8"
   );
-
   await writeFile(
-    path.join(bundleRoot, "verification", "verdict.json"),
+    path.join(outputRoot, "verification", "verdict.json"),
     JSON.stringify(
       {
         attemptId: "attempt-1",
-        axiomCheck: options.result === "pass" ? "passed" : "not_evaluated",
-        benchmarkPackageDigest: "a".repeat(64),
+        axiomCheck: "passed",
+        benchmarkPackageDigest: benchmarkDigest,
         candidateDigest,
         containsAdmit: false,
         containsSorry: false,
-        diagnosticGate: options.result === "pass" ? "passed" : "failed",
+        diagnosticGate: "passed",
         laneId: "lean422_exact",
-        primaryFailure: options.result === "pass" ? null : failure,
-        result: options.result,
-        semanticEquality: options.result === "pass" ? "matched" : "not_evaluated",
-        surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
-        verdictSchemaVersion: "1"
+        primaryFailure: null,
+        result: "pass",
+        semanticEquality: "matched",
+        surfaceEquality: "matched",
+        verdictSchemaVersion: "problem9-verdict.v1"
       },
       null,
       2
     ),
     "utf8"
   );
-
-  return {
-    artifactManifestDigest,
-    bundleDigest,
-    candidateDigest,
-    environmentDigest,
-    verdictDigest
-  };
 }
 
-async function buildTempRoots() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-loop-"));
-  return {
-    outputRoot: path.join(root, "output"),
-    workspaceRoot: path.join(root, "workspace")
-  };
-}
+function createFetchMock(script: ApiMockResponse[], calls: ApiCall[]) {
+  return async (input: URL | RequestInfo, init?: RequestInit) => {
+    const next = script.shift();
 
-function buildLoopOptions(overrides: Partial<Parameters<typeof runWorkerClaimLoop>[0]> = {}) {
-  return {
-    authMode: "machine_api_key" as const,
-    once: true,
-    outputRoot: "C:/tmp/output",
-    workerId: "worker-1",
-    workerPool: "modal-dev",
-    workerVersion: "worker.v1",
-    workspaceRoot: "C:/tmp/workspace",
-    ...overrides
-  };
-}
+    if (!next) {
+      throw new Error(`Unexpected extra fetch to ${String(input)}.`);
+    }
 
-function buildHostedRawEnv() {
-  return {
-    API_BASE_URL: "https://api.paretoproof.test",
-    CODEX_API_KEY: "worker-api-key",
-    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
-  };
-}
-
-test("runWorkerClaimLoop claims work, records lifecycle events, and submits a passing result", async () => {
-  const roots = await buildTempRoots();
-  const claim = buildActiveClaimResponse();
-  const bundleDigests = {
-    artifactManifestDigest: "c".repeat(64),
-    bundleDigest: "d".repeat(64),
-    candidateDigest: "e".repeat(64),
-    environmentDigest: "f".repeat(64),
-    verdictDigest: "1".repeat(64)
-  };
-  const requests: RecordedRequest[] = [];
-  let heartbeatCount = 0;
-  let eventSequence = 0;
-  const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input.toString());
-    const headers = new Headers(init?.headers);
     const bodyText = typeof init?.body === "string" ? init.body : "";
-    const recordedRequest = {
-      headers,
-      json: bodyText ? JSON.parse(bodyText) : null,
-      method: init?.method ?? "GET",
-      path: url.pathname
-    };
 
-    requests.push(recordedRequest);
+    calls.push({
+      body: bodyText.length > 0 ? JSON.parse(bodyText) : null,
+      path: url.pathname,
+      token:
+        new Headers(init?.headers).get("authorization")?.replace(/^Bearer\s+/u, "") ?? ""
+    });
 
-    switch (url.pathname) {
-      case "/internal/worker/claims":
-        return new Response(JSON.stringify(claim), {
-          headers: { "content-type": "application/json" },
-          status: 200
-        });
-      case "/internal/worker/jobs/job-1/heartbeat":
-        heartbeatCount += 1;
-        return new Response(
-          JSON.stringify({
-            acknowledgedEventSequence: eventSequence,
-            cancelRequested: false,
-            jobToken: `job-token-${heartbeatCount + 1}`,
-            jobTokenExpiresAt: "2026-03-13T15:05:00.000Z",
-            leaseExpiresAt: "2026-03-13T15:05:00.000Z",
-            leaseStatus: "active"
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200
-          }
-        );
-      case "/internal/worker/jobs/job-1/events":
-        eventSequence += 1;
-        return new Response(
-          JSON.stringify({
-            acceptedAt: `2026-03-13T15:00:0${eventSequence}.000Z`,
-            acknowledgedSequence: eventSequence
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200
-          }
-        );
-      case "/internal/worker/jobs/job-1/artifacts":
-        return new Response(
-          JSON.stringify({
-            acceptedAt: "2026-03-13T15:00:05.000Z",
-            artifactManifestDigest: bundleDigests.artifactManifestDigest,
-            artifacts: [
-              {
-                artifactId: "artifact-1",
-                artifactRole: "candidate_source",
-                relativePath: "candidate/Candidate.lean"
-              },
-              {
-                artifactId: "artifact-2",
-                artifactRole: "verdict_record",
-                relativePath: "verification/verdict.json"
-              }
-            ]
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200
-          }
-        );
-      case "/internal/worker/jobs/job-1/result":
-        return new Response(
-          JSON.stringify({
-            acceptedAt: "2026-03-13T15:00:06.000Z",
-            attemptState: "succeeded",
-            jobState: "completed",
-            runState: "succeeded"
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200
-          }
-        );
-      default:
-        throw new Error(`Unexpected fetch path ${url.pathname}`);
-    }
+    assert.equal(url.pathname, next.path);
+
+    return new Response(JSON.stringify(next.body), {
+      headers: {
+        "content-type": "application/json"
+      },
+      status: next.status ?? 200
+    });
   };
+}
 
-  const result = await runWorkerClaimLoop(
-    buildLoopOptions(roots),
-    {
-      attemptRunner: async (options) => {
-        const digests = await writeBundleFixture({
-          outputRoot: options.outputRoot,
-          result: "pass"
-        });
-
-        return {
-          ...digests,
-          attemptId: "attempt-1",
-          authMode: "machine_api_key",
-          compileRepairCount: 0,
-          outputRoot: path.join(options.outputRoot, "problem9-run-bundle"),
-          promptPackageDigest: claim.workerJob.target.promptPackageDigest,
-          providerFamily: "openai",
-          providerTurnsUsed: 1,
-          result: "pass",
-          runConfigDigest: "4".repeat(64),
-          runId: "run-1",
-          stopReason: "verification_passed",
-          verifierRepairCount: 0
-        };
-      },
-      fetchImpl,
-      materializeBenchmarkPackage: async ({ outputRoot }) => ({
-        outputRoot: path.join(outputRoot, "firstproof", "Problem9"),
-        packageDigest: claim.workerJob.target.benchmarkPackageDigest,
-        packageId: claim.workerJob.target.benchmarkPackageId,
-        packageVersion: claim.workerJob.target.benchmarkPackageVersion
-      }),
-      materializePromptPackage: async ({ outputRoot }) => ({
-        outputRoot,
-        promptPackageDigest: claim.workerJob.target.promptPackageDigest
-      }),
-      rawEnv: buildHostedRawEnv(),
-      sleep: async (ms) => {
-        await new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5)));
-      }
-    }
-  );
-
-  assert.deepEqual(result, {
-    claimedJobs: 1,
-    completedJobs: 1,
-    idlePollCount: 0,
-    stoppedReason: "idle_once"
-  });
-
-  assert.equal(requests[0].json.availableRunKinds[0], "single_run");
-  assert.deepEqual(
-    requests
-      .filter((request) => request.path.endsWith("/events"))
-      .map((request) => (request.json as WorkerExecutionEvent).eventKind),
-    ["attempt_started", "artifact_manifest_written", "bundle_finalized"]
-  );
-  assert.equal(requests.at(-1)?.path, "/internal/worker/jobs/job-1/result");
-  assert.ok(heartbeatCount >= 2);
-});
-
-test("runWorkerClaimLoop submits terminal failures for pre-bundle attempt errors", async () => {
-  const roots = await buildTempRoots();
-  const claim = buildActiveClaimResponse();
-  const fetchStub = createFetchStub([
-    {
-      path: "/internal/worker/claims",
-      response: claim
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 0,
-        cancelRequested: false,
-        jobToken: "job-token-2",
-        jobTokenExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:01.000Z",
-        acknowledgedSequence: 1
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/failure",
-      response: {
-        acceptedAt: "2026-03-13T15:00:02.000Z",
-        attemptState: "failed",
-        jobState: "failed",
-        runState: "failed"
-      }
-    }
-  ]);
-
-  const result = await runWorkerClaimLoop(
-    buildLoopOptions(roots),
-    {
-      attemptRunner: async () => {
-        throw new Error("Provider response did not contain candidate Lean source.");
-      },
-      fetchImpl: fetchStub.fetchImpl,
-      materializeBenchmarkPackage: async ({ outputRoot }) => ({
-        outputRoot: path.join(outputRoot, "firstproof", "Problem9"),
-        packageDigest: claim.workerJob.target.benchmarkPackageDigest,
-        packageId: claim.workerJob.target.benchmarkPackageId,
-        packageVersion: claim.workerJob.target.benchmarkPackageVersion
-      }),
-      materializePromptPackage: async ({ outputRoot }) => ({
-        outputRoot,
-        promptPackageDigest: claim.workerJob.target.promptPackageDigest
-      }),
-      rawEnv: buildHostedRawEnv(),
-      sleep: async (ms) => {
-        await new Promise((resolve) => setTimeout(resolve, Math.min(ms, 5)));
-      }
-    }
-  );
-
-  assert.equal(result.completedJobs, 1);
-  assert.equal(fetchStub.requests.at(-1)?.path, "/internal/worker/jobs/job-1/failure");
-  assert.equal(fetchStub.requests.at(-1)?.json.failure.failureCode, "provider_malformed_response");
-  fetchStub.assertExhausted();
-});
-
-test("runWorkerClaimLoop drops terminal submission when a cancel request arrives during the attempt", async () => {
-  const roots = await buildTempRoots();
-  const claim = buildActiveClaimResponse();
-  let sleepCalls = 0;
-  let releaseAttempt: (() => void) | null = null;
-  const attemptFinished = new Promise<void>((resolve) => {
-    releaseAttempt = resolve;
-  });
-  const fetchStub = createFetchStub([
-    {
-      path: "/internal/worker/claims",
-      response: claim
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 0,
-        cancelRequested: false,
-        jobToken: "job-token-2",
-        jobTokenExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:01.000Z",
-        acknowledgedSequence: 1
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: () => {
-        releaseAttempt?.();
-        return {
-          acknowledgedEventSequence: 1,
-          cancelRequested: true,
-          jobToken: "job-token-3",
-          jobTokenExpiresAt: "2026-03-13T15:05:00.000Z",
-          leaseExpiresAt: "2026-03-13T15:05:00.000Z",
-          leaseStatus: "cancel_requested"
-        };
-      }
-    }
-  ]);
-
-  const result = await runWorkerClaimLoop(
-    buildLoopOptions(roots),
-    {
-      attemptRunner: async (options) => {
-        await attemptFinished;
-        const digests = await writeBundleFixture({
-          outputRoot: options.outputRoot,
-          result: "pass"
-        });
-
-        return {
-          ...digests,
-          attemptId: "attempt-1",
-          authMode: "machine_api_key",
-          compileRepairCount: 0,
-          outputRoot: path.join(options.outputRoot, "problem9-run-bundle"),
-          promptPackageDigest: claim.workerJob.target.promptPackageDigest,
-          providerFamily: "openai",
-          providerTurnsUsed: 1,
-          result: "pass",
-          runConfigDigest: "4".repeat(64),
-          runId: "run-1",
-          stopReason: "verification_passed",
-          verifierRepairCount: 0
-        };
-      },
-      fetchImpl: fetchStub.fetchImpl,
-      materializeBenchmarkPackage: async ({ outputRoot }) => ({
-        outputRoot: path.join(outputRoot, "firstproof", "Problem9"),
-        packageDigest: claim.workerJob.target.benchmarkPackageDigest,
-        packageId: claim.workerJob.target.benchmarkPackageId,
-        packageVersion: claim.workerJob.target.benchmarkPackageVersion
-      }),
-      materializePromptPackage: async ({ outputRoot }) => ({
-        outputRoot,
-        promptPackageDigest: claim.workerJob.target.promptPackageDigest
-      }),
-      rawEnv: buildHostedRawEnv(),
-      sleep: async () => {
-        sleepCalls += 1;
-        assert.equal(sleepCalls, 1);
-      }
-    }
-  );
-
-  assert.equal(result.completedJobs, 0);
-  assert.equal(
-    fetchStub.requests.some((request) => request.path.endsWith("/result") || request.path.endsWith("/failure")),
-    false
-  );
-  fetchStub.assertExhausted();
-});
-
-test("runWorkerClaimLoop drops terminal submission when the worker lease expires during the attempt", async () => {
-  const roots = await buildTempRoots();
-  const claim = buildActiveClaimResponse();
-  let sleepCalls = 0;
-  let releaseAttempt: (() => void) | null = null;
-  const attemptFinished = new Promise<void>((resolve) => {
-    releaseAttempt = resolve;
-  });
-  const fetchStub = createFetchStub([
-    {
-      path: "/internal/worker/claims",
-      response: claim
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 0,
-        cancelRequested: false,
-        jobToken: "job-token-2",
-        jobTokenExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:01.000Z",
-        acknowledgedSequence: 1
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: () => {
-        releaseAttempt?.();
-        return {
-          acknowledgedEventSequence: 1,
-          cancelRequested: false,
-          jobToken: null,
-          jobTokenExpiresAt: null,
-          leaseExpiresAt: null,
-          leaseStatus: "expired"
-        };
-      }
-    }
-  ]);
-
-  const result = await runWorkerClaimLoop(
-    buildLoopOptions(roots),
-    {
-      attemptRunner: async (options) => {
-        await attemptFinished;
-        const digests = await writeBundleFixture({
-          outputRoot: options.outputRoot,
-          result: "pass"
-        });
-
-        return {
-          ...digests,
-          attemptId: "attempt-1",
-          authMode: "machine_api_key",
-          compileRepairCount: 0,
-          outputRoot: path.join(options.outputRoot, "problem9-run-bundle"),
-          promptPackageDigest: claim.workerJob.target.promptPackageDigest,
-          providerFamily: "openai",
-          providerTurnsUsed: 1,
-          result: "pass",
-          runConfigDigest: "4".repeat(64),
-          runId: "run-1",
-          stopReason: "verification_passed",
-          verifierRepairCount: 0
-        };
-      },
-      fetchImpl: fetchStub.fetchImpl,
-      materializeBenchmarkPackage: async ({ outputRoot }) => ({
-        outputRoot: path.join(outputRoot, "firstproof", "Problem9"),
-        packageDigest: claim.workerJob.target.benchmarkPackageDigest,
-        packageId: claim.workerJob.target.benchmarkPackageId,
-        packageVersion: claim.workerJob.target.benchmarkPackageVersion
-      }),
-      materializePromptPackage: async ({ outputRoot }) => ({
-        outputRoot,
-        promptPackageDigest: claim.workerJob.target.promptPackageDigest
-      }),
-      rawEnv: buildHostedRawEnv(),
-      sleep: async () => {
-        sleepCalls += 1;
-        assert.equal(sleepCalls, 1);
-      }
-    }
-  );
-
-  assert.equal(result.completedJobs, 0);
-  assert.equal(
-    fetchStub.requests.some((request) => request.path.endsWith("/result") || request.path.endsWith("/failure")),
-    false
-  );
-  fetchStub.assertExhausted();
-});
+function neverSleep(): Promise<void> {
+  return new Promise(() => {});
+}

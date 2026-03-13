@@ -12,7 +12,6 @@
     "run:problem9-attempt": "tsx src/index.ts run-problem9-attempt",
     "run:worker-claim-loop": "tsx src/index.ts run-worker-claim-loop",
     "run:problem9-attempt:trusted-local": "tsx src/index.ts run-problem9-attempt-in-devbox",
-    "run:worker-claim-loop": "tsx src/index.ts run-worker-claim-loop",
     "start": "node dist/index.js",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
