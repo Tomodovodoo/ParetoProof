@@ -81,7 +81,7 @@ export const runFailureReasonCatalog = [
     consumesRetryBudget: false,
     id: "manual_cancel",
     retryable: false,
-    terminalRunFailure: true,
+    terminalRunFailure: false,
     rationale:
       "User or admin cancellation is terminal for the current run and should not auto-restart."
   }
