@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import Fastify from "fastify";
+import type { ApiRuntimeEnv } from "../config/runtime.js";
 import { createAccessGuard } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
@@ -13,32 +14,29 @@ import {
   normalizeOrigin
 } from "./trusted-mutation-origin.js";
 
-function readAllowedCorsOrigins() {
+function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   const baselineOrigins = [
     "https://auth.paretoproof.com",
     "https://github.auth.paretoproof.com",
     "https://google.auth.paretoproof.com",
     "https://portal.paretoproof.com"
   ];
-  const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
 
-  return [...new Set([...baselineOrigins, ...(configuredOrigins ?? [])].map(normalizeOrigin))];
+  return [
+    ...new Set(
+      [...baselineOrigins, ...runtimeEnv.corsAllowedOrigins].map(normalizeOrigin)
+    )
+  ];
 }
 
-function shouldAllowLocalhostCors() {
-  return process.env.CORS_ALLOW_LOCALHOST === "true";
-}
-
-export async function buildServer() {
+export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   const app = Fastify({
     logger: true
   });
-  const db = createDbClient();
+  const db = createDbClient(runtimeEnv.databaseUrl);
   const requireAccess = createAccessGuard(db);
-  const allowedOrigins = readAllowedCorsOrigins();
-  const allowLocalhostCors = shouldAllowLocalhostCors();
+  const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
+  const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
 
   await app.register(cors, {
     credentials: true,

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { normalizeOptionalEmail } from "../lib/email.js";
+import { parseApiRuntimeEnv } from "../config/runtime.js";
 import type { PortalIdentityProvider } from "@paretoproof/shared";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
@@ -245,26 +246,16 @@ export function selectCloudflareAccessVerifier(
 }
 
 export function createCloudflareAccessVerifierSetFromEnv() {
-  const teamDomain = process.env.CF_ACCESS_TEAM_DOMAIN;
-  const portalAudience =
-    process.env.CF_ACCESS_PORTAL_AUD ?? process.env.CF_ACCESS_AUD;
-  const internalAudience =
-    process.env.CF_ACCESS_INTERNAL_AUD ?? portalAudience;
-
-  if (!teamDomain || !portalAudience || !internalAudience) {
-    throw new Error(
-      "CF_ACCESS_TEAM_DOMAIN plus CF_ACCESS_PORTAL_AUD/CF_ACCESS_AUD are required for Access JWT validation."
-    );
-  }
+  const runtimeEnv = parseApiRuntimeEnv();
 
   return {
     internal: createCloudflareAccessVerifier({
-      audience: internalAudience,
-      teamDomain
+      audience: runtimeEnv.internalAccessAudience,
+      teamDomain: runtimeEnv.teamDomain
     }),
     portal: createCloudflareAccessVerifier({
-      audience: portalAudience,
-      teamDomain
+      audience: runtimeEnv.portalAccessAudience,
+      teamDomain: runtimeEnv.teamDomain
     })
   };
 }
