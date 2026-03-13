@@ -1,7 +1,16 @@
 import path from "node:path";
 import { runProblem9Attempt } from "./problem9-attempt.js";
+import { validateLocalSingleRunRuntime } from "./runtime-env.js";
+
+const problem9AttemptUsage =
+  "Usage: tsx src/index.ts run-problem9-attempt --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family <family>] [--auth-mode <mode>] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]";
 
 export async function runProblem9AttemptCli(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(problem9AttemptUsage);
+    return;
+  }
+
   const getRequiredValue = (flag: string): string => {
     const index = args.findIndex((argument) => argument === flag);
 
@@ -16,14 +25,21 @@ export async function runProblem9AttemptCli(args: string[]): Promise<void> {
     const index = args.findIndex((argument) => argument === flag);
     return index === -1 || !args[index + 1] ? undefined : args[index + 1];
   };
+  const explicitAuthMode = getOptionalValue("--auth-mode") as
+    | "trusted_local_user"
+    | "machine_api_key"
+    | "machine_oauth"
+    | "local_stub"
+    | undefined;
+
+  if (explicitAuthMode) {
+    await validateLocalSingleRunRuntime({
+      authMode: explicitAuthMode
+    });
+  }
 
   const result = await runProblem9Attempt({
-    authMode: getOptionalValue("--auth-mode") as
-      | "trusted_local_user"
-      | "machine_api_key"
-      | "machine_oauth"
-      | "local_stub"
-      | undefined,
+    authMode: explicitAuthMode,
     benchmarkPackageRoot: path.resolve(getRequiredValue("--benchmark-package-root")),
     modelSnapshotId: getOptionalValue("--model-snapshot-id"),
     outputRoot: path.resolve(getRequiredValue("--output")),

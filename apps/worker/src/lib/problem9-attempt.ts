@@ -9,6 +9,7 @@ import {
   preflightProblem9AuthMode
 } from "./problem9-auth.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
+import { validateLocalSingleRunRuntime } from "./runtime-env.js";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
 
@@ -228,7 +229,9 @@ export async function runProblem9Attempt(
 
   const effectiveProviderFamily = options.providerFamily ?? promptManifest.providerFamily;
   const effectiveAuthMode = (options.authMode ?? promptManifest.authMode) as Problem9AuthMode;
-  const authPreflight = await preflightProblem9AuthMode(effectiveAuthMode);
+  const authPreflight = await validateLocalSingleRunRuntime({
+    authMode: effectiveAuthMode
+  });
 
   await rm(workspaceRoot, { force: true, recursive: true });
   await mkdir(workspaceRoot, { recursive: true });
