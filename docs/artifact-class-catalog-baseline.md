@@ -147,7 +147,7 @@ For every artifact class above, Postgres should own only metadata such as:
 - lifecycle state
 - any narrow denormalized fields that later read models need for filtering or summaries
 
-The exact field list belongs to issue `#123`. This document only fixes which objects deserve rows and which objects deserve R2 bodies.
+The canonical Postgres field set for those metadata rows now lives in `artifact-reference-fields-baseline.md`. This document only fixes which objects deserve rows and which objects deserve R2 bodies.
 
 ## Prefix-family rules
 
