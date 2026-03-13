@@ -199,17 +199,8 @@ export async function parseWorkerRuntimeEnv(
         )
       };
     case "offline_ingest_cli":
-      assertRequiredFields([
-        ["API_BASE_URL", parsed.data.API_BASE_URL],
-        ["WORKER_BOOTSTRAP_TOKEN", parsed.data.WORKER_BOOTSTRAP_TOKEN]
-      ]);
-
       return {
-        apiBaseUrl: resolveRequiredField("API_BASE_URL", parsed.data.API_BASE_URL),
-        workerBootstrapToken: resolveRequiredField(
-          "WORKER_BOOTSTRAP_TOKEN",
-          parsed.data.WORKER_BOOTSTRAP_TOKEN
-        )
+        apiBaseUrl: resolveRequiredField("API_BASE_URL", parsed.data.API_BASE_URL)
       };
   }
 }

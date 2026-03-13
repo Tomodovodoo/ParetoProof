@@ -121,16 +121,14 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
   });
 });
 
-test("parseWorkerRuntimeEnv requires hosted worker env for future offline ingest", async () => {
+test("parseWorkerRuntimeEnv requires API base URL for offline ingest", async () => {
   await assert.rejects(
     () =>
       parseWorkerRuntimeEnv(
         {
           commandFamily: "offline_ingest_cli"
         },
-        {
-          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
-        }
+        {}
       ),
     /API_BASE_URL: is required/
   );
@@ -140,13 +138,11 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future offline ingest
       commandFamily: "offline_ingest_cli"
     },
     {
-      API_BASE_URL: "https://api.paretoproof.com",
-      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+      API_BASE_URL: "https://api.paretoproof.com"
     }
   );
 
   assert.deepEqual(runtimeEnv, {
-    apiBaseUrl: "https://api.paretoproof.com",
-    workerBootstrapToken: "bootstrap-token"
+    apiBaseUrl: "https://api.paretoproof.com"
   });
 });
