@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 
 const defaultImage = "paretoproof-problem9-devbox:local";
-const forwardedArgs = process.argv.slice(2);
+const forwardedArgs = normalizeForwardedArgs(process.argv.slice(2));
 
 if (!forwardedArgs.includes("--image")) {
   forwardedArgs.unshift(defaultImage);
@@ -28,3 +28,20 @@ child.once("error", (error) => {
 child.once("close", (exitCode) => {
   process.exit(exitCode ?? 1);
 });
+
+function normalizeForwardedArgs(args) {
+  return args.flatMap((argument) => {
+    if (!argument.startsWith("--image=")) {
+      return [argument];
+    }
+
+    const image = argument.slice("--image=".length);
+
+    if (!image) {
+      console.error("Trusted-local launcher requires a non-empty value for --image.");
+      process.exit(1);
+    }
+
+    return ["--image", image];
+  });
+}
