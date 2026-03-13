@@ -2,7 +2,7 @@ import {
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   accessRequests,
@@ -11,6 +11,12 @@ import {
   userIdentities,
   users
 } from "../db/schema.js";
+import {
+  loadPortalAdminAccessRequestDetail,
+  loadPortalAdminAccessRequestList,
+  loadPortalAdminUserDetail,
+  loadPortalAdminUserList
+} from "../lib/admin-review-read-model.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
@@ -36,13 +42,33 @@ export function registerAdminRoutes(
       preHandler: requireAccess("admin_only")
     },
     async () => {
-      const requests = await db.query.accessRequests.findMany({
-        orderBy: [asc(accessRequests.createdAt)],
-        where: eq(accessRequests.status, "pending")
-      });
+      return {
+        items: await loadPortalAdminAccessRequestList(db)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/admin/access-requests/:accessRequestId",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async (request, reply) => {
+      const accessRequestId = (request.params as { accessRequestId?: string }).accessRequestId;
+
+      const item = accessRequestId
+        ? await loadPortalAdminAccessRequestDetail(db, accessRequestId)
+        : null;
+
+      if (!item) {
+        reply.code(404).send({
+          error: "access_request_not_found"
+        });
+        return;
+      }
 
       return {
-        items: requests.map((requestRow) => toAccessRequestSummary(requestRow))
+        item
       };
     }
   );
@@ -143,6 +169,7 @@ export function registerAdminRoutes(
           })
           .from(roleGrants)
           .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
+        let linkedIdentityAuditEvent: typeof auditEvents.$inferInsert | null = null;
 
         if (requestRow.requestKind === "identity_recovery") {
           const existingSubjectOwner = await tx.query.userIdentities.findFirst({
@@ -156,6 +183,20 @@ export function registerAdminRoutes(
               providerSubject: requestRow.requestedIdentitySubject!,
               userId: targetUser.id
             });
+            linkedIdentityAuditEvent = {
+              actorKind: "portal_user" as const,
+              actorUserId,
+              eventId: "user_identity.linked",
+              payload: {
+                actorUserId,
+                identityProvider: requestRow.requestedIdentityProvider!,
+                identitySubject: requestRow.requestedIdentitySubject!,
+                targetUserId: targetUser.id
+              },
+              severity: "critical" as const,
+              subjectKind: "user_identity" as const,
+              targetUserId: targetUser.id
+            };
           } else {
             await tx
               .update(userIdentities)
@@ -240,7 +281,8 @@ export function registerAdminRoutes(
                   subjectKind: "role_grant" as const,
                   targetUserId: targetUser.id
                 }
-              ])
+              ]),
+          ...(linkedIdentityAuditEvent ? [linkedIdentityAuditEvent] : [])
         ]);
 
         return {
@@ -390,6 +432,40 @@ export function registerAdminRoutes(
 
       return {
         item: toAccessRequestSummary(result.item)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/admin/users",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async () => {
+      return {
+        items: await loadPortalAdminUserList(db)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/admin/users/:userId",
+    {
+      preHandler: requireAccess("admin_only")
+    },
+    async (request, reply) => {
+      const userId = (request.params as { userId?: string }).userId;
+      const item = userId ? await loadPortalAdminUserDetail(db, userId) : null;
+
+      if (!item) {
+        reply.code(404).send({
+          error: "portal_admin_user_not_found"
+        });
+        return;
+      }
+
+      return {
+        item
       };
     }
   );

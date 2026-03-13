@@ -114,6 +114,14 @@ export const apiEndpointCatalog = [
   {
     access: "admin_only",
     audience: "portal",
+    id: "admin.access-request.read",
+    method: "GET",
+    path: "/portal/admin/access-requests/:accessRequestId",
+    purpose: "Return the full admin review detail payload for one contributor access request."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
     id: "admin.access-request.approve",
     method: "POST",
     path: "/portal/admin/access-requests/:accessRequestId/approve",
@@ -126,6 +134,22 @@ export const apiEndpointCatalog = [
     method: "POST",
     path: "/portal/admin/access-requests/:accessRequestId/reject",
     purpose: "Reject an access request and record the admin decision note."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.user.list",
+    method: "GET",
+    path: "/portal/admin/users",
+    purpose: "List contributor accounts and their current portal-access posture for admin inspection."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.user.read",
+    method: "GET",
+    path: "/portal/admin/users/:userId",
+    purpose: "Return the full admin detail payload for one contributor account."
   },
   {
     access: "service_token",
