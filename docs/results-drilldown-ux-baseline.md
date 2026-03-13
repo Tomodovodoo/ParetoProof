@@ -129,3 +129,5 @@ This keeps deep links usable for async review and admin support.
 - public anonymous results drilldown outside authenticated portal access
 
 Status naming in this document must follow [run-state-vocabulary-baseline.md](run-state-vocabulary-baseline.md). In particular, `timed_out` is a derived failure bucket rather than a primary lifecycle state, and the canonical spelling is `cancelled`.
+
+The allowed sort, filter, and export semantics for these drilldown surfaces are defined in [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md).
