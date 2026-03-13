@@ -566,3 +566,35 @@ test("failure semantic validation rejects cancelled submissions with terminality
       error.code === "worker_failure_terminality_mismatch"
   );
 });
+
+test("artifact manifest validation rejects digest drift when reusing an existing artifact row", () => {
+  const request = buildArtifactManifestRequest();
+
+  assert.throws(
+    () =>
+      internalWorkerControlTestUtils.assertArtifactRowsMatchManifest(
+        {
+          artifactClassId: "candidate_source",
+          artifactManifestDigest: "z".repeat(64),
+          bucketName: "paretoproof-dev-artifacts",
+          byteSize: 128,
+          contentEncoding: null,
+          id: "artifact-1",
+          lifecycleState: "registered",
+          mediaType: "text/plain",
+          objectKey: "runs/run-1/artifacts/attempt-1/candidate/Candidate.lean",
+          prefixFamily: "run_artifacts",
+          relativePath: "candidate/Candidate.lean",
+          requiredForIngest: true,
+          sha256: "c".repeat(64),
+          storageProvider: "cloudflare_r2"
+        },
+        request.artifacts[0],
+        buildJobAuthContext(),
+        request.artifactManifestDigest
+      ),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_artifact_manifest_conflict"
+  );
+});

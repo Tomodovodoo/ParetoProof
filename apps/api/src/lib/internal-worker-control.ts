@@ -625,7 +625,8 @@ function matchesStoredEvent(request: WorkerExecutionEvent, storedEvent: StoredAt
 function assertArtifactRowsMatchManifest(
   existingArtifact: StoredArtifactRow,
   requestArtifact: WorkerArtifactManifestRequest["artifacts"][number],
-  authContext: InternalWorkerJobAuthContext
+  authContext: InternalWorkerJobAuthContext,
+  artifactManifestDigest: string
 ) {
   if (
     existingArtifact.artifactClassId !== requestArtifact.artifactRole ||
@@ -635,7 +636,8 @@ function assertArtifactRowsMatchManifest(
     existingArtifact.mediaType !== requestArtifact.mediaType ||
     existingArtifact.contentEncoding !== requestArtifact.contentEncoding ||
     existingArtifact.requiredForIngest !== requestArtifact.requiredForIngest ||
-    existingArtifact.artifactManifestDigest === null
+    existingArtifact.artifactManifestDigest === null ||
+    existingArtifact.artifactManifestDigest !== artifactManifestDigest
   ) {
     throw createConflictError(
       "worker_artifact_manifest_conflict",
@@ -786,7 +788,27 @@ function selectFailureVerdictClass(request: WorkerTerminalFailureRequest) {
     : ("invalid_result" as const);
 }
 
+function isWorkerAttemptEventDuplicateError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const databaseCode = "code" in error ? String(error.code) : null;
+  const constraintName =
+    "constraint_name" in error
+      ? String(error.constraint_name)
+      : "constraint" in error
+        ? String(error.constraint)
+        : null;
+
+  return (
+    databaseCode === "23505" &&
+    constraintName === "worker_attempt_events_attempt_sequence_unique"
+  );
+}
+
 export const internalWorkerControlTestUtils = {
+  assertArtifactRowsMatchManifest,
   assertFailurePayload,
   assertResultPayload
 };
@@ -1116,18 +1138,43 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
         }
 
-        await tx.insert(workerAttemptEvents).values({
-          attemptId: authContext.attemptRowId,
-          details: request.details,
-          eventKind: request.eventKind,
-          jobId: authContext.jobRowId,
-          leaseId: authContext.leaseRowId,
-          phase: request.phase,
-          recordedAt: new Date(request.recordedAt),
-          runId: authContext.runRowId,
-          sequence: request.sequence,
-          summary: request.summary
-        });
+        try {
+          await tx.insert(workerAttemptEvents).values({
+            attemptId: authContext.attemptRowId,
+            details: request.details,
+            eventKind: request.eventKind,
+            jobId: authContext.jobRowId,
+            leaseId: authContext.leaseRowId,
+            phase: request.phase,
+            recordedAt: new Date(request.recordedAt),
+            runId: authContext.runRowId,
+            sequence: request.sequence,
+            summary: request.summary
+          });
+        } catch (error) {
+          if (!isWorkerAttemptEventDuplicateError(error)) {
+            throw error;
+          }
+
+          const storedEvent = await loadStoredAttemptEvent(
+            tx,
+            authContext.attemptRowId,
+            request.sequence
+          );
+
+          if (storedEvent && matchesStoredEvent(request, storedEvent)) {
+            return {
+              acceptedAt: storedEvent.createdAt.toISOString(),
+              acknowledgedSequence: request.sequence
+            };
+          }
+
+          throw createConflictError(
+            "worker_event_sequence_conflict",
+            "Event sequence has already been used for a different event.",
+            "sequence"
+          );
+        }
 
         await tx
           .update(workerJobLeases)
@@ -1182,7 +1229,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           const existingArtifact = existingArtifactsByKey.get(artifactKey);
 
           if (existingArtifact) {
-            assertArtifactRowsMatchManifest(existingArtifact, artifact, authContext);
+            assertArtifactRowsMatchManifest(
+              existingArtifact,
+              artifact,
+              authContext,
+              request.artifactManifestDigest
+            );
             responseArtifacts.push({
               artifactId: existingArtifact.id,
               artifactRole: artifact.artifactRole,
