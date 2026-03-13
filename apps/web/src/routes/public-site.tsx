@@ -4,6 +4,8 @@ import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
 
+const projectRoute = "/project";
+
 const publicSignals = [
   {
     detail: "versioned harness inputs, environment metadata, and comparable outputs",
@@ -186,19 +188,48 @@ const projectResources: Array<{
   }
 ];
 
-function PublicHeader({ homeHref }: { homeHref?: string }) {
+function buildProjectSectionUrl(sectionId: string) {
+  return buildPublicUrl(`${projectRoute}#${sectionId}`);
+}
+
+const footerProjectLinks = [
+  { id: "overview", label: "Project overview" },
+  { id: "contributors", label: "Contributor path" },
+  { id: "contact", label: "Contact rules" }
+];
+
+function PublicHeader({
+  currentPath,
+  homeHref
+}: {
+  currentPath: string;
+  homeHref?: string;
+}) {
+  const isProjectRoute = currentPath === projectRoute || currentPath.startsWith(`${projectRoute}/`);
+
   return (
     <header className="site-header">
-      <div className="site-brand">
-        <span className="site-brand-mark" aria-hidden="true">
-          <AppIcon name="spark" />
-        </span>
-        <div>
-          <p className="eyebrow">ParetoProof</p>
-          <p className="site-tagline">
-            Formal benchmark infrastructure for mathematical reasoning systems.
-          </p>
+      <div className="site-header-main">
+        <div className="site-brand">
+          <span className="site-brand-mark" aria-hidden="true">
+            <AppIcon name="spark" />
+          </span>
+          <div>
+            <p className="eyebrow">ParetoProof</p>
+            <p className="site-tagline">
+              Formal benchmark infrastructure for mathematical reasoning systems.
+            </p>
+          </div>
         </div>
+
+        <nav className="site-primary-nav" aria-label="Primary">
+          <a
+            className={`site-nav-link${isProjectRoute ? " site-nav-link-active" : ""}`}
+            href={buildPublicUrl(projectRoute)}
+          >
+            Project
+          </a>
+        </nav>
       </div>
 
       <div className="site-header-actions">
@@ -215,10 +246,63 @@ function PublicHeader({ homeHref }: { homeHref?: string }) {
   );
 }
 
+function PublicFooter({ isProjectRoute }: { isProjectRoute: boolean }) {
+  return (
+    <footer className="site-footer" aria-label="Project entry points">
+      <div className="site-footer-grid">
+        <section className="site-footer-panel">
+          <p className="section-tag">Project route</p>
+          <h2>One public entry, three anchored sections.</h2>
+          <p>
+            The public site exposes one consolidated `Project` destination, then routes
+            readers into the exact section they need.
+          </p>
+          <div className="site-footer-links">
+            {footerProjectLinks.map((link) => (
+              <a
+                className="site-footer-link"
+                href={isProjectRoute ? `#${link.id}` : buildProjectSectionUrl(link.id)}
+                key={link.id}
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="site-footer-panel">
+          <p className="section-tag">Public routing</p>
+          <h2>Keep discoverability on the apex surface.</h2>
+          <p>
+            Contributor sign-in still routes into auth, public questions still route to
+            GitHub Discussions, and the apex site keeps the project explanation in one place.
+          </p>
+          <div className="site-footer-links">
+            <a className="site-footer-link" href={buildAuthUrl("/")}>
+              Contributor sign in
+            </a>
+            <a className="site-footer-link" href={githubDiscussionsUrl} rel="noreferrer" target="_blank">
+              GitHub Discussions
+            </a>
+            <a
+              className="site-footer-link"
+              href={`${publicDocsBaseUrl}/README.md`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Working docs
+            </a>
+          </div>
+        </section>
+      </div>
+    </footer>
+  );
+}
+
 function PublicLanding() {
   return (
     <main className="site-shell">
-      <PublicHeader />
+      <PublicHeader currentPath={window.location.pathname} />
 
       <section className="site-hero">
         <div className="site-hero-copy">
@@ -266,6 +350,8 @@ function PublicLanding() {
           </article>
         ))}
       </section>
+
+      <PublicFooter isProjectRoute={false} />
     </main>
   );
 }
@@ -273,7 +359,7 @@ function PublicLanding() {
 function PublicProjectPack() {
   return (
     <main className="site-shell site-project-shell">
-      <PublicHeader homeHref={buildPublicUrl("/")} />
+      <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
 
       <section className="site-hero site-hero-project">
         <div className="site-hero-copy">
@@ -459,6 +545,8 @@ function PublicProjectPack() {
           </div>
         </article>
       </section>
+
+      <PublicFooter isProjectRoute />
     </main>
   );
 }
