@@ -2,13 +2,10 @@ import { access, constants, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import {
-  parseWorkerRuntimeEnv
-} from "./runtime.js";
-import {
-  preflightProblem9AuthMode,
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
 } from "./problem9-auth.js";
+import { validateTrustedLocalDevboxRuntime } from "./runtime-env.js";
 
 const benchmarkPackageContainerRoot = "/workdir/input/benchmark-package";
 const promptPackageContainerRoot = "/workdir/input/prompt-package";
@@ -29,23 +26,15 @@ type DevboxWrapperOptions = {
 };
 
 export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<void> {
-  if (args.includes("--help")) {
-    console.error(
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(
       "Usage: tsx src/index.ts run-problem9-attempt-in-devbox --image <docker-image> [--preflight-only] [--print-docker-command] [--benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model>]"
     );
     return;
   }
 
-  await parseWorkerRuntimeEnv({
-    commandFamily: "trusted_local_devbox"
-  });
-
   const options = parseDevboxWrapperOptions(args);
-  const authPreflight = await preflightProblem9AuthMode("trusted_local_user");
-
-  if (authPreflight.authMode !== "trusted_local_user") {
-    throw new Error("Trusted-local devbox wrapper resolved a non-trusted auth mode unexpectedly.");
-  }
+  const authPreflight = await validateTrustedLocalDevboxRuntime();
 
   const benchmarkPackageRoot = options.preflightOnly
     ? null
