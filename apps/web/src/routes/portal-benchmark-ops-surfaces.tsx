@@ -96,8 +96,28 @@ function toDisplayError(error: unknown) {
   return error instanceof Error ? error.message : "Request failed.";
 }
 
-function buildRunDetailHref(runId: string) {
-  return buildPortalUrl(`/runs/${encodeURIComponent(runId)}`);
+function normalizeRouteSearch(search: string) {
+  if (!search) {
+    return "";
+  }
+
+  return search.startsWith("?") ? search : `?${search}`;
+}
+
+export function buildRunsIndexTargetPath(search = "") {
+  return `/runs${normalizeRouteSearch(search)}`;
+}
+
+export function buildRunsIndexHref(search = "") {
+  return buildPortalUrl(buildRunsIndexTargetPath(search));
+}
+
+export function buildRunDetailTargetPath(runId: string, search = "") {
+  return `/runs/${encodeURIComponent(runId)}${normalizeRouteSearch(search)}`;
+}
+
+export function buildRunDetailHref(runId: string, search = "") {
+  return buildPortalUrl(buildRunDetailTargetPath(runId, search));
 }
 
 function updateRunsQuery(
@@ -300,6 +320,7 @@ export function PortalBenchmarkOpsSurface({
         activeRouteId={activeRouteId}
         loadState={runDetailState}
         onRefresh={loadRunDetail}
+        search={search}
       />
     );
   }
@@ -313,6 +334,7 @@ export function PortalBenchmarkOpsSurface({
         onReplaceLocation={onReplaceLocation}
         pathname={pathname}
         query={runsQuery}
+        search={search}
       />
     );
   }
@@ -350,11 +372,13 @@ function PortalRunsSurface({
   onRefresh,
   onReplaceLocation,
   pathname,
-  query
+  query,
+  search
 }: SurfaceProps<PortalRunsListResponse> & {
   onReplaceLocation: PortalBenchmarkOpsSurfaceProps["onReplaceLocation"];
   pathname: string;
   query: PortalRunsListQuery;
+  search: string;
 }) {
   const providerOptions = buildRunsProviderOptions(
     loadState.data?.items ?? [],
@@ -556,7 +580,7 @@ function PortalRunsSurface({
             {loadState.data.items.map((item) => (
               <div className="portal-table-row" key={item.runId} role="row">
                 <span>
-                  <a className="portal-inline-link" href={buildRunDetailHref(item.runId)}>
+                  <a className="portal-inline-link" href={buildRunDetailHref(item.runId, search)}>
                     {item.runId}
                   </a>
                 </span>
@@ -586,9 +610,13 @@ function PortalRunsSurface({
 function PortalRunDetailSurface({
   activeRouteId,
   loadState,
-  onRefresh
-}: SurfaceProps<PortalRunDetailResponse>) {
+  onRefresh,
+  search
+}: SurfaceProps<PortalRunDetailResponse> & {
+  search: string;
+}) {
   const detail = loadState.data;
+  const runsIndexHref = buildRunsIndexHref(search);
 
   return (
     <section className="portal-workspace-grid">
@@ -598,7 +626,7 @@ function PortalRunDetailSurface({
             <p className="section-tag">Canonical run detail</p>
             <h2>{detail?.item.runId ?? "Run detail"}</h2>
           </div>
-          <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+          <a className="button button-secondary" href={runsIndexHref}>
             Back to runs
           </a>
         </div>
@@ -687,7 +715,7 @@ function PortalRunDetailSurface({
         <div className="portal-action-list">
           <PortalLinkCard
             copy="Return to the canonical filtered run index."
-            href={buildPortalUrl("/runs")}
+            href={runsIndexHref}
             title="Runs"
           />
           <PortalLinkCard
