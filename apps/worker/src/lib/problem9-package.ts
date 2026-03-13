@@ -54,6 +54,7 @@ const ignoredSourcePathSegments = new Set([
   ".tmp",
   "Thumbs.db"
 ]);
+const textHashRelativePaths = new Set<string>(requiredRelativePaths);
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -84,6 +85,7 @@ export async function materializeProblem9Package(
   const outputRoot = path.resolve(options.outputRoot);
   const materializedPackageRoot = path.join(outputRoot, "firstproof", "Problem9");
 
+  assertNoPathOverlap(problem9SourceRoot, materializedPackageRoot);
   await rm(materializedPackageRoot, { force: true, recursive: true });
   await mkdir(materializedPackageRoot, { recursive: true });
 
@@ -100,7 +102,10 @@ export async function materializeProblem9Package(
   }
 
   const sourceManifestPath = path.join(problem9SourceRoot, generatedManifestRelativePath);
-  const sourceManifestDigest = await sha256File(sourceManifestPath);
+  const sourceManifestDigest = await sha256File(
+    sourceManifestPath,
+    generatedManifestRelativePath
+  );
   const fileHashes = await collectFileHashes(materializedPackageRoot);
   const packageDigest = sha256Text(
     stableStringify({
@@ -218,13 +223,35 @@ async function collectFileHashes(
       throw new Error(`Materialized Problem 9 path is not a file: ${fullPath}`);
     }
 
-    fileHashes.push([relativePath, await sha256File(fullPath)]);
+    fileHashes.push([relativePath, await sha256File(fullPath, relativePath)]);
   }
 
   return Object.fromEntries(fileHashes.sort(([left], [right]) => left.localeCompare(right)));
 }
 
-async function sha256File(filePath: string): Promise<string> {
+function assertNoPathOverlap(sourceRoot: string, materializedRoot: string): void {
+  const normalizedSourceRoot = normalizePathForComparison(sourceRoot);
+  const normalizedMaterializedRoot = normalizePathForComparison(materializedRoot);
+
+  const sourceContainsMaterialized =
+    normalizedMaterializedRoot === normalizedSourceRoot ||
+    normalizedMaterializedRoot.startsWith(`${normalizedSourceRoot}/`);
+  const materializedContainsSource =
+    normalizedSourceRoot.startsWith(`${normalizedMaterializedRoot}/`);
+
+  if (sourceContainsMaterialized || materializedContainsSource) {
+    throw new Error(
+      "Problem 9 package output overlaps the checked-in source tree. Choose an output directory outside benchmarks/firstproof/problem9."
+    );
+  }
+}
+
+async function sha256File(filePath: string, relativePath: string): Promise<string> {
+  if (shouldNormalizeTextForHash(relativePath)) {
+    const fileContents = await readFile(filePath, "utf8");
+    return sha256Text(normalizeTextForHash(fileContents));
+  }
+
   const fileContents = await readFile(filePath);
   return sha256Buffer(fileContents);
 }
@@ -241,6 +268,10 @@ function normalizePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
+function normalizePathForComparison(filePath: string): string {
+  return normalizePath(path.resolve(filePath)).toLowerCase();
+}
+
 function shouldIgnoreSourcePath(relativePath: string): boolean {
   if (!relativePath) {
     return false;
@@ -249,6 +280,14 @@ function shouldIgnoreSourcePath(relativePath: string): boolean {
   return normalizePath(relativePath)
     .split("/")
     .some((segment) => ignoredSourcePathSegments.has(segment) || segment.startsWith(".#"));
+}
+
+function shouldNormalizeTextForHash(relativePath: string): boolean {
+  return textHashRelativePaths.has(normalizePath(relativePath));
+}
+
+function normalizeTextForHash(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
