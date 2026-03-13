@@ -24,6 +24,7 @@ import {
 } from "../lib/results-state";
 import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
+import { PortalAdminUsersPanel } from "./portal-admin-users-panel";
 import { PortalProfilePanel } from "./portal-profile-panel";
 
 type PortalShellProps = {
@@ -481,6 +482,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           <section className="portal-content">
             {activeSection?.id === "access_requests" ? (
               <PortalAccessRequestPanel email={email} />
+            ) : activeSection?.id === "users" ? (
+              <PortalAdminUsersPanel email={email} />
             ) : activeSection?.id === "profile" ? (
               <PortalProfilePanel email={email} />
             ) : activeSection?.id === "runs" && activeRunId ? (
