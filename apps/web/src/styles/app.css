@@ -1379,7 +1379,6 @@ a.button-secondary {
 
   .portal-table-head span:nth-child(3),
   .portal-table-head span:nth-child(4),
-  .portal-table-head span:nth-child(6),
   .portal-table-row span:nth-child(3),
   .portal-table-row span:nth-child(4) {
     display: none;
