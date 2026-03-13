@@ -42,6 +42,21 @@ type PortalMeResponse = {
   };
 };
 
+function parseDeniedReason(
+  reason: string | null
+): PortalMeResponse["access"]["reason"] | null {
+  if (
+    reason === "access_request_required" ||
+    reason === "identity_recovery_required" ||
+    reason === "rejected_or_withdrawn" ||
+    reason === "unknown_identity"
+  ) {
+    return reason;
+  }
+
+  return null;
+}
+
 function readRouteDeniedReason(search = window.location.search) {
   const reason = new URLSearchParams(search).get("reason");
 
@@ -70,9 +85,7 @@ function readLocalAccessOverride(): PortalAccessState | null {
   if (accessState === "denied") {
     return {
       email: params.get("email"),
-      reason:
-        (params.get("reason") as PortalMeResponse["access"]["reason"] | null) ??
-        "access_request_required",
+      reason: parseDeniedReason(params.get("reason")) ?? "access_request_required",
       status: "denied"
     };
   }
