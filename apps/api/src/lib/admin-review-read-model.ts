@@ -9,7 +9,7 @@ import type {
   PortalAdminUserIdentitySummary,
   PortalAdminUserListItem
 } from "@paretoproof/shared";
-import { asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import {
   accessRequests,
   auditEvents,
@@ -40,6 +40,14 @@ type UserWithAdminRelations = typeof users.$inferSelect & {
   >;
   sessions?: Array<typeof sessions.$inferSelect>;
 };
+
+const ACCESS_REQUEST_AUDIT_EVENT_IDS = [
+  "access_request.submitted",
+  "access_request.approved",
+  "access_request.rejected",
+  "role_grant.granted",
+  "user_identity.linked"
+] as const;
 
 export async function loadPortalAdminAccessRequestList(
   db: ReturnTypeOfCreateDbClient
@@ -82,7 +90,9 @@ export async function loadPortalAdminAccessRequestDetail(
         .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     : [];
   const recentAuditEvents = matchedUser
-    ? await loadAdminAuditEventsForUser(db, matchedUser.id)
+    ? await loadAdminAuditEventsForUser(db, matchedUser.id, {
+        eventIds: ACCESS_REQUEST_AUDIT_EVENT_IDS
+      })
     : [];
   const activeRoleGrant = matchedUser
     ? getActiveRoleGrantSummary(matchedUser.roleGrants ?? [])
@@ -95,7 +105,7 @@ export async function loadPortalAdminAccessRequestDetail(
     matchedUserIdentities: matchedUser
       ? sortIdentities(matchedUser.identities ?? []).map(toPortalAdminUserIdentitySummary)
       : [],
-    recentAuditEvents: filterAuditEventsForAccessRequest(recentAuditEvents),
+    recentAuditEvents: recentAuditEvents,
     relatedRequests: relatedRequestRows.map((candidate) => toAccessRequestSummary(candidate)),
     sessionImpact: matchedUser
       ? {
@@ -428,12 +438,21 @@ function toPortalAdminRoleGrantSummary(
 
 async function loadAdminAuditEventsForUser(
   db: ReturnTypeOfCreateDbClient,
-  userId: string
+  userId: string,
+  options?: {
+    eventIds?: readonly string[];
+  }
 ) {
   const auditRows = await db.query.auditEvents.findMany({
     limit: 20,
     orderBy: [desc(auditEvents.createdAt)],
-    where: eq(auditEvents.targetUserId, userId),
+    where:
+      options?.eventIds && options.eventIds.length > 0
+        ? and(
+            eq(auditEvents.targetUserId, userId),
+            inArray(auditEvents.eventId, [...options.eventIds])
+          )
+        : eq(auditEvents.targetUserId, userId),
     with: {
       actorUser: true
     }
@@ -457,18 +476,6 @@ function toPortalAdminAuditEcho(
     severity: auditRow.severity,
     targetUserId: auditRow.targetUserId
   };
-}
-
-function filterAuditEventsForAccessRequest(auditEvents: PortalAdminAuditEcho[]) {
-  return auditEvents.filter((auditEvent) => {
-    return [
-      "access_request.submitted",
-      "access_request.approved",
-      "access_request.rejected",
-      "role_grant.granted",
-      "user_identity.linked"
-    ].includes(auditEvent.eventId);
-  });
 }
 
 function sortIdentities(identityRows: Array<typeof userIdentities.$inferSelect>) {
@@ -510,7 +517,11 @@ function getActiveRoleGrantSummary(
 }
 
 function countActiveSessions(sessionRows: Array<typeof sessions.$inferSelect>) {
-  return sessionRows.filter((sessionRow) => sessionRow.revokedAt === null).length;
+  const now = Date.now();
+
+  return sessionRows.filter((sessionRow) => {
+    return sessionRow.revokedAt === null && sessionRow.expiresAt.getTime() > now;
+  }).length;
 }
 
 function findIdentityOwner(

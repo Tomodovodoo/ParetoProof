@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import util from "node:util";
 import Fastify from "fastify";
 import { registerAdminRoutes } from "../src/routes/admin.ts";
 
@@ -107,6 +108,18 @@ test("GET /portal/admin/access-requests returns enriched admin queue items", asy
         lastSeenAt: new Date("2026-03-13T08:35:00.000Z"),
         revokedAt: null,
         tokenHash: "token-hash-1",
+        userAgent: null,
+        userId: "00000000-0000-4000-8000-000000000201"
+      },
+      {
+        createdAt: new Date("2026-03-10T08:30:00.000Z"),
+        expiresAt: new Date("2026-03-11T08:30:00.000Z"),
+        id: "00000000-0000-4000-8000-000000000502",
+        identityId: "00000000-0000-4000-8000-000000000301",
+        ipAddress: null,
+        lastSeenAt: new Date("2026-03-10T08:35:00.000Z"),
+        revokedAt: null,
+        tokenHash: "token-hash-2",
         userAgent: null,
         userId: "00000000-0000-4000-8000-000000000201"
       }
@@ -404,6 +417,18 @@ test("GET /portal/admin/access-requests/:id returns the scoped detail payload", 
         tokenHash: "token-hash-1",
         userAgent: null,
         userId: "00000000-0000-4000-8000-000000000201"
+      },
+      {
+        createdAt: new Date("2026-03-10T08:30:00.000Z"),
+        expiresAt: new Date("2026-03-11T08:30:00.000Z"),
+        id: "00000000-0000-4000-8000-000000000502",
+        identityId: "00000000-0000-4000-8000-000000000301",
+        ipAddress: null,
+        lastSeenAt: new Date("2026-03-10T08:35:00.000Z"),
+        revokedAt: null,
+        tokenHash: "token-hash-2",
+        userAgent: null,
+        userId: "00000000-0000-4000-8000-000000000201"
       }
     ],
     updatedAt: new Date("2026-03-01T00:00:00.000Z")
@@ -463,7 +488,14 @@ test("GET /portal/admin/access-requests/:id returns the scoped detail payload", 
           findFirst: async () => requestRow
         },
         auditEvents: {
-          findMany: async () => auditRows
+          findMany: async (options: { limit?: number; where?: unknown }) => {
+            assert.equal(options.limit, 20);
+            const whereText = util.inspect(options.where, { depth: 20 });
+            assert.equal(whereText.includes("access_request.submitted"), true);
+            assert.equal(whereText.includes("role_grant.granted"), true);
+
+            return auditRows;
+          }
         },
         userIdentities: {
           findMany: async () => []
@@ -687,6 +719,18 @@ test("GET /portal/admin/users and /portal/admin/users/:userId return admin user 
         lastSeenAt: new Date("2026-03-13T08:35:00.000Z"),
         revokedAt: null,
         tokenHash: "token-hash-1",
+        userAgent: null,
+        userId: "00000000-0000-4000-8000-000000000201"
+      },
+      {
+        createdAt: new Date("2026-03-10T08:30:00.000Z"),
+        expiresAt: new Date("2026-03-11T08:30:00.000Z"),
+        id: "00000000-0000-4000-8000-000000000502",
+        identityId: "00000000-0000-4000-8000-000000000301",
+        ipAddress: null,
+        lastSeenAt: new Date("2026-03-10T08:35:00.000Z"),
+        revokedAt: null,
+        tokenHash: "token-hash-2",
         userAgent: null,
         userId: "00000000-0000-4000-8000-000000000201"
       }
