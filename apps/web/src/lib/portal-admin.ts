@@ -1248,12 +1248,18 @@ export function summarizeAccessRequestStatus(
 }
 
 export function summarizeUserPosture(item: PortalAdminUserListItem) {
+  const pendingRequestSummary = item.pendingRequest
+    ? `${item.pendingRequest.requestKind === "identity_recovery" ? "Recovery" : "Access"} request pending`
+    : null;
+
   if (item.activeRole) {
-    return `${item.activeRole.role} active`;
+    return pendingRequestSummary
+      ? `${item.activeRole.role} active + ${pendingRequestSummary.toLowerCase()}`
+      : `${item.activeRole.role} active`;
   }
 
-  if (item.pendingRequest) {
-    return `${item.pendingRequest.requestKind === "identity_recovery" ? "Recovery" : "Access"} request pending`;
+  if (pendingRequestSummary) {
+    return pendingRequestSummary;
   }
 
   if (item.lastReviewedRequestStatus) {
