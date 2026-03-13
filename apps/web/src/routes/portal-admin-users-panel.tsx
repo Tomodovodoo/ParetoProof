@@ -243,9 +243,10 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               <span>Search</span>
               <input
                 onChange={(event) => {
+                  const value = event.currentTarget.value;
                   setFilters((current) => ({
                     ...current,
-                    search: event.currentTarget.value
+                    search: value
                   }));
                 }}
                 placeholder="Email, display name, or user id"
@@ -258,9 +259,10 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               <span>Access posture</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as UserFilters["accessPosture"];
                   setFilters((current) => ({
                     ...current,
-                    accessPosture: event.currentTarget.value as UserFilters["accessPosture"]
+                    accessPosture: value
                   }));
                 }}
                 value={filters.accessPosture}
@@ -277,9 +279,10 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               <span>Active role</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as UserFilters["activeRole"];
                   setFilters((current) => ({
                     ...current,
-                    activeRole: event.currentTarget.value as UserFilters["activeRole"]
+                    activeRole: value
                   }));
                 }}
                 value={filters.activeRole}
@@ -294,10 +297,10 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               <span>Identity provider</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as UserFilters["identityProvider"];
                   setFilters((current) => ({
                     ...current,
-                    identityProvider: event.currentTarget
-                      .value as UserFilters["identityProvider"]
+                    identityProvider: value
                   }));
                 }}
                 value={filters.identityProvider}
