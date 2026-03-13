@@ -1,0 +1,26 @@
+[
+  {
+    "name": "zero-width-space",
+    "path": "apps/web/src/forbidden-zws.ts",
+    "codePoints": ["0061", "200B", "0062"],
+    "expectedCodePoints": ["U+200B"]
+  },
+  {
+    "name": "left-to-right-isolate",
+    "path": "apps/api/src/forbidden-bidi.ts",
+    "codePoints": ["0061", "2066", "0062"],
+    "expectedCodePoints": ["U+2066"]
+  },
+  {
+    "name": "tag-character",
+    "path": "packages/shared/src/forbidden-tag.ts",
+    "codePoints": ["0061", "E0001", "0062"],
+    "expectedCodePoints": ["U+E0001"]
+  },
+  {
+    "name": "escape-control",
+    "path": "infra/examples/forbidden-escape.txt",
+    "codePoints": ["0061", "001B", "0062"],
+    "expectedCodePoints": ["U+001B"]
+  }
+]

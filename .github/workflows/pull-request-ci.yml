@@ -19,8 +19,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Check for hidden bidi characters
+      - name: Check for hidden Unicode control characters
         run: node infra/scripts/check-bidi-chars.mjs
+
+      - name: Test hidden Unicode guard fixtures
+        run: node --test infra/scripts/check-bidi-chars.test.mjs
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
