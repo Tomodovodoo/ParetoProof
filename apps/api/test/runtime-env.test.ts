@@ -7,7 +7,8 @@ test("parseApiRuntimeEnv accepts the documented local API runtime contract", () 
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
-    DATABASE_URL: "postgres://localhost:5432/paretoproof"
+    DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
   });
 
   assert.deepEqual(runtimeEnv, {
@@ -20,7 +21,8 @@ test("parseApiRuntimeEnv accepts the documented local API runtime contract", () 
     nodeEnv: undefined,
     port: 3000,
     portalAccessAudience: "portal-audience",
-    teamDomain: "paretoproof.cloudflareaccess.com"
+    teamDomain: "paretoproof.cloudflareaccess.com",
+    workerBootstrapToken: "worker-bootstrap-token"
   });
 });
 
@@ -35,7 +37,8 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     DATABASE_URL: "postgres://railway.internal:5432/paretoproof",
     HOST: "127.0.0.1",
     NODE_ENV: "production",
-    PORT: "4310"
+    PORT: "4310",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
   });
 
   assert.deepEqual(runtimeEnv, {
@@ -51,7 +54,8 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     nodeEnv: "production",
     port: 4310,
     portalAccessAudience: "legacy-audience",
-    teamDomain: "paretoproof.cloudflareaccess.com"
+    teamDomain: "paretoproof.cloudflareaccess.com",
+    workerBootstrapToken: "worker-bootstrap-token"
   });
 });
 
@@ -61,7 +65,8 @@ test("parseApiRuntimeEnv rejects runtimes without a portal access audience", () 
       parseApiRuntimeEnv({
         ACCESS_PROVIDER_STATE_SECRET: "state-secret",
         CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
-        DATABASE_URL: "postgres://localhost:5432/paretoproof"
+        DATABASE_URL: "postgres://localhost:5432/paretoproof",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
       }),
     /CF_ACCESS_PORTAL_AUD: CF_ACCESS_PORTAL_AUD or CF_ACCESS_AUD is required/
   );
@@ -75,7 +80,7 @@ test("parseApiRuntimeEnv reports omitted required variables explicitly", () => {
         CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
         DATABASE_URL: "postgres://localhost:5432/paretoproof"
       }),
-    /ACCESS_PROVIDER_STATE_SECRET: is required/
+    /ACCESS_PROVIDER_STATE_SECRET: is required; WORKER_BOOTSTRAP_TOKEN: is required|WORKER_BOOTSTRAP_TOKEN: is required; ACCESS_PROVIDER_STATE_SECRET: is required/
   );
 });
 
@@ -88,8 +93,9 @@ test("parseApiRuntimeEnv rejects missing and malformed values with explicit fiel
         CF_ACCESS_TEAM_DOMAIN: "",
         CORS_ALLOW_LOCALHOST: "maybe",
         DATABASE_URL: "",
-        PORT: "70000"
+        PORT: "70000",
+        WORKER_BOOTSTRAP_TOKEN: " "
       }),
-    /ACCESS_PROVIDER_STATE_SECRET: must not be empty; CF_ACCESS_TEAM_DOMAIN: must not be empty; CORS_ALLOW_LOCALHOST: Invalid enum value\..*DATABASE_URL: must not be empty; PORT: must be at most 65535/
+    /ACCESS_PROVIDER_STATE_SECRET: must not be empty; CF_ACCESS_TEAM_DOMAIN: must not be empty; CORS_ALLOW_LOCALHOST: Invalid enum value\..*DATABASE_URL: must not be empty; PORT: must be at most 65535; WORKER_BOOTSTRAP_TOKEN: must not be empty/
   );
 });

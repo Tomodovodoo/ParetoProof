@@ -6,6 +6,7 @@ import { createAccessGuard } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
 import { registerHealthRoute } from "../routes/health.js";
+import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
@@ -72,6 +73,7 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   registerPortalRoutes(app, db, requireAccess);
   registerAdminRoutes(app, db, requireAccess);
   registerOfflineIngestRoutes(app, db, requireAccess);
+  registerInternalWorkerRoutes(app, db, runtimeEnv);
 
   return app;
 }
