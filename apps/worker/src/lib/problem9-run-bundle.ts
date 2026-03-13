@@ -932,7 +932,7 @@ async function loadNormalizedText(filePath: string): Promise<string> {
 
 async function loadLooseJsonFile(filePath: string): Promise<unknown> {
   await ensureFile(filePath);
-  return JSON.parse(await readFile(filePath, "utf8"));
+  return JSON.parse(normalizeText(await readFile(filePath, "utf8")));
 }
 
 async function loadJsonFile<TSchema extends z.ZodTypeAny>(
@@ -940,7 +940,7 @@ async function loadJsonFile<TSchema extends z.ZodTypeAny>(
   schema: TSchema
 ): Promise<z.output<TSchema>> {
   await ensureFile(filePath);
-  return schema.parse(JSON.parse(await readFile(filePath, "utf8")));
+  return schema.parse(JSON.parse(normalizeText(await readFile(filePath, "utf8"))));
 }
 
 async function writeNormalizedText(filePath: string, contents: string): Promise<void> {
