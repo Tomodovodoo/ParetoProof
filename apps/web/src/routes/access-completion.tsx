@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppIcon } from "../components/app-icon";
 import {
-  buildApiSessionFinalizeUrl,
+  buildAccessFinalizeUrl,
   buildAuthUrl
 } from "../lib/surface";
 
@@ -11,11 +11,9 @@ type AccessCompletionProps = {
 };
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
-  const finalizeUrl = buildApiSessionFinalizeUrl();
+  const finalizeUrl = buildAccessFinalizeUrl(redirectPath);
   const finalizeFormRef = useRef<HTMLFormElement>(null);
   const retryUrl = new URL(buildAuthUrl(redirectPath));
-  const flow = new URLSearchParams(window.location.search).get("flow");
-  const finalizeMethod = flow === "link" ? "post" : "get";
 
   retryUrl.searchParams.set("handoff", "retry");
 
@@ -45,7 +43,7 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
         <form
           ref={finalizeFormRef}
           action={finalizeUrl}
-          method={finalizeMethod}
+          method="post"
           className="auth-form"
         >
           {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
