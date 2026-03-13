@@ -120,7 +120,7 @@ When the API receives the terminal submission, it verifies the referenced artifa
 
 For every referenced artifact:
 
-- if the object exists and matches the stored `sha256` plus `byteSize`, promote `registered -> available`
+- if the object exists and matches the stored `sha256`, `byteSize`, and `contentEncoding`, promote `registered -> available`
 - if the object is absent, promote `registered -> missing`
 - if the object exists but does not match the contract, promote to `quarantined`
 
