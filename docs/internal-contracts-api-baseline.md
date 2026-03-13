@@ -183,7 +183,7 @@ The ingest path may:
 
 - accept a completed bundle that already satisfies the run-bundle contract
 - verify digests, reproducibility metadata, failure registration, and verdict structure
-- create run, job, and attempt records in a completed or failed terminal state
+- create terminal run, job, and attempt records that match the imported verdict and artifact set
 
 The ingest path must not require:
 
@@ -212,11 +212,11 @@ The point of the split is:
 
 The canonical run states are:
 
-- `draft`
+- `created`
 - `queued`
 - `running`
 - `cancel_requested`
-- `completed`
+- `succeeded`
 - `failed`
 - `cancelled`
 
@@ -224,9 +224,10 @@ The canonical run states are:
 
 Allowed run transitions are:
 
-- `draft -> queued`
+- `created -> queued`
+- `created -> cancelled`
 - `queued -> running`
-- `running -> completed`
+- `running -> succeeded`
 - `running -> failed`
 - `queued -> cancel_requested`
 - `running -> cancel_requested`
@@ -235,10 +236,10 @@ Allowed run transitions are:
 
 Interpretation:
 
-- `draft` exists only before a launch request is committed
+- `created` means the run record passed initial request validation and now exists in durable state before or during queue handoff
 - `queued` means accepted by the API but not yet fully finished
 - `running` means at least one job has entered active execution or ingest processing
-- `completed`, `failed`, and `cancelled` are terminal
+- `succeeded`, `failed`, and `cancelled` are terminal
 
 The portal may request cancellation, but only the control plane may finalize `cancelled` or `failed`.
 
@@ -345,7 +346,7 @@ The caller that requests an action is not automatically allowed to finalize its 
 
 - the browser may request `cancel_requested`, but the control plane finalizes `cancelled`
 - the worker may submit a terminal result, but the API validates and records the terminal state
-- offline ingest may submit a bundle, but the API decides whether the imported run becomes `completed` or `failed`
+- offline ingest may submit a bundle, but the API decides whether the imported run becomes `succeeded` or `failed`
 
 ### Validation before persistence
 
@@ -382,7 +383,8 @@ This is synchronous.
 
 - browser submits launch request
 - API validates role and run shape
-- API creates `run=queued` plus one or more queued jobs
+- API creates `run=created`, records queue intent, and promotes the run to `queued`
+- API creates one or more queued jobs
 - API returns run metadata immediately
 
 Execution itself is asynchronous.
