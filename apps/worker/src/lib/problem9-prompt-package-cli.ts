@@ -24,9 +24,10 @@ export async function runProblem9PromptPackageCli(args: string[]): Promise<void>
   const result = await materializeProblem9PromptPackage({
     attemptId: getRequiredValue("--attempt-id"),
     authMode: getRequiredValue("--auth-mode") as
-      | "machine"
-      | "trusted_local_codex"
-      | "trusted_local_provider",
+      | "trusted_local_user"
+      | "machine_api_key"
+      | "machine_oauth"
+      | "local_stub",
     benchmarkPackageRoot: path.resolve(getRequiredValue("--benchmark-package-root")),
     harnessRevision: getRequiredValue("--harness-revision"),
     jobId: getOptionalValue("--job-id"),

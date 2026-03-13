@@ -49,9 +49,10 @@ const promptToolProfileSchema = z.enum([
 ]);
 
 const promptAuthModeSchema = z.enum([
-  "machine",
-  "trusted_local_codex",
-  "trusted_local_provider"
+  "trusted_local_user",
+  "machine_api_key",
+  "machine_oauth",
+  "local_stub"
 ]);
 
 const promptProviderFamilySchema = z.enum([
