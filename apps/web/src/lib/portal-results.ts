@@ -19,7 +19,7 @@ export type PortalResultsSort =
   | "runState.asc"
   | "verdictClass.asc";
 
-export type PortalRunRerunLineage = "original" | "retry_1" | "manual_rerun";
+export type PortalRunRerunLineage = "original" | `retry_${number}` | "manual_rerun";
 
 export type PortalResultsQueryState = {
   rerunLineage?: PortalRunRerunLineage[];
