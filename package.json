@@ -17,6 +17,7 @@
     "deploy:web:pages": "bun run build:web:pages && bun --cwd apps/web pages:deploy",
     "build:api": "bun --cwd apps/api build",
     "build:api:railway": "bun run build:shared && bun run build:api",
+    "bootstrap:github:env-secrets": "node infra/scripts/configure-github-environment-secrets.mjs",
     "bootstrap:owner-admin:api": "bun --cwd apps/api bootstrap:owner-admin",
     "db:migrate:api": "bun --cwd apps/api db:migrate",
     "start:api:railway": "node apps/api/dist/index.js",
