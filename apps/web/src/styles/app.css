@@ -171,6 +171,11 @@ a.button-secondary {
   gap: 16px;
 }
 
+.site-header-main {
+  display: grid;
+  gap: 14px;
+}
+
 .site-brand {
   display: flex;
   align-items: flex-start;
@@ -245,12 +250,55 @@ a.button-secondary {
 .hero-actions,
 .site-header-actions,
 .site-pill-row,
+.site-footer-links,
 .portal-link-actions,
 .portal-request-actions,
 .portal-identity {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.site-primary-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.site-nav-link,
+.site-footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.3rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--ink);
+  font-weight: 700;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+.site-nav-link:hover,
+.site-nav-link:focus-visible,
+.site-footer-link:hover,
+.site-footer-link:focus-visible,
+.site-panel-card-link:hover,
+.site-panel-card-link:focus-visible,
+.site-pill-link:hover,
+.site-pill-link:focus-visible {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.site-nav-link-active {
+  background: rgba(17, 42, 103, 0.08);
+  border-color: rgba(17, 42, 103, 0.16);
+  color: var(--navy);
 }
 
 .site-signal-column {
@@ -362,14 +410,6 @@ a.button-secondary {
     box-shadow 160ms ease;
 }
 
-.site-panel-card-link:hover,
-.site-panel-card-link:focus-visible,
-.site-pill-link:hover,
-.site-pill-link:focus-visible {
-  border-color: var(--line-strong);
-  transform: translateY(-1px);
-}
-
 .site-panel-mark {
   display: inline-flex;
   width: 38px;
@@ -391,6 +431,38 @@ a.button-secondary {
   margin: 0;
   font-size: 1.12rem;
   letter-spacing: -0.03em;
+}
+
+.site-footer {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(249, 251, 255, 0.96));
+  padding: 24px;
+}
+
+.site-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.site-footer-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.site-footer-panel h2 {
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
+}
+
+.site-footer-panel p {
+  color: var(--ink-soft);
+  line-height: 1.6;
 }
 
 .site-band {
@@ -1100,6 +1172,10 @@ a.button-secondary {
     padding: 20px;
   }
 
+  .site-footer-grid {
+    grid-template-columns: 1fr;
+  }
+
   .portal-metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1136,6 +1212,7 @@ a.button-secondary {
   .site-header,
   .site-hero,
   .site-project-section,
+  .site-footer,
   .auth-card,
   .auth-inline-status,
   .portal-main {
@@ -1208,9 +1285,11 @@ a.button-secondary {
 
 @media (max-width: 640px) {
   .site-header,
+  .site-header-main,
   .site-header-actions,
   .hero-actions,
   .site-pill-row,
+  .site-footer-links,
   .portal-identity,
   .portal-request-header,
   .portal-request-actions,
