@@ -73,7 +73,7 @@ This mode is the current live CLI surface in `apps/worker/src/index.ts`.
 
 `local_single_run` executes one concrete Problem 9 attempt locally and emits the same canonical run-bundle boundary that hosted execution will later submit or ingest.
 
-This mode is approved now but not implemented yet. The reserved top-level command is:
+This mode is now implemented. The top-level command is:
 
 - `run-problem9-attempt`
 
@@ -107,7 +107,7 @@ This is the canonical shared inner execution mode for MVP worker runtime impleme
 
 `offline_ingest` submits a completed offline run bundle to the API ingest path after local execution has already finished.
 
-This mode is approved now but not implemented yet. The reserved top-level command is:
+This mode is now implemented. The top-level command is:
 
 - `ingest-problem9-run-bundle`
 
@@ -137,9 +137,9 @@ The important boundary is that ingest imports a finished result. It does not exe
 
 ### 4. `hosted_claim_loop`
 
-`hosted_claim_loop` is the long-running service mode for future hosted workers.
+`hosted_claim_loop` is the long-running service mode for hosted workers.
 
-This mode is approved now but not implemented yet. The reserved top-level command is:
+This mode is now implemented. The top-level command is:
 
 - `run-worker-claim-loop`
 
@@ -174,12 +174,12 @@ The approved worker CLI surface is:
 - `materialize-problem9-package`
 - `materialize-problem9-prompt-package`
 - `materialize-problem9-run-bundle`
+- `ingest-problem9-run-bundle`
+- `run-worker-claim-loop`
 
 ### Reserved for follow-up implementation
 
 - `run-problem9-attempt`
-- `ingest-problem9-run-bundle`
-- `run-worker-claim-loop`
 
 The flat command family is deliberate. The worker CLI should not collapse these into one overloaded command with hidden behavior changes, because the operator needs to know whether they are materializing artifacts, running a local attempt, importing a completed result, or starting a hosted worker daemon.
 

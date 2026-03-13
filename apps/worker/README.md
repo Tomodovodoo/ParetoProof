@@ -55,6 +55,14 @@ Local attempt execution:
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
 
+Offline ingest:
+
+- use `bun run ingest:problem9-run-bundle -- --bundle-root <directory>` to validate and import one completed `problem9-run-bundle/` through the admin offline-ingest API route
+- the ingest command validates the local bundle root before any network call by checking the required files, artifact-manifest entries, and canonical bundle digest fields
+- offline ingest targets `POST /portal/admin/offline-ingest/problem9-run-bundles` and sends an explicit `Cf-Access-Jwt-Assertion` header; it never falls back to `WORKER_BOOTSTRAP_TOKEN`, provider auth, or trusted-local `auth.json`
+- provide the Access assertion with `--access-jwt <token>` or `CF_ACCESS_JWT_ASSERTION`; provide the API origin with `--api-base-url <url>` or `API_BASE_URL`
+- success and rejection outputs are emitted as machine-readable JSON for operator use
+
 Trusted-local devbox wrapper:
 
 - use `node infra/scripts/run-problem9-trusted-local-attempt.mjs --preflight-only` to run the repo-owned trusted-local host-side plus in-container auth preflight without starting an attempt

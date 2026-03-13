@@ -201,6 +201,19 @@ They are file-input-driven and should keep working without:
 - `WORKER_BOOTSTRAP_TOKEN`
 - provider API keys
 
+### Offline ingest CLI mode
+
+The offline-ingest CLI requires:
+
+- `API_BASE_URL`
+- an explicit portal-admin `Cf-Access-Jwt-Assertion` provided either by flag or runtime env
+
+The offline-ingest CLI must not require:
+
+- `WORKER_BOOTSTRAP_TOKEN`
+- worker lease tokens
+- provider API keys
+
 ### Future claim-and-run worker mode
 
 When the worker starts acting as a long-lived claimant against the API, the runtime should require:
@@ -240,6 +253,8 @@ That means:
 For the current worker materializer commands, local Docker may legitimately need no runtime secret at all.
 
 For a future hosted-parity worker container, local Docker would require only the variables for the selected worker mode, such as `API_BASE_URL`, `WORKER_BOOTSTRAP_TOKEN`, and mode-specific provider credentials.
+
+For offline-ingest operator flows, the worker CLI should instead accept an explicit portal-admin `Cf-Access-Jwt-Assertion` input and must not repurpose worker bootstrap auth as an ingest credential.
 
 ## Modal contract
 

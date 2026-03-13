@@ -20,6 +20,7 @@ const trimmedOptionalStringSchema = z.preprocess(
 
 const workerRawRuntimeEnvSchema = z.object({
   API_BASE_URL: trimmedOptionalStringSchema,
+  CF_ACCESS_JWT_ASSERTION: trimmedOptionalStringSchema,
   CF_INTERNAL_API_SERVICE_TOKEN_ID: trimmedOptionalStringSchema,
   CF_INTERNAL_API_SERVICE_TOKEN_SECRET: trimmedOptionalStringSchema,
   CODEX_API_KEY: trimmedOptionalStringSchema,
@@ -51,6 +52,7 @@ export type WorkerRuntimeMode =
     };
 
 export type WorkerRuntimeEnv = {
+  accessJwtAssertion?: string;
   apiBaseUrl?: string;
   codexApiKey?: string;
   trustedLocalAuthJsonPath?: string;
@@ -199,17 +201,11 @@ export async function parseWorkerRuntimeEnv(
         )
       };
     case "offline_ingest_cli":
-      assertRequiredFields([
-        ["API_BASE_URL", parsed.data.API_BASE_URL],
-        ["WORKER_BOOTSTRAP_TOKEN", parsed.data.WORKER_BOOTSTRAP_TOKEN]
-      ]);
+      assertRequiredFields([["API_BASE_URL", parsed.data.API_BASE_URL]]);
 
       return {
+        accessJwtAssertion: parsed.data.CF_ACCESS_JWT_ASSERTION,
         apiBaseUrl: resolveRequiredField("API_BASE_URL", parsed.data.API_BASE_URL),
-        workerBootstrapToken: resolveRequiredField(
-          "WORKER_BOOTSTRAP_TOKEN",
-          parsed.data.WORKER_BOOTSTRAP_TOKEN
-        )
       };
   }
 }

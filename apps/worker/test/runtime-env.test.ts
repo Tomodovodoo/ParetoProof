@@ -121,7 +121,7 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
   });
 });
 
-test("parseWorkerRuntimeEnv requires hosted worker env for future offline ingest", async () => {
+test("parseWorkerRuntimeEnv requires API base URL for offline ingest", async () => {
   await assert.rejects(
     () =>
       parseWorkerRuntimeEnv(
@@ -129,7 +129,7 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future offline ingest
           commandFamily: "offline_ingest_cli"
         },
         {
-          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+          CF_ACCESS_JWT_ASSERTION: "portal-admin-jwt"
         }
       ),
     /API_BASE_URL: is required/
@@ -141,12 +141,12 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future offline ingest
     },
     {
       API_BASE_URL: "https://api.paretoproof.com",
-      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+      CF_ACCESS_JWT_ASSERTION: "portal-admin-jwt"
     }
   );
 
   assert.deepEqual(runtimeEnv, {
-    apiBaseUrl: "https://api.paretoproof.com",
-    workerBootstrapToken: "bootstrap-token"
+    accessJwtAssertion: "portal-admin-jwt",
+    apiBaseUrl: "https://api.paretoproof.com"
   });
 });
