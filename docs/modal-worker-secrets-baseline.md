@@ -78,12 +78,23 @@ These credentials must stay out of the base worker identity secret so workers th
 
 Provider machine-auth credentials must not be mixed into the base worker identity secret either. When a hosted worker mode needs machine-auth access to a provider, that provider should get its own environment-scoped Modal Secret object attached only to the deployments that require it.
 
-This issue does not fix the final per-provider variable catalog. The stable rule is narrower:
+The current concrete OpenAI-family example is:
+
+- `paretoproof-worker-openai-dev`
+- `paretoproof-worker-openai-staging`
+- `paretoproof-worker-openai-production`
+
+Each object contains:
+
+- `CODEX_API_KEY`
+
+The stable rule is:
 
 - keep provider credentials in provider-specific Modal Secret objects
 - keep them environment-scoped
 - attach only the provider secret objects required by the selected worker deployment
 - never repurpose `WORKER_BOOTSTRAP_TOKEN` as a provider credential
+- never use trusted-local Codex session auth as a hosted worker secret
 
 ## Required runtime variable names
 
@@ -120,7 +131,7 @@ That means:
 - hosted Modal workers receive the same variable name through Modal Secret injection
 - the Docker image and worker build remain secret-free in both cases
 
-The broader local-versus-Modal injection story, including trusted local Codex handling, belongs to issue `#148`. This document only fixes the hosted Modal worker secret inventory and attachment model.
+The broader local-versus-Modal injection story, including trusted local Codex handling, is defined in `worker-secret-injection-baseline.md`. This document fixes the hosted Modal worker secret inventory and attachment model that the broader runtime-injection baseline builds on.
 
 ## Bootstrap helper
 
