@@ -123,6 +123,10 @@ export type PortalAdminUserDetail = PortalAdminUserListItem & {
   sessionPosture: PortalAdminSessionPosture;
 };
 
+export type PortalAdminUserRevokeInput = {
+  reason: string;
+};
+
 export type PortalAdminAccessRequestListResponse = {
   items: PortalAdminAccessRequestListItem[];
 };

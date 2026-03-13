@@ -31,6 +31,22 @@ function createAdminAccessGuard() {
   };
 }
 
+function createDeniedAccessGuard() {
+  return () => (_request: unknown, reply: { code: (statusCode: number) => { send: (body: unknown) => void } }) => {
+    reply.code(403).send({
+      access: {
+        email: "helper@paretoproof.com",
+        identityId: "99999999-9999-4999-8999-999999999999",
+        roles: ["helper"],
+        status: "approved",
+        subject: "helper-subject",
+        userId: "99999999-9999-4999-8999-999999999999"
+      },
+      error: "insufficient_role"
+    });
+  };
+}
+
 function buildUser(overrides: Partial<typeof users.$inferSelect> = {}): typeof users.$inferSelect {
   return {
     createdAt: new Date("2026-03-13T18:00:00.000Z"),
@@ -574,6 +590,232 @@ test("POST /portal/admin/access-requests/:id/approve emits user_identity.linked 
   );
 });
 
+test("POST /portal/admin/access-requests/:id/approve grants a role and audits standard approvals", async (t) => {
+  const requestRow = buildAccessRequest();
+  const targetUser = buildUser();
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const insertedRoleGrants: Array<typeof roleGrants.$inferInsert> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+          userIdentities: { findFirst: () => Promise<typeof userIdentities.$inferSelect> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        select: () => { from: () => { where: () => Promise<[]> } };
+        update: (table: unknown) => {
+          set: (value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(...(value as Array<typeof auditEvents.$inferInsert>));
+              }
+
+              if (table === roleGrants) {
+                insertedRoleGrants.push(value as typeof roleGrants.$inferInsert);
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          },
+          userIdentities: {
+            findFirst: async () => buildIdentity()
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => []
+              };
+            }
+          };
+        },
+        update(table: unknown) {
+          return {
+            set(_value: unknown) {
+              return {
+                where() {
+                  if (table === accessRequests) {
+                    return {
+                      returning: async () => [
+                        {
+                          ...requestRow,
+                          decisionNote: "Looks good",
+                          reviewedAt: new Date("2026-03-13T19:20:00.000Z"),
+                          reviewedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                          status: "approved"
+                        }
+                      ]
+                    };
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "collaborator",
+      decisionNote: "Looks good"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(insertedRoleGrants[0]?.role, "collaborator");
+  assert.equal(insertedRoleGrants[0]?.userId, targetUser.id);
+  assert.deepEqual(
+    insertedAuditEvents.map((entry) => entry.eventId),
+    ["access_request.approved", "role_grant.granted"]
+  );
+});
+
+test("POST /portal/admin/access-requests/:id/approve rejects first approval when no linked identity exists", async (t) => {
+  const requestRow = buildAccessRequest();
+  const targetUser = buildUser();
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+          userIdentities: { findFirst: () => Promise<null> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          },
+          userIdentities: {
+            findFirst: async () => null
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "collaborator",
+      decisionNote: "Needs linked identity first"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_identity_link_required");
+});
+
+test("POST /portal/admin/access-requests/:id/approve rejects stale standard approvals for already-approved users", async (t) => {
+  const requestRow = buildAccessRequest();
+  const targetUser = buildUser();
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+          userIdentities: { findFirst: () => Promise<typeof userIdentities.$inferSelect> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        select: () => {
+          from: () => {
+            where: () => Promise<Array<{ id: string; role: string }>>;
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          },
+          userIdentities: {
+            findFirst: async () => buildIdentity()
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => [{ id: "existing-role-grant", role: "collaborator" }]
+              };
+            }
+          };
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "collaborator",
+      decisionNote: "Duplicate approval"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_request_stale_for_approved_user");
+});
+
 test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific conflict payload", async (t) => {
   const requestRow = buildAccessRequest({
     email: "recover@paretoproof.com",
@@ -644,4 +886,468 @@ test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific
       status: requestRow.status
     }
   });
+});
+
+test("POST /portal/admin/access-requests/:id/approve does not duplicate a recovery identity that is already linked", async (t) => {
+  const requestRow = buildAccessRequest({
+    email: "recover@paretoproof.com",
+    requestKind: "identity_recovery",
+    requestedIdentityProvider: "cloudflare_google",
+    requestedIdentitySubject: "recovery-subject",
+    requestedRole: "helper"
+  });
+  const targetUser = buildUser();
+  const linkedIdentity = buildIdentity({
+    providerEmail: "old@paretoproof.com",
+    providerSubject: "recovery-subject",
+    userId: targetUser.id
+  });
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const updatedIdentityRows: Array<Partial<typeof userIdentities.$inferSelect>> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+          userIdentities: { findFirst: () => Promise<typeof linkedIdentity> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        select: () => { from: () => { where: () => Promise<Array<{ id: string; role: string }>> } };
+        update: (table: unknown) => {
+          set: (value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      let userIdentityLookupCount = 0;
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(...(value as Array<typeof auditEvents.$inferInsert>));
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          },
+          userIdentities: {
+            findFirst: async () => {
+              userIdentityLookupCount += 1;
+              return linkedIdentity;
+            }
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => []
+              };
+            }
+          };
+        },
+        update(table: unknown) {
+          return {
+            set(value: unknown) {
+              return {
+                where() {
+                  if (table === userIdentities) {
+                    updatedIdentityRows.push(value as Partial<typeof userIdentities.$inferSelect>);
+                    return {};
+                  }
+
+                  if (table === accessRequests) {
+                    return {
+                      returning: async () => [
+                        {
+                          ...requestRow,
+                          decisionNote: "Recovery confirmed",
+                          reviewedAt: new Date("2026-03-13T19:20:00.000Z"),
+                          reviewedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                          status: "approved"
+                        }
+                      ]
+                    };
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      const result = await callback(tx);
+      assert.equal(userIdentityLookupCount, 2);
+      return result;
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "helper",
+      decisionNote: "Recovery confirmed"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(updatedIdentityRows.length, 1);
+  assert.equal(updatedIdentityRows[0]?.providerEmail, requestRow.email);
+  assert.deepEqual(
+    insertedAuditEvents.map((entry) => entry.eventId),
+    ["access_request.approved"]
+  );
+});
+
+test("POST /portal/admin/access-requests/:id/reject records the decision note and rejection audit", async (t) => {
+  const requestRow = buildAccessRequest();
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+        };
+        update: (table: unknown) => {
+          set: (value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          }
+        },
+        update(table: unknown) {
+          return {
+            set(_value: unknown) {
+              return {
+                where() {
+                  if (table === accessRequests) {
+                    return {
+                      returning: async () => [
+                        {
+                          ...requestRow,
+                          decisionNote: "Insufficient project history",
+                          reviewedAt: new Date("2026-03-13T19:25:00.000Z"),
+                          reviewedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                          status: "rejected"
+                        }
+                      ]
+                    };
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      decisionNote: "Insufficient project history"
+    },
+    url: `/portal/admin/access-requests/${requestRow.id}/reject`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().item.status, "rejected");
+  assert.equal(response.json().item.decisionNote, "Insufficient project history");
+  assert.equal(insertedAuditEvents[0]?.eventId, "access_request.rejected");
+  assert.equal(
+    (insertedAuditEvents[0]?.payload as { decisionNote: string }).decisionNote,
+    "Insufficient project history"
+  );
+});
+
+test("POST /portal/admin/users/:id/revoke-role revokes the role, invalidates active sessions, and audits the reason", async (t) => {
+  const reviewer = buildUser({
+    displayName: "Admin Reviewer",
+    email: "admin@paretoproof.com",
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  });
+  const targetUser = buildUser({
+    displayName: "Researcher One"
+  });
+  const activeRoleGrant = buildRoleGrant();
+  const activeSession = buildSession();
+  const expiredSession = buildSession({
+    expiresAt: new Date("2026-03-12T18:00:00.000Z"),
+    id: "56565656-5656-4565-8565-565656565656"
+  });
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const userDetail = {
+    ...targetUser,
+    accessRequests: [],
+    auditEventsAsTarget: [],
+    identities: [buildIdentity()],
+    roleGrants: [
+      {
+        ...activeRoleGrant,
+        grantedByUser: reviewer,
+        revokedByUser: null
+      }
+    ],
+    sessions: [activeSession, expiredSession]
+  };
+  const db = {
+    query: {
+      users: {
+        findFirst: async () => userDetail
+      }
+    },
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          roleGrants: { findFirst: () => Promise<typeof activeRoleGrant> };
+          sessions: { findMany: () => Promise<typeof userDetail.sessions> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        update: (table: unknown) => {
+          set: (value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+                userDetail.auditEventsAsTarget.unshift({
+                  ...buildAuditEvent({
+                    eventId: "role_grant.revoked",
+                    payload: value as Record<string, unknown>,
+                    subjectKind: "role_grant"
+                  }),
+                  actorUser: reviewer
+                });
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          roleGrants: {
+            findFirst: async () => activeRoleGrant
+          },
+          sessions: {
+            findMany: async () => userDetail.sessions
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        update(table: unknown) {
+          return {
+            set(value: unknown) {
+              return {
+                where() {
+                  if (table === roleGrants) {
+                    const patch = value as Partial<typeof roleGrants.$inferSelect>;
+                    userDetail.roleGrants[0] = {
+                      ...userDetail.roleGrants[0],
+                      revokedAt: patch.revokedAt ?? null,
+                      revokedByUser: reviewer,
+                      revokedByUserId: reviewer.id
+                    };
+
+                    return {
+                      returning: async () => [
+                        {
+                          ...activeRoleGrant,
+                          revokedAt: patch.revokedAt ?? new Date("2026-03-13T20:00:00.000Z"),
+                          revokedByUserId: reviewer.id
+                        }
+                      ]
+                    };
+                  }
+
+                  if (table === sessions) {
+                    const patch = value as Partial<typeof sessions.$inferSelect>;
+                    userDetail.sessions = userDetail.sessions.map((sessionRow) =>
+                      sessionRow.revokedAt === null
+                        ? {
+                            ...sessionRow,
+                            revokedAt: patch.revokedAt ?? null
+                          }
+                        : sessionRow
+                    );
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "Contributor left the project"
+    },
+    url: `/portal/admin/users/${targetUser.id}/revoke-role`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().item.activeRole, null);
+  assert.equal(response.json().item.sessionPosture.activeSessionCount, 0);
+  assert.equal(insertedAuditEvents[0]?.eventId, "role_grant.revoked");
+  assert.equal(
+    (insertedAuditEvents[0]?.payload as { revokedSessionCount: number }).revokedSessionCount,
+    1
+  );
+  assert.equal(
+    (insertedAuditEvents[0]?.payload as { revocationReason: string }).revocationReason,
+    "Contributor left the project"
+  );
+});
+
+test("POST /portal/admin/users/:id/revoke-role returns a conflict when no active role exists", async (t) => {
+  const targetUser = buildUser();
+  const db = {
+    query: {
+      users: {
+        findFirst: async () => null
+      }
+    },
+    transaction: async (
+      callback: (tx: {
+        query: {
+          roleGrants: { findFirst: () => Promise<null> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          roleGrants: {
+            findFirst: async () => null
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "Already revoked"
+    },
+    url: `/portal/admin/users/${targetUser.id}/revoke-role`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "admin_user_no_active_role");
+});
+
+test("admin-only mutation routes reject non-admin callers before touching the database", async (t) => {
+  let touchedDatabase = false;
+  const db = {
+    transaction: async () => {
+      touchedDatabase = true;
+      throw new Error("should not run");
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createDeniedAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "No access"
+    },
+    url: "/portal/admin/users/11111111-1111-4111-8111-111111111111/revoke-role"
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().error, "insufficient_role");
+  assert.equal(touchedDatabase, false);
 });

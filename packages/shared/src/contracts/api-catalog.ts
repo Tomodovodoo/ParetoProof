@@ -156,6 +156,15 @@ export const apiEndpointCatalog = [
       "Return one contributor's admin detail view, including linked identities, request history, audit history, and session posture."
   },
   {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.user.revoke",
+    method: "POST",
+    path: "/portal/admin/users/:userId/revoke-role",
+    purpose:
+      "Revoke the active helper or collaborator role for one contributor, audit the reason, and invalidate active sessions."
+  },
+  {
     access: "service_token",
     audience: "internal",
     id: "internal.worker.claim",
