@@ -43,6 +43,13 @@ const defaultFilters: RequestFilterState = {
   status: "all"
 };
 
+const requestStatusPriority: Record<PortalAdminAccessRequestListItem["status"], number> = {
+  approved: 1,
+  pending: 0,
+  rejected: 2,
+  withdrawn: 3
+};
+
 export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProps) {
   const [detail, setDetail] = useState<PortalAdminAccessRequestDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, RequestDraftState>>({});
@@ -97,6 +104,13 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
     });
 
     return [...nextItems].sort((left, right) => {
+      const statusOrder =
+        requestStatusPriority[left.status] - requestStatusPriority[right.status];
+
+      if (statusOrder !== 0) {
+        return statusOrder;
+      }
+
       if (filters.sortOrder === "newest") {
         return right.createdAt.localeCompare(left.createdAt);
       }
