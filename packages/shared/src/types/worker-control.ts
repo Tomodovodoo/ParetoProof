@@ -142,9 +142,21 @@ export type WorkerRunTarget =
       sliceDefinition: string;
     }
   | {
+      authMode: "trusted_local_user" | "machine_api_key" | "machine_oauth" | "local_stub";
       benchmarkItemId: string;
+      benchmarkPackageDigest: string;
+      benchmarkPackageId: string;
+      benchmarkPackageVersion: string;
+      harnessRevision: string;
+      laneId: string;
       modelConfigId: string;
+      modelSnapshotId: string;
+      promptPackageDigest: string;
+      promptProtocolVersion: string;
+      providerFamily: "openai" | "anthropic" | "google" | "aristotle" | "axle" | "custom";
       runKind: "single_run";
+      runMode: "single_pass_probe" | "pass_k_probe" | "bounded_agentic_attempt";
+      toolProfile: "no_tools" | "lean_mcp_readonly" | "workspace_edit_limited";
     }
   | {
       benchmarkTargetId: string;

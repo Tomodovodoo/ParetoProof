@@ -66,16 +66,28 @@ type ReadExecutor = Pick<DbClient, "select">;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
 
 type CandidateClaimRow = {
+  authMode: string;
   attemptId: string;
   attemptRowId: string;
   benchmarkItemId: string;
+  benchmarkPackageDigest: string;
+  benchmarkPackageId: string;
+  benchmarkPackageVersion: string;
+  harnessRevision: string;
   jobId: string;
   jobRowId: string;
+  laneId: string;
   modelConfigId: string;
+  modelSnapshotId: string;
+  promptPackageDigest: string;
+  promptProtocolVersion: string;
+  providerFamily: string;
   runId: string;
   runKind: typeof runs.$inferSelect.runKind;
+  runMode: string;
   runRowId: string;
   runState: typeof runs.$inferSelect.state;
+  toolProfile: string;
 };
 
 type LeaseStateRow = {
@@ -212,16 +224,28 @@ function queuedJobWhereClause(): SQL {
 async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateClaimRow | null> {
   const [candidate] = await tx
     .select({
+      authMode: runs.authMode,
       attemptId: attempts.sourceAttemptId,
       attemptRowId: attempts.id,
       benchmarkItemId: runs.benchmarkItemId,
+      benchmarkPackageDigest: runs.benchmarkPackageDigest,
+      benchmarkPackageId: runs.benchmarkPackageId,
+      benchmarkPackageVersion: runs.benchmarkPackageVersion,
+      harnessRevision: runs.harnessRevision,
       jobId: jobs.sourceJobId,
       jobRowId: jobs.id,
+      laneId: runs.laneId,
       modelConfigId: runs.modelConfigId,
+      modelSnapshotId: runs.modelSnapshotId,
+      promptPackageDigest: runs.promptPackageDigest,
+      promptProtocolVersion: runs.promptProtocolVersion,
+      providerFamily: runs.providerFamily,
       runId: runs.sourceRunId,
       runKind: runs.runKind,
+      runMode: runs.runMode,
       runRowId: runs.id,
-      runState: runs.state
+      runState: runs.state,
+      toolProfile: runs.toolProfile
     })
     .from(jobs)
     .innerJoin(runs, eq(jobs.runId, runs.id))
@@ -239,16 +263,28 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
   }
 
   return {
+    authMode: candidate.authMode,
     attemptId: candidate.attemptId,
     attemptRowId: candidate.attemptRowId,
     benchmarkItemId: candidate.benchmarkItemId,
+    benchmarkPackageDigest: candidate.benchmarkPackageDigest,
+    benchmarkPackageId: candidate.benchmarkPackageId,
+    benchmarkPackageVersion: candidate.benchmarkPackageVersion,
+    harnessRevision: candidate.harnessRevision,
     jobId: candidate.jobId,
     jobRowId: candidate.jobRowId,
+    laneId: candidate.laneId,
     modelConfigId: candidate.modelConfigId,
+    modelSnapshotId: candidate.modelSnapshotId,
+    promptPackageDigest: candidate.promptPackageDigest,
+    promptProtocolVersion: candidate.promptProtocolVersion,
+    providerFamily: candidate.providerFamily,
     runId: candidate.runId,
     runKind: candidate.runKind,
+    runMode: candidate.runMode,
     runRowId: candidate.runRowId,
-    runState: candidate.runState
+    runState: candidate.runState,
+    toolProfile: candidate.toolProfile
   };
 }
 
@@ -1049,9 +1085,37 @@ export function createInternalWorkerControlService(db: DbClient) {
             runBundleSchemaVersion,
             runId: candidate.runId,
             target: {
+              authMode: candidate.authMode as
+                | "trusted_local_user"
+                | "machine_api_key"
+                | "machine_oauth"
+                | "local_stub",
               benchmarkItemId: candidate.benchmarkItemId,
+              benchmarkPackageDigest: candidate.benchmarkPackageDigest,
+              benchmarkPackageId: candidate.benchmarkPackageId,
+              benchmarkPackageVersion: candidate.benchmarkPackageVersion,
+              harnessRevision: candidate.harnessRevision,
+              laneId: candidate.laneId,
               modelConfigId: candidate.modelConfigId,
-              runKind: "single_run"
+              modelSnapshotId: candidate.modelSnapshotId,
+              promptPackageDigest: candidate.promptPackageDigest,
+              promptProtocolVersion: candidate.promptProtocolVersion,
+              providerFamily: candidate.providerFamily as
+                | "openai"
+                | "anthropic"
+                | "google"
+                | "aristotle"
+                | "axle"
+                | "custom",
+              runKind: "single_run",
+              runMode: candidate.runMode as
+                | "single_pass_probe"
+                | "pass_k_probe"
+                | "bounded_agentic_attempt",
+              toolProfile: candidate.toolProfile as
+                | "no_tools"
+                | "lean_mcp_readonly"
+                | "workspace_edit_limited"
             }
           }
         } satisfies WorkerClaimResponse;
