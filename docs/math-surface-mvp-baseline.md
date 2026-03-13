@@ -72,7 +72,7 @@ Until a later scope says otherwise:
 
 ## Relationship to adjacent scopes
 
-- Issue `#444` should define the detailed apex-versus-portal ownership split assuming there is no approved math hostname in MVP.
+- [product-surface-boundary-baseline.md](product-surface-boundary-baseline.md) defines the detailed apex-versus-portal ownership split that this deferred math-hostname decision plugs into.
 - Later frontend scopes should not create a dedicated math nav cluster or deployment target unless this baseline is superseded.
 - Hosting and TLS work should continue to treat `math.paretoproof.com` as a deferred hostname only.
 
