@@ -30,10 +30,27 @@ When creating a new issue:
 3. Every execution issue should:
    - be a child of a parent scope issue when applicable
    - list direct dependencies in the body
+   - include explicit acceptance criteria, verification steps, artifact expectations, security or cost notes, and rollout or rollback notes
    - be added to exactly one team board
    - be added to **Roadmap - ParetoProof**
    - start in status **Todo** unless it is already blocked by an open dependency
 4. Add dates only if the issue is part of the active short-term plan.
+
+Scope issues should use the scoping issue form and must state:
+
+- the decision to be made
+- non-goals
+- the expected baseline doc or ADR
+- the follow-up execution issues that the scope should unlock
+
+Execution issues should use the execution issue form and must state:
+
+- the concrete task
+- acceptance criteria
+- exact verification steps
+- produced artifacts or evidence
+- security or cost impact
+- rollout or rollback notes when applicable
 
 ## PR Rule
 
@@ -41,10 +58,15 @@ Execution work should land through a pull request, not through direct pushes to 
 
 - Open a dedicated branch for the issue.
 - Open a PR against `main`.
+- Fill in the PR template with linked issues, exact verification commands, and any required security notes.
 - Merge the PR into `main`.
 - Close the issue only after the relevant PR has merged into `main`.
 
 If a branch or PR contains work for multiple issues, do not close those issues early. Close each issue only when the merged PR actually contains that issue's completed work.
+
+Security-sensitive PRs should not merge with unresolved review comments that identify real auth, CSRF, secret-handling, or data-exposure risk. If a fix does not land in the same PR, the PR must link the follow-up issue explicitly and describe the accepted temporary risk.
+
+The repository also enforces a hidden-Unicode gate in PR CI. Source changes should not introduce bidirectional control characters unless there is a documented and reviewed exception.
 
 ## Status Rules
 
@@ -91,5 +113,6 @@ For a new execution task:
 3. Add it to one team board.
 4. Add it to **Roadmap - ParetoProof**.
 5. Set `Team`.
-6. Leave status at `Todo` unless it is currently blocked by an open dependency.
-7. Leave `Start date` and `Target date` empty unless it is part of the current short-term plan.
+6. Fill in acceptance criteria, verification steps, artifact expectations, and security or cost notes before starting implementation.
+7. Leave status at `Todo` unless it is currently blocked by an open dependency.
+8. Leave `Start date` and `Target date` empty unless it is part of the current short-term plan.

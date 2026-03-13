@@ -1,0 +1,32 @@
+## Summary
+
+- 
+
+## Linked issues
+
+- Closes #
+
+## Verification
+
+- [ ] Commands run are listed below
+- [ ] Relevant logs, artifact paths, or screenshots are linked or described
+- [ ] New or changed contracts are wired through implementation, not only documented
+
+```text
+# Paste exact commands here
+```
+
+## Security and cost review
+
+- [ ] No new auth, CSRF, secret-handling, or data-exposure risk was introduced without mitigation or a linked follow-up issue
+- [ ] For security-sensitive changes, the threat boundary and mitigation are described below
+- [ ] Cost or rate-limit impact is described below when relevant
+
+## Rollout and rollback
+
+- [ ] Rollout plan is described or marked not applicable
+- [ ] Rollback plan is described or marked not applicable
+
+## Notes
+
+- 
