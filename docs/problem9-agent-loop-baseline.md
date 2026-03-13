@@ -207,10 +207,9 @@ These end the current attempt without automatic whole-attempt retry:
 
 - compile failure after compile-repair budget is exhausted
 - verifier failure after verifier-repair budget is exhausted
-- theorem-target drift failure
-- forbidden-token findings such as `sorry` or `admit`
-- forbidden-axiom findings under the selected lane policy
 - unsupported-request failures that come from the chosen run configuration rather than a transient provider problem
+
+Theorem-target drift, forbidden-token findings such as `sorry` or `admit`, and forbidden-axiom findings are still deterministic verifier-policy failures, but they route into verifier repair while verifier-repair budget remains. They become terminal only once that verifier-repair budget is exhausted or when a later scope decision explicitly marks a finding as non-repairable.
 
 ### Retryable outer failures
 
