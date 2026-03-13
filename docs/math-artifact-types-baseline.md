@@ -49,9 +49,9 @@ Each benchmark task should name both its source artifact types and its required 
 
 - sources: `informal_problem_statement`
 - target: `formal_problem_statement`
-- verification authority: theorem/specification review plus later formal-check consistency
+- verification authority: benchmark-owned canonical `formal_problem_statement`
 
-This task measures whether a system can translate informal mathematics into a precise formal target.
+This task measures whether a system can translate informal mathematics into a precise formal target. For comparable benchmark scoring, the benchmark must still publish one canonical target `formal_problem_statement` that candidate formalizations are judged against. Pure reviewer-only specification judgment without a canonical formal target is out of MVP scoring scope.
 
 ### Proof formalization
 
