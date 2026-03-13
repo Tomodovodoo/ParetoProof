@@ -67,6 +67,8 @@ The package defines one Lean package and one canonical benchmark namespace:
 
 `Statement.lean` is the authority for the published theorem target. `Support.lean` may contain benchmark-owned local definitions, helper lemmas, notation, or setup that the theorem depends on. `Gold.lean` may import both `Statement` and `Support`, but no execution issue may treat `Gold.lean` as mutable working state.
 
+The repository-owned naming, import, theorem-shape, and proof-completion rules for those Lean files are defined in `lean-formalization-standards-baseline.md`. This package-boundary document fixes where the files live and how they version; it does not replace the formalization-authoring standard.
+
 The MVP package uses `lakefile.toml`, not `lakefile.lean`, to keep the package definition declarative and easier to hash. If a future benchmark truly needs a programmable Lake definition, that change should be treated as a new package-boundary revision rather than as an invisible substitution.
 
 ## Versioning rule for statement, formalization, and gold proof
