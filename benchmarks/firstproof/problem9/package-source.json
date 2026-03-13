@@ -1,0 +1,39 @@
+{
+  "sourceSchemaVersion": 1,
+  "packageId": "firstproof/Problem9",
+  "packageVersion": "2026.03.13.1",
+  "benchmarkFamily": "firstproof",
+  "benchmarkItemId": "Problem9",
+  "lanePolicy": {
+    "sourceLaneId": "lean422_exact",
+    "supportedLanes": [
+      {
+        "laneId": "lean422_exact",
+        "leanVersion": "4.22.0",
+        "materialization": "canonical_source"
+      },
+      {
+        "laneId": "lean424_interop",
+        "leanVersion": "4.24.0",
+        "materialization": "deterministic_compatibility_materialization"
+      }
+    ]
+  },
+  "canonicalModules": {
+    "statement": "FirstProof.Problem9.Statement",
+    "support": "FirstProof.Problem9.Support",
+    "gold": "FirstProof.Problem9.Gold"
+  },
+  "requiredPaths": [
+    "benchmark-package.json",
+    "README.md",
+    "LICENSE",
+    "lean-toolchain",
+    "lake-manifest.json",
+    "lakefile.toml",
+    "statements/problem.md",
+    "FirstProof/Problem9/Statement.lean",
+    "FirstProof/Problem9/Support.lean",
+    "FirstProof/Problem9/Gold.lean"
+  ]
+}

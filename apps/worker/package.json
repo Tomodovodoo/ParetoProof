@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "bunx tsc -p tsconfig.json",
+    "materialize:problem9-package": "node dist/cli/materialize-problem9-package.js",
+    "materialize:problem9-package:dev": "tsx src/cli/materialize-problem9-package.ts",
     "start": "node dist/index.js",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },

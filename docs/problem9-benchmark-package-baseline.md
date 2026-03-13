@@ -94,14 +94,17 @@ The package version is therefore the only supported way to say "this is a differ
 - `lanePolicy`: the supported Lean lanes for this package version
 - `canonicalModules`: `Statement`, `Support`, and `Gold`
 - `hashes`: SHA-256 digests for every immutable file in the package root
+- `benchmarkManifestDigest`: deterministic digest for the generated root manifest content before digest fields are attached
 - `packageDigest`: the SHA-256 digest of the normalized whole-package snapshot
 
 The required hash set for MVP is:
 
-- whole-package SHA-256 over the normalized file tree
-- per-file SHA-256 for `benchmark-package.json`, `README.md`, `LICENSE`, `lean-toolchain`, `lakefile.toml`, `lake-manifest.json`, `statements/problem.md`, `FirstProof/Problem9/Statement.lean`, `FirstProof/Problem9/Support.lean`, and `FirstProof/Problem9/Gold.lean`
+- whole-package SHA-256 over the normalized package inventory and canonical manifest metadata
+- per-file SHA-256 for `README.md`, `LICENSE`, `lean-toolchain`, `lakefile.toml`, `lake-manifest.json`, `statements/problem.md`, `FirstProof/Problem9/Statement.lean`, `FirstProof/Problem9/Support.lean`, and `FirstProof/Problem9/Gold.lean`
 
 Normalization must ignore local build output and editor noise. Files such as `.lake/`, `.git/`, `.DS_Store`, `*.olean`, transient logs, and other generated outputs are not part of the package boundary and must never contribute to the package digest.
+
+The generated root manifest is a special case on purpose. The checked-in authoring source under `benchmarks/firstproof/problem9/` may keep source metadata that helps produce the package, but the materialized canonical package root includes a generated `benchmark-package.json`. Because a generated root manifest cannot embed a byte hash of its own final file content without circularity, the package contract should treat `benchmarkManifestDigest` and `packageDigest` like run-bundle root-manifest digests: derived from normalized manifest content and normalized copied-file inventory, not from trying to include the final generated manifest as one of its own ordinary file entries.
 
 ## Compatibility with downstream run and artifact work
 
