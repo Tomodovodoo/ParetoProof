@@ -28,6 +28,7 @@ Runtime env guidance:
 - hosted Modal secret inventory still lives in [docs/modal-worker-secrets-baseline.md](../../docs/modal-worker-secrets-baseline.md)
 - local-versus-Modal injection rules still live in [docs/worker-secret-injection-baseline.md](../../docs/worker-secret-injection-baseline.md)
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
+- the future `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; MVP offline ingest uses an explicit portal-audience `Cf-Access-Jwt-Assertion` supplied by an approved admin at invocation time, as defined in [docs/offline-ingest-auth-baseline.md](../../docs/offline-ingest-auth-baseline.md)
 
 Package materialization:
 
@@ -46,6 +47,15 @@ Package materialization:
 - use `bun --cwd apps/worker materialize:problem9-run-bundle -- --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]` to emit `problem9-run-bundle/` with the canonical manifests, copied package and prompt references, candidate source, verification artifacts, environment snapshot, and deterministic digests
 - the run-bundle command is a supported standalone materializer for fixture generation and later offline-ingest prep; it derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or any bundle input file
 - use `bun --cwd apps/worker test:run-bundle` to run the fixture-backed standalone verification path, which materializes canonical benchmark and prompt inputs, runs the bundle CLI twice on identical fixture evidence, and checks that the resulting digests and root manifests are identical
+
+Offline ingest contract:
+
+- `ingest-problem9-run-bundle` is still a reserved follow-up command; it is not implemented in `apps/worker` yet
+- when it lands, MVP offline ingest targets `POST /portal/admin/offline-ingest/problem9-run-bundles`, not `/internal/*`
+- the operator must supply a fresh portal-audience Access assertion explicitly at runtime, and the CLI must forward it as `Cf-Access-Jwt-Assertion: <token>`
+- that assertion is a short-lived human-admin control-plane credential, not a worker bootstrap secret, provider key, trusted-local `auth.json`, or ambient browser cookie jar
+- if the assertion is missing, expired, or rejected, the CLI should fail as an auth or setup error rather than broadening permissions or mutating auth mode
+- unattended machine-only ingest remains out of scope for MVP; later automation needs a separate scope before a dedicated non-human auth surface can exist
 
 Local attempt execution:
 
