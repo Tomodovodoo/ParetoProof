@@ -22,6 +22,16 @@ The secret model follows the same separation. Bootstrap and platform secrets sta
 
 The current human-controlled bootstrap vault stays outside the repository in an owner-managed private secret store. That vault is the source of truth for bootstrap secret references, recovery-material placeholders, and runtime-secret location notes, but the repository should describe it only as a machine-agnostic policy rather than as a workstation-specific path. Live values remain outside the repository and are only mirrored into platform secret stores when a service actually needs them.
 
+## Local secret handling and example env files
+
+Local setup should start from the checked-in example env files in `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example`. Copy the relevant file to a local `.env` in the same app directory, fill only the values you actually need for that machine, and keep the result uncommitted. The repository ignore rules already treat `.env` and `.env.*` as local-only, with `.env.example` reserved for placeholders and documentation.
+
+Normal contributor setup should not require hosted production secrets. The local API should point at a local Postgres instance by default, the local web app should target the local API when an explicit override is needed, and the local worker should call a local or explicitly chosen API origin without carrying any baked-in provider key. If a contributor needs temporary hosted access for debugging, the owner should issue a branch-scoped or environment-scoped credential instead of reusing a production runtime secret.
+
+Owner-level platform tokens such as `GH_TOKEN`, `RAILWAY_API_TOKEN`, `NEON_API_KEY`, `CLOUDFLARE_API_TOKEN`, `MODAL_TOKEN_ID`, and `MODAL_TOKEN_SECRET` are not normal app-runtime inputs. Keep them in a developer shell session or a private local secret store only when a person is intentionally performing an owner workflow such as bootstrap, deployment, or platform administration. They do not belong in app `.env` files that get reused for everyday web, API, or worker development.
+
+The safe default is simple: checked-in example files may name placeholders, but live values stay local and runtime-only. If a variable would grant access outside one developer machine, spend budget, mutate hosted state, or read private artifacts, it should never appear in the repository and should not be copied into a Docker image, Pages bundle, or committed config file.
+
 ## Docker and CI secret boundary
 
 Container builds must stay reproducible and non-sensitive. A Docker build may consume ordinary build configuration such as package-manager versions, app paths, target package names, non-secret feature flags, and public hostnames that are already intended to ship in client bundles or image metadata. A Docker build must not require live credentials just to produce an artifact, and the final image must never contain secrets in `ARG`, `ENV`, copied files, cached layers, or generated config.
