@@ -16,12 +16,12 @@ import {
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 type RejectedOfflineIngestResult = {
-  bundleRoot: string;
-  endpoint: string;
+  bundleRoot: string | null;
+  endpoint: string | null;
   error: string;
   httpStatus?: number;
-  issues?: Array<{ message: string; path?: string }>;
-  stage: "local_validation" | "remote_rejection";
+  issues?: unknown[];
+  stage: "local_validation" | "remote_rejection" | "setup_failure";
   status: "rejected";
 };
 
@@ -61,23 +61,31 @@ export async function runProblem9OfflineIngest(
   },
   dependencies: OfflineIngestDependencies = {}
 ): Promise<Problem9OfflineIngestResult> {
+  const bundleRoot = path.resolve(options.bundleRoot);
   const runtimeEnv = await parseWorkerRuntimeEnv(
     {
       commandFamily: "offline_ingest_cli"
     },
     dependencies.runtimeEnv
-  );
+  ).catch((error: unknown) => toSetupFailureResult(error, bundleRoot));
+
+  if ("status" in runtimeEnv) {
+    return runtimeEnv;
+  }
+
   const apiBaseUrl = runtimeEnv.apiBaseUrl;
 
   if (!apiBaseUrl) {
-    throw new Error("Offline ingest runtime did not resolve API_BASE_URL.");
+    return toSetupFailureResult(
+      new Error("Offline ingest runtime did not resolve API_BASE_URL."),
+      bundleRoot
+    );
   }
 
   const endpoint = new URL(
     "/portal/admin/offline-ingest/problem9-run-bundles",
     apiBaseUrl
   ).toString();
-  const bundleRoot = path.resolve(options.bundleRoot);
   const localRequest = await loadProblem9OfflineIngestRequest(bundleRoot).catch((error: unknown) =>
     toLocalValidationResult(error, bundleRoot, endpoint)
   );
@@ -130,11 +138,6 @@ export async function runProblem9OfflineIngest(
         "issues" in responseBody &&
         Array.isArray(responseBody.issues)
           ? responseBody.issues
-              .filter((issue) => issue && typeof issue === "object" && "message" in issue)
-              .map((issue) => ({
-                message: String(issue.message),
-                path: "path" in issue && typeof issue.path === "string" ? issue.path : undefined
-              }))
           : undefined,
       stage: "remote_rejection",
       status: "rejected"
@@ -325,6 +328,22 @@ function toLocalValidationResult(
   };
 }
 
+function toSetupFailureResult(
+  error: unknown,
+  bundleRoot: string | null
+): RejectedOfflineIngestResult {
+  const parsed = parseSetupFailure(error);
+
+  return {
+    bundleRoot,
+    endpoint: null,
+    error: parsed.code,
+    issues: parsed.issues,
+    stage: "setup_failure",
+    status: "rejected"
+  };
+}
+
 function parseStructuredError(error: unknown): {
   code: string;
   issues: Array<{ message: string; path?: string }>;
@@ -361,6 +380,34 @@ function parseStructuredError(error: unknown): {
 
   return {
     code: "invalid_problem9_offline_ingest_bundle_root",
+    issues: [
+      {
+        message: String(error)
+      }
+    ]
+  };
+}
+
+function parseSetupFailure(error: unknown): {
+  code: string;
+  issues: Array<{ message: string; path?: string }>;
+} {
+  if (error instanceof Error) {
+    const pathMatch = error.message.match(/\b(API_BASE_URL|--access-jwt|--bundle-root)\b/);
+
+    return {
+      code: "offline_ingest_setup_failure",
+      issues: [
+        {
+          message: error.message,
+          path: pathMatch?.[1]
+        }
+      ]
+    };
+  }
+
+  return {
+    code: "offline_ingest_setup_failure",
     issues: [
       {
         message: String(error)

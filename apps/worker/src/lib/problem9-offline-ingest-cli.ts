@@ -9,7 +9,7 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
     return;
   }
 
-  const getRequiredValue = (flag: string): string => {
+  const getRequiredValue = (flag: "--access-jwt" | "--bundle-root"): string => {
     const index = args.findIndex((argument) => argument === flag);
 
     if (index === -1 || !args[index + 1]) {
@@ -19,14 +19,48 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
     return args[index + 1];
   };
 
+  const parsedOptions = (() => {
+    try {
+      return {
+        accessJwt: getRequiredValue("--access-jwt"),
+        bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
+      };
+    } catch (error) {
+      return {
+        bundleRoot: null,
+        endpoint: null,
+        error: "offline_ingest_setup_failure",
+        issues: [
+          {
+            message: error instanceof Error ? error.message : String(error),
+            path:
+              error instanceof Error && error.message.includes("--access-jwt")
+                ? "--access-jwt"
+                : "--bundle-root"
+          }
+        ],
+        stage: "setup_failure",
+        status: "rejected" as const
+      };
+    }
+  })();
+
+  if (parsedOptions.status === "rejected") {
+    console.error(JSON.stringify(parsedOptions, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+
   const result = await runProblem9OfflineIngest({
-    accessJwt: getRequiredValue("--access-jwt"),
-    bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
+    accessJwt: parsedOptions.accessJwt,
+    bundleRoot: parsedOptions.bundleRoot
   });
 
-  console.log(JSON.stringify(result, null, 2));
-
   if (result.status === "rejected") {
+    console.error(JSON.stringify(result, null, 2));
     process.exitCode = 1;
+    return;
   }
+
+  console.log(JSON.stringify(result, null, 2));
 }

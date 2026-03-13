@@ -9,6 +9,7 @@ import {
   materializeProblem9PromptPackage
 } from "../src/lib/problem9-prompt-package.ts";
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
+import { runProblem9OfflineIngestCli } from "../src/lib/problem9-offline-ingest-cli.ts";
 import { runProblem9OfflineIngest } from "../src/lib/problem9-offline-ingest.ts";
 
 async function buildOfflineIngestBundleRoot(options: {
@@ -312,7 +313,16 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
-            error: "offline_ingest_duplicate_run"
+            error: "offline_ingest_duplicate_run",
+            issues: [
+              {
+                code: "invalid_type",
+                expected: "string",
+                message: "Expected string, received null",
+                path: ["bundle", "runBundle", "runId"],
+                received: "null"
+              }
+            ]
           }),
           {
             headers: {
@@ -332,8 +342,90 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
     endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
     error: "offline_ingest_duplicate_run",
     httpStatus: 409,
-    issues: undefined,
+    issues: [
+      {
+        code: "invalid_type",
+        expected: "string",
+        message: "Expected string, received null",
+        path: ["bundle", "runBundle", "runId"],
+        received: "null"
+      }
+    ],
     stage: "remote_rejection",
+    status: "rejected"
+  });
+});
+
+test("runProblem9OfflineIngest returns machine-readable setup failures for missing API base URL", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const result = await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      runtimeEnv: {}
+    }
+  );
+
+  assert.deepEqual(result, {
+    bundleRoot,
+    endpoint: null,
+    error: "offline_ingest_setup_failure",
+    issues: [
+      {
+        message: "Invalid worker runtime environment: API_BASE_URL: is required",
+        path: "API_BASE_URL"
+      }
+    ],
+    stage: "setup_failure",
+    status: "rejected"
+  });
+});
+
+test("runProblem9OfflineIngestCli emits JSON setup failures for missing flags", async (t) => {
+  const originalExitCode = process.exitCode;
+  const originalConsoleError = console.error;
+  const originalConsoleLog = console.log;
+  const stderrLines: string[] = [];
+  const stdoutLines: string[] = [];
+
+  process.exitCode = undefined;
+  console.error = (...args: unknown[]) => {
+    stderrLines.push(args.map(String).join(" "));
+  };
+  console.log = (...args: unknown[]) => {
+    stdoutLines.push(args.map(String).join(" "));
+  };
+
+  t.after(() => {
+    process.exitCode = originalExitCode;
+    console.error = originalConsoleError;
+    console.log = originalConsoleLog;
+  });
+
+  await runProblem9OfflineIngestCli(["--bundle-root", path.join(os.tmpdir(), "bundle-root")]);
+
+  assert.equal(stdoutLines.length, 0);
+  assert.equal(process.exitCode, 1);
+  assert.deepEqual(JSON.parse(stderrLines.join("\n")), {
+    bundleRoot: null,
+    endpoint: null,
+    error: "offline_ingest_setup_failure",
+    issues: [
+      {
+        message: "Missing required --access-jwt <value> argument.",
+        path: "--access-jwt"
+      }
+    ],
+    stage: "setup_failure",
     status: "rejected"
   });
 });
