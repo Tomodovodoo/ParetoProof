@@ -58,6 +58,46 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
     );
   }
 
+  if (benchmarkPackageRoot && workspaceRoot) {
+    assertNoHostPathOverlap(
+      benchmarkPackageRoot,
+      workspaceRoot,
+      "Benchmark package root",
+      "Workspace root"
+    );
+  }
+
+  if (promptPackageRoot && workspaceRoot) {
+    assertNoHostPathOverlap(
+      promptPackageRoot,
+      workspaceRoot,
+      "Prompt package root",
+      "Workspace root"
+    );
+  }
+
+  if (benchmarkPackageRoot && outputRoot) {
+    assertNoHostPathOverlap(
+      benchmarkPackageRoot,
+      outputRoot,
+      "Benchmark package root",
+      "Output root"
+    );
+  }
+
+  if (promptPackageRoot && outputRoot) {
+    assertNoHostPathOverlap(
+      promptPackageRoot,
+      outputRoot,
+      "Prompt package root",
+      "Output root"
+    );
+  }
+
+  if (workspaceRoot && outputRoot) {
+    assertNoHostPathOverlap(workspaceRoot, outputRoot, "Workspace root", "Output root");
+  }
+
   const workspaceContainerRoot = workspaceRoot
     ? path.posix.join(workspaceParentContainerRoot, path.basename(workspaceRoot))
     : null;
@@ -286,7 +326,15 @@ async function prepareWritableTarget(
   const targetPath = path.resolve(rawTargetPath);
 
   assertNotFilesystemRoot(targetPath, label);
-  await mkdir(path.dirname(targetPath), { recursive: true });
+  const parentPath = path.dirname(targetPath);
+
+  if (parentPath === path.parse(targetPath).root) {
+    throw new Error(
+      `${label} may not be a top-level directory because the trusted-local wrapper would need to mount the filesystem root read-write. Choose a dedicated nested directory instead.`
+    );
+  }
+
+  await mkdir(parentPath, { recursive: true });
 
   return targetPath;
 }
@@ -295,6 +343,31 @@ function assertNotFilesystemRoot(targetPath: string, label: string): void {
   if (targetPath === path.parse(targetPath).root) {
     throw new Error(`${label} must not be a filesystem root: ${targetPath}`);
   }
+}
+
+function assertNoHostPathOverlap(
+  firstPath: string,
+  secondPath: string,
+  firstLabel: string,
+  secondLabel: string
+): void {
+  const normalizedFirstPath = normalizeHostPath(firstPath);
+  const normalizedSecondPath = normalizeHostPath(secondPath);
+
+  if (
+    normalizedFirstPath === normalizedSecondPath ||
+    normalizedFirstPath.startsWith(`${normalizedSecondPath}${path.sep}`) ||
+    normalizedSecondPath.startsWith(`${normalizedFirstPath}${path.sep}`)
+  ) {
+    throw new Error(
+      `${firstLabel} overlaps ${secondLabel} on the host filesystem. Choose disjoint directories before launching the trusted-local wrapper.`
+    );
+  }
+}
+
+function normalizeHostPath(targetPath: string): string {
+  const normalizedPath = path.normalize(targetPath);
+  return process.platform === "win32" ? normalizedPath.toLowerCase() : normalizedPath;
 }
 
 async function runDockerCommand(args: string[]): Promise<void> {
