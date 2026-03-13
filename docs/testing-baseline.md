@@ -2,6 +2,8 @@
 
 This document resolves the MVP testing-stack scope for ParetoProof. It defines which tools are used, what each test layer covers, and which checks are required locally and in CI before merge.
 
+For benchmark-kernel changes on the offline `firstproof/Problem9` slice, the verifier-golden policy in `docs/problem-9-verifier-golden-baseline.md` takes precedence over broader generic test breadth. This document remains the general monorepo testing baseline around that stricter benchmark gate.
+
 ## Goals
 
 - Keep the test stack small and TypeScript-native.
@@ -55,7 +57,7 @@ Before opening or updating a PR, contributors should run:
 3. `bun run test:integration`
 4. `bun run test:e2e:smoke` when changes affect auth flow, portal routing, or cross-surface session handling
 
-If scope is documentation-only, test commands may be skipped.
+If scope is documentation-only, test commands may be skipped. If changes affect the offline Problem 9 benchmark kernel, contributors must also run the required positive and negative verifier goldens defined in `docs/problem-9-verifier-golden-baseline.md`.
 
 ## CI Baseline
 
