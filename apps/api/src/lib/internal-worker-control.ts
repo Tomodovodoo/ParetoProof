@@ -276,6 +276,23 @@ async function requeueExpiredUnstartedLeases(tx: RequeueExecutor, now: Date) {
   }
 
   const runRowIds = [...new Set(requeuedJobs.map((job) => job.runRowId))];
+  const activeRunRows = await tx
+    .select({
+      runRowId: jobs.runId
+    })
+    .from(jobs)
+    .where(
+      and(
+        inArray(jobs.runId, runRowIds),
+        inArray(jobs.state, ["claimed", "running", "cancel_requested"])
+      )
+    );
+  const activeRunIds = new Set(activeRunRows.map((run) => run.runRowId));
+  const runsToQueue = runRowIds.filter((runRowId) => !activeRunIds.has(runRowId));
+
+  if (runsToQueue.length === 0) {
+    return;
+  }
 
   await tx
     .update(runs)
@@ -283,7 +300,7 @@ async function requeueExpiredUnstartedLeases(tx: RequeueExecutor, now: Date) {
       state: "queued",
       updatedAt: now
     })
-    .where(and(inArray(runs.id, runRowIds), eq(runs.state, "running")));
+    .where(and(inArray(runs.id, runsToQueue), eq(runs.state, "running")));
 }
 
 export function createInternalWorkerControlService(db: DbClient) {
@@ -354,14 +371,14 @@ export function createInternalWorkerControlService(db: DbClient) {
       }
 
       return db.transaction(async (tx) => {
-        const now = new Date();
-        await requeueExpiredUnstartedLeases(tx, now);
+        await requeueExpiredUnstartedLeases(tx, new Date());
         const candidate = await selectNextClaimCandidate(tx);
 
         if (!candidate) {
           return buildIdleClaimResponse();
         }
 
+        const now = new Date();
         const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
         const jobTokenExpiresAt = createJobTokenExpiry(now);
         const { token, tokenHash } = issueJobToken();
