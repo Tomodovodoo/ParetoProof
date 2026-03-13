@@ -120,6 +120,9 @@ function copyLocalPortalState(targetUrl: URL, currentLocation = window.location)
   const currentParams = new URLSearchParams(currentLocation.search);
 
   for (const key of localPortalStateParamKeys) {
+    if (targetUrl.searchParams.has(key)) {
+      continue;
+    }
     const value = currentParams.get(key);
 
     if (value) {
