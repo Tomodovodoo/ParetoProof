@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "check:bidi": "node infra/scripts/check-bidi-chars.mjs",
     "build": "bun run build:shared && bun run build:web && bun run build:api && bun run build:worker",
     "typecheck": "bun run typecheck:shared && bun run typecheck:web && bun run typecheck:api && bun run typecheck:worker",
     "dev:web": "bun --cwd apps/web dev",

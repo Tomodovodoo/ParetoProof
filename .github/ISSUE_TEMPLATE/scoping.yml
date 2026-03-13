@@ -1,0 +1,57 @@
+name: Scoping issue
+description: Define a product, architecture, or process decision before execution work starts.
+title: "[Scope] "
+labels:
+  - scoping
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for decisions, boundaries, and non-goals. Scope issues should end in a written baseline or ADR plus follow-up execution work.
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision to be made
+      description: State the question this scope issue must answer.
+      placeholder: |
+        Define ...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Summarize why the decision matters now.
+      placeholder: |
+        Current state:
+        Why now:
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: State what this scope should not decide or implement.
+      placeholder: |
+        - This issue does not implement ...
+        - This issue does not decide ...
+    validations:
+      required: true
+  - type: input
+    id: deliverable
+    attributes:
+      label: Deliverable doc or ADR
+      description: Name the baseline doc or ADR expected from this issue.
+      placeholder: "docs/...-baseline.md"
+    validations:
+      required: true
+  - type: textarea
+    id: follow_up_execution
+    attributes:
+      label: Follow-up execution issues required
+      description: List the concrete implementation tasks that must exist after the scope resolves.
+      placeholder: |
+        - #...
+        - #...
+    validations:
+      required: true
