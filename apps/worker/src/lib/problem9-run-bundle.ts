@@ -457,10 +457,7 @@ export async function materializeProblem9RunBundle(
   const bundleDigest = sha256Text(
     stableStringify({
       artifactInventory: artifactEntries,
-      runBundle: {
-        ...runBundleWithoutDigests,
-        artifactManifestDigest
-      }
+      runBundle: omitDigestFields(runBundleWithoutDigests)
     })
   );
 
@@ -489,7 +486,9 @@ async function loadBenchmarkPackageManifest(
     path.join(benchmarkPackageRoot, benchmarkPackageManifestRelativePath),
     "utf8"
   );
-  const benchmarkManifest = benchmarkPackageManifestSchema.parse(JSON.parse(rawManifest));
+  const benchmarkManifest = benchmarkPackageManifestSchema.parse(
+    JSON.parse(normalizeText(rawManifest))
+  );
   await validateBenchmarkPackageInput(benchmarkPackageRoot, benchmarkManifest);
   return benchmarkManifest;
 }
@@ -503,12 +502,18 @@ async function loadPromptPackage(
   await ensurePromptPackageFiles(promptPackageRoot);
 
   const promptManifest = promptPackageManifestSchema.parse(
-    JSON.parse(await readFile(path.join(promptPackageRoot, promptPackageManifestFilename), "utf8"))
+    JSON.parse(
+      normalizeText(
+        await readFile(path.join(promptPackageRoot, promptPackageManifestFilename), "utf8")
+      )
+    )
   );
   await validatePromptPackageInput(promptPackageRoot, promptManifest);
 
   const runEnvelope = runEnvelopeSchema.parse(
-    JSON.parse(await readFile(path.join(promptPackageRoot, "run-envelope.json"), "utf8"))
+    JSON.parse(
+      normalizeText(await readFile(path.join(promptPackageRoot, "run-envelope.json"), "utf8"))
+    )
   );
 
   return {
@@ -997,6 +1002,12 @@ function sortJsonValue(value: unknown): unknown {
 function omitNullValues<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(value).filter(([, nestedValue]) => nestedValue !== null)
+  );
+}
+
+function omitDigestFields<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !key.toLowerCase().endsWith("digest"))
   );
 }
 
