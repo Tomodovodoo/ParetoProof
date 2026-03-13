@@ -391,6 +391,16 @@ function sortAdminAccessRequestItems(
   });
 }
 
+function dedupeAccessRequestRows(rows: AccessRequestWithReviewer[]) {
+  const rowsById = new Map<string, AccessRequestWithReviewer>();
+
+  for (const row of rows) {
+    rowsById.set(row.id, row);
+  }
+
+  return sortAccessRequestRows([...rowsById.values()]);
+}
+
 async function loadAdminAccessRequestList(
   db: ReturnTypeOfCreateDbClient
 ) {
@@ -424,15 +434,17 @@ async function loadAdminAccessRequestDetail(
   }
 
   const matchedUser = await loadMatchedUserForRequest(db, requestRow);
-  const relatedRequestRows =
-    matchedUser?.accessRequests ??
-    ((await db.query.accessRequests.findMany({
-      orderBy: [desc(accessRequests.createdAt)],
-      where: eq(accessRequests.email, requestRow.email),
-      with: {
-        reviewedByUser: true
-      }
-    })) as AccessRequestWithReviewer[]);
+  const emailRelatedRequestRows = (await db.query.accessRequests.findMany({
+    orderBy: [desc(accessRequests.createdAt)],
+    where: eq(accessRequests.email, requestRow.email),
+    with: {
+      reviewedByUser: true
+    }
+  })) as AccessRequestWithReviewer[];
+  const relatedRequestRows = dedupeAccessRequestRows([
+    ...(matchedUser?.accessRequests ?? []),
+    ...emailRelatedRequestRows
+  ]);
   const listItem = await toAdminAccessRequestListItem(db, requestRow, matchedUser);
 
   return {

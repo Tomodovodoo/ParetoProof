@@ -378,6 +378,88 @@ test("GET /portal/admin/users and detail expose user posture, history, and audit
   assert.equal(detailPayload.item.sessionPosture.activeSessionCount, 1);
 });
 
+test("GET /portal/admin/access-requests/:id preserves email-only history when a matched user exists", async (t) => {
+  const reviewer = buildUser({
+    displayName: "Admin Reviewer",
+    email: "admin@paretoproof.com",
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  });
+  const currentRequest = {
+    ...buildAccessRequest({
+      email: "legacy@paretoproof.com",
+      id: "13131313-1313-4313-8313-131313131313",
+      requestedByUserId: null,
+      status: "pending"
+    }),
+    reviewedByUser: null
+  };
+  const priorEmailOnlyRequest = {
+    ...buildAccessRequest({
+      createdAt: new Date("2026-03-10T18:00:00.000Z"),
+      email: "legacy@paretoproof.com",
+      id: "14141414-1414-4414-8414-141414141414",
+      requestedByUserId: null,
+      reviewedAt: new Date("2026-03-10T18:10:00.000Z"),
+      reviewedByUserId: reviewer.id,
+      status: "approved"
+    }),
+    reviewedByUser: reviewer
+  };
+  const matchedUser = {
+    ...buildUser({
+      email: "legacy@paretoproof.com",
+      id: "15151515-1515-4515-8515-151515151515"
+    }),
+    accessRequests: [],
+    auditEventsAsTarget: [],
+    identities: [buildIdentity()],
+    roleGrants: [
+      {
+        ...buildRoleGrant({
+          userId: "15151515-1515-4515-8515-151515151515"
+        }),
+        grantedByUser: reviewer,
+        revokedByUser: null
+      }
+    ],
+    sessions: []
+  };
+  const db = {
+    query: {
+      accessRequests: {
+        findFirst: async () => currentRequest,
+        findMany: async () => [currentRequest, priorEmailOnlyRequest]
+      },
+      userIdentities: {
+        findFirst: async () => null
+      },
+      users: {
+        findFirst: async () => matchedUser
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/portal/admin/access-requests/${currentRequest.id}`
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(payload.item.relatedRequests.length, 2);
+  assert.deepEqual(
+    payload.item.relatedRequests.map((entry: { id: string }) => entry.id),
+    [currentRequest.id, priorEmailOnlyRequest.id]
+  );
+});
+
 test("POST /portal/admin/access-requests/:id/approve emits user_identity.linked for recovery approval", async (t) => {
   const requestRow = buildAccessRequest({
     email: "recover@paretoproof.com",
