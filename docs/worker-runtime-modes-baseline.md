@@ -130,7 +130,8 @@ This command exists to bridge offline local execution into the control plane wit
 - operator-triggered local or automation-triggered environment
 - not a hosted claim-loop mode
 - must not use worker bootstrap tokens or job lease tokens as ingest credentials
-- must use the future offline-ingest auth surface, which may be human-admin or dedicated operator machine auth, but not trusted-local ChatGPT session material
+- must use the offline-ingest auth surface defined in [offline-ingest-auth-baseline.md](offline-ingest-auth-baseline.md)
+- MVP offline ingest stays on explicit human-admin Access auth; later unattended operator auth needs a separate follow-up scope
 
 The important boundary is that ingest imports a finished result. It does not execute, heartbeat, or synthesize worker events after the fact.
 
