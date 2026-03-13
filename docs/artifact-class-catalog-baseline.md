@@ -57,7 +57,7 @@ These classes belong to one run or attempt and are normally stored under a `runs
 | `verifier_output` | structured verifier findings, theorem comparisons | R2 | `runs/<run_id>/artifacts/` | reference + selected policy summary fields |
 | `environment_snapshot` | environment/toolchain snapshot JSON | R2 | `runs/<run_id>/artifacts/` | reference + reproducibility digest summary |
 | `usage_summary` | token, spend, wall-clock, retry accounting | R2 | `runs/<run_id>/artifacts/` | reference + selected budget summary fields |
-| `execution_trace` | transcripts, event logs, Lean-MCP logs, tool logs | R2 | `runs/<run_id>/traces/` or `runs/<run_id>/logs/` | reference only by default |
+| `execution_trace` | transcripts, event logs, Lean-MCP logs, tool logs | R2 | `runs/<run_id>/traces/` | reference only by default |
 
 ### Benchmark-linked artifact classes
 
@@ -169,6 +169,8 @@ Artifact classes must map to the stable R2 prefix families already defined elsew
 The class catalog owns the class-to-prefix-family mapping. Issue `#123` may later define per-class metadata fields, but it should not move a class into a different bucket family without an explicit policy change.
 
 Within a run prefix family, object keys must still preserve attempt-level uniqueness when multiple attempts emit the same class. The shared `runs/<run_id>/...` family is a storage namespace, not permission to overwrite prior attempt evidence.
+
+For the MVP class catalog, `runs/<run_id>/logs/` is reserved for log-like text output such as `compiler_output`. Rich execution telemetry stays in `runs/<run_id>/traces/` under the `execution_trace` class.
 
 ## Query and review implications
 
