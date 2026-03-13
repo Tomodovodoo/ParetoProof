@@ -19,5 +19,18 @@ Package materialization:
   digest-filled `benchmark-package.json`
 - use `bun --cwd apps/worker materialize:problem9-prompt-package -- --output <directory> --benchmark-package-root <directory> --run-id <id> --attempt-id <id> --lane-id <id> --run-mode <mode> --tool-profile <profile> --provider-family <family> --auth-mode <mode> --model-config-id <id> --harness-revision <revision>` to emit the canonical prompt package for one Problem 9 attempt
 - the prompt package writes `prompt-package.json` plus the reviewable raw prompt layers `system.md`, `benchmark.md`, `item.md`, and `run-envelope.json`
+- supported prompt and local-run auth modes now follow the MVP provider contract:
+  - `trusted_local_user`
+  - `machine_api_key`
+  - `machine_oauth`
+  - `local_stub`
 - use `bun --cwd apps/worker materialize:problem9-run-bundle -- --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]` to emit `problem9-run-bundle/` with the canonical manifests, copied package and prompt references, candidate source, verification artifacts, environment snapshot, and deterministic digests
 - the run-bundle command derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or bundle input files
+
+Local attempt execution:
+
+- use `bun --cwd apps/worker run:problem9-attempt -- --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family <family>] [--auth-mode <mode>] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]` to execute one local Problem 9 attempt and emit the canonical `problem9-run-bundle/`
+- the command copies the immutable benchmark package into a clean writable workspace, writes the candidate as `FirstProof/Problem9/Candidate.lean`, runs the authoritative Lean compile gate, runs theorem and axiom verification, and finalizes through the existing run-bundle materializer instead of inventing a second output shape
+- `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
+- `machine_api_key` runs require `CODEX_API_KEY`
+- `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
