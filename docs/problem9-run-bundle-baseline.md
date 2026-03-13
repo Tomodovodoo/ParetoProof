@@ -302,6 +302,8 @@ Issue `#147` should therefore derive its result payloads from the digests and ar
 
 ### Artifact-catalog implications
 
+The canonical artifact class names and metadata-versus-object-store split now live in `artifact-class-catalog-baseline.md`.
+
 Artifact-catalog work should classify run-bundle members at least along these logical roles:
 
 - `run_manifest`
