@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ingestProblem9RunBundle } from "./problem9-offline-ingest.js";
+import { Problem9OfflineIngestCliError, ingestProblem9RunBundle } from "./problem9-offline-ingest.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 export async function runProblem9OfflineIngestCli(args: string[]): Promise<void> {
@@ -28,21 +28,41 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
     return index === -1 || !args[index + 1] ? undefined : args[index + 1];
   };
 
-  const runtimeEnv = await parseWorkerRuntimeEnv(
-    {
-      commandFamily: "offline_ingest_cli"
-    },
-    {
-      ...process.env,
-      API_BASE_URL: getOptionalValue("--api-base-url") ?? process.env.API_BASE_URL
+  const unresolvedApiBaseUrl = getOptionalValue("--api-base-url") ?? process.env.API_BASE_URL ?? "";
+  const unresolvedBundleRoot = getOptionalValue("--bundle-root");
+
+  try {
+    const runtimeEnv = await parseWorkerRuntimeEnv(
+      {
+        commandFamily: "offline_ingest_cli"
+      },
+      {
+        ...process.env,
+        API_BASE_URL: unresolvedApiBaseUrl || process.env.API_BASE_URL
+      }
+    );
+
+    const result = await ingestProblem9RunBundle({
+      accessJwt: getRequiredValue("--access-jwt"),
+      apiBaseUrl: runtimeEnv.apiBaseUrl ?? "",
+      bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
+    });
+
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    if (error instanceof Problem9OfflineIngestCliError) {
+      throw error;
     }
-  );
 
-  const result = await ingestProblem9RunBundle({
-    accessJwt: getRequiredValue("--access-jwt"),
-    apiBaseUrl: runtimeEnv.apiBaseUrl ?? "",
-    bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
-  });
+    const message = error instanceof Error ? error.message : String(error);
 
-  console.log(JSON.stringify(result, null, 2));
+    throw new Problem9OfflineIngestCliError({
+      apiBaseUrl: unresolvedApiBaseUrl,
+      bundleRoot: unresolvedBundleRoot ? path.resolve(unresolvedBundleRoot) : "",
+      endpoint: "",
+      kind: "setup_error",
+      message,
+      ok: false
+    });
+  }
 }

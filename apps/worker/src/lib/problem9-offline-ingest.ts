@@ -34,6 +34,7 @@ export type Problem9OfflineIngestFailure = {
     | "auth_error"
     | "bundle_validation_error"
     | "response_validation_error"
+    | "setup_error"
     | "transport_error"
     | "unexpected_response";
   message: string;

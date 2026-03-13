@@ -9,6 +9,7 @@ import {
   buildProblem9OfflineIngestRequestFromBundleRoot,
   ingestProblem9RunBundle
 } from "../src/lib/problem9-offline-ingest.ts";
+import { runProblem9OfflineIngestCli } from "../src/lib/problem9-offline-ingest-cli.ts";
 import { materializeProblem9Package } from "../src/lib/problem9-package.ts";
 import {
   getDefaultProblem9PromptPackageOptions,
@@ -349,6 +350,19 @@ test("ingestProblem9RunBundle preserves structured API validation issues", async
           path: ["bundle", "candidateSource"]
         }
       ]);
+      return true;
+    }
+  );
+});
+
+test("runProblem9OfflineIngestCli emits structured setup failures for missing flags", async () => {
+  await assert.rejects(
+    () => runProblem9OfflineIngestCli(["--bundle-root", "C:\\temp\\bundle"]),
+    (error: unknown) => {
+      assert.ok(error instanceof Problem9OfflineIngestCliError);
+      assert.equal(error.result.ok, false);
+      assert.equal(error.result.kind, "setup_error");
+      assert.match(error.result.message, /API_BASE_URL: is required|Missing required --access-jwt/);
       return true;
     }
   );
