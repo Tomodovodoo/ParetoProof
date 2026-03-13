@@ -558,7 +558,7 @@ export function createInternalWorkerControlService(db: DbClient) {
         const nextLeaseExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
         const nextJobTokenExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
 
-        await tx
+        const renewedLeases = await tx
           .update(workerJobLeases)
           .set({
             jobTokenExpiresAt: nextJobTokenExpiresAt,
@@ -567,7 +567,26 @@ export function createInternalWorkerControlService(db: DbClient) {
             leaseExpiresAt: nextLeaseExpiresAt,
             updatedAt: now
           })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+          .where(
+            and(
+              eq(workerJobLeases.id, authContext.leaseRowId),
+              isNull(workerJobLeases.revokedAt)
+            )
+          )
+          .returning({
+            id: workerJobLeases.id
+          });
+
+        if (renewedLeases.length === 0) {
+          return {
+            acknowledgedEventSequence,
+            cancelRequested: false,
+            jobToken: null,
+            jobTokenExpiresAt: null,
+            leaseExpiresAt: null,
+            leaseStatus: "expired"
+          } satisfies WorkerHeartbeatResponse;
+        }
 
         if (lease.jobState === "claimed") {
           await tx

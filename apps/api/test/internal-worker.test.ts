@@ -679,7 +679,10 @@ test("heartbeat preserves the current job token while extending the lease", asyn
 
               return {
                 where() {
-                  return Promise.resolve();
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
                 }
               };
             }
@@ -701,4 +704,72 @@ test("heartbeat preserves the current job token while extending the lease", asyn
   assert.equal(updateCalls[1].state, "running");
   assert.equal(updateCalls[2].state, "active");
   assert.equal(updateCalls[3].state, "running");
+});
+
+test("heartbeat returns expired when lease renewal loses the race with recovery revocation", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
+      const tx = {
+        select() {
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      attemptState: "prepared",
+                      heartbeatTimeoutSeconds: 180,
+                      jobState: "claimed",
+                      lastEventSequence: 2,
+                      leaseExpiresAt: new Date(Date.now() + 60_000),
+                      revokedAt: null,
+                      runState: "queued"
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.heartbeat(buildHeartbeatRequest(), buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acknowledgedEventSequence: 3,
+    cancelRequested: false,
+    jobToken: null,
+    jobTokenExpiresAt: null,
+    leaseExpiresAt: null,
+    leaseStatus: "expired"
+  });
+  assert.equal(updateCalls.length, 1);
 });
