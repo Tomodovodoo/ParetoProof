@@ -212,6 +212,24 @@ export function buildApiSessionFinalizeUrl(targetPath = "/") {
   return completionUrl.toString();
 }
 
+export function buildHostedSessionFinalizeUrl(
+  targetPath = "/",
+  hostname = window.location.hostname
+) {
+  if (isLocalOrigin(hostname)) {
+    return buildApiSessionFinalizeUrl(targetPath);
+  }
+
+  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+  const completionUrl = new URL("/api/session/finalize/submit", window.location.origin);
+
+  if (normalizedTargetPath !== "/") {
+    completionUrl.searchParams.set("redirect", normalizedTargetPath);
+  }
+
+  return completionUrl.toString();
+}
+
 export function resolveAccessProviderHost(hostname = window.location.hostname): AccessProvider | null {
   if (hostname === "github.auth.paretoproof.com") {
     return "github";

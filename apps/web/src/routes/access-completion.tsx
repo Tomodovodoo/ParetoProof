@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppIcon } from "../components/app-icon";
 import {
-  buildApiSessionFinalizeUrl,
+  buildHostedSessionFinalizeUrl,
   buildAuthUrl
 } from "../lib/surface";
 
@@ -11,7 +11,7 @@ type AccessCompletionProps = {
 };
 
 export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
-  const finalizeUrl = buildApiSessionFinalizeUrl();
+  const finalizeUrl = buildHostedSessionFinalizeUrl(redirectPath);
   const finalizeFormRef = useRef<HTMLFormElement>(null);
   const retryUrl = new URL(buildAuthUrl(redirectPath));
 
@@ -41,7 +41,6 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           <a href={retryUrl.toString()}>retry sign in</a>.
         </p>
         <form ref={finalizeFormRef} action={finalizeUrl} method="post" className="auth-form">
-          {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
           <button type="submit" className="button">
             Continue to the portal
           </button>
