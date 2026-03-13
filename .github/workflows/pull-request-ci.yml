@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
       - name: Build shared package
         run: bun run build:shared
 
@@ -54,3 +57,9 @@ jobs:
 
       - name: Build workspace
         run: bun run build
+
+      - name: Build Problem 9 execution image
+        run: bun run build:problem9-execution
+
+      - name: Build Problem 9 worker image
+        run: bun run build:paretoproof-worker

@@ -1,40 +1,22 @@
-name: Publish Problem 9 Execution and Worker Images
+name: Publish Problem 9 Devbox
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/worker/**"
-      - "benchmarks/firstproof/problem9/**"
-      - "packages/shared/**"
-      - "package.json"
-      - "bun.lock"
-      - "tsconfig.base.json"
-      - ".github/workflows/publish-worker-image.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+env:
+  DEVBOX_IMAGE: ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-devbox
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment: production
     concurrency:
-      group: worker-image-publish
+      group: problem9-devbox-publish
       cancel-in-progress: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: problem9-execution
-            image_name: paretoproof-problem9-execution
-            cache_scope: problem9-execution
-          - target: paretoproof-worker
-            image_name: paretoproof-worker
-            cache_scope: paretoproof-worker
 
     steps:
       - name: Check out repository
@@ -54,31 +36,31 @@ jobs:
         id: metadata
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
+          images: ${{ env.DEVBOX_IMAGE }}
           tags: |
             type=raw,value=main,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
-      - name: Build and publish ${{ matrix.target }}
+      - name: Build and publish problem9-devbox
         id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: apps/worker/Dockerfile
-          target: ${{ matrix.target }}
+          target: problem9-devbox
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+          cache-from: type=gha,scope=problem9-devbox
+          cache-to: type=gha,mode=max,scope=problem9-devbox
 
       - name: Write image metadata
         run: |
           mkdir -p image-metadata
-          cat <<EOF > image-metadata/${{ matrix.target }}.json
+          cat <<EOF > image-metadata/problem9-devbox.json
           {
-            "target": ${{ toJson(matrix.target) }},
-            "image": ${{ toJson(format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image_name)) }},
+            "target": "problem9-devbox",
+            "image": ${{ toJson(env.DEVBOX_IMAGE) }},
             "tags": ${{ toJson(steps.metadata.outputs.tags) }},
             "digest": ${{ toJson(steps.build.outputs.digest) }},
             "gitSha": ${{ toJson(github.sha) }}
@@ -88,5 +70,5 @@ jobs:
       - name: Upload image metadata
         uses: actions/upload-artifact@v4
         with:
-          name: problem9-image-metadata-${{ matrix.target }}
-          path: image-metadata/${{ matrix.target }}.json
+          name: problem9-image-metadata-problem9-devbox
+          path: image-metadata/problem9-devbox.json
