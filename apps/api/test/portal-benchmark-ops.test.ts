@@ -347,6 +347,39 @@ test("GET /portal/runs/:runId returns run detail with jobs, attempts, artifacts,
   assert.equal(payload.item.relatedRuns[0]?.id, siblingRun.id);
 });
 
+test("GET /portal/runs/:runId rejects malformed run ids before querying storage", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      query: {
+        runs: {
+          findFirst: async () => {
+            throw new Error("should not query runs for malformed ids");
+          }
+        }
+      }
+    } as never,
+    createApprovedPortalGuard(["helper"]) as never,
+    {
+      resolvePortalAccess: noopPortalAccessResolver as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/runs/not-a-uuid"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.deepEqual(response.json().error, "invalid_portal_run_id");
+});
+
 test("GET /portal/launch returns benchmark targets, model options, and run kinds", async (t) => {
   const db = {
     query: {
@@ -429,10 +462,6 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
         findMany: async () => {
           jobsFindManyCallCount += 1;
           if (jobsFindManyCallCount === 2) {
-            return terminalJobs;
-          }
-
-          if (jobsFindManyCallCount === 3) {
             return terminalJobs
               .filter((jobRow) => jobRow.state === "failed")
               .slice(0, 10);
@@ -463,7 +492,12 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
       workerJobLeases: {
         findMany: async () => [activeLease, staleLease]
       }
-    }
+    },
+    select: () => ({
+      from: () => ({
+        where: async () => [{ count: terminalJobs.length }]
+      })
+    })
   };
   const app = Fastify();
 

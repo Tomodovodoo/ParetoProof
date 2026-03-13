@@ -8,6 +8,7 @@ import {
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import {
   accessRequests,
   auditEvents,
@@ -106,6 +107,10 @@ function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
 function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
   return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Lax; Max-Age=0; Secure; HttpOnly`;
 }
+
+const portalRunIdParamSchema = z.object({
+  runId: z.string().uuid()
+});
 
 function buildPortalAuthStartUrl(options: {
   provider: "cloudflare_github" | "cloudflare_google";
@@ -415,8 +420,17 @@ export function registerPortalRoutes(
       preHandler: requireAccess("approved_helper_or_higher")
     },
     async (request, reply) => {
-      const runId = (request.params as { runId?: string }).runId;
-      const item = runId ? await loadPortalRunDetail(db, runId) : null;
+      const parsedParams = portalRunIdParamSchema.safeParse(request.params ?? {});
+
+      if (!parsedParams.success) {
+        reply.code(400).send({
+          error: "invalid_portal_run_id",
+          issues: parsedParams.error.issues
+        });
+        return;
+      }
+
+      const item = await loadPortalRunDetail(db, parsedParams.data.runId);
 
       if (!item) {
         reply.code(404).send({

@@ -5,7 +5,7 @@ import type {
   PortalWorkersView
 } from "@paretoproof/shared";
 import { runKindCatalog } from "@paretoproof/shared";
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import {
   artifacts,
   attempts,
@@ -263,7 +263,7 @@ export async function loadPortalLaunchView(
 export async function loadPortalWorkersView(
   db: ReturnTypeOfCreateDbClient
 ): Promise<PortalWorkersView> {
-  const [queueJobRows, terminalJobRows, failedIncidentJobRows, leaseRows] = await Promise.all([
+  const [queueJobRows, terminalJobCountRows, failedIncidentJobRows, leaseRows] = await Promise.all([
     db.query.jobs.findMany({
       where: or(
         eq(jobs.state, "queued"),
@@ -272,13 +272,18 @@ export async function loadPortalWorkersView(
         eq(jobs.state, "cancel_requested")
       )
     }),
-    db.query.jobs.findMany({
-      where: or(
-        eq(jobs.state, "completed"),
-        eq(jobs.state, "failed"),
-        eq(jobs.state, "cancelled")
-      )
-    }),
+    db
+      .select({
+        count: count()
+      })
+      .from(jobs)
+      .where(
+        or(
+          eq(jobs.state, "completed"),
+          eq(jobs.state, "failed"),
+          eq(jobs.state, "cancelled")
+        )
+      ),
     db.query.jobs.findMany({
       limit: WORKER_INCIDENT_LIMIT,
       orderBy: [desc(jobs.updatedAt)],
@@ -390,7 +395,7 @@ export async function loadPortalWorkersView(
       claimedJobs: queueJobRows.filter((jobRow) => jobRow.state === "claimed").length,
       queuedJobs: queueJobRows.filter((jobRow) => jobRow.state === "queued").length,
       runningJobs: queueJobRows.filter((jobRow) => jobRow.state === "running").length,
-      terminalJobs: terminalJobRows.length
+      terminalJobs: terminalJobCountRows[0]?.count ?? 0
     }
   };
 }
