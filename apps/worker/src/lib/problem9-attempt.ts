@@ -109,7 +109,7 @@ const problem9AttemptOptionsSchema = z.object({
   promptPackageRoot: z.string().min(1),
   providerFamily: providerFamilySchema.optional(),
   providerModel: z.string().min(1).optional(),
-  stubScenario: z.enum(["exact_canonical"]).default("exact_canonical"),
+  stubScenario: z.enum(["exact_canonical", "compile_failure"]).default("exact_canonical"),
   workspaceRoot: z.string().min(1)
 });
 
@@ -207,6 +207,9 @@ export async function runProblem9Attempt(
 
   assertNotFilesystemRoot(outputRoot, "Attempt output");
   assertNotFilesystemRoot(workspaceRoot, "Attempt workspace");
+  assertNoPathOverlap(benchmarkPackageRoot, workspaceRoot, "Benchmark package input", "Attempt workspace");
+  assertNoPathOverlap(promptPackageRoot, workspaceRoot, "Prompt package input", "Attempt workspace");
+  assertNoPathOverlap(outputRoot, workspaceRoot, "Attempt output", "Attempt workspace");
 
   const benchmarkManifest = await loadJsonFile(
     path.join(benchmarkPackageRoot, "benchmark-package.json"),
@@ -372,8 +375,15 @@ export async function runProblem9Attempt(
     break;
   }
 
-  if (compileResult === null || verificationResult === null || !candidateSource.trim()) {
+  if (compileResult === null || !candidateSource.trim()) {
     throw new Error("Attempt did not reach a bundle-emittable terminal state.");
+  }
+
+  if (verificationResult === null) {
+    verificationResult = await createCompileFailureVerificationResult({
+      compileResult,
+      tempArtifactsRoot
+    });
   }
 
   const environmentInputPath = path.join(tempArtifactsRoot, "environment-input.json");
@@ -497,7 +507,7 @@ async function generateCandidate(options: {
   providerModel: string | null;
   providerTurnsUsed: number;
   runEnvelope: RunEnvelope;
-  stubScenario: "exact_canonical";
+  stubScenario: "compile_failure" | "exact_canonical";
   verificationResult: VerificationResult | null;
   workspaceRoot: string;
 }): Promise<ProviderResponse> {
@@ -829,6 +839,55 @@ async function verifyCandidate(options: {
   };
 }
 
+async function createCompileFailureVerificationResult(options: {
+  compileResult: CompileResult;
+  tempArtifactsRoot: string;
+}): Promise<VerificationResult> {
+  const verifierOutput = {
+    axiomCheck: {
+      output: "",
+      result: "not_evaluated"
+    },
+    compileGate: {
+      result: "failed"
+    },
+    diagnosticGate: {
+      result: "failed"
+    },
+    forbiddenTokens: {
+      containsAdmit: false,
+      containsSorry: false
+    },
+    result: "fail",
+    semanticCheck: {
+      output: options.compileResult.outputText,
+      result: "not_evaluated"
+    },
+    surfaceEquality: "not_evaluated",
+    surface_drift: false,
+    theoremHeaders: {
+      canonical: "",
+      candidate: ""
+    },
+    verifierOutputSchemaVersion: "1"
+  } as const;
+  const verifierOutputPath = path.join(options.tempArtifactsRoot, "verifier-output.json");
+
+  await writeJsonFile(verifierOutputPath, verifierOutput);
+
+  return {
+    axiomCheck: "not_evaluated",
+    containsAdmit: false,
+    containsSorry: false,
+    diagnosticGate: "failed",
+    failureCode: "proof_policy_failed",
+    semanticEquality: "not_evaluated",
+    surfaceEquality: "not_evaluated",
+    verifierOutput,
+    verifierOutputPath
+  };
+}
+
 function deriveVerificationFailureCode(options: {
   axiomCheck: "passed" | "failed" | "not_evaluated";
   containsAdmit: boolean;
@@ -1026,8 +1085,20 @@ function buildCompilerDiagnostics(outputText: string, compileSucceeded: boolean)
   };
 }
 
-function buildStubCandidate(stubScenario: "exact_canonical"): string {
+function buildStubCandidate(stubScenario: "compile_failure" | "exact_canonical"): string {
   switch (stubScenario) {
+    case "compile_failure":
+      return [
+        "import FirstProof.Problem9.Support",
+        "",
+        "namespace FirstProof.Problem9",
+        "",
+        "theorem problem9 (n : Nat) :",
+        "    triangular (Nat.succ n) = triangular n + Nat.succ n := by",
+        "  this is not valid Lean",
+        "",
+        "end FirstProof.Problem9"
+      ].join("\n");
     case "exact_canonical":
       return [
         "import FirstProof.Problem9.Support",
@@ -1067,6 +1138,25 @@ function hasWallClockExceeded(startedAtMs: number, budgetSeconds: number): boole
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
+}
+
+function assertNoPathOverlap(
+  leftPath: string,
+  rightPath: string,
+  leftLabel: string,
+  rightLabel: string
+): void {
+  const normalizedLeft = normalizeComparisonPath(leftPath);
+  const normalizedRight = normalizeComparisonPath(rightPath);
+
+  const overlaps =
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.startsWith(`${normalizedRight}/`) ||
+    normalizedRight.startsWith(`${normalizedLeft}/`);
+
+  if (overlaps) {
+    throw new Error(`${leftLabel} overlaps ${rightLabel}. Choose separate directories.`);
+  }
 }
 
 function assertNotFilesystemRoot(targetPath: string, description: string): void {
@@ -1122,6 +1212,10 @@ function sortJsonValue(value: unknown): unknown {
 
 function normalizeText(value: string): string {
   return value.replace(/^\uFEFF/u, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function normalizeComparisonPath(value: string): string {
+  return path.resolve(value).replace(/\\/g, "/").toLowerCase();
 }
 
 async function runCommand(

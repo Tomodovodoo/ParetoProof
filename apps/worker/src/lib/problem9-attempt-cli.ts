@@ -38,6 +38,7 @@ export async function runProblem9AttemptCli(args: string[]): Promise<void> {
       | undefined,
     providerModel: getOptionalValue("--provider-model"),
     stubScenario: (getOptionalValue("--stub-scenario") ?? "exact_canonical") as
+      | "compile_failure"
       | "exact_canonical",
     workspaceRoot: path.resolve(getRequiredValue("--workspace"))
   });
