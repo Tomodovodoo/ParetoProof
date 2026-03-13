@@ -304,6 +304,171 @@ test("runWorkerClaimLoop exits explicitly when the first heartbeat requests canc
   }
 });
 
+test("runWorkerClaimLoop heartbeats do not advertise unsent finalize event sequences", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-sequence-"));
+
+  try {
+    const workerJob = buildWorkerJob();
+    const artifactEntries = buildArtifactEntries();
+    let heartbeatCount = 0;
+    let sleepCount = 0;
+    let resolveAttemptFinish: (() => void) | null = null;
+    let resolveSecondSleep: (() => void) | null = null;
+    let resolvePendingFinalizeEvent: (() => void) | null = null;
+    let concurrentHeartbeatSequence: number | null = null;
+    const attemptMayFinish = new Promise<void>((resolve) => {
+      resolveAttemptFinish = resolve;
+    });
+    const secondSleepReleased = new Promise<void>((resolve) => {
+      resolveSecondSleep = resolve;
+    });
+    const pendingFinalizeHeartbeat = new Promise<void>((resolve) => {
+      resolvePendingFinalizeEvent = resolve;
+    });
+
+    const fetchImpl = async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+      const bodyText = typeof init?.body === "string" ? init.body : "";
+      const body = bodyText.length > 0 ? JSON.parse(bodyText) : null;
+
+      if (url.pathname === "/internal/worker/claims") {
+        return jsonResponse({
+          leaseStatus: "active",
+          pollAfterSeconds: 0,
+          workerJob
+        });
+      }
+
+      if (url.pathname === `/internal/worker/jobs/${workerJob.jobId}/heartbeat`) {
+        heartbeatCount += 1;
+
+        if (heartbeatCount === 2) {
+          resolveAttemptFinish?.();
+        }
+
+        if (heartbeatCount === 4) {
+          concurrentHeartbeatSequence = body.lastEventSequence;
+          resolvePendingFinalizeEvent?.();
+        }
+
+        return jsonResponse(buildHeartbeatResponse());
+      }
+
+      if (url.pathname === `/internal/worker/jobs/${workerJob.jobId}/events`) {
+        if (body.sequence === 2) {
+          resolveSecondSleep?.();
+          await pendingFinalizeHeartbeat;
+          return jsonResponse({
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 2
+          });
+        }
+
+        return jsonResponse({
+          acceptedAt: fixedNow.toISOString(),
+          acknowledgedSequence: body.sequence
+        });
+      }
+
+      if (url.pathname === `/internal/worker/jobs/${workerJob.jobId}/artifacts`) {
+        return jsonResponse({
+          acceptedAt: fixedNow.toISOString(),
+          artifactManifestDigest,
+          artifacts: artifactEntries.map((artifact, index) => ({
+            artifactId: `artifact-${index + 1}`,
+            artifactRole: artifact.artifactRole,
+            relativePath: artifact.relativePath
+          }))
+        });
+      }
+
+      if (url.pathname === `/internal/worker/jobs/${workerJob.jobId}/result`) {
+        return jsonResponse({
+          acceptedAt: fixedNow.toISOString(),
+          attemptState: "succeeded",
+          jobState: "completed",
+          runState: "succeeded"
+        });
+      }
+
+      throw new Error(`Unexpected fetch path ${url.pathname}.`);
+    };
+
+    await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async (options) => {
+          await attemptMayFinish;
+          await writeBundleOutputs(options.outputRoot, artifactEntries);
+
+          return {
+            artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            authMode: "machine_api_key",
+            bundleDigest,
+            compileRepairCount: 0,
+            outputRoot: options.outputRoot,
+            promptPackageDigest: promptDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 1,
+            result: "pass",
+            runConfigDigest: "2".repeat(64),
+            runId: workerJob.runId,
+            stopReason: "verification_passed",
+            verifierRepairCount: 0,
+            verdictDigest
+          };
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: async () => {
+          sleepCount += 1;
+
+          if (sleepCount === 1) {
+            return;
+          }
+
+          if (sleepCount === 2) {
+            await secondSleepReleased;
+            return;
+          }
+
+          return neverSleep();
+        }
+      }
+    );
+
+    assert.equal(concurrentHeartbeatSequence, 1);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
 test("runWorkerClaimLoop submits a canonical pre-bundle failure when the inner attempt runner fails", async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-failure-"));
 
@@ -396,6 +561,106 @@ test("runWorkerClaimLoop submits a canonical pre-bundle failure when the inner a
     ]);
     assert.equal(failureBody.bundleDigest, null);
     assert.equal(failureBody.verifierVerdict, null);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("runWorkerClaimLoop constrains claimed job filesystem paths under the configured roots", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-paths-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = {
+      ...buildWorkerJob(),
+      jobId: "C:\\danger"
+    };
+    const benchmarkRoots: string[] = [];
+    const attemptCalls: Array<Record<string, unknown>> = [];
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse(),
+          path: jobEndpointPath(workerJob.jobId, "heartbeat")
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: jobEndpointPath(workerJob.jobId, "events")
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: jobEndpointPath(workerJob.jobId, "failure")
+        }
+      ],
+      calls
+    );
+
+    await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async (options) => {
+          attemptCalls.push(options);
+          throw new Error("provider auth failed for hosted attempt");
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => {
+          benchmarkRoots.push(outputRoot);
+          return {
+            outputRoot,
+            packageDigest: benchmarkDigest,
+            packageId: "firstproof/Problem9",
+            packageVersion: "2026.03.13"
+          };
+        },
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.equal(benchmarkRoots.length, 1);
+    assert.match(benchmarkRoots[0]!, /C__danger/i);
+    assert.ok(benchmarkRoots[0]!.startsWith(path.join(tempRoot, "workspace")));
+    assert.ok(!benchmarkRoots[0]!.includes("C:\\danger"));
+    assert.equal(attemptCalls.length, 1);
+    assert.ok(
+      String(attemptCalls[0]!.workspaceRoot).startsWith(path.join(tempRoot, "workspace"))
+    );
+    assert.ok(String(attemptCalls[0]!.outputRoot).startsWith(path.join(tempRoot, "output")));
   } finally {
     await rm(tempRoot, { force: true, recursive: true });
   }
@@ -556,4 +821,20 @@ function createFetchMock(script: ApiMockResponse[], calls: ApiCall[]) {
 
 function neverSleep(): Promise<void> {
   return new Promise(() => {});
+}
+
+function jobEndpointPath(jobId: string, suffix: string): string {
+  return new URL(
+    `/internal/worker/jobs/${jobId}/${suffix}`,
+    "https://api.paretoproof.test"
+  ).pathname;
+}
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      "content-type": "application/json"
+    },
+    status: 200
+  });
 }

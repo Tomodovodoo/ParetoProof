@@ -250,8 +250,14 @@ async function processClaimedJob(
     stopHeartbeat: null,
     stopped: false
   };
-  const jobWorkspaceRoot = path.resolve(options.workspaceRoot, workerJob.jobId);
-  const jobOutputRoot = path.resolve(options.outputRoot, workerJob.jobId);
+  const jobWorkspaceRoot = path.join(
+    path.resolve(options.workspaceRoot),
+    sanitizePathSegment(workerJob.jobId)
+  );
+  const jobOutputRoot = path.join(
+    path.resolve(options.outputRoot),
+    sanitizePathSegment(workerJob.jobId)
+  );
   let heartbeatLoop = Promise.resolve();
 
   try {
@@ -676,7 +682,7 @@ async function appendWorkerEvent(
 
   leaseState.currentPhase = phase;
   leaseState.progressMessage = summary;
-  leaseState.lastEventSequence += 1;
+  const nextSequence = leaseState.lastEventSequence + 1;
 
   const eventPayload: WorkerExecutionEvent = {
     attemptId: leaseState.job.attemptId,
@@ -686,7 +692,7 @@ async function appendWorkerEvent(
     leaseId: leaseState.job.leaseId,
     phase,
     recordedAt: dependencies.now().toISOString(),
-    sequence: leaseState.lastEventSequence,
+    sequence: nextSequence,
     summary
   };
 
@@ -703,9 +709,11 @@ async function appendWorkerEvent(
     }
   );
 
-  if (eventResponse.acknowledgedSequence > leaseState.lastEventSequence) {
-    leaseState.lastEventSequence = eventResponse.acknowledgedSequence;
-  }
+  leaseState.lastEventSequence = Math.max(
+    leaseState.lastEventSequence,
+    nextSequence,
+    eventResponse.acknowledgedSequence
+  );
 }
 
 async function submitArtifactManifest(
@@ -879,6 +887,16 @@ function inferStubScenario(
   modelSnapshotId: string
 ): "compile_failure" | "exact_canonical" {
   return /compile_failure/i.test(modelSnapshotId) ? "compile_failure" : "exact_canonical";
+}
+
+function sanitizePathSegment(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  if (sanitized.length === 0 || /^\.+$/u.test(sanitized)) {
+    return "_";
+  }
+
+  return sanitized;
 }
 
 function classifyHostedAttemptError(error: unknown): WorkerFailureClassification {
