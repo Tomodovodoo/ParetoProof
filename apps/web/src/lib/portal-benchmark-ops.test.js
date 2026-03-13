@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildRunsModelOptions,
+  buildRunsProviderOptions,
   defaultPortalRunsQuery,
   parsePortalRunsQuery
 } from "./portal-benchmark-ops.ts";
@@ -27,5 +29,22 @@ describe("parsePortalRunsQuery", () => {
     expect(query.runKind).toBe("single_run");
     expect(query.verdict).toEqual(["pass", "fail"]);
     expect(query.runLifecycle).toEqual(["queued", "running"]);
+  });
+});
+
+describe("buildRunsProviderOptions", () => {
+  it("preserves the active provider when the current result set is empty", () => {
+    expect(buildRunsProviderOptions([], "google")).toEqual(["google"]);
+  });
+});
+
+describe("buildRunsModelOptions", () => {
+  it("preserves the active model config when the current result set is empty", () => {
+    expect(buildRunsModelOptions([], "google-gemini-pro")).toEqual([
+      {
+        label: "google-gemini-pro",
+        modelConfigId: "google-gemini-pro"
+      }
+    ]);
   });
 });

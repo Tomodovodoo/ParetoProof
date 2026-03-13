@@ -21,7 +21,9 @@ import {
 } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import {
+  buildRunsModelOptions,
   buildPortalRunsQueryString,
+  buildRunsProviderOptions,
   buildRunsCsv,
   defaultPortalRunsQuery,
   fetchPortalLaunchView,
@@ -354,13 +356,13 @@ function PortalRunsSurface({
   pathname: string;
   query: PortalRunsListQuery;
 }) {
-  const providerOptions = Array.from(
-    new Set(loadState.data?.items.map((item) => item.providerFamily) ?? [])
+  const providerOptions = buildRunsProviderOptions(
+    loadState.data?.items ?? [],
+    query.providerFamily
   );
-  const modelOptions = Array.from(
-    new Set(
-      (loadState.data?.items ?? []).map((item) => `${item.modelConfigId}::${item.modelConfigLabel}`)
-    )
+  const modelOptions = buildRunsModelOptions(
+    loadState.data?.items ?? [],
+    query.modelConfigId
   );
 
   return (
@@ -499,14 +501,11 @@ function PortalRunsSurface({
               value={query.modelConfigId ?? ""}
             >
               <option value="">All configs</option>
-              {modelOptions.map((entry) => {
-                const [modelConfigId, label] = entry.split("::");
-                return (
-                  <option key={modelConfigId} value={modelConfigId}>
-                    {label}
-                  </option>
-                );
-              })}
+              {modelOptions.map((entry) => (
+                <option key={entry.modelConfigId} value={entry.modelConfigId}>
+                  {entry.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>

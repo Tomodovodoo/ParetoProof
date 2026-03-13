@@ -1004,6 +1004,42 @@ export function buildRunsCsv(items: PortalRunListItem[]) {
     .join("\n");
 }
 
+export type PortalRunsModelFilterOption = {
+  label: string;
+  modelConfigId: string;
+};
+
+export function buildRunsProviderOptions(
+  items: PortalRunListItem[],
+  selectedProviderFamily: string | null
+) {
+  const providerOptions = Array.from(new Set(items.map((item) => item.providerFamily)));
+
+  if (selectedProviderFamily && !providerOptions.includes(selectedProviderFamily)) {
+    providerOptions.push(selectedProviderFamily);
+  }
+
+  return providerOptions;
+}
+
+export function buildRunsModelOptions(
+  items: PortalRunListItem[],
+  selectedModelConfigId: string | null
+): PortalRunsModelFilterOption[] {
+  const modelOptions = new Map(
+    items.map((item) => [item.modelConfigId, item.modelConfigLabel] as const)
+  );
+
+  if (selectedModelConfigId && !modelOptions.has(selectedModelConfigId)) {
+    modelOptions.set(selectedModelConfigId, selectedModelConfigId);
+  }
+
+  return Array.from(modelOptions, ([modelConfigId, label]) => ({
+    label,
+    modelConfigId
+  }));
+}
+
 function escapeCsvValue(value: string) {
   if (/[",\n]/.test(value)) {
     return `"${value.replaceAll('"', '""')}"`;
