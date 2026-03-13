@@ -55,6 +55,14 @@ Local attempt execution:
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
 
+Hosted claim loop:
+
+- use `bun --cwd apps/worker run:worker-claim-loop -- --once --provider-model <model>` to exercise one hosted claim-loop pass against the internal worker API
+- the hosted loop requires `API_BASE_URL` and `WORKER_BOOTSTRAP_TOKEN`, and it only accepts machine auth modes (`machine_api_key` or `machine_oauth`)
+- `machine_api_key` hosted runs require `CODEX_API_KEY`; hosted execution never reads trusted-local `auth.json`
+- each claimed assignment materializes the canonical Problem 9 package and prompt package locally, runs the shared `run-problem9-attempt` inner executor, registers the canonical artifact manifest including `run-bundle.json` as `run_manifest`, and then submits terminal success or failure through the internal worker API
+- `--once` is the fixture/smoke-test mode; omit it only for the long-running hosted daemon behavior
+
 Trusted-local devbox wrapper:
 
 - use `node infra/scripts/run-problem9-trusted-local-attempt.mjs --preflight-only` to run the repo-owned trusted-local host-side plus in-container auth preflight without starting an attempt

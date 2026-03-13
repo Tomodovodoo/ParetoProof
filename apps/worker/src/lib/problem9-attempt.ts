@@ -198,8 +198,11 @@ export type Problem9AttemptResult = {
 };
 
 export async function runProblem9Attempt(
-  rawOptions: Problem9AttemptOptions
+  rawOptions: Problem9AttemptOptions & {
+    signal?: AbortSignal;
+  }
 ): Promise<Problem9AttemptResult> {
+  const signal = rawOptions.signal;
   const options = problem9AttemptOptionsSchema.parse(rawOptions);
   const benchmarkPackageRoot = path.resolve(options.benchmarkPackageRoot);
   const promptPackageRoot = path.resolve(options.promptPackageRoot);
@@ -226,6 +229,7 @@ export async function runProblem9Attempt(
   );
 
   validateAttemptInputs(benchmarkManifest, promptManifest, runEnvelope, options);
+  throwIfAborted(signal);
 
   const effectiveProviderFamily = options.providerFamily ?? promptManifest.providerFamily;
   const effectiveAuthMode = (options.authMode ?? promptManifest.authMode) as Problem9AuthMode;
@@ -237,12 +241,14 @@ export async function runProblem9Attempt(
 
   await rm(workspaceRoot, { force: true, recursive: true });
   await mkdir(workspaceRoot, { recursive: true });
+  throwIfAborted(signal);
 
   const compileRoot = path.join(workspaceRoot, "package");
   const tempArtifactsRoot = path.join(workspaceRoot, ".paretoproof-artifacts");
 
   await cp(benchmarkPackageRoot, compileRoot, { recursive: true });
   await mkdir(tempArtifactsRoot, { recursive: true });
+  throwIfAborted(signal);
 
   const canonicalTheoremHeader = extractCanonicalTheoremHeader(
     await readNormalizedText(path.join(compileRoot, "FirstProof", "Problem9", "Statement.lean"))
@@ -259,6 +265,8 @@ export async function runProblem9Attempt(
   let terminalFailure: AttemptTerminalFailure | null = null;
 
   while (true) {
+    throwIfAborted(signal);
+
     if (providerTurnsUsed >= runEnvelope.budgets.providerTurns) {
       terminalFailure = {
         failureCode: "turn_budget_exhausted",
@@ -288,6 +296,7 @@ export async function runProblem9Attempt(
         authMode: effectiveAuthMode,
         authPreflight,
         compileResult,
+        signal,
         promptPackageRoot,
         providerFamily: effectiveProviderFamily,
         providerModel: options.providerModel ?? null,
@@ -324,6 +333,7 @@ export async function runProblem9Attempt(
     compileResult = await compileCandidate({
       candidatePath,
       compileRoot,
+      signal,
       tempArtifactsRoot
     });
 
@@ -353,6 +363,7 @@ export async function runProblem9Attempt(
       canonicalTheoremHeader,
       compileResult,
       compileRoot,
+      signal,
       tempArtifactsRoot
     });
 
@@ -387,7 +398,8 @@ export async function runProblem9Attempt(
   if (verificationResult === null) {
     verificationResult = await createCompileFailureVerificationResult({
       compileResult,
-      tempArtifactsRoot
+      tempArtifactsRoot,
+      signal
     });
   }
 
@@ -407,7 +419,8 @@ export async function runProblem9Attempt(
         overrideModelSnapshotId: options.modelSnapshotId,
         providerModel: options.providerModel,
         stubScenario: options.stubScenario
-      })
+      }),
+      signal
     })
   );
 
@@ -514,10 +527,13 @@ async function generateCandidate(options: {
   providerModel: string | null;
   providerTurnsUsed: number;
   runEnvelope: RunEnvelope;
+  signal?: AbortSignal;
   stubScenario: "compile_failure" | "exact_canonical";
   verificationResult: VerificationResult | null;
   workspaceRoot: string;
 }): Promise<ProviderResponse> {
+  throwIfAborted(options.signal);
+
   if (options.authMode === "local_stub") {
     return {
       candidateSource: buildStubCandidate(options.stubScenario),
@@ -575,6 +591,7 @@ async function generateCandidate(options: {
         options.authPreflight,
         options.workspaceRoot
       ),
+      signal: options.signal,
       stdin: promptText,
       timeoutMs: 300000
     }
@@ -680,14 +697,18 @@ async function buildProviderPrompt(options: {
 async function compileCandidate(options: {
   candidatePath: string;
   compileRoot: string;
+  signal?: AbortSignal;
   tempArtifactsRoot: string;
 }): Promise<CompileResult> {
+  throwIfAborted(options.signal);
+
   const compileCommand = await runCommand(
     "lake",
     ["build", "FirstProof.Problem9.Candidate"],
     {
       cwd: options.compileRoot,
       env: process.env,
+      signal: options.signal,
       timeoutMs: 300000
     }
   );
@@ -715,8 +736,11 @@ async function verifyCandidate(options: {
   canonicalTheoremHeader: string;
   compileResult: CompileResult;
   compileRoot: string;
+  signal?: AbortSignal;
   tempArtifactsRoot: string;
 }): Promise<VerificationResult> {
+  throwIfAborted(options.signal);
+
   const containsSorry = /\bsorry\b/.test(options.candidateSource);
   const containsAdmit = /\badmit\b/.test(options.candidateSource);
   const diagnostics =
@@ -748,6 +772,7 @@ async function verifyCandidate(options: {
     {
       cwd: options.compileRoot,
       env: process.env,
+      signal: options.signal,
       timeoutMs: 300000
     }
   );
@@ -783,6 +808,7 @@ async function verifyCandidate(options: {
       {
         cwd: options.compileRoot,
         env: process.env,
+        signal: options.signal,
         timeoutMs: 300000
       }
     );
@@ -848,8 +874,11 @@ async function verifyCandidate(options: {
 
 async function createCompileFailureVerificationResult(options: {
   compileResult: CompileResult;
+  signal?: AbortSignal;
   tempArtifactsRoot: string;
 }): Promise<VerificationResult> {
+  throwIfAborted(options.signal);
+
   const verifierOutput = {
     axiomCheck: {
       output: "",
@@ -950,10 +979,14 @@ async function buildEnvironmentInput(options: {
   benchmarkManifest: BenchmarkPackageManifest;
   compileRoot: string;
   modelSnapshotId: string;
+  signal?: AbortSignal;
 }): Promise<Record<string, unknown>> {
+  throwIfAborted(options.signal);
+
   const leanVersionCommand = await runCommand("lake", ["env", "lean", "--version"], {
     cwd: options.compileRoot,
     env: process.env,
+    signal: options.signal,
     timeoutMs: 120000
   });
   const leanVersion = (
@@ -1249,6 +1282,7 @@ async function runCommand(
   options: {
     cwd: string;
     env: NodeJS.ProcessEnv;
+    signal?: AbortSignal;
     stdin?: string;
     timeoutMs: number;
   }
@@ -1257,6 +1291,8 @@ async function runCommand(
   stderr: string;
   stdout: string;
 }> {
+  throwIfAborted(options.signal);
+
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
@@ -1268,9 +1304,18 @@ async function runCommand(
     let stdout = "";
     let stderr = "";
     let settled = false;
+    const abortListener = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        child.kill();
+        reject(createAbortError());
+      }
+    };
     const timeout = setTimeout(() => {
       if (!settled) {
         settled = true;
+        options.signal?.removeEventListener("abort", abortListener);
         child.kill();
         reject(new Error(`${command} ${args.join(" ")} timed out after ${options.timeoutMs}ms.`));
       }
@@ -1288,6 +1333,7 @@ async function runCommand(
       if (!settled) {
         settled = true;
         clearTimeout(timeout);
+        options.signal?.removeEventListener("abort", abortListener);
         reject(error);
       }
     });
@@ -1296,6 +1342,7 @@ async function runCommand(
       if (!settled) {
         settled = true;
         clearTimeout(timeout);
+        options.signal?.removeEventListener("abort", abortListener);
         resolve({
           exitCode: exitCode ?? 1,
           stderr: stderr.trim(),
@@ -1308,6 +1355,22 @@ async function runCommand(
       child.stdin.write(options.stdin);
     }
 
+    if (options.signal) {
+      options.signal.addEventListener("abort", abortListener, { once: true });
+    }
+
     child.stdin.end();
   });
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function createAbortError(): Error {
+  const error = new Error("Problem 9 attempt was aborted.");
+  error.name = "AbortError";
+  return error;
 }

@@ -136,9 +136,9 @@ The important boundary is that ingest imports a finished result. It does not exe
 
 ### 4. `hosted_claim_loop`
 
-`hosted_claim_loop` is the long-running service mode for future hosted workers.
+`hosted_claim_loop` is the long-running service mode for hosted workers.
 
-This mode is approved now but not implemented yet. The reserved top-level command is:
+The top-level command is:
 
 - `run-worker-claim-loop`
 
@@ -173,12 +173,12 @@ The approved worker CLI surface is:
 - `materialize-problem9-package`
 - `materialize-problem9-prompt-package`
 - `materialize-problem9-run-bundle`
+- `run-worker-claim-loop`
 
 ### Reserved for follow-up implementation
 
 - `run-problem9-attempt`
 - `ingest-problem9-run-bundle`
-- `run-worker-claim-loop`
 
 The flat command family is deliberate. The worker CLI should not collapse these into one overloaded command with hidden behavior changes, because the operator needs to know whether they are materializing artifacts, running a local attempt, importing a completed result, or starting a hosted worker daemon.
 
