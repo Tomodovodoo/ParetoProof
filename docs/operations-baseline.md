@@ -22,6 +22,16 @@ The secret model follows the same separation. Bootstrap and platform secrets sta
 
 The current human-controlled bootstrap vault stays outside the repository in an owner-managed private secret store. That vault is the source of truth for bootstrap secret references, recovery-material placeholders, and runtime-secret location notes, but the repository should describe it only as a machine-agnostic policy rather than as a workstation-specific path. Live values remain outside the repository and are only mirrored into platform secret stores when a service actually needs them.
 
+## Docker and CI secret boundary
+
+Container builds must stay reproducible and non-sensitive. A Docker build may consume ordinary build configuration such as package-manager versions, app paths, target package names, non-secret feature flags, and public hostnames that are already intended to ship in client bundles or image metadata. A Docker build must not require live credentials just to produce an artifact, and the final image must never contain secrets in `ARG`, `ENV`, copied files, cached layers, or generated config.
+
+That means application and platform credentials stay runtime-only. `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `ACCESS_PROVIDER_STATE_SECRET`, Cloudflare Access audience values, Cloudflare API credentials, Railway tokens, Neon API keys, Modal tokens, R2 access keys, worker bootstrap tokens, model-provider keys, and any future service-token material are not valid Docker build inputs. Those values belong in the runtime secret store for the platform that actually executes the process: Railway for the API, Modal for workers, GitHub Actions only for workflows that must call an external platform, and a local developer-managed `.env` file or shell session for local runs.
+
+CI follows that same split. Pull-request CI should stay secret-free and validate only what can run from a clean checkout, because untrusted or low-trust pull requests must not depend on owner-managed credentials. Secrets are allowed only in owner-controlled deploy or publish workflows that need to authenticate to an external platform such as Cloudflare, GHCR, Railway, Neon, or Modal. Even there, the secret must be consumed by the workflow step that performs the external action, not baked into a build artifact that later gets promoted elsewhere.
+
+If a future image build ever needs authenticated access to a private upstream resource, use ephemeral secret mounts or workflow-scoped credential injection during that build step and keep the secret out of image layers, Dockerfile defaults, and generated runtime files. Build arguments are for non-sensitive configuration, not for credentials. The safe default is simple: if a value would be dangerous inside a pushed image, a downloadable artifact, or a pull-request log, it is runtime-only and must not enter `docker build`.
+
 For the MVP, the current secret inventory is small and stable enough to name explicitly. Bootstrap control-plane access uses `GH_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `RAILWAY_API_TOKEN`, `NEON_API_KEY`, `NEON_ORG_ID`, `MODAL_TOKEN_ID`, and `MODAL_TOKEN_SECRET`, plus one of the supported Cloudflare API credential modes:
 - `CLOUDFLARE_API_TOKEN`, or
 - `CLOUDFLARE_EMAIL` together with `CLOUDFLARE_GLOBAL_API_KEY`.
