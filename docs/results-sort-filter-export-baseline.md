@@ -58,6 +58,7 @@ Portal result tables and indices must support filtering on these dimensions:
 - auth mode
 - run mode
 - tool profile
+- run lifecycle state
 - lifecycle bucket
 - verdict bucket
 - failure family
@@ -68,6 +69,13 @@ Portal result tables and indices must support filtering on these dimensions:
 - started-at or finished-at time range
 
 These filters may render as a compact bar plus a secondary drawer, but they must all be representable in URL state for shareable drilldowns.
+
+The canonical query-param names should stay explicit:
+
+- `runState`, `jobState`, and `attemptState` for raw lifecycle enums
+- `runLifecycleBucket`, `jobLifecycleBucket`, and `attemptLifecycleBucket` for derived grouped filters
+- `verdictClass` for `pass`, `fail`, and `invalid_result`
+- `failureFamily` and `failureCode` for failure classification
 
 ## Required sort behavior
 
@@ -150,6 +158,10 @@ When a UI offers grouped filters instead of raw enums, it must derive them from 
 - verdict grouping must use `pass`, `fail`, and `invalid_result`
 - failure grouping must use the canonical failure-family and failure-code catalogs rather than ad hoc labels such as "timeout-ish"
 
+Example canonical grouped-filter query:
+
+- `?runLifecycleBucket=active&runState=running,cancel_requested&verdictClass=fail,invalid_result&sort=startedAt.desc`
+
 ## Export baseline
 
 ### Public site exports
@@ -177,12 +189,18 @@ MVP CSV exports must include:
 - stable ids (`runId`, `jobId`, `attemptId`, or aggregate row id as applicable)
 - benchmark/version identifiers
 - model config identifiers and display labels
+- canonical lifecycle columns such as `runState`, `jobState`, and `attemptState`
+- optional label companions such as `runStateLabel`, `jobStateLabel`, and `attemptStateLabel`
 - lifecycle bucket
-- verdict bucket
+- `verdictClass`
 - failure family and failure code when present
 - rerun lineage
 - started-at and finished-at timestamps
 - duration when known
+
+Example CSV header slice:
+
+- `runId,evaluationBatchId,benchmarkVersionId,modelConfigId,modelLabel,runState,runStateLabel,jobState,jobStateLabel,attemptState,attemptStateLabel,runLifecycleBucket,verdictClass,verdictLabel,rerunLineage,startedAt,finishedAt,durationSeconds,failureFamily,failureCode`
 
 MVP does not require:
 

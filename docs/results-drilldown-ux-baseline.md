@@ -15,7 +15,8 @@ MVP results views must support these pivots:
 - run id
 - model/provider configuration
 - problem/task id
-- lifecycle bucket (`queued`, `running`, `cancel_requested`, `succeeded`, `failed`, `cancelled`)
+- run lifecycle state (`created`, `queued`, `running`, `cancel_requested`, `succeeded`, `failed`, `cancelled`)
+- lifecycle bucket (`pending`, `active`, `terminal_success`, `terminal_failure`, `terminal_cancelled`)
 - verdict bucket (`pass`, `fail`, `invalid_result`) when evaluated result records exist
 - rerun lineage (`original`, `retry_n`, `manual_rerun`)
 
@@ -48,7 +49,7 @@ Shows one row per run attempt with:
 - run id
 - evaluation or benchmark label
 - model config label
-- lifecycle state
+- run lifecycle state
 - verdict bucket when available
 - started/finished timestamps
 - rerun lineage marker
@@ -112,6 +113,7 @@ Comparison must be scoped to the same benchmark/version family. Cross-benchmark 
 Portal results drilldown state should be URL-shareable.
 
 - encode active filters and sort in query params
+- use explicit keys such as `runState`, `runLifecycleBucket`, and `verdictClass`
 - include selected run id in query state when detail panel is open
 - preserve filter state when navigating between portal subviews
 
