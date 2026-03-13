@@ -4,13 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "bunx tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@paretoproof/shared": "workspace:*",
-    "zod": "latest"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "latest",

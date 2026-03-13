@@ -11,7 +11,7 @@ export const portalAccessRequestKindSchema = z.enum([
 ]);
 
 export const portalAccessRequestInputSchema = z.object({
-  rationale: z.string().trim().max(500).nullish().transform((value) => {
+  rationale: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
     if (!value) {
       return null;
     }
@@ -22,7 +22,7 @@ export const portalAccessRequestInputSchema = z.object({
 });
 
 export const portalAccessRecoveryInputSchema = z.object({
-  rationale: z.string().trim().max(500).nullish().transform((value) => {
+  rationale: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
     if (!value) {
       return null;
     }
@@ -31,7 +31,7 @@ export const portalAccessRecoveryInputSchema = z.object({
   })
 });
 
-const portalAccessDecisionNoteSchema = z.string().trim().max(500).nullish().transform((value) => {
+const portalAccessDecisionNoteSchema = z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
   if (!value) {
     return null;
   }
@@ -68,3 +68,4 @@ export const portalAdminAccessRequestApproveInputSchema = z.object({
 export const portalAdminAccessRequestRejectInputSchema = z.object({
   decisionNote: portalAccessDecisionNoteSchema
 });
+

@@ -30,7 +30,7 @@ export const portalProfileSchema = z.object({
 });
 
 export const portalProfileUpdateInputSchema = z.object({
-  displayName: z.union([z.string().trim().max(80), z.null()]).transform((value) => {
+  displayName: z.union([z.string().trim().max(80), z.null()]).transform((value: string | null) => {
     if (!value) {
       return null;
     }
@@ -41,7 +41,7 @@ export const portalProfileUpdateInputSchema = z.object({
 
 export const portalProfileLinkIntentInputSchema = z.object({
   provider: portalLinkableIdentityProviderSchema,
-  redirectPath: z.string().trim().max(500).nullish().transform((value) => {
+  redirectPath: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
     if (!value) {
       return null;
     }
@@ -55,3 +55,4 @@ export const portalProfileLinkIntentSchema = z.object({
   provider: portalLinkableIdentityProviderSchema,
   startUrl: z.string().url()
 });
+
