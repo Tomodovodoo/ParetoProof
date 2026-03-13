@@ -113,6 +113,64 @@ const problem9RunBundleOptionsSchema = z
         message: "Bundle status success requires verdict result pass."
       });
     }
+
+    if (value.result === "pass") {
+      if (value.status !== "success") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --status success."
+        });
+      }
+
+      if (value.semanticEquality !== "pass") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --semantic-equality pass."
+        });
+      }
+
+      if (value.surfaceEquality !== "pass") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --surface-equality pass."
+        });
+      }
+
+      if (value.surfaceDrift) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --surface-drift false."
+        });
+      }
+
+      if (value.containsSorry) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --contains-sorry false."
+        });
+      }
+
+      if (value.containsAdmit) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --contains-admit false."
+        });
+      }
+
+      if (value.axiomCheck !== "pass") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --axiom-check pass."
+        });
+      }
+
+      if (value.diagnosticGate !== "pass") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A passing run bundle requires --diagnostic-gate pass."
+        });
+      }
+    }
   });
 
 const optionalPromptLayerRelativePaths = [
@@ -443,6 +501,10 @@ function assertConsistentPromptInputs(
 
   if (promptManifest.toolProfile !== runEnvelope.toolProfile) {
     throw new Error("Prompt package and run envelope disagree on toolProfile.");
+  }
+
+  if (promptManifest.runMode !== runEnvelope.runMode) {
+    throw new Error("Prompt package and run envelope disagree on runMode.");
   }
 
   if (promptManifest.providerFamily !== runEnvelope.providerFamily) {
