@@ -21,15 +21,18 @@ const benchmarkPackageManifestSchema = z.object({
     statement: z.string().min(1),
     support: z.string().min(1)
   }),
+  hashAlgorithm: z.literal("sha256"),
   hashes: z.record(z.string().min(1), sha256Schema),
   lanePolicy: z.object({
     primaryLane: z.string().min(1),
     supportedLanes: z.array(z.string().min(1)).min(1)
   }),
   packageDigest: sha256Schema,
+  packageDigestMode: z.literal("metadata_plus_file_inventory_v1"),
   packageId: z.literal("firstproof/Problem9"),
   packageRoot: z.literal("firstproof/Problem9"),
-  packageVersion: z.string().min(1)
+  packageVersion: z.string().min(1),
+  sourceManifestDigest: sha256Schema
 });
 
 const promptRunModeSchema = z.enum([
@@ -130,6 +133,7 @@ const promptDefaults = {
   },
   promptProtocolVersion: "problem9-prompt-protocol.v1"
 } as const;
+const benchmarkPackageSourceSchemaVersion = "1";
 
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
 
@@ -289,7 +293,9 @@ async function loadBenchmarkPackageManifest(
     path.join(benchmarkPackageRoot, "benchmark-package.json"),
     "utf8"
   );
-  return benchmarkPackageManifestSchema.parse(JSON.parse(rawManifest));
+  const benchmarkManifest = benchmarkPackageManifestSchema.parse(JSON.parse(rawManifest));
+  await validateBenchmarkPackageInput(benchmarkPackageRoot, benchmarkManifest);
+  return benchmarkManifest;
 }
 
 async function ensureFile(filePath: string): Promise<void> {
@@ -303,6 +309,48 @@ async function ensureFile(filePath: string): Promise<void> {
 async function loadNormalizedText(filePath: string): Promise<string> {
   const fileContents = await readFile(filePath, "utf8");
   return normalizeText(fileContents);
+}
+
+async function validateBenchmarkPackageInput(
+  benchmarkPackageRoot: string,
+  benchmarkManifest: BenchmarkPackageManifest
+): Promise<void> {
+  const validatedHashes: Array<[string, string]> = [];
+
+  for (const [relativePath, expectedHash] of Object.entries(benchmarkManifest.hashes).sort(
+    ([left], [right]) => left.localeCompare(right)
+  )) {
+    const actualHash = await sha256NormalizedFile(path.join(benchmarkPackageRoot, relativePath));
+
+    if (actualHash !== expectedHash.toLowerCase()) {
+      throw new Error(
+        `Benchmark package hash mismatch for ${relativePath}: expected ${expectedHash}, got ${actualHash}.`
+      );
+    }
+
+    validatedHashes.push([relativePath, actualHash]);
+  }
+
+  const recomputedPackageDigest = sha256Text(
+    stableStringify({
+      benchmarkFamily: benchmarkManifest.benchmarkFamily,
+      benchmarkItemId: benchmarkManifest.benchmarkItemId,
+      canonicalModules: benchmarkManifest.canonicalModules,
+      fileHashes: Object.fromEntries(validatedHashes),
+      lanePolicy: benchmarkManifest.lanePolicy,
+      packageId: benchmarkManifest.packageId,
+      packageRoot: benchmarkManifest.packageRoot,
+      packageVersion: benchmarkManifest.packageVersion,
+      sourceManifestDigest: benchmarkManifest.sourceManifestDigest,
+      sourceSchemaVersion: benchmarkPackageSourceSchemaVersion
+    })
+  );
+
+  if (recomputedPackageDigest !== benchmarkManifest.packageDigest.toLowerCase()) {
+    throw new Error(
+      `Benchmark package digest mismatch: expected ${benchmarkManifest.packageDigest}, got ${recomputedPackageDigest}.`
+    );
+  }
 }
 
 function renderBenchmarkLayer(options: {
@@ -496,6 +544,10 @@ function normalizeText(text: string): string {
 
 function toWrittenText(text: string): string {
   return `${normalizeText(text).replace(/\n?$/, "\n")}`;
+}
+
+async function sha256NormalizedFile(filePath: string): Promise<string> {
+  return sha256Text(await loadNormalizedText(filePath));
 }
 
 function sha256Text(text: string): string {
