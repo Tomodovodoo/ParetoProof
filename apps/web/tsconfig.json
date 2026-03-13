@@ -7,6 +7,10 @@
     ]
   },
   "include": [
-    "src"
+    "src",
+    "functions"
+  ],
+  "exclude": [
+    "functions/**/*.test.ts"
   ]
 }
