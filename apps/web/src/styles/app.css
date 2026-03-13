@@ -1104,6 +1104,127 @@ a.button-secondary {
   gap: 12px;
 }
 
+.portal-toolbar,
+.portal-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.portal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portal-field {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.portal-field span {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.portal-inline-button {
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.portal-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+.portal-summary-grid,
+.portal-detail-grid,
+.portal-kv-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.portal-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portal-summary-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.portal-summary-card span,
+.portal-kv-grid span {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.portal-summary-card strong,
+.portal-kv-grid strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.portal-kv-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portal-kv-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.portal-feedback-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  display: grid;
+  gap: 8px;
+}
+
+.portal-feedback-error {
+  border-color: rgba(160, 49, 35, 0.22);
+  background: rgba(250, 236, 233, 0.9);
+}
+
+.portal-severity-info,
+.portal-severity-warning,
+.portal-severity-critical {
+  border: 1px solid transparent;
+}
+
+.portal-severity-info {
+  color: #0a5a7a;
+  background: rgba(221, 241, 248, 0.95);
+}
+
+.portal-severity-warning {
+  color: #7a4b00;
+  background: rgba(255, 242, 208, 0.95);
+}
+
+.portal-severity-critical {
+  color: #8b1e1e;
+  background: rgba(249, 222, 222, 0.98);
+}
+
 .portal-filter-card strong,
 .portal-results-contract-card h3 {
   color: var(--ink);
@@ -1652,7 +1773,11 @@ a.button-secondary {
 
   .portal-filter-grid,
   .portal-results-contract-grid,
-  .portal-admin-filter-grid {
+  .portal-admin-filter-grid,
+  .portal-form-grid,
+  .portal-summary-grid,
+  .portal-detail-grid,
+  .portal-kv-grid {
     grid-template-columns: 1fr;
   }
 
