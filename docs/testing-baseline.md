@@ -51,9 +51,9 @@ The MVP uses one primary test runner family across the monorepo.
 Before opening or updating a PR, contributors should run:
 
 1. `bun run typecheck`
-2. `bun run test:unit`
-3. `bun run test:integration`
-4. `bun run test:e2e:smoke` when changes affect auth flow, portal routing, or cross-surface session handling
+2. `bun run build`
+
+The current repository baseline does not yet define root `test:unit`, `test:integration`, or `test:e2e:smoke` scripts. Until those scripts land, contributors should treat test execution as feature-specific work rather than a universal pre-PR command contract and run the targeted checks that exist for the code they changed.
 
 If scope is documentation-only, test commands may be skipped.
 
@@ -63,9 +63,9 @@ PR CI should run:
 
 1. Install (`bun install --frozen-lockfile`)
 2. `bun run typecheck`
-3. `bun run test:unit`
-4. `bun run test:integration`
-5. `bun run test:e2e:smoke` for web/API/auth-affecting changes, or as a required workflow on protected branches
+3. `bun run build`
+
+Once runnable test scripts exist in the workspace, PR CI should expand to `test:unit`, `test:integration`, and targeted `test:e2e:smoke` coverage for auth-, portal-, and API-affecting changes.
 
 Main-branch/nightly CI should additionally run the full E2E smoke suite and migration tests against a clean ephemeral Postgres service.
 
