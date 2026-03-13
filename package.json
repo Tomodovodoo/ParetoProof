@@ -25,6 +25,7 @@
     "typecheck:web": "bun --cwd apps/web typecheck",
     "typecheck:api": "bun --cwd apps/api typecheck",
     "typecheck:worker": "bun --cwd apps/worker typecheck",
-    "typecheck:shared": "bun --cwd packages/shared typecheck"
+    "typecheck:shared": "bun --cwd packages/shared typecheck",
+    "check:worker:no-public-ingress": "node infra/scripts/check-worker-no-public-ingress.mjs"
   }
 }

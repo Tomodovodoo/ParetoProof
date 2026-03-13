@@ -30,6 +30,9 @@ jobs:
       - name: Build shared package
         run: bun run build:shared
 
+      - name: Enforce worker no-public-ingress policy
+        run: bun run check:worker:no-public-ingress
+
       - name: Typecheck workspace
         run: >-
           bun run typecheck:shared &&
