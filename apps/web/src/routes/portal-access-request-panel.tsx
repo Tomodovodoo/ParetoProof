@@ -366,9 +366,10 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               <span>Status</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as RequestFilterState["status"];
                   setFilters((current) => ({
                     ...current,
-                    status: event.currentTarget.value as RequestFilterState["status"]
+                    status: value
                   }));
                 }}
                 value={filters.status}
@@ -383,9 +384,10 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               <span>Request kind</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as RequestFilterState["requestKind"];
                   setFilters((current) => ({
                     ...current,
-                    requestKind: event.currentTarget.value as RequestFilterState["requestKind"]
+                    requestKind: value
                   }));
                 }}
                 value={filters.requestKind}
@@ -399,9 +401,10 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               <span>Requested role</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as RequestFilterState["requestedRole"];
                   setFilters((current) => ({
                     ...current,
-                    requestedRole: event.currentTarget.value as RequestFilterState["requestedRole"]
+                    requestedRole: value
                   }));
                 }}
                 value={filters.requestedRole}
@@ -415,9 +418,10 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               <span>Reviewer state</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as RequestFilterState["reviewerState"];
                   setFilters((current) => ({
                     ...current,
-                    reviewerState: event.currentTarget.value as RequestFilterState["reviewerState"]
+                    reviewerState: value
                   }));
                 }}
                 value={filters.reviewerState}
@@ -431,9 +435,10 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               <span>Sort</span>
               <select
                 onChange={(event) => {
+                  const value = event.currentTarget.value as RequestFilterState["sortOrder"];
                   setFilters((current) => ({
                     ...current,
-                    sortOrder: event.currentTarget.value as RequestFilterState["sortOrder"]
+                    sortOrder: value
                   }));
                 }}
                 value={filters.sortOrder}
@@ -724,9 +729,10 @@ function AccessRequestDetailCard({
               <select
                 disabled={!isPending || isMutating}
                 onChange={(event) => {
+                  const value = event.currentTarget.value as PortalAdminApprovedRole;
                   onChangeDraft({
                     ...draft,
-                    approvedRole: event.currentTarget.value as PortalAdminApprovedRole
+                    approvedRole: value
                   });
                 }}
                 value={draft.approvedRole}
@@ -741,9 +747,10 @@ function AccessRequestDetailCard({
             <textarea
               disabled={!isPending || isMutating}
               onChange={(event) => {
+                const value = event.currentTarget.value;
                 onChangeDraft({
                   ...draft,
-                  decisionNote: event.currentTarget.value
+                  decisionNote: value
                 });
               }}
               rows={4}
