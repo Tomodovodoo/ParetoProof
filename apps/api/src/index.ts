@@ -1,15 +1,12 @@
-import { assertApiRuntimeEnv } from "./config/runtime.js";
+import { parseApiRuntimeEnv } from "./config/runtime.js";
 import { buildServer } from "./server/build-server.js";
 
-const port = Number(process.env.PORT ?? 3000);
-const host = process.env.HOST ?? "0.0.0.0";
-
 const start = async () => {
-  assertApiRuntimeEnv();
-  const app = await buildServer();
+  const runtimeEnv = parseApiRuntimeEnv();
+  const app = await buildServer(runtimeEnv);
 
   try {
-    await app.listen({ host, port });
+    await app.listen({ host: runtimeEnv.host, port: runtimeEnv.port });
   } catch (error) {
     app.log.error(error);
     process.exit(1);
