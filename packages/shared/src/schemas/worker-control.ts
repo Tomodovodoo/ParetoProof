@@ -2,9 +2,7 @@ import { z } from "zod";
 import { runKindSchema } from "./run-control.js";
 
 const timestampSchema = z.string().min(1);
-const sha256Schema = z
-  .string()
-  .regex(/^[a-f0-9]{64}$/i);
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
 const recordValueSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([
     z.string(),
@@ -26,27 +24,135 @@ export const workerControlEndpointIdSchema = z.enum([
   "internal.worker.failure.submit"
 ]);
 
-export const workerExecutionEventTypeSchema = z.enum([
-  "started",
-  "progress",
-  "warning",
-  "log",
-  "checkpoint"
-]);
-
-export const workerTerminalFailureCodeSchema = z.enum([
-  "runtime_error",
-  "harness_error",
-  "model_provider_error",
-  "artifact_error",
-  "lease_lost",
-  "cancelled"
-]);
-
 export const workerLeaseStatusSchema = z.enum([
+  "idle",
   "active",
   "cancel_requested",
   "expired"
+]);
+
+export const workerExecutionPhaseSchema = z.enum([
+  "prepare",
+  "generate",
+  "tool",
+  "compile",
+  "verify",
+  "finalize",
+  "cancel"
+]);
+
+export const workerJobTokenScopeSchema = z.enum([
+  "heartbeat",
+  "event_append",
+  "artifact_manifest_write",
+  "verifier_verdict_write",
+  "result_finalize",
+  "failure_finalize"
+]);
+
+export const workerBundleArtifactRoleSchema = z.enum([
+  "run_manifest",
+  "package_reference",
+  "prompt_package",
+  "candidate_source",
+  "verdict_record",
+  "compiler_output",
+  "compiler_diagnostics",
+  "verifier_output",
+  "environment_snapshot",
+  "usage_summary",
+  "execution_trace"
+]);
+
+export const workerExecutionEventKindSchema = z.enum([
+  "attempt_started",
+  "compile_started",
+  "compile_succeeded",
+  "compile_failed",
+  "compile_repair_requested",
+  "compile_repair_applied",
+  "verifier_started",
+  "verifier_passed",
+  "verifier_failed",
+  "verifier_repair_requested",
+  "verifier_repair_applied",
+  "budget_exhausted",
+  "artifact_manifest_written",
+  "bundle_finalized"
+]);
+
+export const workerFailureFamilySchema = z.enum([
+  "provider",
+  "harness",
+  "tooling",
+  "budget",
+  "compile",
+  "verification",
+  "input_contract"
+]);
+
+export const workerFailureTerminalitySchema = z.enum([
+  "terminal_attempt",
+  "retryable_outer",
+  "cancelled"
+]);
+
+export const workerFailureRetryEligibilitySchema = z.enum([
+  "never",
+  "outer_retry_allowed",
+  "manual_retry_only"
+]);
+
+export const workerFailureUserVisibilitySchema = z.enum([
+  "user_visible",
+  "user_visible_sanitized",
+  "internal_only"
+]);
+
+export const workerFailureCodeSchema = z.enum([
+  "provider_auth_error",
+  "provider_rate_limited",
+  "provider_transport_error",
+  "provider_timeout",
+  "provider_cancelled",
+  "provider_refusal",
+  "provider_unsupported_request",
+  "provider_malformed_response",
+  "provider_tool_contract_error",
+  "provider_internal_error",
+  "harness_bootstrap_failed",
+  "harness_crashed",
+  "harness_output_missing",
+  "tool_bootstrap_failed",
+  "tool_contract_violation",
+  "tool_permission_violation",
+  "tool_use_outside_policy",
+  "tool_result_missing",
+  "stuck_loop_detected",
+  "wall_clock_budget_exhausted",
+  "provider_usage_budget_exhausted",
+  "turn_budget_exhausted",
+  "compile_repair_budget_exhausted",
+  "verifier_repair_budget_exhausted",
+  "manual_cancelled",
+  "compile_failed",
+  "candidate_output_missing",
+  "candidate_output_malformed",
+  "candidate_file_outside_contract",
+  "forbidden_placeholder_token",
+  "theorem_reference_missing",
+  "theorem_semantic_mismatch",
+  "extra_theorem_assumptions",
+  "wrong_theorem_target",
+  "forbidden_axiom_dependency",
+  "environment_instability_detected",
+  "proof_policy_failed",
+  "benchmark_input_missing",
+  "benchmark_input_digest_mismatch",
+  "lane_configuration_invalid",
+  "prompt_package_missing",
+  "run_configuration_invalid",
+  "worker_lease_lost"
 ]);
 
 export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
@@ -74,11 +180,39 @@ export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
   })
 ]);
 
+export const workerFailureClassificationSchema = z.object({
+  evidenceArtifactRefs: z.array(z.string().min(1)).min(1),
+  failureCode: workerFailureCodeSchema,
+  failureFamily: workerFailureFamilySchema,
+  phase: workerExecutionPhaseSchema,
+  retryEligibility: workerFailureRetryEligibilitySchema,
+  summary: z.string().min(1),
+  terminality: workerFailureTerminalitySchema,
+  userVisibility: workerFailureUserVisibilitySchema
+});
+
+export const workerVerifierVerdictSchema = z.object({
+  attemptId: z.string().min(1),
+  axiomCheck: z.enum(["passed", "failed", "not_evaluated"]),
+  benchmarkPackageDigest: sha256Schema,
+  candidateDigest: sha256Schema,
+  containsAdmit: z.boolean(),
+  containsSorry: z.boolean(),
+  diagnosticGate: z.enum(["passed", "failed"]),
+  laneId: z.string().min(1),
+  primaryFailure: workerFailureClassificationSchema.nullable(),
+  result: z.enum(["pass", "fail"]),
+  semanticEquality: z.enum(["matched", "mismatched", "not_evaluated"]),
+  surfaceEquality: z.enum(["matched", "drifted", "not_evaluated"]),
+  verdictSchemaVersion: z.string().min(1)
+});
+
 export const workerClaimRequestSchema = z.object({
   activeJobCount: z.number().int().min(0),
   availableRunKinds: z.array(runKindSchema),
   maxConcurrentJobs: z.number().int().positive(),
-  supportsArtifactUploads: z.boolean(),
+  supportedArtifactRoles: z.array(workerBundleArtifactRoleSchema).min(1),
+  supportsOfflineBundleContract: z.boolean(),
   supportsTraceUploads: z.boolean(),
   workerId: z.string().min(1),
   workerPool: z.string().min(1),
@@ -98,11 +232,16 @@ export const workerClaimResponseSchema = z.union([
     workerJob: z.object({
       attemptId: z.string().min(1),
       heartbeatIntervalSeconds: z.number().int().positive(),
+      heartbeatTimeoutSeconds: z.number().int().positive(),
       jobId: z.string().min(1),
-      leaseId: z.string().min(1),
       jobToken: z.string().min(1),
       jobTokenExpiresAt: timestampSchema,
+      jobTokenScopes: z.array(workerJobTokenScopeSchema).min(1),
       leaseExpiresAt: timestampSchema,
+      leaseId: z.string().min(1),
+      offlineBundleCompatible: z.literal(true),
+      requiredArtifactRoles: z.array(workerBundleArtifactRoleSchema).min(1),
+      runBundleSchemaVersion: z.string().min(1),
       runId: z.string().min(1),
       target: workerRunTargetSchema
     })
@@ -112,12 +251,16 @@ export const workerClaimResponseSchema = z.union([
 export const workerHeartbeatRequestSchema = z.object({
   attemptId: z.string().min(1),
   jobId: z.string().min(1),
+  lastEventSequence: z.number().int().nonnegative(),
   leaseId: z.string().min(1),
   observedAt: timestampSchema,
+  phase: workerExecutionPhaseSchema,
   progressMessage: z.string().min(1).nullable()
 });
 
 export const workerHeartbeatResponseSchema = z.object({
+  acknowledgedEventSequence: z.number().int().nonnegative(),
+  cancelRequested: z.boolean(),
   jobToken: z.string().min(1).nullable(),
   jobTokenExpiresAt: timestampSchema.nullable(),
   leaseExpiresAt: timestampSchema.nullable(),
@@ -127,26 +270,28 @@ export const workerHeartbeatResponseSchema = z.object({
 export const workerExecutionEventSchema = z.object({
   attemptId: z.string().min(1),
   details: metadataSchema,
-  eventType: workerExecutionEventTypeSchema,
+  eventKind: workerExecutionEventKindSchema,
   jobId: z.string().min(1),
   leaseId: z.string().min(1),
-  message: z.string().min(1),
+  phase: workerExecutionPhaseSchema,
   recordedAt: timestampSchema,
-  sequence: z.number().int().nonnegative()
+  sequence: z.number().int().nonnegative(),
+  summary: z.string().min(1)
 });
 
 export const workerArtifactManifestEntrySchema = z.object({
-  artifactClassId: z.string().min(1),
-  byteSize: z.number().int().nonnegative().nullable(),
+  artifactRole: workerBundleArtifactRoleSchema,
+  byteSize: z.number().int().nonnegative(),
   contentEncoding: z.string().min(1).nullable(),
-  fileName: z.string().min(1),
   mediaType: z.string().min(1).nullable(),
   relativePath: z.string().min(1),
-  sha256: sha256Schema.nullable()
+  requiredForIngest: z.boolean(),
+  sha256: sha256Schema
 });
 
 export const workerArtifactManifestRequestSchema = z.object({
   artifacts: z.array(workerArtifactManifestEntrySchema).min(1),
+  artifactManifestDigest: sha256Schema,
   attemptId: z.string().min(1),
   jobId: z.string().min(1),
   leaseId: z.string().min(1),
@@ -157,40 +302,60 @@ export const workerArtifactManifestResponseSchema = z.object({
   acceptedAt: timestampSchema,
   artifacts: z.array(
     z.object({
-      artifactClassId: z.string().min(1),
       artifactId: z.string().min(1),
+      artifactRole: workerBundleArtifactRoleSchema,
       relativePath: z.string().min(1)
     })
-  )
+  ),
+  artifactManifestDigest: sha256Schema
 });
 
 export const workerResultMessageRequestSchema = z.object({
+  artifactIds: z.array(z.string().min(1)).min(1),
+  artifactManifestDigest: sha256Schema,
   attemptId: z.string().min(1),
+  bundleDigest: sha256Schema,
+  candidateDigest: sha256Schema,
   completedAt: timestampSchema,
+  environmentDigest: sha256Schema,
   jobId: z.string().min(1),
   leaseId: z.string().min(1),
-  resultArtifacts: z.array(z.string().min(1)),
-  resultData: metadataSchema,
-  status: z.literal("succeeded"),
-  summary: z.string().min(1)
+  offlineBundleCompatible: z.literal(true),
+  runId: z.string().min(1),
+  summary: z.string().min(1),
+  usageSummary: metadataSchema.nullable(),
+  verifierVerdict: workerVerifierVerdictSchema,
+  verdictDigest: sha256Schema
 });
 
 export const workerTerminalFailureRequestSchema = z.object({
+  artifactIds: z.array(z.string().min(1)).optional(),
+  artifactManifestDigest: sha256Schema.nullable(),
   attemptId: z.string().min(1),
-  code: workerTerminalFailureCodeSchema,
-  details: metadataSchema,
+  bundleDigest: sha256Schema.nullable(),
+  candidateDigest: sha256Schema.nullable(),
   failedAt: timestampSchema,
+  failure: workerFailureClassificationSchema,
   jobId: z.string().min(1),
   leaseId: z.string().min(1),
-  message: z.string().min(1)
+  runId: z.string().min(1),
+  summary: z.string().min(1),
+  terminalState: z.enum(["failed", "cancelled"]),
+  verifierVerdict: workerVerifierVerdictSchema.nullable(),
+  verdictDigest: sha256Schema.nullable()
 });
 
 export const workerExecutionEventCatalogEntrySchema = z.object({
-  id: workerExecutionEventTypeSchema,
+  id: workerExecutionEventKindSchema,
   purpose: z.string()
 });
 
 export const workerTerminalFailureCatalogEntrySchema = z.object({
-  id: workerTerminalFailureCodeSchema,
+  id: workerFailureCodeSchema,
+  purpose: z.string()
+});
+
+export const workerJobTokenScopeCatalogEntrySchema = z.object({
+  id: workerJobTokenScopeSchema,
   purpose: z.string()
 });
