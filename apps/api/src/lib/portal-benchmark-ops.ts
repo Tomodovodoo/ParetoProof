@@ -20,7 +20,7 @@ import {
   type PortalWorkerLeaseSummary,
   type PortalWorkersViewResponse
 } from "@paretoproof/shared";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   artifacts,
   attempts,
@@ -313,72 +313,6 @@ function buildTimeline(options: {
   );
 }
 
-function filterRunListItems(
-  items: PortalRunListItem[],
-  query: PortalRunsListQuery
-) {
-  const searchTerm = query.q?.toLowerCase() ?? null;
-
-  return items.filter((item) => {
-    if (query.runId && item.runId !== query.runId) {
-      return false;
-    }
-
-    if (query.jobId && !item.lineage.jobIds.includes(query.jobId)) {
-      return false;
-    }
-
-    if (query.attemptId && !item.lineage.attemptIds.includes(query.attemptId)) {
-      return false;
-    }
-
-    if (!searchTerm) {
-      return true;
-    }
-
-    return [
-      item.runId,
-      item.benchmarkItemId,
-      item.benchmarkPackageId,
-      item.benchmarkPackageVersion,
-      item.modelConfigId,
-      item.providerFamily,
-      item.failure.code,
-      item.failure.family,
-      item.failure.summary
-    ]
-      .filter((value): value is string => typeof value === "string")
-      .some((value) => value.toLowerCase().includes(searchTerm));
-  });
-}
-
-function sortRunListItems(items: PortalRunListItem[], sortId: PortalRunsListQuery["sort"]) {
-  const sorted = [...items];
-
-  sorted.sort((left, right) => {
-    switch (sortId) {
-      case "finished_at_desc":
-        return (
-          new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime()
-        );
-      case "duration_desc":
-        return right.durationMs - left.durationMs || left.runId.localeCompare(right.runId);
-      case "run_state_asc":
-        return left.runState.localeCompare(right.runState) || left.runId.localeCompare(right.runId);
-      case "verdict_asc":
-        return (
-          left.verdictClass.localeCompare(right.verdictClass) ||
-          left.runId.localeCompare(right.runId)
-        );
-      case "started_at_desc":
-      default:
-        return new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime();
-    }
-  });
-
-  return sorted;
-}
-
 async function loadJobsForRunIds(
   db: ReturnTypeOfCreateDbClient,
   runIds: string[]
@@ -407,18 +341,48 @@ async function loadAttemptsForRunIds(
     .where(inArray(attempts.runId, runIds));
 }
 
-async function loadActiveLeasesForRunIds(
+async function loadRunIdsForSourceJobId(
   db: ReturnTypeOfCreateDbClient,
-  runIds: string[]
+  sourceJobId: string
 ) {
-  if (runIds.length === 0) {
-    return [] satisfies WorkerJobLeaseRow[];
-  }
+  const jobRows = await db
+    .select({
+      runId: jobs.runId
+    })
+    .from(jobs)
+    .where(eq(jobs.sourceJobId, sourceJobId));
 
-  return db
-    .select()
-    .from(workerJobLeases)
-    .where(and(inArray(workerJobLeases.runId, runIds), isNull(workerJobLeases.revokedAt)));
+  return [...new Set(jobRows.map((jobRow) => jobRow.runId))];
+}
+
+async function loadRunIdsForSourceAttemptId(
+  db: ReturnTypeOfCreateDbClient,
+  sourceAttemptId: string
+) {
+  const attemptRows = await db
+    .select({
+      runId: attempts.runId
+    })
+    .from(attempts)
+    .where(eq(attempts.sourceAttemptId, sourceAttemptId));
+
+  return [...new Set(attemptRows.map((attemptRow) => attemptRow.runId))];
+}
+
+function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
+  switch (sortId) {
+    case "finished_at_desc":
+      return [desc(runs.completedAt), desc(runs.createdAt)] as const;
+    case "duration_desc":
+      return [desc(sql`${runs.completedAt} - ${runs.createdAt}`), desc(runs.createdAt)] as const;
+    case "run_state_asc":
+      return [runs.state, runs.sourceRunId] as const;
+    case "verdict_asc":
+      return [runs.verdictClass, runs.sourceRunId] as const;
+    case "started_at_desc":
+    default:
+      return [desc(runs.createdAt), desc(runs.completedAt)] as const;
+  }
 }
 
 export function createPortalBenchmarkOpsReadModelService(
@@ -490,43 +454,115 @@ export function createPortalBenchmarkOpsReadModelService(
         runConditions.push(eq(runs.primaryFailureCode, query.failureCode));
       }
 
+      if (query.runId) {
+        runConditions.push(eq(runs.sourceRunId, query.runId));
+      }
+
+      if (query.jobId) {
+        const jobRunIds = await loadRunIdsForSourceJobId(db, query.jobId);
+
+        if (jobRunIds.length === 0) {
+          return {
+            items: [],
+            query,
+            summary: {
+              activeRuns: 0,
+              failedRuns: 0,
+              returnedCount: 0,
+              totalMatches: 0,
+              verdictCounts: {
+                fail: 0,
+                invalid_result: 0,
+                pass: 0
+              }
+            }
+          };
+        }
+
+        runConditions.push(inArray(runs.id, jobRunIds));
+      }
+
+      if (query.attemptId) {
+        const attemptRunIds = await loadRunIdsForSourceAttemptId(db, query.attemptId);
+
+        if (attemptRunIds.length === 0) {
+          return {
+            items: [],
+            query,
+            summary: {
+              activeRuns: 0,
+              failedRuns: 0,
+              returnedCount: 0,
+              totalMatches: 0,
+              verdictCounts: {
+                fail: 0,
+                invalid_result: 0,
+                pass: 0
+              }
+            }
+          };
+        }
+
+        runConditions.push(inArray(runs.id, attemptRunIds));
+      }
+
+      if (query.q) {
+        const searchPattern = `%${query.q}%`;
+
+        runConditions.push(
+          or(
+            ilike(runs.sourceRunId, searchPattern),
+            ilike(runs.benchmarkItemId, searchPattern),
+            ilike(runs.benchmarkPackageId, searchPattern),
+            ilike(runs.benchmarkPackageVersion, searchPattern),
+            ilike(runs.modelConfigId, searchPattern),
+            ilike(runs.providerFamily, searchPattern),
+            ilike(runs.primaryFailureCode, searchPattern),
+            ilike(runs.primaryFailureFamily, searchPattern),
+            ilike(runs.primaryFailureSummary, searchPattern)
+          )!
+        );
+      }
+
+      const whereClause = runConditions.length > 0 ? and(...runConditions) : undefined;
+      const [{ total: totalMatches }] = await db
+        .select({
+          total: count()
+        })
+        .from(runs)
+        .where(whereClause);
       const runRows = await db
         .select()
         .from(runs)
-        .where(runConditions.length > 0 ? and(...runConditions) : undefined)
-        .orderBy(desc(runs.createdAt));
+        .where(whereClause)
+        .orderBy(...buildRunOrderBy(query.sort))
+        .limit(query.limit);
       const runIds = runRows.map((runRow) => runRow.id);
       const jobRows = await loadJobsForRunIds(db, runIds);
       const attemptRows = await loadAttemptsForRunIds(db, runIds);
       const jobsByRunId = groupByRunId(jobRows);
       const attemptsByRunId = groupByRunId(attemptRows);
-
-      const filteredItems = filterRunListItems(
-        runRows.map((runRow) =>
-          buildRunListItem({
-            attemptRows: attemptsByRunId.get(runRow.id) ?? [],
-            jobRows: jobsByRunId.get(runRow.id) ?? [],
-            runRow
-          })
-        ),
-        query
+      const items = runRows.map((runRow) =>
+        buildRunListItem({
+          attemptRows: attemptsByRunId.get(runRow.id) ?? [],
+          jobRows: jobsByRunId.get(runRow.id) ?? [],
+          runRow
+        })
       );
-      const sortedItems = sortRunListItems(filteredItems, query.sort);
 
       return {
-        items: sortedItems.slice(0, query.limit),
+        items,
         query,
         summary: {
-          activeRuns: filteredItems.filter((item) => item.runLifecycleBucket === "active").length,
-          failedRuns: filteredItems.filter((item) => item.runState === "failed").length,
-          returnedCount: Math.min(sortedItems.length, query.limit),
-          totalMatches: filteredItems.length,
+          activeRuns: items.filter((item) => item.runLifecycleBucket === "active").length,
+          failedRuns: items.filter((item) => item.runState === "failed").length,
+          returnedCount: items.length,
+          totalMatches,
           verdictCounts: {
-            fail: filteredItems.filter((item) => item.verdictClass === "fail").length,
-            invalid_result: filteredItems.filter(
-              (item) => item.verdictClass === "invalid_result"
-            ).length,
-            pass: filteredItems.filter((item) => item.verdictClass === "pass").length
+            fail: items.filter((item) => item.verdictClass === "fail").length,
+            invalid_result: items.filter((item) => item.verdictClass === "invalid_result")
+              .length,
+            pass: items.filter((item) => item.verdictClass === "pass").length
           }
         }
       };
@@ -699,14 +735,87 @@ export function createPortalBenchmarkOpsReadModelService(
     },
 
     async getWorkersView() {
-      const [runRows, jobRows, attemptRows, leaseRows] = await Promise.all([
-        db.select().from(runs),
-        db.select().from(jobs),
-        db.select().from(attempts),
+      const [
+        [{ total: activeRuns }],
+        [{ total: queuedRuns }],
+        [{ total: queuedJobs }],
+        [{ total: claimedJobs }],
+        [{ total: runningJobs }],
+        [{ total: cancelRequestedJobs }],
+        leaseRows
+      ] = await Promise.all([
+        db
+          .select({
+            total: count()
+          })
+          .from(runs)
+          .where(inArray(runs.state, ["running", "cancel_requested"])),
+        db
+          .select({
+            total: count()
+          })
+          .from(runs)
+          .where(eq(runs.state, "queued")),
+        db
+          .select({
+            total: count()
+          })
+          .from(jobs)
+          .where(eq(jobs.state, "queued")),
+        db
+          .select({
+            total: count()
+          })
+          .from(jobs)
+          .where(eq(jobs.state, "claimed")),
+        db
+          .select({
+            total: count()
+          })
+          .from(jobs)
+          .where(eq(jobs.state, "running")),
+        db
+          .select({
+            total: count()
+          })
+          .from(jobs)
+          .where(eq(jobs.state, "cancel_requested")),
         db
           .select()
           .from(workerJobLeases)
           .where(isNull(workerJobLeases.revokedAt))
+      ]);
+      const runIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.runId))];
+      const jobIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.jobId))];
+      const attemptIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.attemptId))];
+      const [runRows, jobRows, attemptRows, recentFailedRuns, queuedRunRows] = await Promise.all([
+        runIds.length > 0
+          ? db.select().from(runs).where(inArray(runs.id, runIds))
+          : Promise.resolve([] as RunRow[]),
+        jobIds.length > 0
+          ? db.select().from(jobs).where(inArray(jobs.id, jobIds))
+          : Promise.resolve([] as JobRow[]),
+        attemptIds.length > 0
+          ? db.select().from(attempts).where(inArray(attempts.id, attemptIds))
+          : Promise.resolve([] as AttemptRow[]),
+        db
+          .select({
+            completedAt: runs.completedAt,
+            primaryFailureFamily: runs.primaryFailureFamily,
+            sourceRunId: runs.sourceRunId
+          })
+          .from(runs)
+          .where(eq(runs.state, "failed"))
+          .orderBy(desc(runs.completedAt))
+          .limit(20),
+        db
+          .select({
+            sourceRunId: runs.sourceRunId
+          })
+          .from(runs)
+          .where(eq(runs.state, "queued"))
+          .orderBy(desc(runs.createdAt))
+          .limit(5)
       ]);
       const now = new Date();
       const runById = new Map(runRows.map((runRow) => [runRow.id, runRow]));
@@ -751,17 +860,13 @@ export function createPortalBenchmarkOpsReadModelService(
 
       const incidents: PortalWorkerIncident[] = [];
 
-      if (jobRows.some((jobRow) => jobRow.state === "queued")) {
+      if (queuedJobs > 0) {
         incidents.push({
-          affectedRunIds: jobRows
-            .filter((jobRow) => jobRow.state === "queued")
-            .map((jobRow) => runById.get(jobRow.runId)?.sourceRunId ?? null)
-            .filter((runId): runId is string => typeof runId === "string")
-            .slice(0, 5),
+          affectedRunIds: queuedRunRows.map((runRow) => runRow.sourceRunId),
           kind: "queue_backlog",
           observedAt: now.toISOString(),
           severity: "warning",
-          summary: `${jobRows.filter((jobRow) => jobRow.state === "queued").length} queued jobs are waiting for worker capacity.`,
+          summary: `${queuedJobs} queued jobs are waiting for worker capacity.`,
           workerPool: null
         });
       }
@@ -781,7 +886,7 @@ export function createPortalBenchmarkOpsReadModelService(
         });
       }
 
-      const failedRuns = runRows.filter((runRow) => runRow.primaryFailureFamily);
+      const failedRuns = recentFailedRuns.filter((runRow) => runRow.primaryFailureFamily);
 
       if (failedRuns.length > 0) {
         const failureCounts = new Map<string, { affectedRunIds: string[]; count: number }>();
@@ -825,15 +930,12 @@ export function createPortalBenchmarkOpsReadModelService(
         generatedAt: now.toISOString(),
         incidents,
         queueSummary: {
-          activeRuns: runRows.filter((runRow) =>
-            runRow.state === "running" || runRow.state === "cancel_requested"
-          ).length,
-          cancelRequestedJobs: jobRows.filter((jobRow) => jobRow.state === "cancel_requested")
-            .length,
-          claimedJobs: jobRows.filter((jobRow) => jobRow.state === "claimed").length,
-          queuedJobs: jobRows.filter((jobRow) => jobRow.state === "queued").length,
-          queuedRuns: runRows.filter((runRow) => runRow.state === "queued").length,
-          runningJobs: jobRows.filter((jobRow) => jobRow.state === "running").length
+          activeRuns,
+          cancelRequestedJobs,
+          claimedJobs,
+          queuedJobs,
+          queuedRuns,
+          runningJobs
         },
         workerPools: [...workerPools.values()]
       };
