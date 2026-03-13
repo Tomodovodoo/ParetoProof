@@ -243,6 +243,7 @@ The MVP lifecycle transitions are:
 - `available -> quarantined`
 - `missing -> available`
 - `quarantined -> available`
+- `quarantined -> deleted`
 - `available -> deleted`
 - `missing -> deleted`
 
