@@ -129,17 +129,19 @@ const problem9RunBundleOptionsSchema = z
         });
       }
 
-      if (value.surfaceEquality !== "pass") {
+      if (!value.surfaceDrift && value.surfaceEquality !== "pass") {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "A passing run bundle requires --surface-equality pass."
+          message:
+            "A passing run bundle requires --surface-equality pass when --surface-drift is false."
         });
       }
 
-      if (value.surfaceDrift) {
+      if (value.surfaceDrift && value.surfaceEquality !== "fail") {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "A passing run bundle requires --surface-drift false."
+          message:
+            "A passing run bundle requires --surface-equality fail when --surface-drift is true."
         });
       }
 
