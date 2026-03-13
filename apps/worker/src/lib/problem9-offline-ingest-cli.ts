@@ -1,5 +1,8 @@
 import path from "node:path";
-import { runProblem9OfflineIngest } from "./problem9-offline-ingest.js";
+import {
+  Problem9OfflineIngestCliError,
+  runProblem9OfflineIngest
+} from "./problem9-offline-ingest.js";
 
 export async function runProblem9OfflineIngestCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
@@ -19,14 +22,44 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
     return args[index + 1];
   };
 
-  const result = await runProblem9OfflineIngest({
-    accessJwt: getRequiredValue("--access-jwt"),
-    bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
-  });
+  const getOptionalValue = (flag: string): string | undefined => {
+    const index = args.findIndex((argument) => argument === flag);
+    return index === -1 || !args[index + 1] ? undefined : args[index + 1];
+  };
 
-  console.log(JSON.stringify(result, null, 2));
+  const unresolvedApiBaseUrl = process.env.API_BASE_URL ?? "";
+  const unresolvedBundleRoot = getOptionalValue("--bundle-root");
 
-  if (result.status === "rejected") {
-    process.exitCode = 1;
+  try {
+    const result = await runProblem9OfflineIngest({
+      accessJwt: getRequiredValue("--access-jwt"),
+      bundleRoot: path.resolve(getRequiredValue("--bundle-root"))
+    });
+
+    console.log(JSON.stringify(result, null, 2));
+
+    if (result.status === "rejected") {
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    if (error instanceof Problem9OfflineIngestCliError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+
+    throw new Problem9OfflineIngestCliError({
+      bundleRoot: unresolvedBundleRoot ? path.resolve(unresolvedBundleRoot) : "",
+      endpoint: "",
+      error: "offline_ingest_setup_error",
+      kind: "setup_error",
+      issues: [
+        {
+          message
+        }
+      ],
+      stage: "setup_error",
+      status: "rejected"
+    });
   }
 }

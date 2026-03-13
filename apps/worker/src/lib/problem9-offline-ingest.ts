@@ -20,8 +20,9 @@ type RejectedOfflineIngestResult = {
   endpoint: string;
   error: string;
   httpStatus?: number;
-  issues?: Array<{ message: string; path?: string }>;
-  stage: "local_validation" | "remote_rejection";
+  issues?: unknown[];
+  kind?: "setup_error";
+  stage: "local_validation" | "remote_rejection" | "setup_error";
   status: "rejected";
 };
 
@@ -34,6 +35,16 @@ type AcceptedOfflineIngestResult = Problem9OfflineIngestResponse & {
 export type Problem9OfflineIngestResult =
   | AcceptedOfflineIngestResult
   | RejectedOfflineIngestResult;
+
+export class Problem9OfflineIngestCliError extends Error {
+  readonly result: RejectedOfflineIngestResult;
+
+  constructor(result: RejectedOfflineIngestResult) {
+    super(JSON.stringify(result, null, 2));
+    this.name = "Problem9OfflineIngestCliError";
+    this.result = result;
+  }
+}
 
 type OfflineIngestDependencies = {
   fetchImpl?: typeof fetch;
@@ -130,11 +141,6 @@ export async function runProblem9OfflineIngest(
         "issues" in responseBody &&
         Array.isArray(responseBody.issues)
           ? responseBody.issues
-              .filter((issue) => issue && typeof issue === "object" && "message" in issue)
-              .map((issue) => ({
-                message: String(issue.message),
-                path: "path" in issue && typeof issue.path === "string" ? issue.path : undefined
-              }))
           : undefined,
       stage: "remote_rejection",
       status: "rejected"

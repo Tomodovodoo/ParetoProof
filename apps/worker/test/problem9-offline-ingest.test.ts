@@ -8,8 +8,12 @@ import {
   getDefaultProblem9PromptPackageOptions,
   materializeProblem9PromptPackage
 } from "../src/lib/problem9-prompt-package.ts";
+import { runProblem9OfflineIngestCli } from "../src/lib/problem9-offline-ingest-cli.ts";
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
-import { runProblem9OfflineIngest } from "../src/lib/problem9-offline-ingest.ts";
+import {
+  Problem9OfflineIngestCliError,
+  runProblem9OfflineIngest
+} from "../src/lib/problem9-offline-ingest.ts";
 
 async function buildOfflineIngestBundleRoot(options: {
   result: "pass" | "fail";
@@ -338,6 +342,61 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
   });
 });
 
+test("runProblem9OfflineIngest preserves structured API validation issues", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const result = await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            error: "invalid_problem9_offline_ingest_payload",
+            issues: [
+              {
+                message: "Digest mismatch for candidate source",
+                path: ["bundle", "candidateSource"]
+              }
+            ]
+          }),
+          {
+            headers: {
+              "content-type": "application/json"
+            },
+            status: 400
+          }
+        ),
+      runtimeEnv: {
+        API_BASE_URL: "https://api.paretoproof.com"
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    bundleRoot,
+    endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
+    error: "invalid_problem9_offline_ingest_payload",
+    httpStatus: 400,
+    issues: [
+      {
+        message: "Digest mismatch for candidate source",
+        path: ["bundle", "candidateSource"]
+      }
+    ],
+    stage: "remote_rejection",
+    status: "rejected"
+  });
+});
+
 test("runProblem9OfflineIngest converts transport failures into rejected output", async (t) => {
   const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
     result: "pass"
@@ -374,4 +433,35 @@ test("runProblem9OfflineIngest converts transport failures into rejected output"
     stage: "remote_rejection",
     status: "rejected"
   });
+});
+
+test("runProblem9OfflineIngestCli emits structured setup failures for missing flags", async (t) => {
+  const originalApiBaseUrl = process.env.API_BASE_URL;
+
+  t.after(() => {
+    if (originalApiBaseUrl === undefined) {
+      delete process.env.API_BASE_URL;
+      return;
+    }
+
+    process.env.API_BASE_URL = originalApiBaseUrl;
+  });
+
+  delete process.env.API_BASE_URL;
+
+  await assert.rejects(
+    () => runProblem9OfflineIngestCli(["--bundle-root", "C:\\temp\\bundle"]),
+    (error: unknown) => {
+      assert.ok(error instanceof Problem9OfflineIngestCliError);
+      assert.equal(error.result.error, "offline_ingest_setup_error");
+      assert.equal(error.result.kind, "setup_error");
+      assert.equal(error.result.stage, "setup_error");
+      assert.deepEqual(error.result.issues, [
+        {
+          message: "Missing required --access-jwt <value> argument."
+        }
+      ]);
+      return true;
+    }
+  );
 });
