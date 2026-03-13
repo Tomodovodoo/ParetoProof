@@ -160,9 +160,10 @@ At minimum it must include:
 - provider options:
   - structured escape hatch map described below
 
+`systemPrompt` is the only canonical home for system-layer instructions at the provider boundary. The `messages` array must not contain a second `system` message slot, because that would create ambiguous transport precedence across providers with different system-prompt models.
+
 The `messages` field should use one shared role model:
 
-- `system`
 - `user`
 - `assistant`
 - `tool`
@@ -181,6 +182,7 @@ Every adapter call must return one normalized response object. At minimum it mus
 - outcome:
   - `stopReason`
   - `status`: `completed`, `incomplete`, or `failed`
+  - `errorClass` when `status=failed`
 - generated content:
   - `assistantMessage`
   - `toolCalls`
@@ -207,6 +209,8 @@ The normalized `stopReason` enum should be:
 - `unsupported_request`
 
 This lets the harness map provider outcomes into retry policy without parsing vendor-specific strings.
+
+When `status=failed`, `errorClass` must carry one of the shared provider error ids from the error model below rather than hiding that classification inside provider metadata.
 
 ## Tool-call boundary
 
