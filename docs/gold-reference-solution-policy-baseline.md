@@ -124,7 +124,7 @@ For proof-generation benchmarks, `internal_gold` and `internal_reference_only` a
 
 When the reference artifact is withheld, it does not need to ship inside a contributor-visible benchmark package. It does still need one benchmark-owned, versioned internal home so review, reruns, and future disclosure decisions all point at the same validated artifact instead of at reviewer-local files.
 
-This baseline does not decide the full public-disclosure matrix for statements, hints, or benchmark release timing. That broader publication policy belongs to issue `#77`. This document only fixes the minimum rule that a hold-out item may withhold its reference artifact publicly, but it may not skip having one internally.
+This baseline does not decide the full public-disclosure matrix for statements, hints, or benchmark release timing. That broader publication policy is defined in `public-disclosure-holdout-policy-baseline.md`. This document only fixes the minimum rule that a hold-out item may withhold its reference artifact publicly, but it may not skip having one internally.
 
 ## MVP application to `firstproof/Problem9`
 
@@ -143,7 +143,7 @@ That makes Problem 9 a `public_gold` style benchmark item for MVP.
 - `problem-statement-metadata-baseline.md` defines the canonical statement pair and metadata contract that this policy builds on
 - `lean-formalization-standards-baseline.md` defines how benchmark-owned gold proofs and statement modules should be authored
 - `problem9-benchmark-package-baseline.md` defines where the gold artifact lives inside the immutable package
-- issue `#77` should later define the broader public disclosure and hold-out policy across statements, solutions, and discussion norms
+- `public-disclosure-holdout-policy-baseline.md` defines the broader public disclosure and hold-out policy across statements, solutions, and discussion norms
 
 This document is the source of truth for whether a benchmark item must have a gold or reference solution before ParetoProof treats it as an active benchmark target.
 
