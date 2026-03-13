@@ -9,6 +9,8 @@ The policy intentionally distinguishes between:
 
 That split keeps the local workflow practical while preserving a clean migration path toward non-interactive worker execution.
 
+The concrete Docker target graph, cache boundaries, GHCR naming, and workflow ownership that implement this policy are defined in [problem9-image-build-graph-baseline.md](problem9-image-build-graph-baseline.md).
+
 ## Policy summary
 
 - MVP starts with both a local/offline devbox image and a separate benchmark execution image.
