@@ -78,6 +78,13 @@
       "when": 1773416536825,
       "tag": "0010_plain_franklin_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773422400000,
+      "tag": "0011_curious_mimic",
+      "breakpoints": true
     }
   ]
 }
