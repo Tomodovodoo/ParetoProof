@@ -24,6 +24,12 @@ import {
   verifyAccessLinkIntent
 } from "../auth/cloudflare-access.js";
 import {
+  loadPortalLaunchView,
+  loadPortalRunDetail,
+  loadPortalRunList,
+  loadPortalWorkersView
+} from "../lib/portal-benchmark-ops-read-model.js";
+import {
   createAccessResolver,
   isAccessAssertionVerificationError
 } from "../auth/require-access.js";
@@ -389,6 +395,64 @@ export function registerPortalRoutes(
       preHandler: requireAccess("authenticated_access_identity")
     },
     handlePortalSessionCompletion
+  );
+
+  app.get(
+    "/portal/runs",
+    {
+      preHandler: requireAccess("approved_helper_or_higher")
+    },
+    async () => {
+      return {
+        items: await loadPortalRunList(db)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/runs/:runId",
+    {
+      preHandler: requireAccess("approved_helper_or_higher")
+    },
+    async (request, reply) => {
+      const runId = (request.params as { runId?: string }).runId;
+      const item = runId ? await loadPortalRunDetail(db, runId) : null;
+
+      if (!item) {
+        reply.code(404).send({
+          error: "portal_run_not_found"
+        });
+        return;
+      }
+
+      return {
+        item
+      };
+    }
+  );
+
+  app.get(
+    "/portal/launch",
+    {
+      preHandler: requireAccess("approved_collaborator_or_higher")
+    },
+    async () => {
+      return {
+        item: await loadPortalLaunchView(db)
+      };
+    }
+  );
+
+  app.get(
+    "/portal/workers",
+    {
+      preHandler: requireAccess("approved_collaborator_or_higher")
+    },
+    async () => {
+      return {
+        item: await loadPortalWorkersView(db)
+      };
+    }
   );
 
   app.get(

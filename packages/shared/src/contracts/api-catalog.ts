@@ -95,6 +95,42 @@ export const apiEndpointCatalog = [
       "Create a short-lived identity-link handoff so an approved user can attach another sign-in method."
   },
   {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.run.list",
+    method: "GET",
+    path: "/portal/runs",
+    purpose:
+      "Return the canonical private run index payload for approved users, including benchmark, verdict, failure, and lineage summaries."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.run.detail",
+    method: "GET",
+    path: "/portal/runs/:runId",
+    purpose:
+      "Return the canonical single-run evidence payload with job, attempt, artifact, lease, and related-run context."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "portal",
+    id: "portal.launch.read",
+    method: "GET",
+    path: "/portal/launch",
+    purpose:
+      "Return launch preflight metadata for benchmark selection, run-kind choice, and model configuration without browser-side authoring."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "portal",
+    id: "portal.workers.read",
+    method: "GET",
+    path: "/portal/workers",
+    purpose:
+      "Return worker-pool, queue, lease, and incident posture summaries for collaborator-plus operational inspection."
+  },
+  {
     access: "admin_only",
     audience: "portal",
     id: "admin.problem9-offline-ingest.create",
