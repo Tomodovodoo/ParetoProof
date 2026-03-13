@@ -25,6 +25,9 @@ jobs:
       - name: Test hidden Unicode guard fixtures
         run: node --test infra/scripts/check-bidi-chars.test.mjs
 
+      - name: Check runtime env examples
+        run: node infra/scripts/check-runtime-env-examples.mjs
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:

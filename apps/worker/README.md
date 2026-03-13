@@ -2,18 +2,13 @@
 
 `apps/worker` holds the control code that remote worker runtimes will execute. The exact image contents and Lean toolchain policy remain a separate scope, but the worker service boundary is now fixed.
 
-Current runtime-secret contract:
+Runtime env guidance:
 
-- local runs may set worker runtime variables in `apps/worker/.env`
-- hosted Modal workers receive the same variable names through Modal Secret injection
-- the current hosted baseline is documented in `docs/modal-worker-secrets-baseline.md`
-- the broader local-versus-Modal injection model is documented in `docs/worker-secret-injection-baseline.md`
+- use [docs/runtime-env-contract-baseline.md](../../docs/runtime-env-contract-baseline.md) as the authoritative source for required versus optional worker variables by mode
+- use [`.env.example`](./.env.example) only as the local developer-facing example
+- hosted Modal secret inventory still lives in [docs/modal-worker-secrets-baseline.md](../../docs/modal-worker-secrets-baseline.md)
+- local-versus-Modal injection rules still live in [docs/worker-secret-injection-baseline.md](../../docs/worker-secret-injection-baseline.md)
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
-- worker commands now validate runtime env by command family before execution starts:
-  - materializers stay env-free
-  - `run-problem9-attempt` validates by effective auth mode
-  - `run-problem9-attempt-in-devbox` requires a readable trusted-local `CODEX_HOME/auth.json`
-  - future hosted claim-loop and offline-ingest modes reserve `API_BASE_URL` and `WORKER_BOOTSTRAP_TOKEN` as their canonical runtime requirements
 
 Package materialization:
 
