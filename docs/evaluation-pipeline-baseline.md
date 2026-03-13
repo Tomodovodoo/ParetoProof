@@ -150,7 +150,7 @@ This stage produces:
 
 - `intake_status = accepted` or `rejected`
 
-Rejected intake does not become a benchmark verdict.
+Rejected intake must still emit an `invalid_result` attempt record when the bundle can be tied to a concrete run, job, or attempt identity. Only pre-attempt transport failures that never establish a benchmark identity may remain intake-only rejections outside benchmark metrics.
 
 ### Stage 2: Attempt normalization
 
@@ -172,6 +172,8 @@ The backend derives the benchmark verdict using this logic:
 2. if `verification/verdict.json` says `pass`, record a passing attempt only when required verifier artifacts and reproducibility fields are present and consistent
 3. if `verification/verdict.json` says `fail`, record a failing attempt with the canonical `failureCode`
 4. if required verdict fields are missing or contradictory, record an ingest or evaluation failure rather than silently promoting the result
+
+When step 1 rejects a structurally invalid bundle that is already attached to an attempt identity, the backend must emit `verdictClass=invalid_result` with an `input_contract` or `evaluation_contract` failure family instead of dropping the case from attempt metrics.
 
 This means benchmark success requires both:
 
@@ -365,9 +367,11 @@ The strict MVP comparison boundary is:
 - same lane id
 - same prompt package digest
 - same provider family
+- same auth mode
 - same model config id
 - same model snapshot identity when available
 - same environment digest
+- same run config digest
 
 If those differ, the results may still be displayed together, but they must be labeled as different configurations rather than pooled into one benchmark score.
 
