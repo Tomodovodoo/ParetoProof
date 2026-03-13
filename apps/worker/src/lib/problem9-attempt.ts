@@ -401,11 +401,13 @@ export async function runProblem9Attempt(
     await buildEnvironmentInput({
       benchmarkManifest,
       compileRoot,
-      modelSnapshotId:
-        options.modelSnapshotId ??
-        (effectiveAuthMode === "local_stub"
-          ? "local_stub/problem9_exact_canonical.v1"
-          : options.providerModel ?? promptManifest.modelConfigId)
+      modelSnapshotId: resolveProblem9ModelSnapshotId({
+        authMode: effectiveAuthMode,
+        fallbackModelConfigId: promptManifest.modelConfigId,
+        overrideModelSnapshotId: options.modelSnapshotId,
+        providerModel: options.providerModel,
+        stubScenario: options.stubScenario
+      })
     })
   );
 
@@ -983,6 +985,24 @@ async function buildEnvironmentInput(options: {
     },
     verifierVersion: "problem9-local-verifier.v1"
   };
+}
+
+export function resolveProblem9ModelSnapshotId(options: {
+  authMode: Problem9AuthMode;
+  fallbackModelConfigId: string;
+  overrideModelSnapshotId?: string;
+  providerModel?: string;
+  stubScenario: "compile_failure" | "exact_canonical";
+}): string {
+  if (options.overrideModelSnapshotId) {
+    return options.overrideModelSnapshotId;
+  }
+
+  if (options.authMode === "local_stub") {
+    return `local_stub/problem9_${options.stubScenario}.v1`;
+  }
+
+  return options.providerModel ?? options.fallbackModelConfigId;
 }
 
 function buildFailureClassification(failure: AttemptTerminalFailure): Record<string, unknown> {
