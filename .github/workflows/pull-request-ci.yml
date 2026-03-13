@@ -34,8 +34,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build shared package
+        run: bun run build:shared
+
       - name: Typecheck workspace
-        run: bun run typecheck
+        run: >-
+          bun run typecheck:shared &&
+          bun run typecheck:web &&
+          bun run typecheck:api &&
+          bun run typecheck:worker
 
       - name: Build workspace
         run: bun run build
