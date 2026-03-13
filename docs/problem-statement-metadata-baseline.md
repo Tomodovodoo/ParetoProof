@@ -201,6 +201,6 @@ This baseline does not decide:
 - exact database column names or JSON schema code
 - multilingual statement support
 - public API response shape for listing benchmark items
-- how gold/reference solution availability is exposed to contributors
+- how gold/reference solution availability is exposed to contributors, which is now partially scoped by `gold-reference-solution-policy-baseline.md` and still leaves the broader disclosure matrix to later work
 
 Those are follow-on scope or execution questions. This document only fixes the minimum canonical statement and metadata contract that later implementation work must preserve.
