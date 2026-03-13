@@ -14,11 +14,12 @@ Docker targets:
   - `paretoproof-worker`
 - `problem9-execution` is the canonical non-interactive verdict environment and includes the built worker runtime, prompt templates, and checked-in `benchmarks/firstproof/problem9` source tree at the repo-root paths the CLI materializers resolve at runtime
 - `problem9-devbox` extends `problem9-execution` with Bun `1.3.10`, Python `3.11`, Codex CLI, and `lean-lsp-mcp` for trusted-local contributor workflows
-- `paretoproof-worker` remains the narrower hosted wrapper target and is intentionally the final Dockerfile stage so current publish automation still builds the worker image by default
-- local verification commands for the named runtime targets:
-  - `docker build --target problem9-execution -f apps/worker/Dockerfile .`
-  - `docker build --target problem9-devbox -f apps/worker/Dockerfile .`
-  - `docker build --target paretoproof-worker -f apps/worker/Dockerfile .`
+- `paretoproof-worker` remains the narrower hosted wrapper target and is published on `main` alongside the canonical `problem9-execution` image
+- root-level image build commands for the named runtime targets:
+  - `bun run build:problem9-execution` builds `problem9-execution` and tags it as `paretoproof-problem9-execution:local`
+  - `bun run build:problem9-devbox` builds `problem9-devbox` and tags it as `paretoproof-problem9-devbox:local`
+  - `bun run build:paretoproof-worker` builds `paretoproof-worker` and tags it as `paretoproof-worker:local`
+- use `node infra/scripts/build-problem9-image.mjs --target <target> --dry-run` to print the exact `docker buildx build` command without executing it
 
 Runtime env guidance:
 
@@ -56,8 +57,8 @@ Local attempt execution:
 
 Trusted-local devbox wrapper:
 
-- use `bun run run:problem9-attempt:trusted-local -- --image <docker-image> --preflight-only` to run the trusted-local host-side plus in-container auth preflight without starting an attempt
-- use `bun run run:problem9-attempt:trusted-local -- --image <docker-image> --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through a local Docker/devbox wrapper
+- use `bun run run:problem9-attempt:trusted-local -- --image paretoproof-problem9-devbox:local --preflight-only` to run the trusted-local host-side plus in-container auth preflight without starting an attempt
+- use `bun run run:problem9-attempt:trusted-local -- --image paretoproof-problem9-devbox:local --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through a local Docker/devbox wrapper
 - the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories

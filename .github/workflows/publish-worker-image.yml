@@ -1,4 +1,4 @@
-name: Publish Worker Image
+name: Publish Problem 9 Execution and Worker Images
 
 on:
   push:
@@ -19,6 +19,7 @@ permissions:
   packages: write
 
 env:
+  EXECUTION_IMAGE: ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-execution
   WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/paretoproof-worker
 
 jobs:
@@ -43,8 +44,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image metadata
-        id: metadata
+      - name: Generate execution image metadata
+        id: execution_metadata
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.EXECUTION_IMAGE }}
+          tags: |
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Generate worker image metadata
+        id: worker_metadata
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.WORKER_IMAGE }}
@@ -52,13 +62,57 @@ jobs:
             type=raw,value=main,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
-      - name: Build and publish worker image
+      - name: Build and publish Problem 9 execution image
+        id: build_execution
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: apps/worker/Dockerfile
+          target: problem9-execution
           push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.execution_metadata.outputs.tags }}
+          labels: ${{ steps.execution_metadata.outputs.labels }}
+          cache-from: type=gha,scope=problem9-execution
+          cache-to: type=gha,scope=problem9-execution,mode=max
+
+      - name: Build and publish worker image
+        id: build_worker
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          target: paretoproof-worker
+          push: true
+          tags: ${{ steps.worker_metadata.outputs.tags }}
+          labels: ${{ steps.worker_metadata.outputs.labels }}
+          cache-from: |
+            type=gha,scope=problem9-execution
+            type=gha,scope=paretoproof-worker
+          cache-to: type=gha,scope=paretoproof-worker,mode=max
+
+      - name: Record published image digests
+        run: |
+          {
+            echo "# Problem 9 publish result"
+            echo
+            echo "## ${{ env.EXECUTION_IMAGE }}"
+            echo
+            echo "Tags:"
+            echo "${{ steps.execution_metadata.outputs.tags }}"
+            echo
+            echo "Digest: \`${{ steps.build_execution.outputs.digest }}\`"
+            echo
+            echo
+            echo "## ${{ env.WORKER_IMAGE }}"
+            echo
+            echo "Tags:"
+            echo "${{ steps.worker_metadata.outputs.tags }}"
+            echo
+            echo "Digest: \`${{ steps.build_worker.outputs.digest }}\`"
+          } | tee problem9-image-digests.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload image digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: problem9-image-digests
+          path: problem9-image-digests.md
