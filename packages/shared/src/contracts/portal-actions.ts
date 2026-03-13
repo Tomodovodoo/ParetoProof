@@ -30,7 +30,7 @@ const portalActionBlueprints = [
     description: "Start a new benchmark run from the authenticated control plane.",
     disabledReason: "Only collaborators and admins can spend benchmark execution budget.",
     helperState: "disabled",
-    helperVisible: true,
+    helperVisible: false,
     id: "launch_benchmark",
     routeId: "portal.launch-run",
     title: "Launch benchmark"
@@ -41,7 +41,7 @@ const portalActionBlueprints = [
     description: "Inspect worker availability and execution posture once worker surfaces are live.",
     disabledReason: "Worker operations stay outside helper permissions.",
     helperState: "disabled",
-    helperVisible: true,
+    helperVisible: false,
     id: "inspect_workers",
     routeId: "portal.workers",
     title: "Inspect workers"

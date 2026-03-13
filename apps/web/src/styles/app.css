@@ -741,6 +741,26 @@ a.button-secondary {
   gap: 4px;
 }
 
+.portal-nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.portal-nav-group + .portal-nav-group {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.portal-nav-group-label {
+  margin: 0 10px 2px;
+  color: rgba(186, 206, 255, 0.78);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .portal-nav-link {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
@@ -795,6 +815,10 @@ a.button-secondary {
 .portal-sidebar-collapsed .portal-brand-block > div,
 .portal-sidebar-collapsed .portal-nav-copy,
 .portal-sidebar-collapsed .portal-sidebar-footer {
+  display: none;
+}
+
+.portal-sidebar-collapsed .portal-nav-group-label {
   display: none;
 }
 
@@ -1010,6 +1034,17 @@ a.button-secondary {
   height: 6px;
   border-radius: 999px;
   background: var(--blue);
+}
+
+.portal-inline-link {
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
+
+.portal-inline-link:hover,
+.portal-inline-link:focus-visible {
+  color: var(--blue);
 }
 
 .portal-action-list,
