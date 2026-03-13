@@ -196,6 +196,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   useEffect(() => {
     if (!selectedRequestId) {
       setDetail(null);
+      setIsDetailLoading(false);
       return;
     }
 
