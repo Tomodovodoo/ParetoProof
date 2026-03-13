@@ -20,6 +20,16 @@ type JobRow = typeof jobs.$inferSelect;
 type AttemptRow = typeof attempts.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
 type WorkerLeaseRow = typeof workerJobLeases.$inferSelect;
+type RunLineageIdentity = Pick<
+  RunRow,
+  | "authMode"
+  | "benchmarkItemId"
+  | "benchmarkPackageDigest"
+  | "laneId"
+  | "modelConfigId"
+  | "providerFamily"
+  | "runConfigDigest"
+>;
 
 const RUN_LIST_LIMIT = 50;
 const LAUNCH_SOURCE_LIMIT = 100;
@@ -263,15 +273,22 @@ export async function loadPortalLaunchView(
 export async function loadPortalWorkersView(
   db: ReturnTypeOfCreateDbClient
 ): Promise<PortalWorkersView> {
-  const [queueJobRows, terminalJobCountRows, failedIncidentJobRows, leaseRows] = await Promise.all([
-    db.query.jobs.findMany({
-      where: or(
-        eq(jobs.state, "queued"),
-        eq(jobs.state, "claimed"),
-        eq(jobs.state, "running"),
-        eq(jobs.state, "cancel_requested")
+  const [queueStateCountRows, terminalJobCountRows, failedIncidentJobRows, leaseRows] = await Promise.all([
+    db
+      .select({
+        count: count(),
+        state: jobs.state
+      })
+      .from(jobs)
+      .where(
+        or(
+          eq(jobs.state, "queued"),
+          eq(jobs.state, "claimed"),
+          eq(jobs.state, "running"),
+          eq(jobs.state, "cancel_requested")
+        )
       )
-    }),
+      .groupBy(jobs.state),
     db
       .select({
         count: count()
@@ -350,6 +367,9 @@ export async function loadPortalWorkersView(
         : existingPool.latestHeartbeatAt;
     poolMap.set(poolKey, existingPool);
   }
+  const queueStateCounts = new Map(
+    queueStateCountRows.map((row) => [row.state, Number(row.count)])
+  );
 
   return {
     activeLeases: leaseRows.slice(0, 20).map((leaseRow) => ({
@@ -391,11 +411,11 @@ export async function loadPortalWorkersView(
         workerRuntime: pool.workerRuntime
       })),
     queue: {
-      cancelRequestedJobs: queueJobRows.filter((jobRow) => jobRow.state === "cancel_requested").length,
-      claimedJobs: queueJobRows.filter((jobRow) => jobRow.state === "claimed").length,
-      queuedJobs: queueJobRows.filter((jobRow) => jobRow.state === "queued").length,
-      runningJobs: queueJobRows.filter((jobRow) => jobRow.state === "running").length,
-      terminalJobs: terminalJobCountRows[0]?.count ?? 0
+      cancelRequestedJobs: queueStateCounts.get("cancel_requested") ?? 0,
+      claimedJobs: queueStateCounts.get("claimed") ?? 0,
+      queuedJobs: queueStateCounts.get("queued") ?? 0,
+      runningJobs: queueStateCounts.get("running") ?? 0,
+      terminalJobs: Number(terminalJobCountRows[0]?.count ?? 0)
     }
   };
 }
@@ -410,20 +430,41 @@ async function mapPortalRunList(
 
   const runIds = runRows.map((runRow) => runRow.id);
   const runConfigDigests = [...new Set(runRows.map((runRow) => runRow.runConfigDigest))];
-  const [jobRows, attemptRows, lineageRows] = await Promise.all([
+  const [jobRows, attemptRows, lineageCountRows] = await Promise.all([
     db.query.jobs.findMany({
       where: inArray(jobs.runId, runIds)
     }),
     db.query.attempts.findMany({
       where: inArray(attempts.runId, runIds)
     }),
-    db.query.runs.findMany({
-      where: inArray(runs.runConfigDigest, runConfigDigests)
-    })
+    db
+      .select({
+        authMode: runs.authMode,
+        benchmarkItemId: runs.benchmarkItemId,
+        benchmarkPackageDigest: runs.benchmarkPackageDigest,
+        laneId: runs.laneId,
+        modelConfigId: runs.modelConfigId,
+        providerFamily: runs.providerFamily,
+        relatedRunCount: count(),
+        runConfigDigest: runs.runConfigDigest
+      })
+      .from(runs)
+      .where(inArray(runs.runConfigDigest, runConfigDigests))
+      .groupBy(
+        runs.authMode,
+        runs.benchmarkItemId,
+        runs.benchmarkPackageDigest,
+        runs.laneId,
+        runs.modelConfigId,
+        runs.providerFamily,
+        runs.runConfigDigest
+      )
   ]);
   const jobsByRunId = groupBy(jobRows, (jobRow) => jobRow.runId);
   const attemptsByRunId = groupBy(attemptRows, (attemptRow) => attemptRow.runId);
-  const lineageCounts = countBy(lineageRows, buildRunLineageKey);
+  const lineageCounts = new Map(
+    lineageCountRows.map((row) => [buildRunLineageKey(row), Number(row.relatedRunCount)])
+  );
 
   return runRows.map((runRow) => {
     const runJobRows = jobsByRunId.get(runRow.id) ?? [];
@@ -472,7 +513,7 @@ async function mapPortalRunList(
   });
 }
 
-function buildRunLineageKey(runRow: RunRow) {
+function buildRunLineageKey(runRow: RunLineageIdentity) {
   return [
     runRow.benchmarkPackageDigest,
     runRow.benchmarkItemId,
@@ -504,16 +545,4 @@ function groupBy<T>(rows: T[], keySelector: (row: T) => string) {
   }
 
   return groupedRows;
-}
-
-function countBy<T>(rows: T[], keySelector: (row: T) => string) {
-  const counts = new Map<string, number>();
-
-  for (const row of rows) {
-    const key = keySelector(row);
-
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return counts;
 }

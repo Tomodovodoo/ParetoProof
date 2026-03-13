@@ -250,7 +250,35 @@ test("GET /portal/runs returns the benchmark operations run index contract", asy
             : [primaryRun, siblingRun, queueRun];
         }
       }
-    }
+    },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          groupBy: async () => [
+            {
+              authMode: primaryRun.authMode,
+              benchmarkItemId: primaryRun.benchmarkItemId,
+              benchmarkPackageDigest: primaryRun.benchmarkPackageDigest,
+              laneId: primaryRun.laneId,
+              modelConfigId: primaryRun.modelConfigId,
+              providerFamily: primaryRun.providerFamily,
+              relatedRunCount: 2,
+              runConfigDigest: primaryRun.runConfigDigest
+            },
+            {
+              authMode: queueRun.authMode,
+              benchmarkItemId: queueRun.benchmarkItemId,
+              benchmarkPackageDigest: queueRun.benchmarkPackageDigest,
+              laneId: queueRun.laneId,
+              modelConfigId: queueRun.modelConfigId,
+              providerFamily: queueRun.providerFamily,
+              relatedRunCount: 1,
+              runConfigDigest: queueRun.runConfigDigest
+            }
+          ]
+        })
+      })
+    })
   };
   const app = Fastify();
 
@@ -312,7 +340,25 @@ test("GET /portal/runs/:runId returns run detail with jobs, attempts, artifacts,
       workerJobLeases: {
         findMany: async () => [buildLease()]
       }
-    }
+    },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          groupBy: async () => [
+            {
+              authMode: primaryRun.authMode,
+              benchmarkItemId: primaryRun.benchmarkItemId,
+              benchmarkPackageDigest: primaryRun.benchmarkPackageDigest,
+              laneId: primaryRun.laneId,
+              modelConfigId: primaryRun.modelConfigId,
+              providerFamily: primaryRun.providerFamily,
+              relatedRunCount: 2,
+              runConfigDigest: primaryRun.runConfigDigest
+            }
+          ]
+        })
+      })
+    })
   };
   const app = Fastify();
 
@@ -444,7 +490,6 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
     runId: "00000000-0000-4000-8000-000000000002",
     workerId: "worker-b"
   });
-  let jobsFindManyCallCount = 0;
   const terminalJobs = Array.from({ length: 12 }, (_, index) =>
     buildJob({
       id: `10000000-0000-4000-8000-0000000001${String(index).padStart(2, "0")}`,
@@ -456,48 +501,42 @@ test("GET /portal/workers returns queue, pool, lease, and incident posture", asy
       verdictClass: index < 9 ? "invalid_result" : "pass"
     })
   );
+  let selectCallCount = 0;
   const db = {
     query: {
       jobs: {
-        findMany: async () => {
-          jobsFindManyCallCount += 1;
-          if (jobsFindManyCallCount === 2) {
-            return terminalJobs
-              .filter((jobRow) => jobRow.state === "failed")
-              .slice(0, 10);
-          }
-
-          return [
-            buildJob({
-              id: "10000000-0000-4000-8000-000000000001",
-              state: "queued",
-              stopReason: "queued",
-              verdictClass: "invalid_result"
-            }),
-            buildJob({
-              id: "10000000-0000-4000-8000-000000000002",
-              state: "running",
-              stopReason: "running",
-              verdictClass: "pass"
-            }),
-            buildJob({
-              id: "10000000-0000-4000-8000-000000000004",
-              state: "cancel_requested",
-              stopReason: "cancel_requested",
-              verdictClass: "invalid_result"
-            })
-          ];
-        }
+        findMany: async () =>
+          terminalJobs
+            .filter((jobRow) => jobRow.state === "failed")
+            .slice(0, 10)
       },
       workerJobLeases: {
         findMany: async () => [activeLease, staleLease]
       }
     },
-    select: () => ({
-      from: () => ({
-        where: async () => [{ count: terminalJobs.length }]
-      })
-    })
+    select: () => {
+      selectCallCount += 1;
+
+      if (selectCallCount === 1) {
+        return {
+          from: () => ({
+            where: () => ({
+              groupBy: async () => [
+                { count: 1, state: "queued" },
+                { count: 1, state: "running" },
+                { count: 1, state: "cancel_requested" }
+              ]
+            })
+          })
+        };
+      }
+
+      return {
+        from: () => ({
+          where: async () => [{ count: terminalJobs.length }]
+        })
+      };
+    }
   };
   const app = Fastify();
 
