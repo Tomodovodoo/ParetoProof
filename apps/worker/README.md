@@ -8,3 +8,5 @@ Current runtime-secret contract:
 - hosted Modal workers receive the same variable names through Modal Secret injection
 - the current hosted baseline is documented in `docs/modal-worker-secrets-baseline.md`
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
+- the broader local Docker, Modal, and trusted-Codex runtime boundary is documented in `docs/worker-runtime-secret-injection-baseline.md`
+- trusted local Codex auth is local-only runtime state; hosted workers and automation must use machine auth such as `CODEX_API_KEY`
