@@ -56,10 +56,12 @@ Shows one row per run attempt with:
 
 Table interactions:
 
-- sort by newest, pass rate, duration, failure count
+- sort by newest, duration, lifecycle state, verdict bucket, or failure family
 - filter by pivot set above
 - export current filtered selection (CSV baseline)
 - open run detail on row click
+
+The exact MVP sort, filter, and CSV export contract for these controls is defined in [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md).
 
 ### 3) Run detail panel
 
