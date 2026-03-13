@@ -9,6 +9,7 @@ import {
   materializeProblem9PromptPackage
 } from "../src/lib/problem9-prompt-package.ts";
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
+import { runProblem9OfflineIngestCli } from "../src/lib/problem9-offline-ingest-cli.ts";
 import { runProblem9OfflineIngest } from "../src/lib/problem9-offline-ingest.ts";
 
 async function buildOfflineIngestBundleRoot(options: {
@@ -312,7 +313,15 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
-            error: "offline_ingest_duplicate_run"
+            error: "offline_ingest_duplicate_run",
+            issues: [
+              {
+                code: "too_small",
+                minimum: 11,
+                path: ["bundle", "artifactManifest", "artifacts"],
+                received: 10
+              }
+            ]
           }),
           {
             headers: {
@@ -332,7 +341,14 @@ test("runProblem9OfflineIngest preserves API rejections for operator output", as
     endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
     error: "offline_ingest_duplicate_run",
     httpStatus: 409,
-    issues: undefined,
+    issues: [
+      {
+        code: "too_small",
+        minimum: 11,
+        path: ["bundle", "artifactManifest", "artifacts"],
+        received: 10
+      }
+    ],
     stage: "remote_rejection",
     status: "rejected"
   });
@@ -372,6 +388,91 @@ test("runProblem9OfflineIngest converts transport failures into rejected output"
       }
     ],
     stage: "remote_rejection",
+    status: "rejected"
+  });
+});
+
+test("runProblem9OfflineIngestCli emits JSON for missing required flags", async () => {
+  const originalConsoleLog = console.log;
+  const originalExitCode = process.exitCode;
+  const loggedMessages: string[] = [];
+
+  console.log = (...args: unknown[]) => {
+    loggedMessages.push(args.map((argument) => String(argument)).join(" "));
+  };
+
+  try {
+    process.exitCode = undefined;
+
+    await runProblem9OfflineIngestCli(["--bundle-root", "problem9-run-bundle"]);
+
+    assert.equal(process.exitCode, 1);
+    assert.equal(loggedMessages.length, 1);
+    assert.deepEqual(JSON.parse(loggedMessages[0] ?? ""), {
+      bundleRoot: path.resolve("problem9-run-bundle"),
+      endpoint: null,
+      error: "invalid_problem9_offline_ingest_cli_arguments",
+      issues: [
+        {
+          message: "Missing required --access-jwt <value> argument."
+        }
+      ],
+      stage: "setup_failure",
+      status: "rejected"
+    });
+  } finally {
+    console.log = originalConsoleLog;
+    process.exitCode = originalExitCode;
+  }
+});
+
+test("runProblem9OfflineIngestCli emits JSON for missing runtime config", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+  const originalConsoleLog = console.log;
+  const originalExitCode = process.exitCode;
+  const originalApiBaseUrl = process.env.API_BASE_URL;
+  const loggedMessages: string[] = [];
+
+  t.after(async () => {
+    console.log = originalConsoleLog;
+    process.exitCode = originalExitCode;
+
+    if (typeof originalApiBaseUrl === "string") {
+      process.env.API_BASE_URL = originalApiBaseUrl;
+    } else {
+      delete process.env.API_BASE_URL;
+    }
+
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  console.log = (...args: unknown[]) => {
+    loggedMessages.push(args.map((argument) => String(argument)).join(" "));
+  };
+  delete process.env.API_BASE_URL;
+  process.exitCode = undefined;
+
+  await runProblem9OfflineIngestCli([
+    "--bundle-root",
+    bundleRoot,
+    "--access-jwt",
+    "test-access-jwt"
+  ]);
+
+  assert.equal(process.exitCode, 1);
+  assert.equal(loggedMessages.length, 1);
+  assert.deepEqual(JSON.parse(loggedMessages[0] ?? ""), {
+    bundleRoot,
+    endpoint: null,
+    error: "invalid_problem9_offline_ingest_runtime_env",
+    issues: [
+      {
+        message: "Invalid worker runtime environment: API_BASE_URL: is required"
+      }
+    ],
+    stage: "setup_failure",
     status: "rejected"
   });
 });

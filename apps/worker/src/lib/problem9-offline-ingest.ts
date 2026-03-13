@@ -20,7 +20,7 @@ type RejectedOfflineIngestResult = {
   endpoint: string;
   error: string;
   httpStatus?: number;
-  issues?: Array<{ message: string; path?: string }>;
+  issues?: Array<Record<string, unknown>>;
   stage: "local_validation" | "remote_rejection";
   status: "rejected";
 };
@@ -129,12 +129,7 @@ export async function runProblem9OfflineIngest(
         typeof responseBody === "object" &&
         "issues" in responseBody &&
         Array.isArray(responseBody.issues)
-          ? responseBody.issues
-              .filter((issue) => issue && typeof issue === "object" && "message" in issue)
-              .map((issue) => ({
-                message: String(issue.message),
-                path: "path" in issue && typeof issue.path === "string" ? issue.path : undefined
-              }))
+          ? normalizeOfflineIngestIssues(responseBody.issues)
           : undefined,
       stage: "remote_rejection",
       status: "rejected"
@@ -371,4 +366,18 @@ function parseStructuredError(error: unknown): {
 
 function normalizeText(text: string): string {
   return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function normalizeOfflineIngestIssues(
+  issues: unknown[]
+): Array<Record<string, unknown>> {
+  return issues.map((issue) => {
+    if (issue && typeof issue === "object" && !Array.isArray(issue)) {
+      return { ...(issue as Record<string, unknown>) };
+    }
+
+    return {
+      message: String(issue)
+    };
+  });
 }
