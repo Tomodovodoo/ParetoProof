@@ -493,21 +493,21 @@ a.button-secondary {
 
 .portal-shell {
   min-height: 100vh;
-  padding: 12px;
+  padding: 10px;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 10px;
 }
 
 .portal-sidebar {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
   background: linear-gradient(180deg, #153178 0%, var(--navy-strong) 100%);
   color: #fff;
-  padding: 18px 14px;
+  padding: 16px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .portal-sidebar-header,
@@ -527,10 +527,10 @@ a.button-secondary {
 }
 
 .portal-brand-mark {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.1);
   color: #fff;
-  border-radius: 4px;
+  border-radius: 2px;
 }
 
 .portal-sidebar .eyebrow {
@@ -553,8 +553,8 @@ a.button-secondary {
   width: 40px;
   height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   padding: 0;
 }
@@ -635,14 +635,27 @@ a.button-secondary {
   padding-inline: 8px;
 }
 
+.portal-nav-link {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.portal-nav-link-active {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .portal-main {
-  padding: 22px;
+  padding: 18px 20px 22px;
   display: grid;
-  gap: 20px;
+  gap: 18px;
   min-width: 0;
   align-content: start;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .portal-topbar h1 {
@@ -660,12 +673,12 @@ a.button-secondary {
 }
 
 .portal-status-strip {
-  padding: 10px 0 12px;
+  padding: 8px 0 10px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  border-width: 1px 0;
+  border-width: 1px 0 0;
   border-radius: 0;
   background: transparent;
 }
@@ -699,15 +712,15 @@ a.button-secondary {
 .portal-metric-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-width: 0 0 1px;
+  border-width: 1px 0;
   border-radius: 0;
   background: transparent;
 }
 
 .portal-metric-cell {
-  padding: 14px 18px 18px;
+  padding: 12px 16px 14px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .portal-metric-cell + .portal-metric-cell {
@@ -731,7 +744,7 @@ a.button-secondary {
 .portal-workspace-grid,
 .portal-grid {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .portal-overview-grid,
@@ -749,15 +762,15 @@ a.button-secondary {
 }
 
 .portal-panel {
-  padding: 20px;
+  padding: 16px 0 0;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .portal-overview-lead {
   border-width: 1px 0 0;
   border-radius: 0;
-  padding: 16px 0 0;
+  padding: 14px 0 0;
   background: transparent;
 }
 
@@ -765,8 +778,8 @@ a.button-secondary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px 0 0;
+  gap: 12px;
+  padding: 12px 0 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -845,15 +858,15 @@ a.button-secondary {
 .portal-surface-rail,
 .portal-overview-timeline {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   align-content: start;
-  padding-left: 22px;
+  padding-left: 18px;
   border-left: 1px solid var(--line);
 }
 
 .portal-panel-table-flat {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .portal-overview-lead .portal-panel-header,
@@ -868,8 +881,8 @@ a.button-secondary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px 0;
+  gap: 12px;
+  padding: 14px 0;
 }
 
 .portal-action-card:first-child,
@@ -1043,7 +1056,7 @@ a.button-secondary {
 
   .portal-sidebar {
     order: 2;
-    border-radius: 4px;
+    border-radius: 0;
     min-height: auto;
   }
 
@@ -1054,7 +1067,8 @@ a.button-secondary {
 
   .portal-main {
     order: 1;
-    border-radius: 4px;
+    padding: 16px 14px 18px;
+    border-radius: 0;
   }
 
   .portal-metric-cell + .portal-metric-cell {
