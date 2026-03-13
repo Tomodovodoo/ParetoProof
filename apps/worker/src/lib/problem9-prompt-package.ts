@@ -157,6 +157,7 @@ export async function materializeProblem9PromptPackage(
     );
   }
 
+  assertOutputRootIsNotFilesystemRoot(outputRoot);
   await assertNoPathOverlap(promptTemplateSourceRoot, outputRoot, "prompt template source");
   await assertNoPathOverlap(benchmarkPackageRoot, outputRoot, "benchmark package input");
 
@@ -198,10 +199,10 @@ export async function materializeProblem9PromptPackage(
   });
 
   const layerContents = {
-    "benchmark.md": benchmarkLayer,
-    "item.md": itemLayer,
-    "run-envelope.json": stableStringify(runEnvelope),
-    "system.md": systemTemplate
+    "benchmark.md": toWrittenText(benchmarkLayer),
+    "item.md": toWrittenText(itemLayer),
+    "run-envelope.json": toWrittenText(stableStringify(runEnvelope)),
+    "system.md": toWrittenText(systemTemplate)
   } as const;
 
   for (const filename of textLayerFilenames) {
@@ -258,10 +259,7 @@ export async function materializeProblem9PromptPackage(
     }
   };
 
-  await writeNormalizedText(
-    path.join(outputRoot, "prompt-package.json"),
-    stableStringify(promptPackageManifest)
-  );
+  await writeNormalizedText(path.join(outputRoot, "prompt-package.json"), stableStringify(promptPackageManifest));
 
   return {
     outputRoot,
@@ -452,6 +450,16 @@ async function assertNoPathOverlap(
   }
 }
 
+function assertOutputRootIsNotFilesystemRoot(outputRoot: string): void {
+  const parsedOutputRoot = path.parse(outputRoot).root;
+
+  if (parsedOutputRoot === outputRoot) {
+    throw new Error(
+      "Prompt package output may not be a filesystem root. Choose a dedicated output directory."
+    );
+  }
+}
+
 async function resolvePathForComparison(filePath: string): Promise<string> {
   const absolutePath = path.resolve(filePath);
   const unresolvedSegments: string[] = [];
@@ -475,7 +483,7 @@ async function resolvePathForComparison(filePath: string): Promise<string> {
 }
 
 async function writeNormalizedText(filePath: string, contents: string): Promise<void> {
-  await writeFile(filePath, `${normalizeText(contents).replace(/\n?$/, "\n")}`, "utf8");
+  await writeFile(filePath, toWrittenText(contents), "utf8");
 }
 
 function normalizePath(relativePath: string): string {
@@ -484,6 +492,10 @@ function normalizePath(relativePath: string): string {
 
 function normalizeText(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function toWrittenText(text: string): string {
+  return `${normalizeText(text).replace(/\n?$/, "\n")}`;
 }
 
 function sha256Text(text: string): string {
