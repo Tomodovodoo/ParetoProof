@@ -75,7 +75,16 @@ The validation model should follow these rules:
 
 ## Web contract
 
-The web app currently has one optional public build-time override:
+The web surface has two distinct configuration modes:
+
+- browser build-time config for the Vite app
+- Pages-managed runtime config for auth-entry edge functions
+
+Those modes must not be collapsed into one "web has no secrets" rule.
+
+### Browser build-time config
+
+The Vite browser app currently has one optional public build-time override:
 
 - `VITE_API_BASE_URL`
 
@@ -90,13 +99,23 @@ If it is absent, the web app should keep deriving the API origin automatically:
 
 ### Hosted web runtime
 
-The current MVP web surface should not depend on runtime-only secret injection in Pages for normal rendering.
+The browser-rendered web surface should not depend on runtime-only secret injection in Pages for normal rendering.
 
 That means:
 
 - no app secret should be required in the browser bundle
 - `VITE_API_BASE_URL` remains an optional override, not a mandatory production secret
 - auth, portal, and public web surfaces should prefer stable hostname-based derivation over environment drift
+
+### Auth-entry edge runtime
+
+The Pages-managed auth-entry handlers are a separate runtime mode from the browser bundle.
+
+That mode currently requires:
+
+- `ACCESS_PROVIDER_STATE_SECRET`
+
+Those handlers may not be rendered into the browser bundle, but they are still part of the hosted web surface and must fail fast if the required secret is missing.
 
 ## API contract
 
