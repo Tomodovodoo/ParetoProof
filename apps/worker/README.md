@@ -50,11 +50,12 @@ Package materialization:
 
 Offline ingest contract:
 
-- `ingest-problem9-run-bundle` is still a reserved follow-up command; it is not implemented in `apps/worker` yet
-- when it lands, MVP offline ingest targets `POST /portal/admin/offline-ingest/problem9-run-bundles`, not `/internal/*`
-- the operator must supply a fresh portal-audience Access assertion explicitly at runtime, and the CLI must forward it as `Cf-Access-Jwt-Assertion: <token>`
+- use `bun --cwd apps/worker ingest:problem9-run-bundle -- --bundle-root <directory> --access-jwt <token> [--api-base-url <url>]` to submit a completed canonical `problem9-run-bundle/` into the existing admin offline-ingest route
+- MVP offline ingest targets `POST /portal/admin/offline-ingest/problem9-run-bundles`, not `/internal/*`
+- the operator must supply a fresh portal-audience Access assertion explicitly at runtime, and the CLI forwards it as `Cf-Access-Jwt-Assertion: <token>`
+- the CLI reads the canonical bundle files from the selected bundle root, validates the request shape locally before any network call, and then prints machine-readable JSON for either success or rejection
 - that assertion is a short-lived human-admin control-plane credential, not a worker bootstrap secret, provider key, trusted-local `auth.json`, or ambient browser cookie jar
-- if the assertion is missing, expired, or rejected, the CLI should fail as an auth or setup error rather than broadening permissions or mutating auth mode
+- if the assertion is missing, expired, or rejected, the CLI fails as an auth or setup error rather than broadening permissions or mutating auth mode
 - unattended machine-only ingest remains out of scope for MVP; later automation needs a separate scope before a dedicated non-human auth surface can exist
 
 Local attempt execution:

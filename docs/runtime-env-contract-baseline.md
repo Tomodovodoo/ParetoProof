@@ -210,9 +210,9 @@ When the worker starts acting as a long-lived claimant against the API, the runt
 
 This is the first hosted worker runtime contract.
 
-### Future offline-ingest CLI mode
+### Offline-ingest CLI mode
 
-When the worker adds `ingest-problem9-run-bundle`, the CLI should require:
+When the worker runs `ingest-problem9-run-bundle`, the CLI should require:
 
 - `API_BASE_URL`
 - one explicit portal-audience Access assertion supplied by the operator at invocation time

@@ -33,6 +33,7 @@
     "materialize:problem9-prompt-package": "bun --cwd apps/worker materialize:problem9-prompt-package",
     "materialize:problem9-run-bundle": "bun --cwd apps/worker materialize:problem9-run-bundle",
     "run:problem9-attempt": "bun --cwd apps/worker run:problem9-attempt",
+    "ingest:problem9-run-bundle": "bun --cwd apps/worker ingest:problem9-run-bundle",
     "run:problem9-attempt:trusted-local": "node infra/scripts/run-problem9-trusted-local-attempt.mjs",
     "run:worker-claim-loop": "bun --cwd apps/worker run:worker-claim-loop",
     "build:shared": "bun --cwd packages/shared build",
