@@ -3,6 +3,8 @@ import {
   getPortalActionsForRoles,
   getPortalLiveViewFreshness,
   getPortalSectionsForRoles,
+  type EvaluationVerdictClass,
+  type RunLifecycleState,
   type PortalActionDefinition,
   type PortalRole,
   type PortalSectionDefinition
@@ -11,6 +13,15 @@ import { useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
+import {
+  buildPortalResultsQueryString,
+  evaluationVerdictLabels,
+  examplePortalResultsQueryState,
+  portalResultsExportHeaders,
+  portalResultsLifecycleBuckets,
+  portalResultsSortOptions,
+  runLifecycleStateLabels
+} from "../lib/results-state";
 import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalProfilePanel } from "./portal-profile-panel";
@@ -48,7 +59,7 @@ const overviewMetrics = [
   },
   {
     label: "Recent runs",
-    note: "2 pending review, 1 blocked",
+    note: "2 active, 1 terminal failure",
     value: "08"
   },
   {
@@ -63,22 +74,25 @@ const overviewRuns = [
     branch: "main",
     id: "PP-318",
     model: "gpt-oss",
-    state: "passed",
-    target: "mathlib4 / simplification"
+    runState: "succeeded" as RunLifecycleState,
+    target: "mathlib4 / simplification",
+    verdict: "pass" as EvaluationVerdictClass
   },
   {
     branch: "auth-fix",
     id: "PP-319",
     model: "claude",
-    state: "running",
-    target: "proof search / induction"
+    runState: "running" as RunLifecycleState,
+    target: "proof search / induction",
+    verdict: null
   },
   {
     branch: "railway-host",
     id: "PP-320",
     model: "gemini",
-    state: "blocked",
-    target: "worker smoke / queue handoff"
+    runState: "failed" as RunLifecycleState,
+    target: "worker smoke / queue handoff",
+    verdict: "invalid_result" as EvaluationVerdictClass
   }
 ];
 
@@ -140,6 +154,14 @@ function resolveActiveSection(
   }
 
   return sections[0];
+}
+
+function formatRunLifecycleState(state: RunLifecycleState) {
+  return runLifecycleStateLabels[state];
+}
+
+function formatVerdictClass(verdict: EvaluationVerdictClass | null) {
+  return verdict ? evaluationVerdictLabels[verdict] : "Pending";
 }
 
 export function PortalShell({ email, roles }: PortalShellProps) {
@@ -350,7 +372,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     <span>Model</span>
                     <span>Target</span>
                     <span>Branch</span>
-                    <span>Status</span>
+                    <span>Lifecycle</span>
+                    <span>Verdict</span>
                   </div>
                   {overviewRuns.map((row) => (
                     <div className="portal-table-row" key={row.id} role="row">
@@ -358,8 +381,17 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                       <span>{row.model}</span>
                       <span>{row.target}</span>
                       <span>{row.branch}</span>
-                      <span className={`portal-state-badge portal-state-${row.state}`}>
-                        {row.state}
+                      <span
+                        className={`portal-state-badge portal-state-${row.runState}`}
+                      >
+                        {formatRunLifecycleState(row.runState)}
+                      </span>
+                      <span
+                        className={`portal-verdict-badge${
+                          row.verdict ? ` portal-verdict-${row.verdict}` : ""
+                        }`}
+                      >
+                        {formatVerdictClass(row.verdict)}
                       </span>
                     </div>
                   ))}
@@ -387,6 +419,110 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <PortalAccessRequestPanel email={email} />
             ) : activeSection?.id === "profile" ? (
               <PortalProfilePanel email={email} />
+            ) : activeSection?.id === "runs" ? (
+              <section className="portal-grid portal-grid-stack">
+                <article className="portal-panel portal-results-panel">
+                  <div className="portal-panel-header">
+                    <div>
+                      <p className="section-tag">Canonical query state</p>
+                      <h2>Run filters and exports now track the approved vocabulary.</h2>
+                    </div>
+                    <span className="role-chip role-chip-tonal">CSV only</span>
+                  </div>
+                  <p className="portal-panel-muted">
+                    Lifecycle, verdict, and export fields stay separate here so the portal
+                    does not collapse control-plane state into benchmark outcome labels.
+                  </p>
+                  <div className="portal-filter-grid">
+                    {portalResultsLifecycleBuckets.map((bucket) => (
+                      <article className="portal-filter-card" key={bucket.id}>
+                        <strong>{bucket.label}</strong>
+                        <p>{bucket.description}</p>
+                        <div className="portal-filter-chip-row">
+                          {bucket.runStates.map((state) => (
+                            <span className="role-chip role-chip-muted" key={state}>
+                              {state}
+                            </span>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="portal-results-contract-grid">
+                    <article className="portal-results-contract-card">
+                      <p className="section-tag">Example query</p>
+                      <h3>Shareable URL state</h3>
+                      <code className="portal-code-block">
+                        {`/runs?${buildPortalResultsQueryString(examplePortalResultsQueryState)}`}
+                      </code>
+                    </article>
+                    <article className="portal-results-contract-card">
+                      <p className="section-tag">Sort ids</p>
+                      <h3>Deterministic ordering</h3>
+                      <div className="portal-filter-chip-row">
+                        {portalResultsSortOptions.map((option) => (
+                          <span className="role-chip role-chip-muted" key={option.id}>
+                            {option.id}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                    <article className="portal-results-contract-card">
+                      <p className="section-tag">CSV headers</p>
+                      <h3>Export field split</h3>
+                      <code className="portal-code-block">
+                        {portalResultsExportHeaders.join(",")}
+                      </code>
+                    </article>
+                  </div>
+                </article>
+
+                <article className="portal-panel-table-flat">
+                  <div className="portal-panel-header">
+                    <div>
+                      <p className="section-tag">Run slice</p>
+                      <h2>Current vocabulary example rows</h2>
+                    </div>
+                    <a className="button button-secondary" href={buildPortalUrl("/")}>
+                      Back to overview
+                    </a>
+                  </div>
+                  <div
+                    className="portal-table-shell portal-results-table"
+                    role="table"
+                    aria-label="Canonical run-state examples"
+                  >
+                    <div className="portal-table-head" role="row">
+                      <span>Run</span>
+                      <span>Model</span>
+                      <span>Target</span>
+                      <span>Branch</span>
+                      <span>Lifecycle</span>
+                      <span>Verdict</span>
+                    </div>
+                    {overviewRuns.map((row) => (
+                      <div className="portal-table-row" key={`${row.id}-runs`} role="row">
+                        <span>{row.id}</span>
+                        <span>{row.model}</span>
+                        <span>{row.target}</span>
+                        <span>{row.branch}</span>
+                        <span
+                          className={`portal-state-badge portal-state-${row.runState}`}
+                        >
+                          {formatRunLifecycleState(row.runState)}
+                        </span>
+                        <span
+                          className={`portal-verdict-badge${
+                            row.verdict ? ` portal-verdict-${row.verdict}` : ""
+                          }`}
+                        >
+                          {formatVerdictClass(row.verdict)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
             ) : (
               <section className="portal-workspace-grid">
                 <article className="portal-panel portal-surface-main">
