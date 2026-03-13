@@ -238,23 +238,44 @@ async function requeueExpiredUnstartedLeases(tx: RequeueExecutor, now: Date) {
 
   const leaseRowIds = staleLeases.map((lease) => lease.leaseRowId);
   const jobRowIds = staleLeases.map((lease) => lease.jobRowId);
-  const runRowIds = [...new Set(staleLeases.map((lease) => lease.runRowId))];
 
-  await tx
+  const revokedLeases = await tx
     .update(workerJobLeases)
     .set({
       revokedAt: now,
       updatedAt: now
     })
-    .where(inArray(workerJobLeases.id, leaseRowIds));
+    .where(
+      and(
+        inArray(workerJobLeases.id, leaseRowIds),
+        lte(workerJobLeases.leaseExpiresAt, now),
+        isNull(workerJobLeases.revokedAt)
+      )
+    )
+    .returning({
+      jobRowId: workerJobLeases.jobId
+    });
 
-  await tx
+  if (revokedLeases.length === 0) {
+    return;
+  }
+
+  const requeuedJobs = await tx
     .update(jobs)
     .set({
       state: "queued",
       updatedAt: now
     })
-    .where(inArray(jobs.id, jobRowIds));
+    .where(and(inArray(jobs.id, jobRowIds), eq(jobs.state, "claimed")))
+    .returning({
+      runRowId: jobs.runId
+    });
+
+  if (requeuedJobs.length === 0) {
+    return;
+  }
+
+  const runRowIds = [...new Set(requeuedJobs.map((job) => job.runRowId))];
 
   await tx
     .update(runs)

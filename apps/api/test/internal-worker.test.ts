@@ -454,6 +454,14 @@ test("claim requeues stale unstarted leases before assigning work", async () => 
                   return this;
                 },
                 returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([{ jobRowId: "job-row-1" }]);
+                  }
+
+                  if (updateCalls.length === 2) {
+                    return Promise.resolve([{ runRowId: "run-row-1" }]);
+                  }
+
                   return Promise.resolve([{ id: "job-row-1" }]);
                 }
               };
