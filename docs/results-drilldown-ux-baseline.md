@@ -15,7 +15,7 @@ MVP results views must support these pivots:
 - run id
 - model/provider configuration
 - problem/task id
-- status bucket (`passed`, `failed`, `running`, `canceled`, `timed_out`)
+- status bucket (`passed`, `failed`, `running`, `cancelled`, `timed_out`)
 - rerun lineage (`original`, `retry_n`, `manual_rerun`)
 
 Each pivot must be composable with at least one additional pivot (for example model + failure status).

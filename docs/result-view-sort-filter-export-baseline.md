@@ -41,7 +41,7 @@ These filters establish what benchmark slice the results belong to.
 
 ### Result scope
 
-- status bucket (`passed`, `failed`, `running`, `canceled`, `timed_out`, `invalid`)
+- status bucket (`passed`, `failed`, `running`, `cancelled`, `timed_out`, `invalid`)
 - evaluation batch or release cohort
 - model or provider configuration label
 
