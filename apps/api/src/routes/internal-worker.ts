@@ -1,13 +1,25 @@
 import { timingSafeEqual } from "node:crypto";
 import type {
+  WorkerArtifactManifestRequest,
+  WorkerArtifactManifestResponse,
   WorkerClaimRequest,
   WorkerClaimResponse,
+  WorkerExecutionEvent,
+  WorkerExecutionEventResponse,
   WorkerHeartbeatRequest,
-  WorkerHeartbeatResponse
+  WorkerHeartbeatResponse,
+  WorkerResultMessageRequest,
+  WorkerResultMessageResponse,
+  WorkerTerminalFailureRequest,
+  WorkerTerminalFailureResponse
 } from "@paretoproof/shared";
 import {
+  workerArtifactManifestRequestSchema,
   workerClaimRequestSchema,
-  workerHeartbeatRequestSchema
+  workerExecutionEventSchema,
+  workerHeartbeatRequestSchema,
+  workerResultMessageRequestSchema,
+  workerTerminalFailureRequestSchema
 } from "@paretoproof/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ApiRuntimeEnv } from "../config/runtime.js";
@@ -51,6 +63,12 @@ function replyWithInternalWorkerError(
   });
 }
 
+function readRouteJobId(request: {
+  params?: { jobId?: string };
+}) {
+  return typeof request.params?.jobId === "string" ? request.params.jobId : null;
+}
+
 export function registerInternalWorkerRoutes(
   app: FastifyInstance,
   db: ReturnTypeOfCreateDbClient,
@@ -61,18 +79,36 @@ export function registerInternalWorkerRoutes(
       jobToken: string
     ) => Promise<InternalWorkerJobAuthContext | null>;
     claimWorker?: (request: WorkerClaimRequest) => Promise<WorkerClaimResponse>;
+    eventWorker?: (
+      request: WorkerExecutionEvent,
+      authContext: InternalWorkerJobAuthContext
+    ) => Promise<WorkerExecutionEventResponse>;
+    artifactManifestWorker?: (
+      request: WorkerArtifactManifestRequest,
+      authContext: InternalWorkerJobAuthContext
+    ) => Promise<WorkerArtifactManifestResponse>;
     heartbeatWorker?: (
       request: WorkerHeartbeatRequest,
       authContext: InternalWorkerJobAuthContext
     ) => Promise<WorkerHeartbeatResponse>;
+    resultWorker?: (
+      request: WorkerResultMessageRequest,
+      authContext: InternalWorkerJobAuthContext
+    ) => Promise<WorkerResultMessageResponse>;
+    failureWorker?: (
+      request: WorkerTerminalFailureRequest,
+      authContext: InternalWorkerJobAuthContext
+    ) => Promise<WorkerTerminalFailureResponse>;
   }
 ) {
-  const internalWorkerControl =
-    options?.claimWorker && options?.heartbeatWorker && options?.authenticateWorkerJob
-      ? null
-      : createInternalWorkerControlService(db);
+  const internalWorkerControl = createInternalWorkerControlService(db);
   const claimWorker = options?.claimWorker ?? internalWorkerControl!.claim;
+  const eventWorker = options?.eventWorker ?? internalWorkerControl!.reportEvent;
+  const artifactManifestWorker =
+    options?.artifactManifestWorker ?? internalWorkerControl!.submitArtifactManifest;
   const heartbeatWorker = options?.heartbeatWorker ?? internalWorkerControl!.heartbeat;
+  const resultWorker = options?.resultWorker ?? internalWorkerControl!.submitResult;
+  const failureWorker = options?.failureWorker ?? internalWorkerControl!.submitFailure;
   const authenticateWorkerJob =
     options?.authenticateWorkerJob ?? internalWorkerControl!.authenticateJobToken;
 
@@ -114,10 +150,7 @@ export function registerInternalWorkerRoutes(
       return;
     }
 
-    const routeJobId =
-      typeof (request.params as { jobId?: string } | undefined)?.jobId === "string"
-        ? (request.params as { jobId: string }).jobId
-        : null;
+    const routeJobId = readRouteJobId(request as { params?: { jobId?: string } });
 
     if (!routeJobId) {
       reply.code(400).send({
@@ -157,6 +190,250 @@ export function registerInternalWorkerRoutes(
 
     try {
       reply.send(await heartbeatWorker(parsedBody.data, authContext));
+    } catch (error) {
+      if (error instanceof InternalWorkerControlError) {
+        replyWithInternalWorkerError(reply, error);
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/internal/worker/jobs/:jobId/events", async (request, reply) => {
+    const parsedBody = workerExecutionEventSchema.safeParse(request.body ?? {});
+
+    if (!parsedBody.success) {
+      reply.code(400).send({
+        error: "invalid_worker_event_payload",
+        issues: zodIssuesToResponse(parsedBody.error.issues)
+      });
+      return;
+    }
+
+    const routeJobId = readRouteJobId(request as { params?: { jobId?: string } });
+
+    if (!routeJobId) {
+      reply.code(400).send({
+        error: "worker_job_id_required"
+      });
+      return;
+    }
+
+    if (routeJobId !== parsedBody.data.jobId) {
+      reply.code(400).send({
+        error: "worker_job_id_mismatch"
+      });
+      return;
+    }
+
+    const jobToken = readBearerToken(
+      typeof request.headers.authorization === "string"
+        ? request.headers.authorization
+        : undefined
+    );
+
+    if (!jobToken) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    const authContext = await authenticateWorkerJob(routeJobId, jobToken);
+
+    if (!authContext) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    try {
+      reply.send(await eventWorker(parsedBody.data, authContext));
+    } catch (error) {
+      if (error instanceof InternalWorkerControlError) {
+        replyWithInternalWorkerError(reply, error);
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/internal/worker/jobs/:jobId/artifacts", async (request, reply) => {
+    const parsedBody = workerArtifactManifestRequestSchema.safeParse(request.body ?? {});
+
+    if (!parsedBody.success) {
+      reply.code(400).send({
+        error: "invalid_worker_artifact_manifest_payload",
+        issues: zodIssuesToResponse(parsedBody.error.issues)
+      });
+      return;
+    }
+
+    const routeJobId = readRouteJobId(request as { params?: { jobId?: string } });
+
+    if (!routeJobId) {
+      reply.code(400).send({
+        error: "worker_job_id_required"
+      });
+      return;
+    }
+
+    if (routeJobId !== parsedBody.data.jobId) {
+      reply.code(400).send({
+        error: "worker_job_id_mismatch"
+      });
+      return;
+    }
+
+    const jobToken = readBearerToken(
+      typeof request.headers.authorization === "string"
+        ? request.headers.authorization
+        : undefined
+    );
+
+    if (!jobToken) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    const authContext = await authenticateWorkerJob(routeJobId, jobToken);
+
+    if (!authContext) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    try {
+      reply.send(await artifactManifestWorker(parsedBody.data, authContext));
+    } catch (error) {
+      if (error instanceof InternalWorkerControlError) {
+        replyWithInternalWorkerError(reply, error);
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/internal/worker/jobs/:jobId/result", async (request, reply) => {
+    const parsedBody = workerResultMessageRequestSchema.safeParse(request.body ?? {});
+
+    if (!parsedBody.success) {
+      reply.code(400).send({
+        error: "invalid_worker_result_payload",
+        issues: zodIssuesToResponse(parsedBody.error.issues)
+      });
+      return;
+    }
+
+    const routeJobId = readRouteJobId(request as { params?: { jobId?: string } });
+
+    if (!routeJobId) {
+      reply.code(400).send({
+        error: "worker_job_id_required"
+      });
+      return;
+    }
+
+    if (routeJobId !== parsedBody.data.jobId) {
+      reply.code(400).send({
+        error: "worker_job_id_mismatch"
+      });
+      return;
+    }
+
+    const jobToken = readBearerToken(
+      typeof request.headers.authorization === "string"
+        ? request.headers.authorization
+        : undefined
+    );
+
+    if (!jobToken) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    const authContext = await authenticateWorkerJob(routeJobId, jobToken);
+
+    if (!authContext) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    try {
+      reply.send(await resultWorker(parsedBody.data, authContext));
+    } catch (error) {
+      if (error instanceof InternalWorkerControlError) {
+        replyWithInternalWorkerError(reply, error);
+        return;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/internal/worker/jobs/:jobId/failure", async (request, reply) => {
+    const parsedBody = workerTerminalFailureRequestSchema.safeParse(request.body ?? {});
+
+    if (!parsedBody.success) {
+      reply.code(400).send({
+        error: "invalid_worker_failure_payload",
+        issues: zodIssuesToResponse(parsedBody.error.issues)
+      });
+      return;
+    }
+
+    const routeJobId = readRouteJobId(request as { params?: { jobId?: string } });
+
+    if (!routeJobId) {
+      reply.code(400).send({
+        error: "worker_job_id_required"
+      });
+      return;
+    }
+
+    if (routeJobId !== parsedBody.data.jobId) {
+      reply.code(400).send({
+        error: "worker_job_id_mismatch"
+      });
+      return;
+    }
+
+    const jobToken = readBearerToken(
+      typeof request.headers.authorization === "string"
+        ? request.headers.authorization
+        : undefined
+    );
+
+    if (!jobToken) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    const authContext = await authenticateWorkerJob(routeJobId, jobToken);
+
+    if (!authContext) {
+      reply.code(401).send({
+        error: "invalid_worker_job_token"
+      });
+      return;
+    }
+
+    try {
+      reply.send(await failureWorker(parsedBody.data, authContext));
     } catch (error) {
       if (error instanceof InternalWorkerControlError) {
         replyWithInternalWorkerError(reply, error);

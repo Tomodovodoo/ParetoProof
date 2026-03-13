@@ -279,6 +279,11 @@ export const workerExecutionEventSchema = z.object({
   summary: z.string().min(1)
 });
 
+export const workerExecutionEventResponseSchema = z.object({
+  acceptedAt: timestampSchema,
+  acknowledgedSequence: z.number().int().nonnegative()
+});
+
 export const workerArtifactManifestEntrySchema = z.object({
   artifactRole: workerBundleArtifactRoleSchema,
   byteSize: z.number().int().nonnegative(),
@@ -328,6 +333,13 @@ export const workerResultMessageRequestSchema = z.object({
   verdictDigest: sha256Schema
 });
 
+export const workerResultMessageResponseSchema = z.object({
+  acceptedAt: timestampSchema,
+  attemptState: z.literal("succeeded"),
+  jobState: z.literal("completed"),
+  runState: z.literal("succeeded")
+});
+
 export const workerTerminalFailureRequestSchema = z.object({
   artifactIds: z.array(z.string().min(1)).optional(),
   artifactManifestDigest: sha256Schema.nullable(),
@@ -343,6 +355,13 @@ export const workerTerminalFailureRequestSchema = z.object({
   terminalState: z.enum(["failed", "cancelled"]),
   verifierVerdict: workerVerifierVerdictSchema.nullable(),
   verdictDigest: sha256Schema.nullable()
+});
+
+export const workerTerminalFailureResponseSchema = z.object({
+  acceptedAt: timestampSchema,
+  attemptState: z.enum(["failed", "cancelled"]),
+  jobState: z.enum(["failed", "cancelled"]),
+  runState: z.enum(["failed", "cancelled"])
 });
 
 export const workerExecutionEventCatalogEntrySchema = z.object({

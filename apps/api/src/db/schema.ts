@@ -138,6 +138,33 @@ export const artifactLifecycleStateEnum = pgEnum("artifact_lifecycle_state", [
   "deleted"
 ]);
 
+export const workerExecutionPhaseEnum = pgEnum("worker_execution_phase", [
+  "prepare",
+  "generate",
+  "tool",
+  "compile",
+  "verify",
+  "finalize",
+  "cancel"
+]);
+
+export const workerExecutionEventKindEnum = pgEnum("worker_execution_event_kind", [
+  "attempt_started",
+  "compile_started",
+  "compile_succeeded",
+  "compile_failed",
+  "compile_repair_requested",
+  "compile_repair_applied",
+  "verifier_started",
+  "verifier_passed",
+  "verifier_failed",
+  "verifier_repair_requested",
+  "verifier_repair_applied",
+  "budget_exhausted",
+  "artifact_manifest_written",
+  "bundle_finalized"
+]);
+
 export const workerRuntimeEnum = pgEnum("worker_runtime", [
   "local_docker",
   "modal"
@@ -584,6 +611,45 @@ export const workerJobLeases = pgTable(
     jobIndex: index("worker_job_leases_job_id_idx").on(table.jobId),
     attemptIndex: index("worker_job_leases_attempt_id_idx").on(table.attemptId),
     leaseExpiryIndex: index("worker_job_leases_lease_expires_at_idx").on(table.leaseExpiresAt)
+  })
+);
+
+export const workerAttemptEvents = pgTable(
+  "worker_attempt_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    leaseId: uuid("lease_id")
+      .notNull()
+      .references(() => workerJobLeases.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    phase: workerExecutionPhaseEnum("phase").notNull(),
+    eventKind: workerExecutionEventKindEnum("event_kind").notNull(),
+    summary: text("summary").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    attemptSequenceUnique: uniqueIndex("worker_attempt_events_attempt_sequence_unique").on(
+      table.attemptId,
+      table.sequence
+    ),
+    attemptRecordedAtIndex: index("worker_attempt_events_attempt_recorded_at_idx").on(
+      table.attemptId,
+      table.recordedAt
+    ),
+    leaseIndex: index("worker_attempt_events_lease_id_idx").on(table.leaseId)
   })
 );
 
