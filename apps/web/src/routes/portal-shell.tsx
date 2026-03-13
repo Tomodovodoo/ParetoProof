@@ -150,6 +150,18 @@ function buildRunDetailHref(runId: string) {
   return buildPortalUrl(`/runs/${encodeURIComponent(runId)}`);
 }
 
+function readActiveRunId(pathname: string) {
+  if (!pathname.startsWith("/runs/")) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(pathname.slice("/runs/".length));
+  } catch {
+    return pathname.slice("/runs/".length);
+  }
+}
+
 function getPortalNavGroups(sections: PortalSectionDefinition[]): PortalNavGroup[] {
   const accountSections = sections.filter(
     (section) => section.id === "overview" || section.id === "profile"
@@ -225,9 +237,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   );
   const pathname = window.location.pathname;
   const matchedPortalRoute = findMatchedPortalRoute(pathname);
-  const activeRunId = pathname.startsWith("/runs/")
-    ? decodeURIComponent(pathname.slice("/runs/".length))
-    : null;
+  const activeRunId = readActiveRunId(pathname);
   const activeSection = useMemo(
     () => resolveActiveSection(pathname, matchedPortalRoute?.id ?? null, sections),
     [matchedPortalRoute, pathname, sections]
