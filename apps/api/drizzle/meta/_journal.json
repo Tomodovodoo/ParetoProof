@@ -64,6 +64,13 @@
       "when": 1773139800000,
       "tag": "0008_tan_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773404400000,
+      "tag": "0009_deep_prodigy",
+      "breakpoints": true
     }
   ]
 }

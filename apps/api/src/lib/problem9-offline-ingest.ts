@@ -49,6 +49,15 @@ const benchmarkExpectedHashPaths = [
   "statements/problem.md"
 ] as const;
 
+const offlineIngestDuplicateConstraints = new Set([
+  "runs_source_run_id_unique",
+  "runs_bundle_digest_unique",
+  "attempts_source_attempt_id_unique",
+  "attempts_bundle_digest_unique",
+  "artifacts_storage_locator_unique",
+  "artifacts_attempt_relative_path_unique"
+]);
+
 type Problem9OfflineIngestArtifactDraft = {
   artifactClassId: (typeof artifactClassEnum.enumValues)[number];
   artifactManifestDigest: string | null;
@@ -134,92 +143,100 @@ export function createProblem9OfflineIngestService(
   return async (rawRequest, _actorUserId) => {
     const plan = buildProblem9OfflineIngestPlan(rawRequest);
 
-    return db.transaction(async (tx) => {
-      const existingRun = await tx.query.runs.findFirst({
-        where: eq(runs.sourceRunId, plan.run.sourceRunId)
-      });
+    try {
+      return await db.transaction(async (tx) => {
+        const existingRun = await tx.query.runs.findFirst({
+          where: eq(runs.sourceRunId, plan.run.sourceRunId)
+        });
 
-      if (existingRun) {
+        if (existingRun) {
+          throw new Problem9OfflineIngestDuplicateError(plan.run.sourceRunId);
+        }
+
+        const [persistedRun] = await tx
+          .insert(runs)
+          .values(plan.run)
+          .returning({
+            id: runs.id,
+            sourceRunId: runs.sourceRunId,
+            state: runs.state
+          });
+
+        if (!persistedRun) {
+          throw new Error("Failed to persist the imported run record.");
+        }
+
+        const [persistedJob] = await tx
+          .insert(jobs)
+          .values({
+            ...plan.job,
+            runId: persistedRun.id
+          })
+          .returning({
+            id: jobs.id,
+            sourceJobId: jobs.sourceJobId,
+            state: jobs.state
+          });
+
+        if (!persistedJob) {
+          throw new Error("Failed to persist the imported job record.");
+        }
+
+        const [persistedAttempt] = await tx
+          .insert(attempts)
+          .values({
+            ...plan.attempt,
+            jobId: persistedJob.id,
+            runId: persistedRun.id
+          })
+          .returning({
+            id: attempts.id,
+            sourceAttemptId: attempts.sourceAttemptId,
+            state: attempts.state,
+            verdictClass: attempts.verdictClass
+          });
+
+        if (!persistedAttempt) {
+          throw new Error("Failed to persist the imported attempt record.");
+        }
+
+        await tx.insert(artifacts).values(
+          plan.artifacts.map((artifactDraft) => ({
+            ...artifactDraft,
+            attemptId: persistedAttempt.id,
+            jobId: persistedJob.id,
+            ownerScope: "run_attempt" as const,
+            runId: persistedRun.id
+          }))
+        );
+
+        return {
+          artifactCount: plan.artifacts.length,
+          attempt: {
+            id: persistedAttempt.id,
+            sourceAttemptId: persistedAttempt.sourceAttemptId,
+            state: plan.attempt.state,
+            verdictClass: plan.attempt.verdictClass
+          },
+          job: {
+            id: persistedJob.id,
+            sourceJobId: persistedJob.sourceJobId,
+            state: plan.job.state
+          },
+          run: {
+            id: persistedRun.id,
+            sourceRunId: persistedRun.sourceRunId,
+            state: plan.run.state
+          }
+        } satisfies Problem9OfflineIngestResponse;
+      });
+    } catch (error) {
+      if (isOfflineIngestDuplicateConstraintError(error)) {
         throw new Problem9OfflineIngestDuplicateError(plan.run.sourceRunId);
       }
 
-      const [persistedRun] = await tx
-        .insert(runs)
-        .values(plan.run)
-        .returning({
-          id: runs.id,
-          sourceRunId: runs.sourceRunId,
-          state: runs.state
-        });
-
-      if (!persistedRun) {
-        throw new Error("Failed to persist the imported run record.");
-      }
-
-      const [persistedJob] = await tx
-        .insert(jobs)
-        .values({
-          ...plan.job,
-          runId: persistedRun.id
-        })
-        .returning({
-          id: jobs.id,
-          sourceJobId: jobs.sourceJobId,
-          state: jobs.state
-        });
-
-      if (!persistedJob) {
-        throw new Error("Failed to persist the imported job record.");
-      }
-
-      const [persistedAttempt] = await tx
-        .insert(attempts)
-        .values({
-          ...plan.attempt,
-          jobId: persistedJob.id,
-          runId: persistedRun.id
-        })
-        .returning({
-          id: attempts.id,
-          sourceAttemptId: attempts.sourceAttemptId,
-          state: attempts.state,
-          verdictClass: attempts.verdictClass
-        });
-
-      if (!persistedAttempt) {
-        throw new Error("Failed to persist the imported attempt record.");
-      }
-
-      await tx.insert(artifacts).values(
-        plan.artifacts.map((artifactDraft) => ({
-          ...artifactDraft,
-          attemptId: persistedAttempt.id,
-          jobId: persistedJob.id,
-          ownerScope: "run_attempt" as const,
-          runId: persistedRun.id
-        }))
-      );
-
-      return {
-        artifactCount: plan.artifacts.length,
-        attempt: {
-          id: persistedAttempt.id,
-          sourceAttemptId: persistedAttempt.sourceAttemptId,
-          state: plan.attempt.state,
-          verdictClass: plan.attempt.verdictClass
-        },
-        job: {
-          id: persistedJob.id,
-          sourceJobId: persistedJob.sourceJobId,
-          state: plan.job.state
-        },
-        run: {
-          id: persistedRun.id,
-          sourceRunId: persistedRun.sourceRunId,
-          state: plan.run.state
-        }
-      } satisfies Problem9OfflineIngestResponse;
-    });
+      throw error;
+    }
   };
 }
 
@@ -923,6 +940,26 @@ function toJsonRecordOrNull(value: unknown): Record<string, unknown> | null {
   return {
     value
   };
+}
+
+function isOfflineIngestDuplicateConstraintError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const databaseCode = "code" in error ? String(error.code) : null;
+  const constraintName =
+    "constraint_name" in error
+      ? String(error.constraint_name)
+      : "constraint" in error
+        ? String(error.constraint)
+        : null;
+
+  return (
+    databaseCode === "23505" &&
+    constraintName !== null &&
+    offlineIngestDuplicateConstraints.has(constraintName)
+  );
 }
 
 function assertDigest(actual: string, expected: string, label: string, code: string) {
