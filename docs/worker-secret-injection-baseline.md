@@ -68,6 +68,8 @@ The trusted local Codex path is:
 - auth mode: `trusted_local_user`
 - allowed runtime: local devbox or local Docker on a trusted contributor machine
 
+The exact host-path, mount-path, and preflight contract for this path is defined in [codex-trusted-local-auth-baseline.md](codex-trusted-local-auth-baseline.md).
+
 The hard rule is:
 
 - keep Codex `auth.json` and any ChatGPT-managed session material on the host
