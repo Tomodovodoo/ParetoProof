@@ -210,6 +210,26 @@ When the worker starts acting as a long-lived claimant against the API, the runt
 
 This is the first hosted worker runtime contract.
 
+### Future offline-ingest CLI mode
+
+When the worker adds `ingest-problem9-run-bundle`, the CLI should require:
+
+- `API_BASE_URL`
+- one explicit portal-audience Access assertion supplied by the operator at invocation time
+
+That assertion is the control-plane auth artifact approved by [offline-ingest-auth-baseline.md](offline-ingest-auth-baseline.md). It should be passed explicitly to the command and forwarded as:
+
+- `Cf-Access-Jwt-Assertion: <token>`
+
+The offline-ingest CLI must not require or reuse:
+
+- `WORKER_BOOTSTRAP_TOKEN`
+- per-job worker tokens
+- provider API keys
+- trusted-local `auth.json`
+
+Because the assertion is short-lived and human-admin scoped, it should not be documented as a steady-state worker `.env` variable.
+
 ### Hosted provider or non-interactive model mode
 
 When the worker must call a hosted model provider without a trusted local Codex session, the mode should additionally require the relevant provider credential, such as:
