@@ -8,7 +8,7 @@ Pages now has a concrete project baseline. The Cloudflare project is `paretoproo
 
 Because the frontend consumes the shared workspace package, the web bundle should be built from the repository root with `bun run build:web:pages`, then uploaded to Pages from `apps/web/dist`. This keeps the Pages deployment path aligned with the Bun workspace instead of depending on a narrower dashboard root that would miss shared-package changes. The portal hostname is protected by a Cloudflare Access application with an owner-only bootstrap policy, and `apps/web/public/_headers` now carries the checked-in `X-Robots-Tag: noindex, nofollow, noarchive` policy for that host while leaving the public site indexable.
 
-Each app also has a small `.env.example` file so deployment variables are easy to discover without pretending that the final secret model is already implemented. Those files are there to make local bootstrapping and platform configuration predictable, not to define the final production secret inventory.
+Each app also has a small `.env.example` file so deployment variables are easy to discover without pretending that the final secret model is already implemented. Those files are there to make local bootstrapping and platform configuration predictable, not to define the final production secret inventory. The authoritative staging-entry and manual-promotion flow for these surfaces lives in `staging-promotion-baseline.md`.
 
 ## Rollback Baseline
 
