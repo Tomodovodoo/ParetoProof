@@ -899,7 +899,7 @@ a.button-secondary {
 .portal-metric-cell span,
 .portal-metric-cell small,
 .portal-table-head,
-.portal-table-row span:not(.portal-state-badge) {
+.portal-table-row span:not(.portal-state-badge):not(.portal-verdict-badge) {
   color: var(--ink-soft);
 }
 
@@ -1015,7 +1015,9 @@ a.button-secondary {
 .portal-action-list,
 .portal-timeline,
 .portal-request-list,
-.portal-identity-list {
+.portal-identity-list,
+.portal-filter-grid,
+.portal-results-contract-grid {
   display: grid;
 }
 
@@ -1036,6 +1038,66 @@ a.button-secondary {
 .portal-panel-table-flat {
   display: grid;
   gap: 12px;
+}
+
+.portal-results-panel {
+  gap: 16px;
+}
+
+.portal-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.portal-filter-card,
+.portal-results-contract-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.portal-results-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.portal-filter-card strong,
+.portal-results-contract-card h3 {
+  color: var(--ink);
+}
+
+.portal-filter-card p,
+.portal-results-contract-card p {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.portal-filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.portal-code-block {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid rgba(17, 42, 103, 0.08);
+  border-radius: 12px;
+  background: rgba(17, 42, 103, 0.04);
+  color: var(--navy);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .portal-overview-lead .portal-panel-header,
@@ -1084,7 +1146,7 @@ a.button-secondary {
 .portal-table-head,
 .portal-table-row {
   display: grid;
-  grid-template-columns: 0.9fr 0.8fr 1.6fr 0.9fr 0.7fr;
+  grid-template-columns: 0.9fr 0.8fr 1.6fr 0.9fr 0.78fr 0.78fr;
   gap: 14px;
   align-items: center;
   padding: 14px 16px;
@@ -1106,7 +1168,14 @@ a.button-secondary {
   justify-self: start;
 }
 
-.portal-state-passed {
+.portal-state-created,
+.portal-state-queued {
+  color: var(--navy);
+  border-color: rgba(17, 42, 103, 0.16);
+  background: rgba(17, 42, 103, 0.06);
+}
+
+.portal-state-succeeded {
   color: var(--mint);
   border-color: rgba(14, 139, 115, 0.2);
   background: rgba(14, 139, 115, 0.08);
@@ -1118,10 +1187,45 @@ a.button-secondary {
   background: rgba(37, 99, 235, 0.08);
 }
 
-.portal-state-blocked {
+.portal-state-cancel_requested,
+.portal-state-cancelled {
   color: var(--amber);
   border-color: rgba(185, 117, 20, 0.2);
   background: rgba(185, 117, 20, 0.1);
+}
+
+.portal-state-failed {
+  color: var(--rose);
+  border-color: rgba(168, 71, 94, 0.2);
+  background: rgba(168, 71, 94, 0.08);
+}
+
+.portal-verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  padding: 0.32rem 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.66);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+  justify-self: start;
+}
+
+.portal-verdict-pass {
+  color: var(--mint);
+  border-color: rgba(14, 139, 115, 0.2);
+  background: rgba(14, 139, 115, 0.08);
+}
+
+.portal-verdict-fail,
+.portal-verdict-invalid_result {
+  color: var(--rose);
+  border-color: rgba(168, 71, 94, 0.2);
+  background: rgba(168, 71, 94, 0.08);
 }
 
 .portal-timeline-item {
@@ -1163,7 +1267,8 @@ a.button-secondary {
   .portal-grid-profile,
   .portal-topbar,
   .portal-status-strip,
-  .auth-card-footer {
+  .auth-card-footer,
+  .portal-results-contract-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
@@ -1245,6 +1350,11 @@ a.button-secondary {
     border-top: 1px solid var(--line);
   }
 
+  .portal-filter-grid,
+  .portal-results-contract-grid {
+    grid-template-columns: 1fr;
+  }
+
   .portal-main {
     order: 1;
     padding: 16px 14px 18px;
@@ -1274,6 +1384,10 @@ a.button-secondary {
   .portal-table-row span:nth-child(3),
   .portal-table-row span:nth-child(4) {
     display: none;
+  }
+
+  .portal-table-row span:nth-child(6) {
+    display: inline-flex;
   }
 
   .portal-freshness-card,

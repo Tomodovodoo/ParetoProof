@@ -142,6 +142,38 @@ Filter UX must follow these rules:
 - URL state is the source of truth for active sort and filter values
 - mobile layouts may collapse the controls into a sheet, but active filters must remain visible after the sheet closes
 
+### Canonical query-state keys
+
+Portal results routes must use one stable query-state shape so links, exports, and frontend state do not invent parallel aliases.
+
+Required key names:
+
+- `runLifecycle`
+  - comma-separated canonical `run.state` ids such as `running,cancel_requested`
+- `lifecycleBucket`
+  - one derived bucket id from [run-state-vocabulary-baseline.md](run-state-vocabulary-baseline.md), such as `active`
+- `verdict`
+  - comma-separated canonical verdict ids such as `fail,invalid_result`
+- `failureFamily`
+  - canonical failure-family ids only
+- `failureCode`
+  - canonical failure-code ids only
+- `sort`
+  - one documented sort id such as `started_at_desc`
+- `q`
+  - free-text search term when a view supports search
+
+Disallowed key names:
+
+- `status`
+- `stateLabel`
+- ad hoc result-only aliases that hide the lifecycle versus verdict split
+- US-spelled cancellation values
+
+Example query state:
+
+- `/runs?runLifecycle=running,cancel_requested&lifecycleBucket=active&verdict=fail,invalid_result&sort=started_at_desc`
+
 ### Canonical grouping buckets
 
 When a UI offers grouped filters instead of raw enums, it must derive them from the canonical backend vocabularies:
@@ -183,6 +215,31 @@ MVP CSV exports must include:
 - rerun lineage
 - started-at and finished-at timestamps
 - duration when known
+
+The canonical CSV header set for run-level exports should be:
+
+- `runId`
+- `jobId`
+- `attemptId`
+- `benchmarkVersionId`
+- `modelConfigId`
+- `modelConfigLabel`
+- `runState`
+- `runStateLabel`
+- `runLifecycleBucket`
+- `verdictClass`
+- `verdictLabel`
+- `failureFamily`
+- `failureCode`
+- `startedAt`
+- `finishedAt`
+- `durationMs`
+
+Header rules:
+
+- lifecycle fields must use `runState` and `runStateLabel`, not `status`
+- verdict fields must use `verdictClass` and `verdictLabel`, not any legacy result-only status alias
+- labels are optional convenience columns; canonical ids remain the authority for filtering and downstream parsing
 
 MVP does not require:
 

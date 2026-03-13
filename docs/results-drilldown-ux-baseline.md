@@ -115,6 +115,18 @@ Portal results drilldown state should be URL-shareable.
 - include selected run id in query state when detail panel is open
 - preserve filter state when navigating between portal subviews
 
+The frontend query state must use the canonical keys and ids from [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md):
+
+- `runLifecycle`
+- `lifecycleBucket`
+- `verdict`
+- `failureFamily`
+- `failureCode`
+- `sort`
+- optional `q`
+
+The drilldown UI must not fall back to older ambiguous names such as `status` or result-only aliases that mix lifecycle with verdict.
+
 This keeps deep links usable for async review and admin support.
 
 ## Responsive behavior
