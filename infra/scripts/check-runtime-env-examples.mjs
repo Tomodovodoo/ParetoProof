@@ -54,12 +54,14 @@ const checks = [
       "# The authoritative mode split lives in docs/runtime-env-contract-baseline.md.",
       "# Current local development mode:",
       "# Hosted-parity worker runtime config. Leave commented unless you are running claim-loop style flows.",
+      "# Offline-ingest operator input. Leave commented unless you are importing a completed run bundle through the admin ingest route.",
       "# Mode-specific hosted provider auth. Trusted-local Codex auth does not belong in this file.",
       "# Reserved later-scope worker runtime variables. Only set these when the specific workflow requires them."
     ],
     variables: [
       { name: "API_BASE_URL", commented: false },
       { name: "WORKER_BOOTSTRAP_TOKEN", commented: true },
+      { name: "CF_ACCESS_JWT_ASSERTION", commented: true },
       { name: "CODEX_API_KEY", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_ID", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_SECRET", commented: true },
