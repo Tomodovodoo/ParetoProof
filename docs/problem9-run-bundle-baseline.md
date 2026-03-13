@@ -67,7 +67,7 @@ The naming rule is intentionally narrow. The canonical candidate file for the Pr
 - `run-bundle.json`
   - the top-level bundle manifest for schema version, run identity, package identity, lane id, tool profile, stop reason, and root digests
 - `artifact-manifest.json`
-  - the path-by-path checksum and size inventory for every file present in the bundle
+  - the path-by-path checksum and size inventory for every non-root file present in the bundle
 - `package/package-ref.json`
   - the run-local reference to the immutable benchmark package id, version, lane, and whole-package digest
 - `package/benchmark-package.json`
@@ -182,7 +182,7 @@ At minimum it must record:
 - `failureCode` when the result is `fail`
 - `semanticEquality`
 - `surfaceEquality`
-- `surfaceDrift`
+- `surface_drift`
 - `containsSorry`
 - `containsAdmit`
 - `axiomCheck`
