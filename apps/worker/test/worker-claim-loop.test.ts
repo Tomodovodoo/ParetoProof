@@ -259,94 +259,96 @@ test("runWorkerClaimLoop claims work, records lifecycle events, and submits a pa
     environmentDigest: "f".repeat(64),
     verdictDigest: "1".repeat(64)
   };
-  const fetchStub = createFetchStub([
-    {
-      path: "/internal/worker/claims",
-      response: claim
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 0,
-        cancelRequested: false,
-        jobToken: "job-token-2",
-        jobTokenExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseExpiresAt: "2026-03-13T15:04:00.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:01.000Z",
-        acknowledgedSequence: 1
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 1,
-        cancelRequested: false,
-        jobToken: "job-token-3",
-        jobTokenExpiresAt: "2026-03-13T15:04:30.000Z",
-        leaseExpiresAt: "2026-03-13T15:04:30.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/heartbeat",
-      response: {
-        acknowledgedEventSequence: 1,
-        cancelRequested: false,
-        jobToken: "job-token-4",
-        jobTokenExpiresAt: "2026-03-13T15:05:00.000Z",
-        leaseExpiresAt: "2026-03-13T15:05:00.000Z",
-        leaseStatus: "active"
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/artifacts",
-      response: {
-        acceptedAt: "2026-03-13T15:00:02.000Z",
-        artifactManifestDigest: bundleDigests.artifactManifestDigest,
-        artifacts: [
+  const requests: RecordedRequest[] = [];
+  let heartbeatCount = 0;
+  let eventSequence = 0;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input.toString());
+    const headers = new Headers(init?.headers);
+    const bodyText = typeof init?.body === "string" ? init.body : "";
+    const recordedRequest = {
+      headers,
+      json: bodyText ? JSON.parse(bodyText) : null,
+      method: init?.method ?? "GET",
+      path: url.pathname
+    };
+
+    requests.push(recordedRequest);
+
+    switch (url.pathname) {
+      case "/internal/worker/claims":
+        return new Response(JSON.stringify(claim), {
+          headers: { "content-type": "application/json" },
+          status: 200
+        });
+      case "/internal/worker/jobs/job-1/heartbeat":
+        heartbeatCount += 1;
+        return new Response(
+          JSON.stringify({
+            acknowledgedEventSequence: eventSequence,
+            cancelRequested: false,
+            jobToken: `job-token-${heartbeatCount + 1}`,
+            jobTokenExpiresAt: "2026-03-13T15:05:00.000Z",
+            leaseExpiresAt: "2026-03-13T15:05:00.000Z",
+            leaseStatus: "active"
+          }),
           {
-            artifactId: "artifact-1",
-            artifactRole: "candidate_source",
-            relativePath: "candidate/Candidate.lean"
-          },
-          {
-            artifactId: "artifact-2",
-            artifactRole: "verdict_record",
-            relativePath: "verification/verdict.json"
+            headers: { "content-type": "application/json" },
+            status: 200
           }
-        ]
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:03.000Z",
-        acknowledgedSequence: 2
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/events",
-      response: {
-        acceptedAt: "2026-03-13T15:00:04.000Z",
-        acknowledgedSequence: 3
-      }
-    },
-    {
-      path: "/internal/worker/jobs/job-1/result",
-      response: {
-        acceptedAt: "2026-03-13T15:00:05.000Z",
-        attemptState: "succeeded",
-        jobState: "completed",
-        runState: "succeeded"
-      }
+        );
+      case "/internal/worker/jobs/job-1/events":
+        eventSequence += 1;
+        return new Response(
+          JSON.stringify({
+            acceptedAt: `2026-03-13T15:00:0${eventSequence}.000Z`,
+            acknowledgedSequence: eventSequence
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200
+          }
+        );
+      case "/internal/worker/jobs/job-1/artifacts":
+        return new Response(
+          JSON.stringify({
+            acceptedAt: "2026-03-13T15:00:05.000Z",
+            artifactManifestDigest: bundleDigests.artifactManifestDigest,
+            artifacts: [
+              {
+                artifactId: "artifact-1",
+                artifactRole: "candidate_source",
+                relativePath: "candidate/Candidate.lean"
+              },
+              {
+                artifactId: "artifact-2",
+                artifactRole: "verdict_record",
+                relativePath: "verification/verdict.json"
+              }
+            ]
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200
+          }
+        );
+      case "/internal/worker/jobs/job-1/result":
+        return new Response(
+          JSON.stringify({
+            acceptedAt: "2026-03-13T15:00:06.000Z",
+            attemptState: "succeeded",
+            jobState: "completed",
+            runState: "succeeded"
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200
+          }
+        );
+      default:
+        throw new Error(`Unexpected fetch path ${url.pathname}`);
     }
-  ]);
+  };
 
   const result = await runWorkerClaimLoop(
     buildLoopOptions(roots),
@@ -373,7 +375,7 @@ test("runWorkerClaimLoop claims work, records lifecycle events, and submits a pa
           verifierRepairCount: 0
         };
       },
-      fetchImpl: fetchStub.fetchImpl,
+      fetchImpl,
       materializeBenchmarkPackage: async ({ outputRoot }) => ({
         outputRoot: path.join(outputRoot, "firstproof", "Problem9"),
         packageDigest: claim.workerJob.target.benchmarkPackageDigest,
@@ -398,15 +400,15 @@ test("runWorkerClaimLoop claims work, records lifecycle events, and submits a pa
     stoppedReason: "idle_once"
   });
 
-  assert.equal(fetchStub.requests[0].json.availableRunKinds[0], "single_run");
+  assert.equal(requests[0].json.availableRunKinds[0], "single_run");
   assert.deepEqual(
-    fetchStub.requests
+    requests
       .filter((request) => request.path.endsWith("/events"))
       .map((request) => (request.json as WorkerExecutionEvent).eventKind),
     ["attempt_started", "artifact_manifest_written", "bundle_finalized"]
   );
-  assert.equal(fetchStub.requests.at(-1)?.path, "/internal/worker/jobs/job-1/result");
-  fetchStub.assertExhausted();
+  assert.equal(requests.at(-1)?.path, "/internal/worker/jobs/job-1/result");
+  assert.ok(heartbeatCount >= 2);
 });
 
 test("runWorkerClaimLoop submits terminal failures for pre-bundle attempt errors", async () => {

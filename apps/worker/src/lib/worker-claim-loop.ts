@@ -961,7 +961,7 @@ function buildStaticFailure(options: {
   summary: string;
 }): WorkerFailureClassification {
   return {
-    evidenceArtifactRefs: ["worker-control/prebundle"],
+    evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
     failureCode: options.failureCode,
     failureFamily: classifyFailureFamily(options.failureCode),
     phase: options.phase,
