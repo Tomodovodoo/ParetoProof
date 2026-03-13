@@ -109,7 +109,7 @@ MVP should therefore avoid:
 - per-row artifact menus
 - export actions on the public site
 
-Those belong to follow-on scopes such as issue `#52`.
+Those belong to follow-on scopes defined in [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md).
 
 ## Distinguishing result, data, and error states
 
@@ -202,7 +202,7 @@ For MVP:
 ## Relationship to adjacent frontend scopes
 
 - [product-surface-boundary-baseline.md](product-surface-boundary-baseline.md) defines why this reporting flow belongs on the public apex site rather than in the portal or a separate math hostname
-- issue `#52` should define sort, filter, and export behavior for richer result views
+- [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md) defines the exact public-versus-portal split for result sorting, filtering, and CSV export behavior
 - [release-notes-and-updates-baseline.md](release-notes-and-updates-baseline.md) defines the canonical public update surfaces and external announcement-link rules that sit beside benchmark release pages
 - [results-drilldown-ux-baseline.md](results-drilldown-ux-baseline.md) defines the authenticated portal drilldown behavior once users move beyond the public release summary
 - [frontend-design-system-baseline.md](frontend-design-system-baseline.md) defines the component and styling rules this reporting surface should use

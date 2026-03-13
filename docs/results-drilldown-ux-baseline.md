@@ -61,6 +61,8 @@ Table interactions:
 - export current filtered selection (CSV baseline)
 - open run detail on row click
 
+The exact MVP sort, filter, and CSV export contract for these controls is defined in [results-sort-filter-export-baseline.md](results-sort-filter-export-baseline.md).
+
 ### 3) Run detail panel
 
 The run detail panel is the canonical evidence view for one run attempt.
