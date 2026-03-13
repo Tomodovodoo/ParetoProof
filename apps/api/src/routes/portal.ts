@@ -1,8 +1,11 @@
 import {
+  portalBenchmarkOpsReadModelsContract,
   portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
+  portalRunDetailParamsSchema,
   portalProfileLinkIntentInputSchema,
   portalProfileUpdateInputSchema,
+  portalRunsListQuerySchema,
   type PortalProfile,
   type PortalProfileLinkIntent
 } from "@paretoproof/shared";
@@ -18,6 +21,10 @@ import {
 } from "../db/schema.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
+import {
+  createPortalBenchmarkOpsReadModelService,
+  type PortalBenchmarkOpsReadModelService
+} from "../lib/portal-benchmark-ops.js";
 import {
   buildSignedAccessCookie,
   verifyAccessProviderHint,
@@ -186,10 +193,13 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard,
   options?: {
+    portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
     resolvePortalAccess?: ReturnType<typeof createAccessResolver>;
   }
 ) {
   const resolvePortalAccess = options?.resolvePortalAccess ?? createAccessResolver(db);
+  const portalBenchmarkOpsReadModels =
+    options?.portalBenchmarkOpsReadModels ?? createPortalBenchmarkOpsReadModelService(db);
 
   const handlePortalSessionRetryRedirect = (
     request: FastifyRequest,
@@ -466,6 +476,83 @@ export function registerPortalRoutes(
         })
       };
     }
+  );
+
+  app.get(
+    "/portal/runs",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.runsListResponse
+      },
+      preHandler: requireAccess("approved_helper_or_higher")
+    },
+    async (request, reply) => {
+      const parsedQuery = portalRunsListQuerySchema.safeParse(request.query ?? {});
+
+      if (!parsedQuery.success) {
+        reply.code(400).send({
+          error: "invalid_portal_runs_query",
+          issues: parsedQuery.error.issues
+        });
+        return;
+      }
+
+      return portalBenchmarkOpsReadModels.getRunsList(parsedQuery.data);
+    }
+  );
+
+  app.get(
+    "/portal/runs/:runId",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.runDetailResponse
+      },
+      preHandler: requireAccess("approved_helper_or_higher")
+    },
+    async (request, reply) => {
+      const parsedParams = portalRunDetailParamsSchema.safeParse(request.params ?? {});
+
+      if (!parsedParams.success) {
+        reply.code(400).send({
+          error: "invalid_portal_run_detail_params",
+          issues: parsedParams.error.issues
+        });
+        return;
+      }
+
+      const detail = await portalBenchmarkOpsReadModels.getRunDetail(parsedParams.data.runId);
+
+      if (!detail) {
+        reply.code(404).send({
+          error: "portal_run_not_found"
+        });
+        return;
+      }
+
+      return detail;
+    }
+  );
+
+  app.get(
+    "/portal/launch",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.launchViewResponse
+      },
+      preHandler: requireAccess("approved_collaborator_or_higher")
+    },
+    async () => portalBenchmarkOpsReadModels.getLaunchView()
+  );
+
+  app.get(
+    "/portal/workers",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.workersViewResponse
+      },
+      preHandler: requireAccess("approved_collaborator_or_higher")
+    },
+    async () => portalBenchmarkOpsReadModels.getWorkersView()
   );
 
   const handlePortalProfileUpdate = async (

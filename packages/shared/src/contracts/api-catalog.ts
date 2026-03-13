@@ -78,6 +78,42 @@ export const apiEndpointCatalog = [
     purpose: "Return the caller's editable portal profile details and linked identities."
   },
   {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.runs.list",
+    method: "GET",
+    path: "/portal/runs",
+    purpose:
+      "Return the canonical private run index read model for approved portal users, including bounded filters and benchmark-operation summaries."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.run-detail.read",
+    method: "GET",
+    path: "/portal/runs/:runId",
+    purpose:
+      "Return the canonical evidence view for one run, including timeline, artifact, attempt, and worker-lease summaries."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "portal",
+    id: "portal.launch.read",
+    method: "GET",
+    path: "/portal/launch",
+    purpose:
+      "Return launch preflight metadata for benchmark selection, run-shape policy, and contributor-visible governance limits."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "portal",
+    id: "portal.workers.read",
+    method: "GET",
+    path: "/portal/workers",
+    purpose:
+      "Return the bounded worker-operations overview for queue pressure, active leases, and derived operational incidents."
+  },
+  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.profile.update",
