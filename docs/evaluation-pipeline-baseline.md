@@ -338,9 +338,11 @@ By default, metric aggregation should be grouped at least by:
 - `laneId`
 - `promptPackageDigest`
 - `providerFamily`
+- `authMode`
 - `modelConfigId`
 - `modelSnapshotId` when available
 - `environmentDigest`
+- `runConfigDigest`
 
 This keeps unlike configurations from being merged into one apparent score.
 
