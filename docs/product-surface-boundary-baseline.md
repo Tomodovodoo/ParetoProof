@@ -153,6 +153,7 @@ Use these rules when placing new work:
 
 ## Relationship to adjacent baselines
 
+- [public-content-pack-baseline.md](public-content-pack-baseline.md) defines the exact MVP project-explanation, contributor-entry, and contact-content pack that belongs on the apex site.
 - [math-surface-mvp-baseline.md](math-surface-mvp-baseline.md) decides that `math.paretoproof.com` stays out of MVP entirely.
 - [public-benchmark-reporting-ux-baseline.md](public-benchmark-reporting-ux-baseline.md) defines the public reporting UX that belongs on the apex site.
 - [release-notes-and-updates-baseline.md](release-notes-and-updates-baseline.md) defines the public update surfaces that also belong on the apex site.
