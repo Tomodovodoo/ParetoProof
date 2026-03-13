@@ -15,7 +15,8 @@ MVP results views must support these pivots:
 - run id
 - model/provider configuration
 - problem/task id
-- status bucket (`passed`, `failed`, `running`, `canceled`, `timed_out`)
+- lifecycle bucket (`queued`, `running`, `cancel_requested`, `succeeded`, `failed`, `cancelled`)
+- verdict bucket (`pass`, `fail`, `invalid_result`) when evaluated result records exist
 - rerun lineage (`original`, `retry_n`, `manual_rerun`)
 
 Each pivot must be composable with at least one additional pivot (for example model + failure status).
@@ -35,7 +36,7 @@ Shows aggregate counters and quick filters:
 - total runs
 - pass rate
 - failure count
-- active-running count
+- active count
 - rerun count
 
 Clicking any counter must apply a visible filter to level 2.
@@ -47,7 +48,8 @@ Shows one row per run attempt with:
 - run id
 - evaluation or benchmark label
 - model config label
-- status
+- lifecycle state
+- verdict bucket when available
 - started/finished timestamps
 - rerun lineage marker
 - quick failure badge (when failed)
@@ -125,3 +127,5 @@ This keeps deep links usable for async review and admin support.
 - custom chart builder
 - cross-project federated result search
 - public anonymous results drilldown outside authenticated portal access
+
+Status naming in this document must follow [run-state-vocabulary-baseline.md](run-state-vocabulary-baseline.md). In particular, `timed_out` is a derived failure bucket rather than a primary lifecycle state, and the canonical spelling is `cancelled`.
