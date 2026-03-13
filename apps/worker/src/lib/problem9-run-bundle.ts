@@ -773,7 +773,7 @@ function buildVerdict(options: {
     }
   }
 
-  return omitNullValues({
+  const verdict = {
     attemptId: options.attemptId,
     axiomCheck: options.axiomCheck,
     benchmarkPackageDigest: options.benchmarkPackageDigest,
@@ -791,7 +791,14 @@ function buildVerdict(options: {
     surfaceEquality: options.surfaceEquality,
     surface_drift: options.surfaceEquality === "drifted",
     verdictSchemaVersion: "1"
-  });
+  };
+
+  if (options.result === "fail") {
+    return verdict;
+  }
+
+  const { failureCode: _failureCode, ...passingVerdict } = verdict;
+  return passingVerdict;
 }
 
 function buildPackageRef(options: {
