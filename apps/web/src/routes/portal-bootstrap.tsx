@@ -94,13 +94,13 @@ function readLocalAccessOverride(): PortalAccessState | null {
 function formatPortalBootstrapError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "Failed to fetch") {
-      return "The portal could not reach the API. Check the API host and try again.";
+      return "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
     }
 
-    return error.message;
+    return "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
   }
 
-  return "The portal could not be loaded.";
+  return "The portal could not finish loading right now. Try again in a moment.";
 }
 
 export function PortalBootstrap() {

@@ -76,7 +76,7 @@ export function PublicSite() {
           </p>
           <div className="hero-actions">
             <a className="button" href={buildAuthUrl("/")}>
-              Enter the portal
+              Contributor sign in
             </a>
             <a className="button button-secondary" href="/benchmarks">
               Read the benchmark model
