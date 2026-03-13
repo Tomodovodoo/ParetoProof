@@ -145,7 +145,7 @@ That makes Problem 9 a valid MVP kernel item even though it is not intended to b
 - `problem-statement-metadata-baseline.md` defines the metadata fields that must record source and difficulty labels
 - `gold-reference-solution-policy-baseline.md` defines the reference-solution requirement once an item is active
 - `lean-formalization-standards-baseline.md` defines how benchmark-owned Lean targets and gold proofs should be authored
-- issue `#77` should later define how public disclosure and hold-out policy affect what can be claimed publicly about curated items
+- `public-disclosure-holdout-policy-baseline.md` defines how public disclosure and hold-out policy affect what can be claimed publicly about curated items
 
 This document is the source of truth for deciding whether a selected candidate item is good enough to remain in the ParetoProof benchmark set.
 

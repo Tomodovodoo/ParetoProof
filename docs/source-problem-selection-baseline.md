@@ -167,7 +167,7 @@ That is acceptable for MVP because the current goal is to establish one reproduc
 - `math-artifact-types-baseline.md` defines the task-target artifact types that source families may feed
 - `gold-reference-solution-policy-baseline.md` defines the reference-solution requirement after an item is selected
 - issue `#39` should define which selected items are good enough to keep, based on difficulty, novelty, contamination, theorem quality, and Lean suitability
-- issue `#77` should later define the broader disclosure and hold-out policy for selected benchmark material
+- `public-disclosure-holdout-policy-baseline.md` defines the broader disclosure and hold-out policy for selected benchmark material
 
 This document is the source of truth for what kinds of upstream problem sources ParetoProof may curate into benchmark items in the first place.
 

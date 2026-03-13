@@ -198,7 +198,7 @@ The benchmark package and later database model may expose additional fields, but
 
 This baseline does not decide:
 
-- public disclosure versus private hold-out policy for benchmark statements
+- public disclosure versus private hold-out policy for benchmark statements, which is now scoped by `public-disclosure-holdout-policy-baseline.md`
 - exact database column names or JSON schema code
 - multilingual statement support
 - public API response shape for listing benchmark items
