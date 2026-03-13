@@ -65,3 +65,21 @@ Trusted-local devbox wrapper:
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
 - the supplied Docker image must already include the Codex CLI and the worker runtime; if it cannot run `codex login status`, trusted-local preflight fails before any attempt starts
+
+Hosted claim loop:
+
+- use `bun run run:worker-claim-loop -- --worker-id <id> --worker-pool <pool> --worker-version <version> --workspace-root <directory> --output-root <directory>` to claim hosted worker jobs from the internal worker API and run them through the existing Problem 9 attempt runner
+- hosted claim-loop runtime env still comes from `API_BASE_URL`, `WORKER_BOOTSTRAP_TOKEN`, and the selected machine-auth provider credentials such as `CODEX_API_KEY`
+- the loop claims one job at a time, materializes the benchmark and prompt package locally from the claimed identity, heartbeats while the attempt is running, appends explicit lifecycle events, submits the artifact manifest, and then submits either terminal success or terminal failure
+- if a heartbeat returns `cancel_requested` or `expired`, the loop stops terminal submission for that job instead of racing a stale result write against a revoked lease
+
+Hosted claim loop:
+
+- use `bun run run:worker-claim-loop -- --auth-mode machine_api_key --once` to run one hosted claim attempt against the internal worker API
+- required env for hosted mode:
+  - `API_BASE_URL`
+  - `WORKER_BOOTSTRAP_TOKEN`
+  - `CODEX_API_KEY` when `--auth-mode machine_api_key`
+- the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
+- use `--max-claims <n>` to bound a longer poller run, `--work-root <directory>` to choose the local scratch directory, and `--worker-id`, `--worker-pool`, `--worker-runtime`, or `--worker-version` to override the worker identity sent in claim requests
+- if the API reports `cancel_requested` or `expired` on a heartbeat before terminal submission, the loop exits that claim explicitly without sending a stale terminal finalize
