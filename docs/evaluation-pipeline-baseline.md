@@ -40,6 +40,7 @@ The evaluation pipeline must treat these artifacts as the minimum authoritative 
 - `run-bundle.json`
 - `artifact-manifest.json`
 - `package/package-ref.json`
+- `package/benchmark-package.json`
 - `prompt/prompt-package.json`
 - `candidate/Candidate.lean`
 - `verification/verdict.json`
@@ -114,19 +115,27 @@ These fields should align with `problem9-failure-registration-baseline.md`. The 
 
 ### 5. Reproducibility identity
 
-`environment/environment.json`, `run-bundle.json`, and `package/package-ref.json` together provide the reproducibility tuple that determines whether two results are meaningfully comparable.
+`environment/environment.json`, `run-bundle.json`, `package/package-ref.json`, `package/benchmark-package.json`, and `prompt/prompt-package.json` together provide the reproducibility tuple that determines whether two results are meaningfully comparable.
 
 The evaluation pipeline must preserve:
 
-- benchmark package identity and digest
-- lane id
-- prompt package digest
-- provider family
-- auth mode
-- model config id
-- model snapshot id when present
-- environment digest
-- run config digest
+- `benchmarkPackageId`
+- `benchmarkPackageVersion`
+- `benchmarkPackageDigest`
+- `benchmarkItemId`
+- `laneId`
+- `promptProtocolVersion`
+- `promptPackageDigest`
+- `runMode`
+- `toolProfile`
+- `harnessRevision`
+- `verifierVersion`
+- `providerFamily`
+- `authMode`
+- `modelConfigId`
+- `modelSnapshotId`
+- `environmentDigest`
+- `runConfigDigest`
 
 ## Evaluation pipeline stages
 
@@ -335,8 +344,16 @@ These metrics are the minimum useful cut for understanding where the system fail
 By default, metric aggregation should be grouped at least by:
 
 - `benchmarkPackageVersion`
+- `benchmarkPackageId`
+- `benchmarkPackageDigest`
+- `benchmarkItemId`
 - `laneId`
+- `promptProtocolVersion`
 - `promptPackageDigest`
+- `runMode`
+- `toolProfile`
+- `harnessRevision`
+- `verifierVersion`
 - `providerFamily`
 - `authMode`
 - `modelConfigId`
@@ -365,9 +382,14 @@ The backend should compare runs as like-for-like only when the reproducibility-c
 
 The strict MVP comparison boundary is:
 
-- same benchmark package version and digest
+- same benchmark package id, version, digest, and item id
 - same lane id
+- same prompt protocol version
 - same prompt package digest
+- same run mode
+- same tool profile
+- same harness revision
+- same verifier version
 - same provider family
 - same auth mode
 - same model config id
