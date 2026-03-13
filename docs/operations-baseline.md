@@ -50,6 +50,8 @@ The owner-admin bootstrap path also requires `OWNER_EMAIL` so the script can res
 
 The MVP contributor approval path is intentionally manual. While the portal is still protected by an owner-only bootstrap policy, approval starts from an out-of-band request or a manually inserted `access_requests` row rather than from self-service entry. The owner then ensures there is a `users` row and the correct `user_identities` link, updates the request to `approved` or `rejected` with `reviewed_by_user_id`, `reviewed_at`, and any `decision_note`, and inserts or revokes the relevant `role_grants` row. If approval changes an existing contributor's privileges, existing `sessions` should be revoked so the next login rebuilds session state from the current role grants instead of stale session data.
 
+The portal review UX for that manual path is defined in [admin-verification-ux-baseline.md](admin-verification-ux-baseline.md).
+
 The machine-identity model should stay narrower than the human bootstrap model. GitHub Actions may publish code and images but should not get direct production database credentials. The Railway API runtime should hold only the application credential that serves normal reads and writes, while migrations use a separate credential that never sits in the live API service. Modal workers should authenticate to the backend with their own worker bootstrap identity and then receive per-job scoped tokens rather than broad backend secrets. Cloudflare Access service tokens should exist only for internal API surfaces that need machine callers, and any future R2 access keys should be separated by environment so one compromised non-production principal cannot read or mutate production artifacts.
 
 ## Worker bootstrap-token and per-job token flow
