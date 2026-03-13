@@ -39,7 +39,7 @@ export const apiCallBoundaryCatalog = [
     mode: "browser_navigation",
     origin: "portal_browser",
     rationale:
-      "Custom auth buttons finish on a protected API handoff route first so Cloudflare Access can establish the API audience before the browser returns to the static portal host."
+      "Custom auth buttons finish on a protected API handoff route through a same-site form POST so Cloudflare Access can establish the API audience without leaving a mutating GET finalize path."
   },
   {
     credential: "cloudflare_access_jwt",
