@@ -5,6 +5,7 @@ import { createAccessGuard } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
 import { registerHealthRoute } from "../routes/health.js";
+import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
   createTrustedMutationOriginHook,
@@ -72,6 +73,7 @@ export async function buildServer() {
   registerHealthRoute(app);
   registerPortalRoutes(app, db, requireAccess);
   registerAdminRoutes(app, db, requireAccess);
+  registerOfflineIngestRoutes(app, db, requireAccess);
 
   return app;
 }
