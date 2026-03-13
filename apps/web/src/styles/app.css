@@ -65,7 +65,6 @@ svg {
 
 h1,
 h2,
-h3,
 p,
 ul {
   margin: 0;
@@ -389,6 +388,7 @@ a.button-secondary {
 }
 
 .site-panel-copy h3 {
+  margin: 0;
   font-size: 1.12rem;
   letter-spacing: -0.03em;
 }
