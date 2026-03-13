@@ -99,7 +99,7 @@ The package version is therefore the only supported way to say "this is a differ
 The required hash set for MVP is:
 
 - whole-package SHA-256 over the normalized file tree
-- per-file SHA-256 for `benchmark-package.json`, `lean-toolchain`, `lakefile.toml`, `lake-manifest.json`, `statements/problem.md`, `FirstProof/Problem9/Statement.lean`, `FirstProof/Problem9/Support.lean`, and `FirstProof/Problem9/Gold.lean`
+- per-file SHA-256 for `benchmark-package.json`, `README.md`, `LICENSE`, `lean-toolchain`, `lakefile.toml`, `lake-manifest.json`, `statements/problem.md`, `FirstProof/Problem9/Statement.lean`, `FirstProof/Problem9/Support.lean`, and `FirstProof/Problem9/Gold.lean`
 
 Normalization must ignore local build output and editor noise. Files such as `.lake/`, `.git/`, `.DS_Store`, `*.olean`, transient logs, and other generated outputs are not part of the package boundary and must never contribute to the package digest.
 
