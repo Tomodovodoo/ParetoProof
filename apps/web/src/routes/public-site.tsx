@@ -344,6 +344,12 @@ const footerProjectLinks = [
   { id: "contact", label: "Contact rules" }
 ];
 
+type PublicBenchmarkSummaryCard = {
+  detail: string;
+  label: string;
+  value: string;
+};
+
 function PublicHeader({
   currentPath,
   homeHref
@@ -455,6 +461,44 @@ function PublicFooter({ isProjectRoute }: { isProjectRoute: boolean }) {
   );
 }
 
+function PublicBenchmarkSummary({
+  ariaLabel,
+  cards,
+  compact
+}: {
+  ariaLabel: string;
+  cards: PublicBenchmarkSummaryCard[];
+  compact: boolean;
+}) {
+  if (compact) {
+    return (
+      <section className="site-benchmark-mobile-summary" aria-label={ariaLabel}>
+        {cards.map((card) => (
+          <article className="site-benchmark-mobile-card" key={card.label}>
+            <span className="site-benchmark-mobile-value">{card.value}</span>
+            <h2>{card.label}</h2>
+            <p>{card.detail}</p>
+          </article>
+        ))}
+      </section>
+    );
+  }
+
+  return (
+    <aside className="site-signal-column" aria-label={ariaLabel}>
+      {cards.map((card) => (
+        <article className="site-signal-row" key={card.label}>
+          <span className="site-signal-value">{card.value}</span>
+          <div>
+            <h2>{card.label}</h2>
+            <p>{card.detail}</p>
+          </div>
+        </article>
+      ))}
+    </aside>
+  );
+}
+
 function PublicLanding() {
   return (
     <main className="site-shell site-home-shell">
@@ -514,6 +558,27 @@ function PublicLanding() {
 
 function PublicBenchmarkIndex() {
   const isCompactLayout = useCompactLayout(480);
+  const showInFlowSummary = useCompactLayout(640);
+  const benchmarkIndexLead = showInFlowSummary
+    ? "The benchmark index shows which slices are public, which release is current, and whether publication is complete, partial, or withheld."
+    : "The benchmark index is release-oriented, not run-oriented. It shows which benchmark slices are public, which release is current, and whether the visible numbers are complete, partial, or historically superseded.";
+  const benchmarkIndexSummaryCards: PublicBenchmarkSummaryCard[] = [
+    {
+      detail: "Public benchmark release summaries listed on the apex site.",
+      label: "Released slices",
+      value: publicBenchmarks.length.toString().padStart(2, "0")
+    },
+    {
+      detail: "Each benchmark card points at one current public release state.",
+      label: "Latest reference",
+      value: "01"
+    },
+    {
+      detail: "Partial publication stays visible as scope, not benchmark failure.",
+      label: "Data-quality first",
+      value: "QA"
+    }
+  ];
 
   const benchmarkCards = (
     <section
@@ -558,11 +623,7 @@ function PublicBenchmarkIndex() {
             Public benchmark releases
           </p>
           <h1>Read the current public benchmark slices without dropping into portal internals.</h1>
-          <p className="site-lead">
-            The benchmark index is release-oriented, not run-oriented. It shows which benchmark
-            slices are public, which release is current, and whether the visible numbers are
-            complete, partial, or historically superseded.
-          </p>
+          <p className="site-lead">{benchmarkIndexLead}</p>
           <div className="hero-actions">
             <a className="button" href={buildBenchmarkReportUrl(publicBenchmarks[0].benchmarkVersionId)}>
               Open latest release
@@ -572,30 +633,11 @@ function PublicBenchmarkIndex() {
             </a>
           </div>
         </div>
-
-        <aside className="site-signal-column" aria-label="Benchmark index summary">
-          <article className="site-signal-row">
-            <span className="site-signal-value">{publicBenchmarks.length.toString().padStart(2, "0")}</span>
-            <div>
-              <h2>Released slices</h2>
-              <p>Each card points at one public benchmark release summary instead of a private run table.</p>
-            </div>
-          </article>
-          <article className="site-signal-row">
-            <span className="site-signal-value">01</span>
-            <div>
-              <h2>Latest reference</h2>
-              <p>Each benchmark lists one current public reference point and its release state.</p>
-            </div>
-          </article>
-          <article className="site-signal-row">
-            <span className="site-signal-value">QA</span>
-            <div>
-              <h2>Data-quality first</h2>
-              <p>Partial or withheld publication is called out as release scope, not benchmark failure.</p>
-            </div>
-          </article>
-        </aside>
+        <PublicBenchmarkSummary
+          ariaLabel="Benchmark index summary"
+          cards={benchmarkIndexSummaryCards}
+          compact={showInFlowSummary}
+        />
       </section>
 
       {benchmarkCards}
@@ -629,6 +671,7 @@ function PublicBenchmarkReport({
 }: {
   benchmarkVersionId: string;
 }) {
+  const showInFlowSummary = useCompactLayout(640);
   const report =
     publicBenchmarkReports[benchmarkVersionId as keyof typeof publicBenchmarkReports] ?? null;
 
@@ -666,9 +709,15 @@ function PublicBenchmarkReport({
     );
   }
 
+  const reportSummaryCards: PublicBenchmarkSummaryCard[] = report.summaryCards.map((card) => ({
+    detail: report.releaseLabel,
+    label: card.label,
+    value: card.value
+  }));
+
   return (
     <main className="site-shell site-benchmark-shell site-benchmark-report-shell">
-        <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl(benchmarksRoute)} />
+      <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl(benchmarksRoute)} />
 
       <section className="site-hero">
         <div className="site-hero-copy">
@@ -689,18 +738,11 @@ function PublicBenchmarkReport({
             </a>
           </div>
         </div>
-
-        <aside className="site-signal-column" aria-label="Release summary">
-          {report.summaryCards.map((card) => (
-            <article className="site-signal-row" key={card.label}>
-              <span className="site-signal-value">{card.value}</span>
-              <div>
-                <h2>{card.label}</h2>
-                <p>{report.releaseLabel}</p>
-              </div>
-            </article>
-          ))}
-        </aside>
+        <PublicBenchmarkSummary
+          ariaLabel="Release summary"
+          cards={reportSummaryCards}
+          compact={showInFlowSummary}
+        />
       </section>
 
       <section className="site-band-grid" aria-label="Release metadata">
