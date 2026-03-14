@@ -1,4 +1,5 @@
 import path from "node:path";
+import { rejectedOfflineIngestExitCode } from "./cli-contract.js";
 import { runProblem9OfflineIngest } from "./problem9-offline-ingest.js";
 
 export async function runProblem9OfflineIngestCli(args: string[]): Promise<void> {
@@ -47,7 +48,7 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
 
   if (parsedOptions.status === "rejected") {
     console.error(JSON.stringify(parsedOptions, null, 2));
-    process.exitCode = 1;
+    process.exitCode = rejectedOfflineIngestExitCode(parsedOptions.stage);
     return;
   }
 
@@ -58,7 +59,7 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
 
   if (result.status === "rejected") {
     console.error(JSON.stringify(result, null, 2));
-    process.exitCode = 1;
+    process.exitCode = rejectedOfflineIngestExitCode(result.stage);
     return;
   }
 

@@ -8,6 +8,7 @@
     "materialize:problem9-package": "tsx src/index.ts materialize-problem9-package",
     "materialize:problem9-prompt-package": "tsx src/index.ts materialize-problem9-prompt-package",
     "materialize:problem9-run-bundle": "tsx src/index.ts materialize-problem9-run-bundle",
+    "test:cli-contract": "bun --cwd ../../packages/shared build && node --import tsx --test test/worker-cli-contract.test.ts",
     "test:cli-smoke": "node --import tsx --test test/worker-cli-smoke.test.ts",
     "test:run-bundle": "node --import tsx --test src/lib/problem9-run-bundle.test.ts",
     "run:problem9-attempt": "tsx src/index.ts run-problem9-attempt",

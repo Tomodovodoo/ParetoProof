@@ -414,7 +414,7 @@ test("runProblem9OfflineIngestCli emits JSON setup failures for missing flags", 
   await runProblem9OfflineIngestCli(["--bundle-root", path.join(os.tmpdir(), "bundle-root")]);
 
   assert.equal(stdoutLines.length, 0);
-  assert.equal(process.exitCode, 1);
+  assert.equal(process.exitCode, 2);
   assert.deepEqual(JSON.parse(stderrLines.join("\n")), {
     bundleRoot: null,
     endpoint: null,
@@ -426,6 +426,66 @@ test("runProblem9OfflineIngestCli emits JSON setup failures for missing flags", 
       }
     ],
     stage: "setup_failure",
+    status: "rejected"
+  });
+});
+
+test("runProblem9OfflineIngestCli uses runtime exit code for remote rejections", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+  const originalExitCode = process.exitCode;
+  const originalConsoleError = console.error;
+  const originalConsoleLog = console.log;
+  const originalFetch = globalThis.fetch;
+  const originalApiBaseUrl = process.env.API_BASE_URL;
+  const stderrLines: string[] = [];
+  const stdoutLines: string[] = [];
+
+  process.exitCode = undefined;
+  console.error = (...args: unknown[]) => {
+    stderrLines.push(args.map(String).join(" "));
+  };
+  console.log = (...args: unknown[]) => {
+    stdoutLines.push(args.map(String).join(" "));
+  };
+  globalThis.fetch = async () => {
+    throw new Error("connect ECONNREFUSED 127.0.0.1");
+  };
+  process.env.API_BASE_URL = "https://api.paretoproof.com";
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+    process.exitCode = originalExitCode;
+    console.error = originalConsoleError;
+    console.log = originalConsoleLog;
+    globalThis.fetch = originalFetch;
+    if (originalApiBaseUrl === undefined) {
+      delete process.env.API_BASE_URL;
+    } else {
+      process.env.API_BASE_URL = originalApiBaseUrl;
+    }
+  });
+
+  await runProblem9OfflineIngestCli([
+    "--bundle-root",
+    bundleRoot,
+    "--access-jwt",
+    "test-access-jwt"
+  ]);
+
+  assert.equal(stdoutLines.length, 0);
+  assert.equal(process.exitCode, 3);
+  assert.deepEqual(JSON.parse(stderrLines.join("\n")), {
+    bundleRoot,
+    endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
+    error: "offline_ingest_transport_error",
+    issues: [
+      {
+        message: "connect ECONNREFUSED 127.0.0.1"
+      }
+    ],
+    stage: "remote_rejection",
     status: "rejected"
   });
 });
