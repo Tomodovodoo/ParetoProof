@@ -1,9 +1,16 @@
-const authOrigin = "https://auth.paretoproof.com";
 const portalOrigin = "https://portal.paretoproof.com";
 
 function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
+
+const brandedHosts = new Set([
+  "paretoproof.com",
+  "auth.paretoproof.com",
+  "github.auth.paretoproof.com",
+  "google.auth.paretoproof.com",
+  "portal.paretoproof.com"
+]);
 
 function isLocalHostname(hostname: string) {
   return (
@@ -39,19 +46,17 @@ function sanitizeRedirectPath(rawRedirectPath: string | null) {
   }
 }
 
-function buildAuthRetryUrl(redirectPath: string) {
-  const authUrl = new URL(authOrigin);
-
-  if (redirectPath !== "/") {
-    authUrl.searchParams.set("redirect", redirectPath);
+function resolveApiBaseUrl(requestUrl: URL) {
+  if (
+    requestUrl.protocol === "http:" &&
+    requestUrl.port !== "" &&
+    brandedHosts.has(requestUrl.hostname)
+  ) {
+    const localApiUrl = new URL(requestUrl.origin);
+    localApiUrl.port = "3000";
+    return trimTrailingSlash(localApiUrl.origin);
   }
 
-  authUrl.searchParams.set("handoff", "retry");
-
-  return authUrl.toString();
-}
-
-function resolveApiBaseUrl(requestUrl: URL) {
   if (
     requestUrl.hostname === "paretoproof.com" ||
     requestUrl.hostname.endsWith(".paretoproof.com")
@@ -69,40 +74,14 @@ function resolveApiBaseUrl(requestUrl: URL) {
   return "https://api.paretoproof.com";
 }
 
-function resolvePortalRedirectTarget(rawRedirectTarget: unknown, fallbackRedirectPath: string) {
-  if (typeof rawRedirectTarget !== "string" || rawRedirectTarget.length === 0) {
-    return new URL(fallbackRedirectPath, portalOrigin).toString();
+function buildFinalizeSubmitUrl(requestUrl: URL, redirectPath: string) {
+  const apiUrl = new URL("/portal/session/finalize/submit", resolveApiBaseUrl(requestUrl));
+
+  if (redirectPath !== "/") {
+    apiUrl.searchParams.set("redirect", redirectPath);
   }
 
-  try {
-    const targetUrl = new URL(rawRedirectTarget);
-
-    if (targetUrl.origin !== portalOrigin) {
-      return null;
-    }
-
-    return targetUrl.toString();
-  } catch {
-    return null;
-  }
-}
-
-function readSetCookieHeaders(headers: Headers) {
-  const cookieHeaders = headers as Headers & {
-    getAll?: (name: string) => string[];
-    getSetCookie?: () => string[];
-  };
-
-  if (typeof cookieHeaders.getSetCookie === "function") {
-    return cookieHeaders.getSetCookie();
-  }
-
-  if (typeof cookieHeaders.getAll === "function") {
-    return cookieHeaders.getAll("set-cookie");
-  }
-
-  const singleCookieHeader = headers.get("set-cookie");
-  return singleCookieHeader ? [singleCookieHeader] : [];
+  return apiUrl.toString();
 }
 
 async function readRedirectPath(request: Request) {
@@ -130,81 +109,24 @@ async function readRedirectPath(request: Request) {
   );
 }
 
-function buildRedirectResponse(targetUrl: string, responseHeaders?: Headers) {
+function buildRedirectResponse(targetUrl: string, status = 303) {
   const headers = new Headers({
     "cache-control": "no-store",
     location: targetUrl
   });
 
-  for (const cookieValue of responseHeaders ? readSetCookieHeaders(responseHeaders) : []) {
-    headers.append("set-cookie", cookieValue);
-  }
-
   return new Response(null, {
     headers,
-    status: 303
+    status
   });
 }
 
 export async function handleAccessFinalize(request: Request) {
   const redirectPath = await readRedirectPath(request);
-  const retryUrl = buildAuthRetryUrl(redirectPath);
   const requestUrl = new URL(request.url);
-  const apiUrl = new URL("/portal/session/finalize", resolveApiBaseUrl(requestUrl));
-  const forwardedHeaders = new Headers({
-    accept: "application/json",
-    "content-type": "application/json"
-  });
-  const accessAssertion = request.headers.get("cf-access-jwt-assertion");
-  const cookieHeader = request.headers.get("cookie");
+  const submitUrl = buildFinalizeSubmitUrl(requestUrl, redirectPath);
 
-  if (accessAssertion) {
-    forwardedHeaders.set("cf-access-jwt-assertion", accessAssertion);
-  }
-
-  if (cookieHeader) {
-    forwardedHeaders.set("cookie", cookieHeader);
-  }
-
-  let finalizeResponse: Response;
-
-  try {
-    finalizeResponse = await fetch(apiUrl.toString(), {
-      body: JSON.stringify(
-        redirectPath === "/"
-          ? {}
-          : {
-              redirect: redirectPath
-            }
-      ),
-      headers: forwardedHeaders,
-      method: "POST",
-      redirect: "manual"
-    });
-  } catch {
-    return buildRedirectResponse(retryUrl);
-  }
-
-  if (!finalizeResponse.ok) {
-    return buildRedirectResponse(retryUrl);
-  }
-
-  let responseBody: unknown;
-
-  try {
-    responseBody = await finalizeResponse.json();
-  } catch {
-    return buildRedirectResponse(retryUrl, finalizeResponse.headers);
-  }
-
-  const redirectTarget = resolvePortalRedirectTarget(
-    (responseBody as { redirectTo?: unknown }).redirectTo,
-    redirectPath
-  );
-
-  if (!redirectTarget) {
-    return buildRedirectResponse(retryUrl, finalizeResponse.headers);
-  }
-
-  return buildRedirectResponse(redirectTarget, finalizeResponse.headers);
+  // Preserve the browser's form POST so the API audience can establish its own
+  // Access session instead of completing the handoff only on the auth Pages runtime.
+  return buildRedirectResponse(submitUrl, 307);
 }

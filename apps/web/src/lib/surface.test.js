@@ -67,7 +67,15 @@ describe("buildPortalUrl", () => {
     setWindowUrl("http://github.auth.paretoproof.com:4371/");
 
     expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "http://github.auth.paretoproof.com:3000/portal/session/finalize?redirect=%2Fprofile"
+      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?redirect=%2Fprofile"
+    );
+  });
+
+  it("uses the protected API finalize submit endpoint on branded auth hosts", () => {
+    setWindowUrl("https://google.auth.paretoproof.com/");
+
+    expect(buildAccessFinalizeUrl("/profile")).toBe(
+      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fprofile"
     );
   });
 });

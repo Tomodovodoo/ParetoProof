@@ -146,3 +146,42 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
     ok: true
   });
 });
+
+test("trusted mutation origin hook allows branded auth POSTs to the finalize submit handoff", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOrigins: [
+        "https://auth.paretoproof.com",
+        "https://github.auth.paretoproof.com",
+        "https://google.auth.paretoproof.com",
+        "https://portal.paretoproof.com"
+      ]
+    })
+  );
+
+  app.post("/portal/session/finalize/submit", async () => ({ ok: true }));
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      redirect: "/profile"
+    },
+    url: "/portal/session/finalize/submit",
+    headers: {
+      origin: "https://github.auth.paretoproof.com"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    ok: true
+  });
+});
