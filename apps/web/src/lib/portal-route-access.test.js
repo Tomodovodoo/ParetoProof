@@ -43,4 +43,27 @@ describe("resolvePortalRouteRedirect", () => {
     expect(redirect.searchParams.get("roles")).toBe("helper");
     expect(redirect.searchParams.has("reason")).toBe(false);
   });
+
+  it("strips stale approved roles from pending routes", () => {
+    setWindowUrl(
+      "http://localhost/admin/users?surface=portal&access=pending&roles=admin&email=ada@paretoproof.local"
+    );
+
+    const redirect = new URL(
+      resolvePortalRouteRedirect({
+        pathname: "/admin/users",
+        roles: [],
+        search:
+          "?surface=portal&access=pending&roles=admin&email=ada@paretoproof.local",
+        status: "pending"
+      }),
+      "http://localhost"
+    );
+
+    expect(redirect.pathname).toBe("/pending");
+    expect(redirect.searchParams.get("surface")).toBe("portal");
+    expect(redirect.searchParams.get("access")).toBe("pending");
+    expect(redirect.searchParams.get("email")).toBe("ada@paretoproof.local");
+    expect(redirect.searchParams.has("roles")).toBe(false);
+  });
 });
