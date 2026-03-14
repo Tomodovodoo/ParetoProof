@@ -434,8 +434,8 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   const layout = (
     <section className="portal-admin-layout">
       <aside className="portal-admin-list-shell">
-        {isCompactLayout ? userList : filterFields}
         {isCompactLayout ? filterFields : userList}
+        {isCompactLayout ? userList : filterFields}
       </aside>
 
       <section className="portal-admin-detail-shell" ref={detailShellRef}>
