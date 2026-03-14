@@ -706,6 +706,18 @@ test("POST /portal/admin/access-requests/:id/approve grants a role and audits st
     insertedAuditEvents.map((entry) => entry.eventId),
     ["access_request.approved", "role_grant.granted"]
   );
+  assert.deepEqual(insertedAuditEvents[0]?.payload, {
+    accessRequestId: requestRow.id,
+    actorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    approvedRole: "collaborator",
+    requestKind: "access_request",
+    targetUserId: targetUser.id
+  });
+  assert.deepEqual(insertedAuditEvents[1]?.payload, {
+    actorUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    grantedRole: "collaborator",
+    targetUserId: targetUser.id
+  });
 });
 
 test("POST /portal/admin/access-requests/:id/approve rejects first approval when no linked identity exists", async (t) => {
@@ -816,6 +828,68 @@ test("POST /portal/admin/access-requests/:id/approve rejects stale standard appr
 
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().error, "access_request_stale_for_approved_user");
+});
+
+test("POST /portal/admin/access-requests/:id/approve returns a stale-request conflict for already-reviewed requests", async (t) => {
+  const requestRow = buildAccessRequest({
+    decisionNote: "Already handled",
+    reviewedAt: new Date("2026-03-13T19:22:00.000Z"),
+    reviewedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    status: "approved"
+  });
+  let touchedWritePath = false;
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+        };
+        insert: () => { values: () => Promise<never> };
+        select: () => { from: () => { where: () => Promise<never> } };
+        update: () => { set: () => { where: () => Promise<never> } };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        insert() {
+          touchedWritePath = true;
+          throw new Error("should not insert");
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          }
+        },
+        select() {
+          touchedWritePath = true;
+          throw new Error("should not select roles");
+        },
+        update() {
+          touchedWritePath = true;
+          throw new Error("should not update");
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "collaborator",
+      decisionNote: "Should fail as stale"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_request_not_pending");
+  assert.equal(response.json().item.status, "approved");
+  assert.equal(touchedWritePath, false);
 });
 
 test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific conflict payload", async (t) => {
@@ -1116,6 +1190,62 @@ test("POST /portal/admin/access-requests/:id/reject records the decision note an
   );
 });
 
+test("POST /portal/admin/access-requests/:id/reject returns a stale-request conflict for already-reviewed requests", async (t) => {
+  const requestRow = buildAccessRequest({
+    decisionNote: "Already rejected",
+    reviewedAt: new Date("2026-03-13T19:25:00.000Z"),
+    reviewedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    status: "rejected"
+  });
+  let touchedWritePath = false;
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow> };
+        };
+        insert: () => { values: () => Promise<never> };
+        update: () => { set: () => { where: () => Promise<never> } };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        insert() {
+          touchedWritePath = true;
+          throw new Error("should not insert");
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => requestRow
+          }
+        },
+        update() {
+          touchedWritePath = true;
+          throw new Error("should not update");
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      decisionNote: "Should fail as stale"
+    },
+    url: `/portal/admin/access-requests/${requestRow.id}/reject`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_request_not_pending");
+  assert.equal(response.json().item.status, "rejected");
+  assert.equal(touchedWritePath, false);
+});
+
 test("POST /portal/admin/users/:id/revoke-role revokes the role, invalidates active sessions, and audits the reason", async (t) => {
   const reviewer = buildUser({
     displayName: "Admin Reviewer",
@@ -1377,6 +1507,74 @@ test("POST /portal/admin/users/:id/revoke-role rejects active admin grants", asy
 
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().error, "admin_user_role_not_revocable");
+});
+
+test("POST /portal/admin/users/:id/revoke-role returns a conflict when concurrent revocation wins first", async (t) => {
+  const targetUser = buildUser();
+  const activeRoleGrant = buildRoleGrant();
+  const db = {
+    query: {
+      users: {
+        findFirst: async () => null
+      }
+    },
+    transaction: async (
+      callback: (tx: {
+        query: {
+          roleGrants: { findFirst: () => Promise<typeof activeRoleGrant> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        update: () => {
+          set: () => {
+            where: () => {
+              returning: () => Promise<[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          roleGrants: {
+            findFirst: async () => activeRoleGrant
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning: async () => []
+                  };
+                }
+              };
+            }
+          };
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      reason: "Concurrent revoke"
+    },
+    url: `/portal/admin/users/${targetUser.id}/revoke-role`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "admin_user_role_revocation_conflict");
 });
 
 test("admin-only mutation routes reject non-admin callers before touching the database", async (t) => {
