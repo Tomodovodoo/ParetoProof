@@ -20,129 +20,92 @@ const publicBenchmarks = [
     benchmarkVersionId: "problem-9-v1",
     description:
       "Offline Lean proof-generation bundle focused on reproducible execution, failure taxonomy, and benchmark-package integrity.",
-    headlineMetric: "61% pass rate",
-    latestReleaseLabel: "Release 2026-03",
-    releaseStatus: "complete",
-    scopeNote: "Single released slice covering the current Problem 9 proof-generation bundle.",
+    headlineMetric: "In progress",
+    latestReleaseLabel: "Pending first release",
+    releaseStatus: "in_development",
+    scopeNote: "The benchmark package is being built and validated. Results will be published here once the first release is ready.",
     taskType: "Proof generation",
     title: "Problem 9"
   },
   {
     benchmarkVersionId: "statement-formalization-pilot-v1",
     description:
-      "Pilot release for public statement-formalization reporting while canonical artifact and verification contracts stabilize.",
-    headlineMetric: "Partial publication",
-    latestReleaseLabel: "Release 2026-02",
-    releaseStatus: "partial",
-    scopeNote: "Published subset only while the remaining benchmark package stays withheld for methodology review.",
+      "Statement-formalization benchmark covering formal mathematical statement translation and verification.",
+    headlineMetric: "Planned",
+    latestReleaseLabel: "Pending pilot release",
+    releaseStatus: "planned",
+    scopeNote: "This benchmark is in early development. Methodology and verification contracts are being defined.",
     taskType: "Statement formalization",
-    title: "Statement Formalization Pilot"
+    title: "Statement Formalization"
   }
 ] as const;
 
 const publicBenchmarkReports = {
   "problem-9-v1": {
     benchmarkVersionId: "problem-9-v1",
-    completeness: "complete",
-    dateLabel: "March 2026",
+    completeness: "in_development",
+    dateLabel: "TBD",
     description:
-      "Public release for the Problem 9 proof-generation benchmark slice under the current offline run-bundle contract.",
-    includedConfigs: "3 configs",
-    latestStatus: "mixed",
+      "The Problem 9 benchmark is being developed. This page will show results once the first public release is ready.",
+    includedConfigs: "TBD",
+    latestStatus: "in_development",
     methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
-      "Complete public release for the current disclosed slice. Held-out or internal-only benchmark material remains out of scope for this report.",
-    qualityState: "complete",
-    releaseLabel: "Release 2026-03",
-    results: [
-      {
-        displayLabel: "OpenAI GPT-OSS",
-        includedCount: "36 / 59 solved",
-        providerLabel: "OpenAI family",
-        status: "mixed",
-        updatedAt: "Updated Mar 2026"
-      },
-      {
-        displayLabel: "Claude Sonnet",
-        includedCount: "31 / 59 solved",
-        providerLabel: "Anthropic family",
-        status: "mixed",
-        updatedAt: "Updated Mar 2026"
-      },
-      {
-        displayLabel: "Gemini 2.5 Pro",
-        includedCount: "24 / 59 solved",
-        providerLabel: "Google family",
-        status: "fail",
-        updatedAt: "Updated Mar 2026"
-      }
-    ],
+      "No results have been published yet. The benchmark package and methodology are still being validated.",
+    qualityState: "in_development",
+    releaseLabel: "Not yet released",
+    results: [],
     scopeNote:
-      "Includes the currently disclosed proof-generation benchmark package and released model configurations only.",
+      "Results will appear here once the benchmark package is validated and the first release is published.",
     summaryCards: [
-      { label: "Configs included", value: "03" },
-      { label: "Evaluated items", value: "59" },
-      { label: "Solved count", value: "36 top score" },
-      { label: "Release state", value: "complete" }
+      { label: "Status", value: "Building" },
+      { label: "Configs", value: "TBD" },
+      { label: "Models", value: "TBD" },
+      { label: "Release", value: "Pending" }
     ],
-    title: "Problem 9 public release"
+    title: "Problem 9 — in development"
   },
   "statement-formalization-pilot-v1": {
     benchmarkVersionId: "statement-formalization-pilot-v1",
-    completeness: "partial",
-    dateLabel: "February 2026",
+    completeness: "planned",
+    dateLabel: "TBD",
     description:
-      "Public pilot release for statement-formalization reporting while the remaining package stays withheld for methodology and verification review.",
-    includedConfigs: "2 configs",
-    latestStatus: "partial",
+      "The statement formalization benchmark is in early planning. Methodology and verification contracts are being defined.",
+    includedConfigs: "TBD",
+    latestStatus: "planned",
     methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
-      "Partial publication: some intended rows are still withheld while the canonical formal-statement verification policy is finalized.",
-    qualityState: "partial",
-    releaseLabel: "Release 2026-02",
-    results: [
-      {
-        displayLabel: "OpenAI GPT-OSS",
-        includedCount: "18 / 34 solved",
-        providerLabel: "OpenAI family",
-        status: "mixed",
-        updatedAt: "Updated Feb 2026"
-      },
-      {
-        displayLabel: "Claude Sonnet",
-        includedCount: "14 / 34 solved",
-        providerLabel: "Anthropic family",
-        status: "mixed",
-        updatedAt: "Updated Feb 2026"
-      }
-    ],
+      "This benchmark has not been released yet. The methodology is still being designed.",
+    qualityState: "planned",
+    releaseLabel: "Not yet released",
+    results: [],
     scopeNote:
-      "Covers only the public pilot subset. Withheld statement sets are excluded from all shown metrics.",
+      "No results yet — this benchmark is in the design phase.",
     summaryCards: [
-      { label: "Configs included", value: "02" },
-      { label: "Evaluated items", value: "34" },
-      { label: "Solved count", value: "18 top score" },
-      { label: "Release state", value: "partial" }
+      { label: "Status", value: "Planning" },
+      { label: "Configs", value: "TBD" },
+      { label: "Models", value: "TBD" },
+      { label: "Release", value: "Planned" }
     ],
-    title: "Statement formalization pilot release"
+    title: "Statement Formalization — planned"
   }
 } as const;
 
 const publicSignals = [
   {
     detail: "versioned harness, locked inputs, full environment metadata per run",
-    label: "Reproducible runs",
-    value: "22"
+    label: "Reproducibility",
+    value: "Built in"
   },
   {
-    detail: "proof generation and statement formalization with public release tracking",
+    detail: "proof generation and statement formalization benchmarks in development",
     label: "Benchmark types",
-    value: "2 active"
+    value: "2 planned"
   },
   {
-    detail: "GPT, Claude, and Gemini families evaluated under identical conditions",
-    label: "Models tested",
-    value: "3 families"
+    detail: "containerized replay so anyone can verify results independently",
+    label: "Verification",
+    value: "Open"
   }
 ];
 
@@ -216,7 +179,7 @@ const contributorSteps: Array<{
 }> = [
   {
     body:
-      "Start with the project pack, benchmark reporting, and update surfaces so you understand the current product boundary before requesting access.",
+      "Start by reading about the project and benchmarks so you understand what ParetoProof does before requesting access.",
     icon: "compass",
     kicker: "Step 1",
     title: "Understand the project"
@@ -670,22 +633,22 @@ function PublicLanding() {
 function PublicBenchmarkIndex() {
   const isCompactLayout = useCompactLayout(480);
   const showInFlowSummary = useCompactLayout(640);
-  const benchmarkIndexLead = "Browse released benchmark slices, see which models were tested, and open detailed release summaries with methodology and results.";
+  const benchmarkIndexLead = "See which benchmarks are being developed, track their progress, and access results and methodology once they are released.";
   const benchmarkIndexSummaryCards: PublicBenchmarkSummaryCard[] = [
     {
-      detail: "Public benchmark release summaries listed on the apex site.",
-      label: "Released slices",
+      detail: "Benchmark types currently being developed.",
+      label: "Benchmarks",
       value: publicBenchmarks.length.toString().padStart(2, "0")
     },
     {
-      detail: "Each benchmark card points at one current public release state.",
-      label: "Latest reference",
-      value: "01"
+      detail: "All benchmarks use versioned, reproducible execution.",
+      label: "Approach",
+      value: "Reproducible"
     },
     {
-      detail: "Partial publication stays visible as scope, not benchmark failure.",
-      label: "Data-quality first",
-      value: "QA"
+      detail: "Results will include full methodology and scope documentation.",
+      label: "Transparency",
+      value: "Open"
     }
   ];
 
@@ -701,13 +664,7 @@ function PublicBenchmarkIndex() {
             <h3>{benchmark.title}</h3>
             <p>{benchmark.description}</p>
             <p>
-              Latest release: <strong>{benchmark.latestReleaseLabel}</strong>
-            </p>
-            <p>
               Status: <strong>{formatReleaseStatus(benchmark.releaseStatus)}</strong>
-            </p>
-            <p>
-              Headline metric: <strong>{benchmark.headlineMetric}</strong>
             </p>
             <p>{benchmark.scopeNote}</p>
           </div>
@@ -720,21 +677,21 @@ function PublicBenchmarkIndex() {
   );
 
   const reportingRules = (
-    <section className="site-band-grid" aria-label="Reporting rules">
+    <section className="site-band-grid" aria-label="Methodology">
       <article className="site-band">
-        <p className="section-tag">Release flow</p>
-        <h2>Public reporting stays release-centric.</h2>
+        <p className="section-tag">Methodology</p>
+        <h2>How results are produced</h2>
         <p>
-          Benchmark cards route into one release summary page with stable top-line metrics,
-          one visible notice block, and links to methodology rather than private evidence consoles.
+          Each benchmark run uses a versioned harness with locked inputs and full
+          environment metadata, so results are comparable across time and models.
         </p>
       </article>
       <article className="site-band">
-        <p className="section-tag">What not to expect</p>
-        <h2>No public run drilldown.</h2>
+        <p className="section-tag">Coming soon</p>
+        <h2>Docker replay</h2>
         <p>
-          Per-run evidence, artifact inspection, and operational rerun context remain in the
-          authenticated portal. The public site only shows released benchmark slices.
+          We are building fully containerized Docker images so you can replay any
+          benchmark run yourself, bring your own API keys, and independently verify results.
         </p>
       </article>
     </section>
@@ -773,7 +730,7 @@ function PublicBenchmarkIndex() {
               Open latest release
             </a>
             <a className="button button-secondary" href={buildPublicUrl(projectRoute)}>
-              Read the project pack
+              About the project
             </a>
           </div>
         </div>
@@ -840,7 +797,7 @@ function PublicBenchmarkReport({
                 Return to benchmark index
               </a>
               <a className="button button-secondary" href={buildPublicUrl(projectRoute)}>
-                Read the project pack
+                About the project
               </a>
             </div>
           </div>
@@ -914,36 +871,50 @@ function PublicBenchmarkReport({
           <p>
             Outcome state: <strong>{formatReleaseStatus(report.latestStatus)}</strong>
           </p>
-          <p>Portal drilldown and per-run evidence remain out of scope for the public release page.</p>
+          <p>Detailed per-run evidence is available to approved contributors in the portal.</p>
         </article>
       </section>
 
-      <section className="site-project-section" aria-label="Public results table">
+      <section className="site-project-section" aria-label="Results">
         <div className="site-section-copy">
-          <p className="section-tag">Primary public results</p>
-          <h2>Results by model</h2>
-          <p className="site-lead">
-            Each model family is evaluated under identical benchmark conditions.
-          </p>
+          <p className="section-tag">Results</p>
+          {report.results.length > 0 ? (
+            <>
+              <h2>Results by model</h2>
+              <p className="site-lead">
+                Each model family is evaluated under identical benchmark conditions.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>No results published yet</h2>
+              <p className="site-lead">
+                This benchmark is still in development. Results will be published here
+                once the first release is ready.
+              </p>
+            </>
+          )}
         </div>
 
-        <div className="site-card-grid">
-          {report.results.map((row) => (
-            <article className="site-panel-card" key={row.displayLabel}>
-              <div className="site-panel-copy">
-                <p className="section-tag">{row.providerLabel}</p>
-                <h3>{row.displayLabel}</h3>
-                <p>
-                  Solved or pass summary: <strong>{row.includedCount}</strong>
-                </p>
-                <p>
-                  Status: <strong>{formatReleaseStatus(row.status)}</strong>
-                </p>
-                <p>{row.updatedAt}</p>
-              </div>
-            </article>
-          ))}
-        </div>
+        {report.results.length > 0 ? (
+          <div className="site-card-grid">
+            {report.results.map((row) => (
+              <article className="site-panel-card" key={row.displayLabel}>
+                <div className="site-panel-copy">
+                  <p className="section-tag">{row.providerLabel}</p>
+                  <h3>{row.displayLabel}</h3>
+                  <p>
+                    Solved: <strong>{row.includedCount}</strong>
+                  </p>
+                  <p>
+                    Status: <strong>{formatReleaseStatus(row.status)}</strong>
+                  </p>
+                  <p>{row.updatedAt}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <PublicFooter isProjectRoute={false} />
@@ -994,27 +965,13 @@ function PublicProjectPack() {
         </p>
       </div>
 
-      <div className="site-editorial-grid">
-        <div className="site-editorial-copy">
-          <p>
-            ParetoProof is a benchmark platform first, not a generic AI showcase. The public
-            site should explain the mission, make the trust boundary obvious, and point
-            people toward the right next step without turning every idea into its own page.
-          </p>
-          <p>
-            That means one coherent public project route, one benchmark route, and one docs
-            index. Everything else should either live in the portal or stay in implementation
-            docs until it becomes a real user-facing surface.
-          </p>
-        </div>
-        <div className="site-topic-list" aria-label="Project overview points">
-          {projectOverviewPoints.map((point) => (
-            <article className="site-topic-item" key={point.title}>
-              <h3>{point.title}</h3>
-              <p>{point.body}</p>
-            </article>
-          ))}
-        </div>
+      <div className="site-topic-list" aria-label="Project overview points">
+        {projectOverviewPoints.map((point) => (
+          <article className="site-topic-item" key={point.title}>
+            <h3>{point.title}</h3>
+            <p>{point.body}</p>
+          </article>
+        ))}
       </div>
     </article>
   );
