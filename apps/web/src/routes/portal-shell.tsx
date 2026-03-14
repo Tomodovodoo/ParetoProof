@@ -256,6 +256,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     activeSection?.id === "runs" ||
     activeSection?.id === "launch" ||
     activeSection?.id === "workers";
+  const overviewRouteActive = activeSection?.id === "overview";
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
   const activeRouteId = matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
   const activeFreshnessPolicy = useMemo(
@@ -339,6 +340,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   return (
     <main
       className={`portal-shell${
+        overviewRouteActive ? " portal-shell-overview-active" : ""
+      }${
         activeSection?.id === "profile" ? " portal-shell-profile-active" : ""
       }${
         benchmarkOpsRouteActive ? " portal-shell-benchmark-ops-active" : ""
@@ -459,7 +462,6 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
         {activeSection?.id === "overview" ? (
           <>
-            {compactLayout ? overviewActionRail : null}
             <section className="portal-metric-strip" aria-label="Portal metrics">
               {overviewMetrics.map((metric) => (
                 <article className="portal-metric-cell" key={metric.label}>
@@ -469,6 +471,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 </article>
               ))}
             </section>
+            {compactLayout ? overviewActionRail : null}
 
             <section className="portal-overview-grid">
               <article className="portal-panel portal-overview-lead">
