@@ -5,6 +5,9 @@
 ## Linked issues
 
 - Closes #
+- Replace the placeholder with real issue references before opening or merging.
+- Use literal markdown such as `Closes #123` or `Related: #456`; do not leave the placeholder blank and do not paste escaped `\n` text.
+- If there is intentionally no issue, say so explicitly here.
 
 ## Verification
 

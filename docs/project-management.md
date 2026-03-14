@@ -59,6 +59,8 @@ Execution work should land through a pull request, not through direct pushes to 
 - Open a dedicated branch for the issue.
 - Open a PR against `main`.
 - Fill in the PR template with linked issues, exact verification commands, and any required security notes.
+- The PR body must contain real GitHub issue references such as `Closes #123` or `Related: #456` in normal markdown text. Do not leave the placeholder `Closes #` line empty, and do not paste escaped `\n` sequences that prevent GitHub from parsing the reference.
+- If a PR intentionally has no linked issue, say that explicitly in the PR body so the missing link is a conscious exception instead of silent drift.
 - Merge the PR into `main`.
 - Close the issue only after the relevant PR has merged into `main`.
 
