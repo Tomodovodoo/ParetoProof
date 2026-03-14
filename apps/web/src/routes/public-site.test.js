@@ -66,7 +66,7 @@ describe("PublicSite", () => {
   it("renders the benchmark index on /benchmarks", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/benchmarks");
 
-    expect(html).toContain("Read the current public benchmark slices");
+    expect(html).toContain("Public benchmark releases.");
     expect(html).toContain("Problem 9");
     expect(html).not.toContain("Measure frontier reasoning with reproducible proof workflows.");
   });
@@ -75,7 +75,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/reports/problem-9-v1");
 
     expect(html).toContain("Problem 9 public release");
-    expect(html).toContain("One release table, presented as calm mobile-safe rows.");
+    expect(html).toContain("Results by model");
     expect(html).not.toContain("site-benchmark-report-partial");
     expect(html).not.toContain("Measure frontier reasoning with reproducible proof workflows.");
   });
@@ -93,9 +93,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/benchmarks", 320);
 
     expect(html).toContain("site-benchmark-index-shell-compact");
-    expect(html.indexOf("Problem 9")).toBeLessThan(
-      html.indexOf("Benchmark status cues stay available after the released slices.")
-    );
+    expect(html.indexOf("Problem 9")).toBeLessThan(html.indexOf("Data-quality first"));
   });
 
   it("keeps the wide benchmark index summary ahead of the release cards", async () => {
@@ -109,9 +107,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/project", 320);
 
     expect(html).toContain("site-project-pack-shell-compact");
-    expect(html.indexOf("Explain the product without duplicating the whole methodology archive.")).toBeLessThan(
-      html.indexOf("Coverage cues stay available after the actual project overview.")
-    );
+    expect(html.indexOf("What is ParetoProof?")).toBeLessThan(html.indexOf("Contact boundary"));
   });
 
   it("keeps the wide project pack coverage in the hero rail", async () => {
@@ -125,9 +121,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/", 320);
 
     expect(html).toContain("site-home-shell-compact");
-    expect(html.indexOf("Evidence before hype")).toBeLessThan(
-      html.indexOf("Project signal cues stay available after the summary bands.")
-    );
+    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Benchmark types"));
   });
 
   it("keeps the wide home signal rail in the hero", async () => {
@@ -140,6 +134,16 @@ describe("PublicSite", () => {
   it("keeps the project pack route intact", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/project");
 
-    expect(html).toContain("One public pack for project context, contributor entry, and contact rules.");
+    expect(html).toContain("About ParetoProof.");
+    expect(html).toContain(
+      "Approved contributors sign in directly. New collaborators use the separate access-request entry"
+    );
+    expect(html).toContain("Read contributor rules");
+    expect(html).toContain("public-content-pack-baseline.md");
+    expect(html).toContain("public-contact-channel-baseline.md");
+    expect(html).toContain("product-surface-boundary-baseline.md");
+    expect(html).toContain("Keep unsupported enrollment and support promises off the public site.");
+    expect(html).toContain("No open self-serve enrollment or waitlist");
+    expect(html).toContain("No public support mailbox or contact form");
   });
 });

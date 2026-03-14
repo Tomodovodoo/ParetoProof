@@ -5,6 +5,9 @@ import { Fragment, useEffect, useState } from "react";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
+const publicContentPackDocsUrl = `${publicDocsBaseUrl}/public-content-pack-baseline.md`;
+const publicContactPolicyDocsUrl = `${publicDocsBaseUrl}/public-contact-channel-baseline.md`;
+const productSurfaceBoundaryDocsUrl = `${publicDocsBaseUrl}/product-surface-boundary-baseline.md`;
 
 const projectRoute = "/project";
 const benchmarksRoute = "/benchmarks";
@@ -230,7 +233,7 @@ const contributorSteps: Array<{
   },
   {
     body:
-      "New collaborators start with a separate access-request entry that verifies identity first, then lands them on the request form for manual review.",
+      "New collaborators use the separate access-request entry, which verifies identity first and lands on the request form for manual review instead of promising open enrollment or automated invitations.",
     icon: "users",
     kicker: "Step 3",
     title: "Request access separately"
@@ -289,6 +292,33 @@ const projectResources: Array<{
 }> = [
   {
     body:
+      "Read the approved scope for the single apex-owned project, contributor, and contact pack instead of assuming separate page trees.",
+    external: true,
+    href: publicContentPackDocsUrl,
+    icon: "grid",
+    label: "Open content scope",
+    title: "Public content boundary"
+  },
+  {
+    body:
+      "See the exact MVP rule that public contact stays on GitHub Discussions and does not become a support mailbox or form.",
+    external: true,
+    href: publicContactPolicyDocsUrl,
+    icon: "shield",
+    label: "Open contact policy",
+    title: "Contact policy"
+  },
+  {
+    body:
+      "Check the route-ownership baseline for what belongs on the public apex, auth entry, and portal surfaces during MVP.",
+    external: true,
+    href: productSurfaceBoundaryDocsUrl,
+    icon: "compass",
+    label: "Open surface boundary",
+    title: "Surface ownership"
+  },
+  {
+    body:
       "Read how public benchmark releases should be presented without turning the site into an analyst console.",
     external: true,
     href: buildDocsUrl("benchmarks.md"),
@@ -316,6 +346,37 @@ const projectResources: Array<{
   }
 ];
 
+const deferredPublicContentItems: Array<{
+  body: string;
+  icon: AppIconName;
+  title: string;
+}> = [
+  {
+    body:
+      "The public site does not offer broad self-serve contributor signup, automated approvals, or a standing waitlist in MVP.",
+    icon: "users",
+    title: "No open self-serve enrollment or waitlist"
+  },
+  {
+    body:
+      "ParetoProof does not publish a support mailbox, contact form, or confidential intake surface on the apex site yet.",
+    icon: "shield",
+    title: "No public support mailbox or contact form"
+  },
+  {
+    body:
+      "About, Contact, and Contribution do not split into separate top-level site trees while the public pack stays intentionally compact.",
+    icon: "grid",
+    title: "No separate public site trees"
+  },
+  {
+    body:
+      "The public site does not promise an SLA-backed support desk, live chat, or managed community program before the MVP spine is stable.",
+    icon: "spark",
+    title: "No support desk or community program"
+  }
+];
+
 function buildProjectSectionUrl(sectionId: string) {
   return buildPublicUrl(`${projectRoute}#${sectionId}`);
 }
@@ -338,6 +399,7 @@ export function getCompactProjectPackSectionOrder() {
     "coverageSupport",
     "contributorsSection",
     "contactSection",
+    "deferredSection",
     "resourcesSection"
   ] as const;
 }
@@ -624,7 +686,8 @@ function PublicLanding() {
           <p className="site-lead">
             ParetoProof measures what frontier AI systems can actually do on formal
             mathematical tasks — with fully reproducible execution, transparent methodology,
-            and results you can verify yourself via containerized replay.
+            and results you can verify yourself via containerized replay. Approved contributors
+            sign in directly, and new collaborators use the separate access-request path.
           </p>
           <div className="hero-actions">
             <a className="button" href={buildPublicUrl(benchmarksRoute)}>
@@ -1039,8 +1102,9 @@ function PublicProjectPack() {
         <p className="section-tag">Contributor path</p>
         <h2>How to contribute</h2>
         <p className="site-lead">
-          Contributors go through a manual approval process. Once approved, all work
-          happens inside the portal.
+          Approved contributors sign in directly. New collaborators use the separate
+          access-request entry, and approval stays manual before any contributor work
+          opens inside the portal.
         </p>
       </div>
 
@@ -1052,8 +1116,13 @@ function PublicProjectPack() {
           <a className="button button-secondary" href={buildAccessRequestUrl()}>
             Request collaborator access
           </a>
-          <a className="button button-secondary" href={githubDiscussionsUrl}>
-            Ask a public question first
+          <a
+            className="button button-secondary"
+            href={publicContentPackDocsUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Read contributor rules
           </a>
         </div>
       ) : null}
@@ -1083,11 +1152,44 @@ function PublicProjectPack() {
           <a className="button button-secondary" href={buildAccessRequestUrl()}>
             Request collaborator access
           </a>
-          <a className="button button-secondary" href={githubDiscussionsUrl}>
-            Ask a public question first
+          <a
+            className="button button-secondary"
+            href={publicContentPackDocsUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Read contributor rules
           </a>
         </div>
       ) : null}
+    </article>
+  );
+
+  const deferredSection = (
+    <article className="site-project-section" aria-label="Deferred public content">
+      <div className="site-section-copy">
+        <p className="section-tag">Still outside MVP</p>
+        <h2>Keep unsupported enrollment and support promises off the public site.</h2>
+        <p className="site-lead">
+          These asks are still intentionally deferred. Keeping them explicit on the
+          public route makes it harder for copy, navigation, or docs links to imply a
+          broader support program than the product actually runs today.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {deferredPublicContentItems.map((item) => (
+          <article className="site-panel-card" key={item.title}>
+            <span className="site-panel-mark" aria-hidden="true">
+              <AppIcon name={item.icon} />
+            </span>
+            <div className="site-panel-copy">
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
     </article>
   );
 
@@ -1223,6 +1325,7 @@ function PublicProjectPack() {
                 contactSection,
                 contributorsSection,
                 coverageSupport,
+                deferredSection,
                 overviewSection,
                 resourcesSection
               };
@@ -1234,6 +1337,7 @@ function PublicProjectPack() {
                 {overviewSection}
                 {contributorsSection}
                 {contactSection}
+                {deferredSection}
                 {resourcesSection}
               </>
             )}
