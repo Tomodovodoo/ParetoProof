@@ -1233,6 +1233,15 @@ a.button-secondary {
   gap: 10px;
 }
 
+.portal-runs-quick-filter-panel {
+  gap: 10px;
+}
+
+.portal-runs-quick-filter-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .portal-run-card-list {
   display: grid;
   gap: 10px;
@@ -2347,6 +2356,19 @@ a.button-secondary {
   .portal-results-panel-compact .portal-toolbar .button,
   .portal-results-panel-compact .portal-toolbar a.button {
     min-height: 2.45rem;
+  }
+
+  .portal-runs-quick-filter-panel {
+    gap: 8px;
+  }
+
+  .portal-runs-quick-filter-panel h2 {
+    font-size: 1.02rem;
+    line-height: 1.08;
+  }
+
+  .portal-runs-quick-filter-grid {
+    gap: 8px;
   }
 
   .portal-run-card-timestamp {
