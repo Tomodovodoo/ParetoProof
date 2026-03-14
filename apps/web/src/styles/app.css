@@ -2205,12 +2205,51 @@ a.button-secondary {
   }
 
   .site-project-shell .site-pill-row {
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .site-project-shell .site-pill-link {
+    min-height: 2rem;
+    padding: 0.36rem 0.62rem;
+    font-size: 0.8rem;
+    text-align: center;
   }
 
   .site-project-shell .site-pill-link {
     min-height: 2rem;
     padding-block: 0.42rem;
+  }
+
+  .site-project-shell .site-signal-column {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .site-project-shell .site-signal-row,
+  .site-project-shell .site-signal-row + .site-signal-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .site-project-shell .site-signal-row h2 {
+    font-size: 1rem;
+    line-height: 1.08;
+  }
+
+  .site-project-shell .site-signal-row p {
+    font-size: 0.82rem;
+    line-height: 1.32;
+  }
+
+  .site-project-shell .site-signal-value {
+    min-width: 0;
+    font-size: 0.94rem;
   }
 
   .portal-shell {
@@ -2887,14 +2926,14 @@ a.button-secondary {
   }
 
   .site-project-shell .site-header {
-    gap: 8px;
-    padding-bottom: 10px;
+    gap: 6px;
+    padding-bottom: 8px;
   }
 
   .site-project-shell .site-header-main,
   .site-project-shell .site-header-actions,
   .site-project-shell .site-hero-copy {
-    gap: 6px;
+    gap: 5px;
   }
 
   .site-project-shell .site-tagline,
@@ -2903,33 +2942,34 @@ a.button-secondary {
   }
 
   .site-project-shell .site-brand {
-    gap: 10px;
+    gap: 8px;
   }
 
   .site-project-shell .site-brand-mark {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
 
   .site-project-shell .button,
   .site-project-shell a.button {
-    min-height: 2.5rem;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.92rem;
+    min-height: 2.34rem;
+    padding: 0.52rem 0.82rem;
+    font-size: 0.9rem;
   }
 
   .site-project-shell .site-hero {
-    gap: 12px;
-    padding-top: 12px;
+    gap: 6px;
+    padding-top: 6px;
   }
 
   .site-project-shell .site-hero-copy h1 {
-    font-size: clamp(1.68rem, 8.7vw, 2.2rem);
+    font-size: clamp(1.44rem, 7.5vw, 1.88rem);
     line-height: 0.98;
   }
 
   .site-project-shell .site-lead {
-    font-size: 0.92rem;
+    font-size: 0.82rem;
+    line-height: 1.38;
   }
 
   .site-project-shell .site-pill-row {
@@ -2939,9 +2979,9 @@ a.button-secondary {
   }
 
   .site-project-shell .site-pill-link {
-    min-height: 1.9rem;
-    padding: 0.36rem 0.68rem;
-    font-size: 0.82rem;
+    min-height: 1.78rem;
+    padding: 0.28rem 0.52rem;
+    font-size: 0.74rem;
     text-align: center;
   }
 
@@ -2980,18 +3020,33 @@ a.button-secondary {
   }
 
   .site-project-shell .site-signal-column {
-    gap: 0;
-    padding-top: 8px;
+    gap: 6px;
+    padding-top: 4px;
   }
 
-  .site-project-shell .site-signal-row {
-    gap: 12px;
-    padding: 10px 0;
+  .site-project-shell .site-signal-row,
+  .site-project-shell .site-signal-row + .site-signal-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .site-project-shell .site-signal-row h2 {
+    font-size: 0.94rem;
+    line-height: 1.06;
+  }
+
+  .site-project-shell .site-signal-row p {
+    font-size: 0.74rem;
+    line-height: 1.28;
   }
 
   .site-project-shell .site-signal-value {
-    min-width: 4.25rem;
-    font-size: 1rem;
+    min-width: 0;
+    font-size: 0.88rem;
   }
 
   .site-shell:not(.site-project-shell) .site-header,
