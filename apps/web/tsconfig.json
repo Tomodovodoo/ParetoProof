@@ -2,6 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@paretoproof/shared": [
+        "../../packages/shared/src/index.ts"
+      ]
+    },
     "types": [
       "vite/client"
     ]
