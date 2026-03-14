@@ -27,6 +27,7 @@ import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalAdminUsersPanel } from "./portal-admin-users-panel";
 import { PortalBenchmarkOpsSurface } from "./portal-benchmark-ops-surfaces";
 import { PortalProfilePanel } from "./portal-profile-panel";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalShellProps = {
   email: string | null;
@@ -222,6 +223,7 @@ function formatVerdictClass(verdict: EvaluationVerdictClass | null) {
 
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const compactLayout = useCompactLayout();
   const approvedRoles = useMemo(() => coercePortalRoles(roles), [roles]);
   const sections = useMemo(
     () => getPortalSectionsForRoles(approvedRoles),
@@ -313,6 +315,22 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       search: mergedSearch ? `?${mergedSearch}` : ""
     });
   }
+
+  const overviewActionRail = (
+    <aside
+      className={`portal-surface-rail${
+        compactLayout ? " portal-overview-actions-compact" : ""
+      }`}
+    >
+      <p className="section-tag">Role-aware controls</p>
+      <h2>Next actions</h2>
+      <div className="portal-action-list">
+        {visibleOverviewActions.map((action) => (
+          <PortalActionRow action={action} key={action.id} />
+        ))}
+      </div>
+    </aside>
+  );
 
   return (
     <main className="portal-shell">
@@ -431,6 +449,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
         {activeSection?.id === "overview" ? (
           <>
+            {compactLayout ? overviewActionRail : null}
             <section className="portal-metric-strip" aria-label="Portal metrics">
               {overviewMetrics.map((metric) => (
                 <article className="portal-metric-cell" key={metric.label}>
@@ -462,15 +481,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 </div>
               </article>
 
-              <aside className="portal-surface-rail">
-                <p className="section-tag">Role-aware controls</p>
-                <h2>Next actions</h2>
-                <div className="portal-action-list">
-                  {visibleOverviewActions.map((action) => (
-                    <PortalActionRow action={action} key={action.id} />
-                  ))}
-                </div>
-              </aside>
+              {!compactLayout ? overviewActionRail : null}
             </section>
 
             <section className="portal-overview-grid portal-overview-grid-secondary">
