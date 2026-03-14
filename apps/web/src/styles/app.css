@@ -1119,12 +1119,12 @@ a.button-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 1.85rem;
-  padding: 0.32rem 0.62rem;
+  min-height: 1.75rem;
+  padding: 0.28rem 0.58rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.66);
-  font-size: 0.84rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--ink);
 }
@@ -1376,11 +1376,11 @@ a.button-secondary {
 .portal-results-contract-card {
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  padding: 14px;
+  border-radius: 10px;
+  background: transparent;
+  padding: 12px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .portal-results-contract-grid {
@@ -1708,11 +1708,11 @@ a.button-secondary {
 
 .portal-summary-card {
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.72);
-  border-radius: 14px;
-  padding: 14px;
+  background: transparent;
+  border-radius: 10px;
+  padding: 12px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .portal-summary-card span,
@@ -1738,9 +1738,9 @@ a.button-secondary {
 
 .portal-feedback-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.78);
+  border-radius: 10px;
+  padding: 14px;
+  background: transparent;
   display: grid;
   gap: 8px;
 }
@@ -1815,7 +1815,21 @@ a.button-secondary {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 0;
+  padding: 10px 0;
+}
+
+.portal-action-list-compact .portal-action-card {
+  padding: 8px 0;
+}
+
+.portal-action-list-compact .portal-action-title {
+  margin-bottom: 2px;
+  font-size: 0.92rem;
+}
+
+.portal-action-list-compact .portal-action-copy {
+  font-size: 0.84rem;
+  line-height: 1.4;
 }
 
 .portal-action-card:first-child,
@@ -1957,7 +1971,7 @@ a.button-secondary {
 
 .portal-request-rationale {
   padding-left: 14px;
-  border-left: 2px solid rgba(37, 99, 235, 0.14);
+  border-left: 2px solid var(--indigo-border);
 }
 
 .portal-admin-layout {
@@ -1993,24 +2007,23 @@ a.button-secondary {
 
 .portal-admin-record {
   width: 100%;
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  background: transparent;
   color: inherit;
   text-align: left;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   transition:
-    border-color 160ms ease,
-    transform 160ms ease,
-    background-color 160ms ease;
+    border-color 140ms ease,
+    background-color 140ms ease;
 }
 
 .portal-admin-record:hover,
 .portal-admin-record:focus-visible {
   border-color: var(--line-strong);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .portal-admin-record-active {
@@ -2041,8 +2054,8 @@ a.button-secondary {
 .portal-admin-empty-state,
 .portal-admin-alert-block {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  background: transparent;
 }
 
 .portal-admin-metric-card,
@@ -2191,12 +2204,12 @@ a.button-secondary {
 }
 
 .portal-admin-mini-card {
-  border: 1px solid rgba(17, 42, 103, 0.08);
-  border-radius: 12px;
-  background: rgba(17, 42, 103, 0.03);
-  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  padding: 10px 12px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .portal-admin-mini-card p {

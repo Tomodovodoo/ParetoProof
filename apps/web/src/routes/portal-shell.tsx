@@ -331,9 +331,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         compactLayout ? " portal-overview-actions-compact" : ""
       }`}
     >
-      <p className="section-tag">Role-aware controls</p>
-      <h2>Next actions</h2>
-      <div className="portal-action-list">
+      <h2>Quick actions</h2>
+      <div className="portal-action-list portal-action-list-compact">
         {visibleOverviewActions.map((action) => (
           <PortalActionRow action={action} key={action.id} />
         ))}
@@ -354,23 +353,13 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   const overviewLeadSection = (
     <section className="portal-overview-grid">
       <article className="portal-panel portal-overview-lead">
-        <p className="section-tag">Portal overview</p>
-        <h2>Start from the current state of the portal.</h2>
         <p>
-          Overview is the landing summary for approved contributors. Use it to scan
-          service posture, spot active benchmark work, and move into Runs, Launch,
-          or Workers without treating this page like a second queue.
+          Scan service posture, spot active benchmark work, and jump into Runs,
+          Launch, or Workers.
         </p>
         {activeFreshnessPolicy ? (
           <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
         ) : null}
-        <div className="portal-section-notes">
-          <ul className="portal-note-list">
-            <li>Keep recent runs, approval posture, and service health visible in one pass.</li>
-            <li>Use Runs as the canonical private index and /runs/:runId as the evidence destination.</li>
-            <li>Keep Launch for new execution intent and Workers for execution posture only.</li>
-          </ul>
-        </div>
       </article>
 
       {!compactLayout ? overviewActionRail : null}
@@ -380,16 +369,9 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <section className="portal-overview-grid portal-overview-grid-secondary">
       <article className="portal-panel-table-flat">
         <div className="portal-panel-header">
-          <div>
-            {!compactLayout ? <p className="section-tag">Benchmark operations</p> : null}
-            <h2>
-              {compactLayout
-                ? "Recent runs"
-                : "Recent runs route back into the canonical cluster."}
-            </h2>
-          </div>
+          <h2>Recent runs</h2>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
-            {compactLayout ? "All runs" : "View all runs"}
+            View all
           </a>
         </div>
 
@@ -428,8 +410,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       </article>
 
       <aside className="portal-overview-timeline">
-        <p className="section-tag">Approvals</p>
-        <h2>Identity and review timeline</h2>
+        <h2>Recent activity</h2>
         <div className="portal-timeline">
           {overviewTimeline.map((item) => (
             <article className="portal-timeline-item" key={item.title}>
@@ -594,35 +575,14 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 search={search}
               />
             ) : (
-              <section className="portal-workspace-grid">
-                <article className="portal-panel portal-surface-main">
-                  <p className="section-tag">Current section</p>
-                  <h2>{activeSection?.navLabel ?? "Portal section"}</h2>
-                  <p>{activeSection?.summary}</p>
-                  {activeFreshnessPolicy ? (
-                    <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
-                  ) : null}
-                  <div className="portal-section-notes">
-                    <p className="portal-panel-muted">
-                      This section is ready for live data and task-specific workflows as
-                      backend features come online.
-                    </p>
-                    <ul className="portal-note-list">
-                      <li>Navigation and route access already follow the approved role model.</li>
-                      <li>Live data can replace the placeholder content without a shell rewrite.</li>
-                      <li>The rail stays fixed while each deeper workflow grows in place.</li>
-                    </ul>
-                  </div>
-                </article>
-                <aside className="portal-surface-rail">
-                  <p className="section-tag">Available actions</p>
-                  <h2>Role-aware controls</h2>
-                  <div className="portal-action-list">
-                    {visibleOverviewActions.map((action) => (
-                      <PortalActionRow action={action} key={action.id} />
-                    ))}
-                  </div>
-                </aside>
+              <section className="portal-panel">
+                <p>{activeSection?.summary}</p>
+                <p className="portal-panel-muted">
+                  This section is ready for live data as backend features come online.
+                </p>
+                {activeFreshnessPolicy ? (
+                  <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+                ) : null}
               </section>
             )}
           </section>
