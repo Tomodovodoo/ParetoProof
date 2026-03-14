@@ -856,7 +856,24 @@ function PublicBenchmarkReport({
 }
 
 function PublicProjectPack() {
-  const isCompactLayout = useCompactLayout(480);
+  const isCompactLayout = useCompactLayout(640);
+
+  const projectCoverageSummary = (
+    <aside
+      className="site-signal-column site-project-coverage-hero"
+      aria-label="Project pack coverage"
+    >
+      {packCoverage.map((item) => (
+        <article className="site-signal-row" key={item.label}>
+          <span className="site-signal-value">{item.value}</span>
+          <div>
+            <h2>{item.label}</h2>
+            <p>{item.detail}</p>
+          </div>
+        </article>
+      ))}
+    </aside>
+  );
 
   useEffect(() => {
     function scrollProjectHashIntoView() {
@@ -918,17 +935,7 @@ function PublicProjectPack() {
           </div>
         </div>
 
-        <aside className="site-signal-column" aria-label="Project pack coverage">
-          {packCoverage.map((item) => (
-            <article className="site-signal-row" key={item.label}>
-              <span className="site-signal-value">{item.value}</span>
-              <div>
-                <h2>{item.label}</h2>
-                <p>{item.detail}</p>
-              </div>
-            </article>
-          ))}
-        </aside>
+        {projectCoverageSummary}
       </section>
 
       <section className="site-section-stack" aria-label="Project pack sections">
@@ -956,6 +963,19 @@ function PublicProjectPack() {
               </article>
             ))}
           </div>
+        </article>
+
+        <article className="site-project-section site-project-section-support">
+          <div className="site-section-copy">
+            <p className="section-tag">Pack coverage</p>
+            <h2>Coverage summary stays available after the real overview.</h2>
+            <p className="site-lead">
+              The coverage summary still tells readers which parts of the pack exist
+              without displacing the actual project overview from the first compact
+              viewport.
+            </p>
+          </div>
+          {projectCoverageSummary}
         </article>
 
         <article className="site-project-section" id="contributors">

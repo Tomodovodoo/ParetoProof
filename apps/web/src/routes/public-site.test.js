@@ -110,4 +110,28 @@ describe("PublicSite", () => {
 
     expect(html).toContain("One public pack for project context, contributor entry, and contact rules.");
   });
+
+  it("keeps compact project pack overview content ahead of the coverage summary", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/project", 320);
+
+    expect(html.indexOf("Explain the product without duplicating the whole methodology archive.")).toBeLessThan(
+      html.indexOf("Coverage summary stays available after the real overview.")
+    );
+  });
+
+  it("keeps realistic phone-width project pack overview content ahead of the coverage summary", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/project", 390);
+
+    expect(html.indexOf("Explain the product without duplicating the whole methodology archive.")).toBeLessThan(
+      html.indexOf("Coverage summary stays available after the real overview.")
+    );
+  });
+
+  it("keeps the wide project pack coverage summary in the hero ahead of the overview section", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/project", 1280);
+
+    expect(html.indexOf("Project overview")).toBeLessThan(
+      html.indexOf("Explain the product without duplicating the whole methodology archive.")
+    );
+  });
 });

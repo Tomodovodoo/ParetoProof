@@ -399,6 +399,15 @@ a.button-secondary {
   gap: 18px;
 }
 
+.site-project-section-support .site-signal-column {
+  border: 0;
+  padding: 0;
+}
+
+.site-project-section-support {
+  display: none;
+}
+
 .site-section-copy {
   display: grid;
   gap: 10px;
@@ -2332,6 +2341,14 @@ a.button-secondary {
     font-size: 0.94rem;
   }
 
+  .site-project-shell .site-project-coverage-hero {
+    display: none;
+  }
+
+  .site-project-shell .site-project-section-support {
+    display: grid;
+  }
+
   .portal-shell {
     padding: 8px;
   }
@@ -3275,6 +3292,19 @@ a.button-secondary {
     padding: 0.28rem 0.52rem;
     font-size: 0.74rem;
     text-align: center;
+  }
+
+  .site-project-shell .site-project-coverage-hero {
+    display: none;
+  }
+
+  .site-project-shell .site-project-section-support {
+    display: grid;
+    padding: 12px;
+  }
+
+  .site-project-shell .site-project-section-support .site-section-copy {
+    gap: 6px;
   }
 
   .site-project-shell #overview {
