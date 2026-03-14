@@ -18,6 +18,7 @@ describe("handleAccessFinalize", () => {
       expect(init?.method).toBe("POST");
       expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBe("assertion-1");
       expect((init?.headers as Headers).get("cookie")).toContain("PortalAccessProvider=");
+      expect((init?.headers as Headers).get("origin")).toBe("https://google.auth.paretoproof.com");
       expect(init?.redirect).toBe("manual");
       expect(init?.body).toBe(JSON.stringify({ redirect: "/profile" }));
 
@@ -65,7 +66,46 @@ describe("handleAccessFinalize", () => {
     expect(setCookies[1]).toContain("PortalLinkIntent=");
   });
 
-  it("redirects back to the branded retry surface when the branded handoff lacks an Access assertion", async () => {
+  it("relays a cookie-only branded Access session back to the API finalize boundary", async () => {
+    globalThis.fetch = async (_input, init) => {
+      expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBeNull();
+      expect((init?.headers as Headers).get("cookie")).toContain("CF_Authorization=session-cookie");
+      expect((init?.headers as Headers).get("origin")).toBe("https://github.auth.paretoproof.com");
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/access-request"
+        }),
+        {
+          headers: [
+            [
+              "set-cookie",
+              "PortalAccessProvider=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
+            ]
+          ],
+          status: 200
+        }
+      );
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/access-request"
+        }),
+        headers: {
+          cookie: "CF_Authorization=session-cookie; PortalAccessProvider=signed",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/access-request");
+  });
+
+  it("redirects back to the branded retry surface when the branded handoff lacks both Access header and session cookie", async () => {
     const response = await handleAccessFinalize(
       new Request("https://github.auth.paretoproof.com/api/access/finalize", {
         body: new URLSearchParams({

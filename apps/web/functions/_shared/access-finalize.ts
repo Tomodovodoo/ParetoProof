@@ -5,6 +5,22 @@ function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
 
+function readCookieValue(cookieHeader: string | null, name: string) {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...valueParts] = part.trim().split("=");
+
+    if (rawName === name) {
+      return valueParts.join("=") || null;
+    }
+  }
+
+  return null;
+}
+
 const brandedHosts = new Set([
   "paretoproof.com",
   "auth.paretoproof.com",
@@ -171,16 +187,20 @@ export async function handleAccessFinalize(request: Request) {
   const apiUrl = new URL("/portal/session/finalize", resolveApiBaseUrl(requestUrl));
   const forwardedHeaders = new Headers({
     accept: "application/json",
-    "content-type": "application/json"
+    "content-type": "application/json",
+    origin: requestUrl.origin
   });
   const accessAssertion = request.headers.get("cf-access-jwt-assertion");
   const cookieHeader = request.headers.get("cookie");
+  const accessSessionCookie = readCookieValue(cookieHeader, "CF_Authorization");
 
-  if (!accessAssertion) {
+  if (!accessAssertion && !accessSessionCookie) {
     return buildRedirectResponse(retryUrl);
   }
 
-  forwardedHeaders.set("cf-access-jwt-assertion", accessAssertion);
+  if (accessAssertion) {
+    forwardedHeaders.set("cf-access-jwt-assertion", accessAssertion);
+  }
 
   if (cookieHeader) {
     forwardedHeaders.set("cookie", cookieHeader);

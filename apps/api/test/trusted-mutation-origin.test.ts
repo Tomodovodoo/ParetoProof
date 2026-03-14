@@ -181,7 +181,7 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
   });
 });
 
-test("trusted mutation origin hook allows branded auth POSTs to the finalize submit handoff", async (t) => {
+test("trusted mutation origin hook allows branded auth POSTs to the finalize relay and finalize submit handoff", async (t) => {
   const app = Fastify();
 
   t.after(async () => {
@@ -201,9 +201,21 @@ test("trusted mutation origin hook allows branded auth POSTs to the finalize sub
     })
   );
 
+  app.post("/portal/session/finalize", async () => ({ ok: true }));
   app.post("/portal/session/finalize/submit", async () => ({ ok: true }));
 
-  const response = await app.inject({
+  const finalizeResponse = await app.inject({
+    method: "POST",
+    payload: {
+      redirect: "/profile"
+    },
+    url: "/portal/session/finalize",
+    headers: {
+      origin: "https://github.auth.paretoproof.com"
+    }
+  });
+
+  const submitResponse = await app.inject({
     method: "POST",
     payload: {
       redirect: "/profile"
@@ -214,8 +226,12 @@ test("trusted mutation origin hook allows branded auth POSTs to the finalize sub
     }
   });
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), {
+  assert.equal(finalizeResponse.statusCode, 200);
+  assert.deepEqual(finalizeResponse.json(), {
+    ok: true
+  });
+  assert.equal(submitResponse.statusCode, 200);
+  assert.deepEqual(submitResponse.json(), {
     ok: true
   });
 });
