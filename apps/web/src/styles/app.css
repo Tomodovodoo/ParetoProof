@@ -2120,6 +2120,91 @@ a.button-secondary {
 }
 
 @media (max-width: 360px) {
+  .site-project-shell {
+    gap: 14px;
+  }
+
+  .site-project-shell .site-header,
+  .site-project-shell .site-hero,
+  .site-project-shell .site-project-section,
+  .site-project-shell .site-footer {
+    padding: 14px;
+  }
+
+  .site-project-shell .site-header {
+    gap: 8px;
+    padding-bottom: 10px;
+  }
+
+  .site-project-shell .site-header-main,
+  .site-project-shell .site-header-actions,
+  .site-project-shell .site-hero-copy {
+    gap: 6px;
+  }
+
+  .site-project-shell .site-tagline,
+  .site-project-shell .site-primary-nav {
+    display: none;
+  }
+
+  .site-project-shell .site-brand {
+    gap: 10px;
+  }
+
+  .site-project-shell .site-brand-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .site-project-shell .button,
+  .site-project-shell a.button {
+    min-height: 2.5rem;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.92rem;
+  }
+
+  .site-project-shell .site-hero {
+    gap: 12px;
+    padding-top: 12px;
+  }
+
+  .site-project-shell .site-hero-copy h1 {
+    font-size: clamp(1.68rem, 8.7vw, 2.2rem);
+    line-height: 0.98;
+  }
+
+  .site-project-shell .site-lead {
+    font-size: 0.92rem;
+  }
+
+  .site-project-shell .site-pill-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .site-project-shell .site-pill-link {
+    min-height: 1.9rem;
+    padding: 0.36rem 0.68rem;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+
+  .site-project-shell .site-signal-column {
+    gap: 0;
+    padding-top: 8px;
+  }
+
+  .site-project-shell .site-signal-row {
+    gap: 12px;
+    padding: 10px 0;
+  }
+
+  .site-project-shell .site-signal-value {
+    min-width: 4.25rem;
+    font-size: 1rem;
+  }
+
   .site-shell:not(.site-project-shell) .site-header,
   .site-shell:not(.site-project-shell) .site-hero,
   .site-shell:not(.site-project-shell) .site-footer {
