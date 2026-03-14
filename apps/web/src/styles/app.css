@@ -3062,29 +3062,85 @@ a.button-secondary {
   }
 
   .site-shell.site-home-shell .site-header {
-    padding-bottom: 10px;
+    padding-bottom: 8px;
   }
 
   .site-shell.site-home-shell .site-hero {
-    gap: 8px;
-    padding-top: 10px;
+    gap: 4px;
+    padding-top: 6px;
   }
 
   .site-shell.site-home-shell .site-hero-copy {
-    gap: 8px;
+    gap: 5px;
   }
 
   .site-shell.site-home-shell .site-hero-copy h1 {
-    font-size: clamp(1.68rem, 8.7vw, 2.18rem);
+    font-size: clamp(1.5rem, 7.9vw, 1.92rem);
     line-height: 0.98;
   }
 
   .site-shell.site-home-shell .site-lead {
-    font-size: 0.9rem;
+    font-size: 0.84rem;
+    line-height: 1.44;
   }
 
   .site-shell.site-home-shell .hero-actions {
+    gap: 5px;
+  }
+
+  .site-shell.site-home-shell .site-brand {
     gap: 8px;
+  }
+
+  .site-shell.site-home-shell .site-brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .site-shell.site-home-shell .site-primary-nav {
+    gap: 6px;
+  }
+
+  .site-shell.site-home-shell .site-nav-link {
+    min-height: 2rem;
+    padding: 0.35rem 0.68rem;
+  }
+
+  .site-shell.site-home-shell .button,
+  .site-shell.site-home-shell a.button {
+    min-height: 2.34rem;
+    padding: 0.52rem 0.82rem;
+    font-size: 0.9rem;
+  }
+
+  .site-shell.site-home-shell .site-signal-column {
+    gap: 6px;
+    padding-top: 4px;
+  }
+
+  .site-shell.site-home-shell .site-signal-row,
+  .site-shell.site-home-shell .site-signal-row + .site-signal-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .site-shell.site-home-shell .site-signal-row h2 {
+    font-size: 0.98rem;
+    line-height: 1.06;
+  }
+
+  .site-shell.site-home-shell .site-signal-row p {
+    font-size: 0.78rem;
+    line-height: 1.34;
+  }
+
+  .site-shell.site-home-shell .site-signal-value {
+    min-width: 0;
+    font-size: 0.92rem;
   }
 
   .site-shell.site-benchmark-shell .site-hero {
