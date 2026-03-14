@@ -1313,6 +1313,25 @@ a.button-secondary {
   line-height: 1.08;
 }
 
+.portal-run-detail-quick-evidence {
+  gap: 8px;
+}
+
+.portal-run-detail-highlight {
+  gap: 4px;
+  padding: 12px;
+}
+
+.portal-run-detail-highlight p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.portal-run-detail-highlight small {
+  font-size: 0.76rem;
+}
+
 .portal-run-detail-main-compact .portal-summary-grid {
   gap: 8px;
 }
@@ -2415,6 +2434,11 @@ a.button-secondary {
   .portal-run-detail-main-compact .portal-panel-header a.button {
     min-height: 2.35rem;
     padding: 0.48rem 0.78rem;
+  }
+
+  .portal-run-detail-quick-evidence h2 {
+    font-size: 1.02rem;
+    line-height: 1.08;
   }
 
   .portal-workers-main-compact .portal-panel-header .button,
