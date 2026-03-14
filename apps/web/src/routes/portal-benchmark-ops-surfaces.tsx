@@ -27,12 +27,14 @@ import {
   buildRunsProviderOptions,
   buildRunsCsv,
   defaultPortalRunsQuery,
+  extractPortalRunsQueryString,
   fetchPortalLaunchView,
   fetchPortalRunDetail,
   fetchPortalRunsView,
   fetchPortalWorkersView,
   getWorkerIncidentTone,
-  parsePortalRunsQuery
+  parsePortalRunsQuery,
+  sanitizePortalRunsQueryString
 } from "../lib/portal-benchmark-ops";
 import { usePortalPolling } from "../lib/portal-freshness";
 import { evaluationVerdictLabels, runLifecycleStateLabels } from "../lib/results-state";
@@ -126,6 +128,10 @@ export function getCompactRunsSectionOrder() {
   return ["runsSlice", "quickFilters", "resultsPanel", "supportPanel"] as const;
 }
 
+export function isCurrentPortalRequest(requestId: number, latestRequestId: number) {
+  return requestId === latestRequestId;
+}
+
 function updateRunsQuery(
   pathname: string,
   currentQuery: PortalRunsListQuery,
@@ -170,17 +176,30 @@ export function PortalBenchmarkOpsSurface({
   const [runDetailState, setRunDetailState] = useState<LoadState<PortalRunDetailResponse>>(createLoadState);
   const [launchState, setLaunchState] = useState<LoadState<PortalLaunchViewResponse>>(createLoadState);
   const [workersState, setWorkersState] = useState<LoadState<PortalWorkersViewResponse>>(createLoadState);
+  const runsListRequestIdRef = useRef(0);
   const runDetailRequestIdRef = useRef(0);
   const [launchSelection, setLaunchSelection] = useState<LaunchSelectionState>({
     benchmarkVersionId: "",
     modelConfigId: "",
     runKind: "single_run"
   });
+  const sanitizedRunsQueryString = useMemo(
+    () => sanitizePortalRunsQueryString(search),
+    [search]
+  );
 
   const loadRuns = useCallback(async () => {
     setRunsState((current) => ({ ...current, error: null, isLoading: true }));
+    runsListRequestIdRef.current += 1;
+    const requestId = runsListRequestIdRef.current;
+
     try {
       const data = await fetchPortalRunsView(runsQuery);
+
+      if (!isCurrentPortalRequest(requestId, runsListRequestIdRef.current)) {
+        return;
+      }
+
       setRunsState({
         data,
         error: null,
@@ -188,6 +207,10 @@ export function PortalBenchmarkOpsSurface({
         lastUpdatedAt: new Date().toISOString()
       });
     } catch (error) {
+      if (!isCurrentPortalRequest(requestId, runsListRequestIdRef.current)) {
+        return;
+      }
+
       setRunsState((current) => ({
         ...current,
         error: toDisplayError(error),
@@ -208,7 +231,7 @@ export function PortalBenchmarkOpsSurface({
     try {
       const data = await fetchPortalRunDetail(activeRunId);
 
-      if (requestId !== runDetailRequestIdRef.current) {
+      if (!isCurrentPortalRequest(requestId, runDetailRequestIdRef.current)) {
         return;
       }
 
@@ -219,7 +242,7 @@ export function PortalBenchmarkOpsSurface({
         lastUpdatedAt: new Date().toISOString()
       });
     } catch (error) {
-      if (requestId !== runDetailRequestIdRef.current) {
+      if (!isCurrentPortalRequest(requestId, runDetailRequestIdRef.current)) {
         return;
       }
 
@@ -290,6 +313,21 @@ export function PortalBenchmarkOpsSurface({
     onPoll: pollCurrentView,
     routeId: activeRouteId
   });
+
+  useEffect(() => {
+    if (activeSectionId !== "runs") {
+      return;
+    }
+
+    if (extractPortalRunsQueryString(search) === sanitizedRunsQueryString) {
+      return;
+    }
+
+    onReplaceLocation(
+      pathname,
+      sanitizedRunsQueryString ? `?${sanitizedRunsQueryString}` : ""
+    );
+  }, [activeSectionId, onReplaceLocation, pathname, sanitizedRunsQueryString, search]);
 
   useEffect(() => {
     if (activeSectionId === "runs" && activeRunId) {

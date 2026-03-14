@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
   buildRunDetailTargetPath,
   buildRunsIndexTargetPath,
-  getCompactRunsSectionOrder
+  getCompactRunsSectionOrder,
+  isCurrentPortalRequest
 } from "./portal-benchmark-ops-surfaces.tsx";
 
 describe("portal benchmark ops route targets", () => {
@@ -45,5 +46,10 @@ describe("portal benchmark ops route targets", () => {
       "resultsPanel",
       "supportPanel"
     ]);
+  });
+
+  it("uses the same current-request guard for list and detail async responses", () => {
+    expect(isCurrentPortalRequest(2, 2)).toBe(true);
+    expect(isCurrentPortalRequest(1, 2)).toBe(false);
   });
 });

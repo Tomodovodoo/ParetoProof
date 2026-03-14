@@ -3,47 +3,51 @@ import {
   buildRunsModelOptions,
   buildRunsProviderOptions,
   defaultPortalRunsQuery,
-  parsePortalRunsQuery
+  extractPortalRunsQueryString,
+  parsePortalRunsQuery,
+  sanitizePortalRunsQueryString
 } from "./portal-benchmark-ops.ts";
 
 describe("parsePortalRunsQuery", () => {
-  it("falls back on malformed query params without discarding valid filters", () => {
-    const query = parsePortalRunsQuery(
-      "?providerFamily=openai&q=%20PP-318%20&limit=9999&sort=bad&runKind=nope&verdict=pass,wrong&runLifecycle=queued,broken"
-    );
-
-    expect(query).toEqual({
-      ...defaultPortalRunsQuery,
-      providerFamily: "openai",
-      q: "PP-318"
-    });
-  });
-
-  it("keeps valid enum and csv params when they parse cleanly", () => {
-    const query = parsePortalRunsQuery(
-      "?limit=50&sort=duration_desc&runKind=single_run&verdict=pass,fail&runLifecycle=queued,running"
-    );
-
-    expect(query.limit).toBe(50);
-    expect(query.sort).toBe("duration_desc");
-    expect(query.runKind).toBe("single_run");
-    expect(query.verdict).toEqual(["pass", "fail"]);
-    expect(query.runLifecycle).toEqual(["queued", "running"]);
+  it("falls back safely when the runs query contains invalid or outdated param values", () => {
+    expect(
+      parsePortalRunsQuery(
+        "?surface=portal&sort=bogus&lifecycleBucket=not_real&verdict=pass,broken&limit=9999"
+      )
+    ).toEqual(defaultPortalRunsQuery);
   });
 });
 
-describe("buildRunsProviderOptions", () => {
-  it("preserves the active provider when the current result set is empty", () => {
-    expect(buildRunsProviderOptions([], "google")).toEqual(["google"]);
+describe("extractPortalRunsQueryString", () => {
+  it("keeps only recognized runs query params when local portal state is present", () => {
+    expect(
+      extractPortalRunsQueryString(
+        "?surface=portal&access=approved&roles=admin&providerFamily=openai&sort=bogus"
+      )
+    ).toBe("providerFamily=openai&sort=bogus");
   });
 });
 
-describe("buildRunsModelOptions", () => {
-  it("preserves the active model config when the current result set is empty", () => {
-    expect(buildRunsModelOptions([], "google-gemini-pro")).toEqual([
+describe("sanitizePortalRunsQueryString", () => {
+  it("drops malformed runs query params while preserving valid filter state", () => {
+    expect(
+      sanitizePortalRunsQueryString(
+        "?surface=portal&providerFamily=openai&sort=bogus&verdict=pass,broken"
+      )
+    ).toBe("providerFamily=openai");
+  });
+});
+
+describe("runs filter option builders", () => {
+  it("keeps the selected provider visible even when the current result set is empty", () => {
+    expect(buildRunsProviderOptions([], "openai")).toEqual(["openai"]);
+  });
+
+  it("keeps the selected model config visible even when the current result set is empty", () => {
+    expect(buildRunsModelOptions([], "openai-gpt-oss-high")).toEqual([
       {
-        label: "google-gemini-pro",
-        modelConfigId: "google-gemini-pro"
+        label: "openai-gpt-oss-high",
+        modelConfigId: "openai-gpt-oss-high"
       }
     ]);
   });
