@@ -1,4 +1,7 @@
-import type { PortalAccessRequestInput } from "@paretoproof/shared";
+import type {
+  PortalAccessRecoveryInput,
+  PortalAccessRequestInput
+} from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
@@ -102,6 +105,27 @@ function readLocalAccessOverride(): PortalAccessState | null {
   }
 
   return null;
+}
+
+export function buildLocalPendingPortalUrl(
+  currentSearch = window.location.search
+) {
+  const currentParams = new URLSearchParams(currentSearch);
+  const nextParams = new URLSearchParams(currentParams);
+
+  nextParams.set("surface", "portal");
+  nextParams.set("access", "pending");
+  nextParams.delete("reason");
+  nextParams.delete("roles");
+
+  const email = currentParams.get("email");
+
+  if (email) {
+    nextParams.set("email", email);
+  }
+
+  const nextSearch = nextParams.toString();
+  return `/pending${nextSearch ? `?${nextSearch}` : ""}`;
 }
 
 function formatPortalBootstrapError(error: unknown) {
@@ -243,7 +267,7 @@ export function PortalBootstrap() {
         email: state.status === "denied" || state.status === "pending" ? state.email : null,
         status: "pending"
       });
-      window.history.replaceState({}, "", buildPortalUrl("/pending"));
+      window.history.replaceState({}, "", buildLocalPendingPortalUrl());
       return;
     }
 
@@ -270,13 +294,13 @@ export function PortalBootstrap() {
     window.location.replace(buildPortalUrl("/pending"));
   }
 
-  async function submitAccessRecovery(payload: { rationale: string | null }) {
+  async function submitAccessRecovery(payload: PortalAccessRecoveryInput) {
     if (isLocalHostname(window.location.hostname)) {
       setState({
         email: state.status === "denied" || state.status === "pending" ? state.email : null,
         status: "pending"
       });
-      window.history.replaceState({}, "", buildPortalUrl("/pending"));
+      window.history.replaceState({}, "", buildLocalPendingPortalUrl());
       return;
     }
 
