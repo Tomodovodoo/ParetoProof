@@ -97,6 +97,53 @@ function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkInten
   return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Lax; Max-Age=0; Secure; HttpOnly`;
 }
 
+function normalizeOrigin(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function isAllowedPortalMutationOrigin(origin: string) {
+  const allowLocalhostCors = process.env.CORS_ALLOW_LOCALHOST === "true";
+
+  if (allowLocalhostCors && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/u.test(origin)) {
+    return true;
+  }
+
+  const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(normalizeOrigin);
+
+  return ["https://portal.paretoproof.com", ...(configuredOrigins ?? [])].includes(origin);
+}
+
+function enforcePortalMutationOrigin(request: FastifyRequest, reply: FastifyReply) {
+  const originHeader =
+    typeof request.headers.origin === "string" ? normalizeOrigin(request.headers.origin) : null;
+  const refererHeader =
+    typeof request.headers.referer === "string" ? request.headers.referer : null;
+
+  const candidateOrigin =
+    originHeader ??
+    (refererHeader
+      ? (() => {
+          try {
+            return normalizeOrigin(new URL(refererHeader).origin);
+          } catch {
+            return null;
+          }
+        })()
+      : null);
+
+  if (!candidateOrigin || !isAllowedPortalMutationOrigin(candidateOrigin)) {
+    reply.code(403).send({
+      error: "invalid_mutation_origin"
+    });
+    return false;
+  }
+
+  return true;
+}
+
 function buildPortalAuthStartUrl(options: {
   provider: "cloudflare_github" | "cloudflare_google";
   redirectPath: string;
@@ -621,7 +668,17 @@ export function registerPortalRoutes(
   app.post(
     "/portal/access-requests",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        requireAccess("authenticated_access_identity"),
+        (request, reply, done) => {
+          if (!enforcePortalMutationOrigin(request, reply)) {
+            done();
+            return;
+          }
+
+          done();
+        }
+      ]
     },
     async (request, reply) => {
       const parsedBody = portalAccessRequestInputSchema.safeParse(request.body ?? {});
