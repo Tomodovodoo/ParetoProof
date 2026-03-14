@@ -2006,6 +2006,58 @@ a.button-secondary {
 }
 
 @media (max-width: 420px) {
+  .site-shell:not(.site-project-shell) {
+    gap: 16px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-header,
+  .site-shell:not(.site-project-shell) .site-hero,
+  .site-shell:not(.site-project-shell) .site-footer {
+    padding: 16px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-header {
+    gap: 12px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-header-main,
+  .site-shell:not(.site-project-shell) .site-header-actions,
+  .site-shell:not(.site-project-shell) .site-hero-copy {
+    gap: 10px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-hero {
+    gap: 14px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-hero-copy h1 {
+    font-size: clamp(1.9rem, 9.5vw, 2.6rem);
+    line-height: 0.97;
+  }
+
+  .site-shell:not(.site-project-shell) .site-lead {
+    font-size: 0.95rem;
+  }
+
+  .site-shell:not(.site-project-shell) .hero-actions {
+    gap: 10px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-signal-column {
+    gap: 0;
+    padding-top: 10px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-signal-row {
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .site-shell:not(.site-project-shell) .site-signal-value {
+    min-width: 4.75rem;
+    font-size: 1rem;
+  }
+
   .auth-shell {
     align-items: start;
     padding: 8px 0;
@@ -2064,5 +2116,32 @@ a.button-secondary {
   .auth-check-mark {
     width: 28px;
     height: 28px;
+  }
+}
+
+@media (max-width: 360px) {
+  .site-shell:not(.site-project-shell) .site-header,
+  .site-shell:not(.site-project-shell) .site-hero,
+  .site-shell:not(.site-project-shell) .site-footer {
+    padding: 14px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-header-main,
+  .site-shell:not(.site-project-shell) .site-header-actions,
+  .site-shell:not(.site-project-shell) .site-hero-copy {
+    gap: 6px;
+  }
+
+  .site-shell:not(.site-project-shell) .site-tagline {
+    display: none;
+  }
+
+  .site-shell:not(.site-project-shell) .site-tagline,
+  .site-shell:not(.site-project-shell) .site-lead {
+    font-size: 0.92rem;
+  }
+
+  .site-shell:not(.site-project-shell) .site-hero-copy h1 {
+    font-size: clamp(1.75rem, 9vw, 2.3rem);
   }
 }
