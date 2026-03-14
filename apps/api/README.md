@@ -5,6 +5,7 @@
 Runtime env guidance:
 
 - use [docs/runtime.md](../../docs/runtime.md) as the runtime baseline
+- use [docs/runtime-env-mode-checklists.md](../../docs/runtime-env-mode-checklists.md) for the concrete local API, Railway, migration, and owner-bootstrap checklists
 - use [`.env.example`](./.env.example) only as the local developer-facing example for routine startup and owner ops
 
 ## Offline Problem 9 ingest

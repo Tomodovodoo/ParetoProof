@@ -5,6 +5,7 @@ This repo uses a small number of runtime rules.
 ## Environment
 
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
+- [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
 
