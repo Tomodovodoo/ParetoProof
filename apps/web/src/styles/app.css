@@ -2298,6 +2298,49 @@ a.button-secondary {
 }
 
 @media (max-width: 360px) {
+  .portal-grid-admin-workspace .portal-admin-list-panel {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel .portal-panel-header {
+    gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel .section-tag {
+    display: none;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel h2 {
+    font-size: 1.04rem;
+    line-height: 1.05;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel .role-chip {
+    min-height: 1.5rem;
+    padding: 0.18rem 0.42rem;
+    font-size: 0.74rem;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-record {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-record-header,
+  .portal-grid-admin-workspace .portal-admin-meta-row {
+    gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-meta-row {
+    font-size: 0.84rem;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-filter-grid {
+    gap: 8px;
+    padding-top: 10px;
+  }
+
   .auth-card {
     gap: 12px;
   }
