@@ -1,5 +1,5 @@
 import type { PortalAdminUserListItem } from "@paretoproof/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import {
@@ -93,6 +93,9 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   const [revocationReason, setRevocationReason] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [users, setUsers] = useState<PortalAdminUserListItem[]>([]);
+  const detailShellRef = useRef<HTMLElement | null>(null);
+  const correctiveActionRef = useRef<HTMLElement | null>(null);
+  const pendingCompactRevealUserIdRef = useRef<string | null>(null);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const isCompactLayout = useCompactLayout();
   const {
@@ -162,6 +165,34 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     };
   }, [apiBaseUrl, selectedUserId]);
 
+  useEffect(() => {
+    if (
+      !isCompactLayout ||
+      !selectedUserId ||
+      pendingCompactRevealUserIdRef.current !== selectedUserId
+    ) {
+      return;
+    }
+
+    const detailShell = correctiveActionRef.current ?? detailShellRef.current;
+
+    if (!detailShell) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      detailShell.scrollIntoView({
+        behavior: "auto",
+        block: "start"
+      });
+      pendingCompactRevealUserIdRef.current = null;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isCompactLayout, selectedUserId]);
+
   async function refreshUsers(initialLoad = false) {
     try {
       const nextItems = await loadPortalAdminUsers(apiBaseUrl);
@@ -220,6 +251,19 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     } finally {
       setIsMutating(false);
     }
+  }
+
+  function revealSelectedUserDetail(userId: string) {
+    if (isCompactLayout && userId === selectedUserId) {
+      (correctiveActionRef.current ?? detailShellRef.current)?.scrollIntoView({
+        behavior: "auto",
+        block: "start"
+      });
+      return;
+    }
+
+    pendingCompactRevealUserIdRef.current = userId;
+    setSelectedUserId(userId);
   }
 
   if (isLoading) {
@@ -353,7 +397,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               }`}
               key={item.userId}
               onClick={() => {
-                setSelectedUserId(item.userId);
+                revealSelectedUserDetail(item.userId);
                 setActionMessage(null);
               }}
               type="button"
@@ -394,7 +438,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
         {isCompactLayout ? filterFields : userList}
       </aside>
 
-      <section className="portal-admin-detail-shell">
+      <section className="portal-admin-detail-shell" ref={detailShellRef}>
         {detailError ? (
           <article className="portal-admin-card portal-admin-card-empty">
             <h3>User detail unavailable</h3>
@@ -477,7 +521,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               </article>
             </div>
 
-            <article className="portal-admin-card">
+            <article className="portal-admin-card" ref={correctiveActionRef}>
               <p className="section-tag">Corrective action</p>
               <h3>Revoke the current contributor role from this user.</h3>
               <p className="portal-action-copy">

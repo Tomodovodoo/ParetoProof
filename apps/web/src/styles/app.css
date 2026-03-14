@@ -1854,6 +1854,11 @@ a.button-secondary {
   align-content: start;
 }
 
+.portal-admin-detail-panel,
+.portal-admin-detail-shell {
+  scroll-margin-top: 16px;
+}
+
 .portal-admin-list-card {
   cursor: pointer;
 }
