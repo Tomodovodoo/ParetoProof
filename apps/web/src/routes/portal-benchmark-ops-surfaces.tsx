@@ -840,27 +840,39 @@ function PortalRunDetailSurface({
 }) {
   const detail = loadState.data;
   const runsIndexHref = buildRunsIndexHref(search);
+  const isCompactLayout = useCompactLayout(480);
+  const freshnessCard = (
+    <PortalFreshnessCard
+      isRefreshing={loadState.isLoading}
+      lastUpdatedAt={loadState.lastUpdatedAt}
+      onRefresh={() => {
+        void onRefresh();
+      }}
+      routeId={activeRouteId}
+    />
+  );
 
   return (
-    <section className="portal-workspace-grid">
-      <article className="portal-panel portal-surface-main">
+    <section
+      className={`portal-workspace-grid${
+        isCompactLayout ? " portal-run-detail-workspace-compact" : ""
+      }`}
+    >
+      <article
+        className={`portal-panel portal-surface-main${
+          isCompactLayout ? " portal-run-detail-main-compact" : ""
+        }`}
+      >
         <div className="portal-panel-header">
           <div>
-            <p className="section-tag">Canonical run detail</p>
+            {!isCompactLayout ? <p className="section-tag">Canonical run detail</p> : null}
             <h2>{detail?.item.runId ?? "Run detail"}</h2>
           </div>
           <a className="button button-secondary" href={runsIndexHref}>
             Back to runs
           </a>
         </div>
-        <PortalFreshnessCard
-          isRefreshing={loadState.isLoading}
-          lastUpdatedAt={loadState.lastUpdatedAt}
-          onRefresh={() => {
-            void onRefresh();
-          }}
-          routeId={activeRouteId}
-        />
+        {!isCompactLayout ? freshnessCard : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
         {detail ? (
           <>
@@ -886,6 +898,7 @@ function PortalRunDetailSurface({
                 <small>{detail.item.failure.summary ?? "No terminal failure summary."}</small>
               </article>
             </div>
+            {isCompactLayout ? freshnessCard : null}
             <div className="portal-detail-grid">
               <article className="portal-filter-card">
                 <p className="section-tag">Lineage</p>
