@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
+  describeAccessRequestActionState,
+  describeAccessRequestTransition,
   getCompactAccessRequestSectionOrder,
   isSelectedAccessRequestDetailCurrent,
   sortAccessRequestsForDisplay,
@@ -113,5 +115,79 @@ describe("isSelectedAccessRequestDetailCurrent", () => {
         "request-pending"
       )
     ).toBe(true);
+  });
+});
+
+describe("describeAccessRequestTransition", () => {
+  it("describes unresolved requests as still pending review", () => {
+    expect(
+      describeAccessRequestTransition({
+        reviewedAt: null,
+        reviewer: null,
+        status: "pending"
+      })
+    ).toBe("Pending review. No admin decision has been recorded yet.");
+  });
+
+  it("describes approved requests with reviewer and timestamp context", () => {
+    expect(
+      describeAccessRequestTransition({
+        reviewedAt: "2026-03-13T09:30:00.000Z",
+        reviewer: {
+          label: "Portal Admin"
+        },
+        status: "approved"
+      })
+    ).toContain("Approved by Portal Admin");
+  });
+});
+
+describe("describeAccessRequestActionState", () => {
+  it("explains that resolved requests are locked against further actions", () => {
+    expect(
+      describeAccessRequestActionState({
+        matchedUser: {
+          email: "ada@paretoproof.local"
+        },
+        recovery: null,
+        requestKind: "access_request",
+        status: "approved"
+      })
+    ).toBe(
+      "This request is already resolved. Actions stay locked so the review history remains stable."
+    );
+  });
+
+  it("explains identity-recovery conflicts explicitly", () => {
+    expect(
+      describeAccessRequestActionState({
+        matchedUser: {
+          email: "ada@paretoproof.local"
+        },
+        recovery: {
+          conflictingUser: {
+            email: "lin@paretoproof.local"
+          },
+          requestedIdentityAlreadyLinked: false
+        },
+        requestKind: "identity_recovery",
+        status: "pending"
+      })
+    ).toBe(
+      "Approval is blocked until the identity conflict for lin@paretoproof.local is resolved."
+    );
+  });
+
+  it("explains standard approvals as immediate role grants when the request is actionable", () => {
+    expect(
+      describeAccessRequestActionState({
+        matchedUser: {
+          email: "ada@paretoproof.local"
+        },
+        recovery: null,
+        requestKind: "access_request",
+        status: "pending"
+      })
+    ).toBe("Approving will grant the selected contributor role immediately.");
   });
 });

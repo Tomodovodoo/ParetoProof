@@ -100,6 +100,56 @@ export function getCompactAccessRequestSectionOrder() {
   return ["queueContent", "filterFields"] as const;
 }
 
+export function describeAccessRequestTransition(
+  detail: Pick<PortalAdminAccessRequestDetail, "reviewedAt" | "reviewer" | "status">
+) {
+  if (detail.status === "pending") {
+    return "Pending review. No admin decision has been recorded yet.";
+  }
+
+  const reviewerLabel = detail.reviewer?.label ?? "an admin";
+  const reviewedAtLabel = formatDateTime(detail.reviewedAt);
+
+  if (detail.status === "approved") {
+    return `Approved by ${reviewerLabel} on ${reviewedAtLabel}.`;
+  }
+
+  if (detail.status === "rejected") {
+    return `Rejected by ${reviewerLabel} on ${reviewedAtLabel}.`;
+  }
+
+  return `Withdrawn after review context from ${reviewerLabel} on ${reviewedAtLabel}.`;
+}
+
+export function describeAccessRequestActionState(
+  detail: Pick<
+    PortalAdminAccessRequestDetail,
+    "matchedUser" | "recovery" | "requestKind" | "status"
+  >
+) {
+  if (detail.status !== "pending") {
+    return "This request is already resolved. Actions stay locked so the review history remains stable.";
+  }
+
+  if (!detail.matchedUser) {
+    return "Approval stays blocked until the backend resolves the matched user record.";
+  }
+
+  if (detail.requestKind === "identity_recovery") {
+    if (detail.recovery?.conflictingUser) {
+      return `Approval is blocked until the identity conflict for ${detail.recovery.conflictingUser.email} is resolved.`;
+    }
+
+    if (detail.recovery?.requestedIdentityAlreadyLinked) {
+      return "Approving will confirm the existing linked identity and preserve the current role.";
+    }
+
+    return "Approving will attach the requested identity and preserve the current role.";
+  }
+
+  return "Approving will grant the selected contributor role immediately.";
+}
+
 export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProps) {
   const [detail, setDetail] = useState<PortalAdminAccessRequestDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, RequestDraftState>>({});
@@ -749,6 +799,8 @@ function AccessRequestDetailCard({
         <p className="section-tag">Evidence</p>
         <h3>Request rationale</h3>
         <p>{detail.rationale ?? "No rationale was supplied with this request."}</p>
+        <h3>Transition state</h3>
+        <p>{describeAccessRequestTransition(detail)}</p>
         {detail.decisionNote ? (
           <>
             <h3>Decision note</h3>
@@ -822,43 +874,56 @@ function AccessRequestDetailCard({
         <article className="portal-admin-card">
           <p className="section-tag">Related requests</p>
           <h3>Recent history stays visible for audit follow-up.</h3>
-          <div className="portal-admin-simple-list">
-            {detail.relatedRequests.map((item) => (
-              <div className="portal-admin-list-row" key={item.id}>
-                <div>
-                  <strong>{formatRequestKind(item.requestKind)}</strong>
-                  <p>{formatDateTime(item.createdAt)}</p>
+          {detail.relatedRequests.length === 0 ? (
+            <p className="portal-action-copy">
+              No earlier request history is attached to this identity or email yet.
+            </p>
+          ) : (
+            <div className="portal-admin-simple-list">
+              {detail.relatedRequests.map((item) => (
+                <div className="portal-admin-list-row" key={item.id}>
+                  <div>
+                    <strong>{formatRequestKind(item.requestKind)}</strong>
+                    <p>{formatDateTime(item.createdAt)}</p>
+                  </div>
+                  <span className={`portal-state-badge portal-admin-status-${item.status}`}>
+                    {formatRequestStatusLabel(item.status)}
+                  </span>
                 </div>
-                <span className={`portal-state-badge portal-admin-status-${item.status}`}>
-                  {formatRequestStatusLabel(item.status)}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </article>
 
         <article className="portal-admin-card">
           <p className="section-tag">Audit echoes</p>
           <h3>Privileged actions are visible close to the request.</h3>
-          <div className="portal-admin-simple-list">
-            {detail.auditEchoes.map((auditEvent) => (
-              <div className="portal-admin-list-row" key={auditEvent.id}>
-                <div>
-                  <strong>{auditEvent.eventId}</strong>
-                  <p>{auditEvent.actor?.label ?? "System actor"}</p>
+          {detail.auditEchoes.length === 0 ? (
+            <p className="portal-action-copy">
+              No recent privileged audit echoes are attached to this request yet.
+            </p>
+          ) : (
+            <div className="portal-admin-simple-list">
+              {detail.auditEchoes.map((auditEvent) => (
+                <div className="portal-admin-list-row" key={auditEvent.id}>
+                  <div>
+                    <strong>{auditEvent.eventId}</strong>
+                    <p>{auditEvent.actor?.label ?? "System actor"}</p>
+                  </div>
+                  <span className="role-chip role-chip-muted">
+                    {formatDateTime(auditEvent.createdAt)}
+                  </span>
                 </div>
-                <span className="role-chip role-chip-muted">
-                  {formatDateTime(auditEvent.createdAt)}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </article>
       </div>
 
       <article className="portal-admin-card" ref={actionSectionRef}>
         <p className="section-tag">Decision action</p>
         <h3>Admin actions stay request-scoped.</h3>
+        <p className="portal-action-copy">{describeAccessRequestActionState(detail)}</p>
         <div className="auth-form">
           {!isRecoveryRequest ? (
             <label className="auth-field">
