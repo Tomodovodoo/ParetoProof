@@ -991,6 +991,9 @@ function PortalLaunchSurface({
   const modelConfig = loadState.data?.modelConfigs.find(
     (item) => item.modelConfigId === selection.modelConfigId
   );
+  const launchEvidenceHref = benchmark
+    ? buildRunDetailHref(benchmark.lastSeenRunId)
+    : buildPortalUrl("/runs");
 
   return (
     <section className="portal-workspace-grid">
@@ -1019,6 +1022,16 @@ function PortalLaunchSurface({
           />
         ) : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
+        {isCompactLayout ? (
+          <div className="portal-launch-quick-actions" aria-label="Launch next steps">
+            <a className="button button-secondary" href={launchEvidenceHref}>
+              Open evidence
+            </a>
+            <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+              Review runs
+            </a>
+          </div>
+        ) : null}
         <div className="portal-form-grid">
           <label className="portal-field">
             <span>Benchmark package</span>
@@ -1121,7 +1134,7 @@ function PortalLaunchSurface({
           />
           <PortalLinkCard
             copy="Preflight is currently read-only; use the last seen run as the concrete evidence target."
-            href={benchmark ? buildRunDetailHref(benchmark.lastSeenRunId) : buildPortalUrl("/runs")}
+            href={launchEvidenceHref}
             title="Open current evidence"
           />
         </div>
