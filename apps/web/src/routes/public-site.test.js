@@ -49,6 +49,16 @@ describe("resolvePublicSiteRoute", () => {
       kind: "report"
     });
   });
+
+  it("handles malformed percent-encoding in report routes", async () => {
+    setWindowUrl("http://127.0.0.1/");
+    const { resolvePublicSiteRoute } = await loadPublicSiteModule();
+
+    expect(resolvePublicSiteRoute("/reports/%")).toEqual({
+      benchmarkVersionId: "%",
+      kind: "report"
+    });
+  });
 });
 
 describe("PublicSite", () => {
