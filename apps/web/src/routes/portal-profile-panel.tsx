@@ -128,6 +128,65 @@ function buildLocalProfile(email: string | null): PortalProfile {
   };
 }
 
+const profileLinkStatusHistoryKey = "portalProfileLinkStatusMessage";
+
+function stripProfileLinkStatusHistoryState(historyState: unknown) {
+  if (!historyState || typeof historyState !== "object") {
+    return null;
+  }
+
+  const {
+    [profileLinkStatusHistoryKey]: _ignoredLinkStatus,
+    ...rest
+  } = historyState as Record<string, unknown>;
+
+  return Object.keys(rest).length > 0 ? rest : null;
+}
+
+export function consumeLinkStatus(
+  search: string,
+  pathname: string,
+  hash = "",
+  historyState: unknown = null
+) {
+  const params = new URLSearchParams(search);
+  const linkStatus = params.get("link");
+  const currentUrl = `${pathname}${search}${hash}`;
+  const baseHistoryState = stripProfileLinkStatusHistoryState(historyState);
+
+  if (!linkStatus) {
+    const historyMessage =
+      historyState &&
+      typeof historyState === "object" &&
+      profileLinkStatusHistoryKey in historyState
+        ? (historyState as Record<string, unknown>)[profileLinkStatusHistoryKey]
+        : null;
+
+    return {
+      message: typeof historyMessage === "string" ? historyMessage : null,
+      nextHistoryState: baseHistoryState,
+      nextUrl: currentUrl
+    };
+  }
+
+  const nextParams = new URLSearchParams(params);
+  nextParams.delete("link");
+  const nextSearch = nextParams.toString();
+  const nextUrl = `${pathname}${nextSearch ? `?${nextSearch}` : ""}${hash}`;
+  const message = formatLinkStatusMessage(linkStatus);
+
+  return {
+    message,
+    nextHistoryState: message
+      ? {
+          ...(baseHistoryState ?? {}),
+          [profileLinkStatusHistoryKey]: message
+        }
+      : baseHistoryState,
+    nextUrl
+  };
+}
+
 export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   const [profile, setProfile] = useState<PortalProfile | null>(null);
   const [displayNameInput, setDisplayNameInput] = useState("");
@@ -145,12 +204,41 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
     let cancelled = false;
 
     async function loadProfile() {
+      const linkStatus = consumeLinkStatus(
+        window.location.search,
+        window.location.pathname,
+        window.location.hash,
+        window.history.state
+      );
+
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const currentHistoryMessage =
+        window.history.state &&
+        typeof window.history.state === "object" &&
+        profileLinkStatusHistoryKey in window.history.state
+          ? (window.history.state as Record<string, unknown>)[profileLinkStatusHistoryKey]
+          : null;
+      const nextHistoryMessage =
+        linkStatus.nextHistoryState &&
+        typeof linkStatus.nextHistoryState === "object" &&
+        profileLinkStatusHistoryKey in linkStatus.nextHistoryState
+          ? (linkStatus.nextHistoryState as Record<string, unknown>)[profileLinkStatusHistoryKey]
+          : null;
+
+      if (
+        linkStatus.nextUrl !== currentUrl ||
+        currentHistoryMessage !== nextHistoryMessage
+      ) {
+        window.history.replaceState(linkStatus.nextHistoryState, "", linkStatus.nextUrl);
+      }
+
       try {
         if (isLocalHostname(window.location.hostname)) {
           const localProfile = buildLocalProfile(email);
 
           if (!cancelled) {
             setDisplayNameInput(localProfile.displayName ?? "");
+            setLinkMessage(linkStatus.message);
             setLastUpdatedAt(new Date().toISOString());
             setProfile(localProfile);
             setIsLoading(false);
@@ -177,7 +265,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           setDisplayNameInput(payload.profile.displayName ?? "");
           setLastUpdatedAt(new Date().toISOString());
           setProfile(payload.profile);
-          setLinkMessage(readLinkStatusMessage());
+          setLinkMessage(linkStatus.message);
           setIsLoading(false);
         }
       } catch (error) {
@@ -445,20 +533,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   );
 }
 
-function readLinkStatusMessage() {
-  const params = new URLSearchParams(window.location.search);
-  const linkStatus = params.get("link");
-
-  if (!linkStatus) {
-    return null;
-  }
-
-  const nextParams = new URLSearchParams(params);
-  nextParams.delete("link");
-  const nextSearch = nextParams.toString();
-  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
-  window.history.replaceState(null, "", nextUrl);
-
+function formatLinkStatusMessage(linkStatus: string) {
   switch (linkStatus) {
     case "linked":
       return "The new sign-in method has been linked to your portal account.";
