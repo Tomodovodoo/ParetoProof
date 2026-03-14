@@ -887,6 +887,7 @@ function PortalRunDetailSurface({
   const detail = loadState.data;
   const runsIndexHref = buildRunsIndexHref(search);
   const isCompactLayout = useCompactLayout(480);
+  const latestTimelineEntry = detail?.timeline.at(-1) ?? null;
   const freshnessCard = (
     <PortalFreshnessCard
       isRefreshing={loadState.isLoading}
@@ -922,6 +923,24 @@ function PortalRunDetailSurface({
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
         {detail ? (
           <>
+            {isCompactLayout && latestTimelineEntry ? (
+              <article className="portal-panel-table-flat portal-run-detail-quick-evidence">
+                <div className="portal-panel-header">
+                  <div>
+                    <p className="section-tag">Current evidence</p>
+                    <h2>Latest run signal stays in the first viewport.</h2>
+                  </div>
+                </div>
+                <article className="portal-timeline-item portal-run-detail-highlight">
+                  <strong>{latestTimelineEntry.label}</strong>
+                  <p>
+                    {latestTimelineEntry.scope}
+                    {latestTimelineEntry.sourceId ? ` - ${latestTimelineEntry.sourceId}` : ""}
+                  </p>
+                  <small>{formatTimestamp(latestTimelineEntry.occurredAt)}</small>
+                </article>
+              </article>
+            ) : null}
             <div className="portal-summary-grid">
               <article className="portal-summary-card">
                 <span>Benchmark</span>
