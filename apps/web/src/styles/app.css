@@ -955,6 +955,15 @@ a.button-secondary {
   padding-top: 8px;
 }
 
+.portal-launch-panel-compact {
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.portal-launch-panel-compact .portal-form-grid {
+  margin-top: -2px;
+}
+
 .portal-grid-profile-compact .portal-profile-form-panel {
   gap: 8px;
 }

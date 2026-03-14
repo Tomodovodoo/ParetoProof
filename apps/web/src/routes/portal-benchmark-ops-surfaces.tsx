@@ -36,6 +36,7 @@ import {
 import { usePortalPolling } from "../lib/portal-freshness";
 import { evaluationVerdictLabels, runLifecycleStateLabels } from "../lib/results-state";
 import { buildPortalUrl } from "../lib/surface";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalBenchmarkOpsSurfaceProps = {
   activeRouteId: string;
@@ -744,6 +745,7 @@ function PortalLaunchSurface({
   selection: LaunchSelectionState;
   setSelection: Dispatch<SetStateAction<LaunchSelectionState>>;
 }) {
+  const isCompactLayout = useCompactLayout(480);
   const benchmark = loadState.data?.benchmarks.find(
     (item) => item.benchmarkVersionId === selection.benchmarkVersionId
   );
@@ -753,24 +755,30 @@ function PortalLaunchSurface({
 
   return (
     <section className="portal-workspace-grid">
-      <article className="portal-panel portal-surface-main">
+      <article
+        className={`portal-panel portal-surface-main${
+          isCompactLayout ? " portal-launch-panel-compact" : ""
+        }`}
+      >
         <div className="portal-panel-header">
           <div>
-            <p className="section-tag">Create run intent</p>
+            {!isCompactLayout ? <p className="section-tag">Create run intent</p> : null}
             <h2>Launch stays focused on preflight, not history.</h2>
           </div>
           <span className="role-chip role-chip-tonal">
             {loadState.data?.submissionMode ?? "preflight_only"}
           </span>
         </div>
-        <PortalFreshnessCard
-          isRefreshing={loadState.isLoading}
-          lastUpdatedAt={loadState.lastUpdatedAt}
-          onRefresh={() => {
-            void onRefresh();
-          }}
-          routeId={activeRouteId}
-        />
+        {!isCompactLayout ? (
+          <PortalFreshnessCard
+            isRefreshing={loadState.isLoading}
+            lastUpdatedAt={loadState.lastUpdatedAt}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+            routeId={activeRouteId}
+          />
+        ) : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
         <div className="portal-form-grid">
           <label className="portal-field">
@@ -822,6 +830,16 @@ function PortalLaunchSurface({
             </select>
           </label>
         </div>
+        {isCompactLayout ? (
+          <PortalFreshnessCard
+            isRefreshing={loadState.isLoading}
+            lastUpdatedAt={loadState.lastUpdatedAt}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+            routeId={activeRouteId}
+          />
+        ) : null}
         {benchmark && modelConfig ? (
           <div className="portal-results-contract-grid">
             <article className="portal-results-contract-card">
