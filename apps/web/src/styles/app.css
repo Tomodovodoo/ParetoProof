@@ -2505,6 +2505,45 @@ a.button-secondary {
     font-size: 0.94rem;
   }
 
+  .site-shell.site-benchmark-report-shell .site-header-main,
+  .site-shell.site-benchmark-report-shell .site-header-actions,
+  .site-shell.site-benchmark-report-shell .site-hero-copy {
+    gap: 7px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-hero {
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-hero-copy h1 {
+    font-size: clamp(1.72rem, 8.1vw, 2.18rem);
+  }
+
+  .site-shell.site-benchmark-report-shell .site-lead {
+    font-size: 0.9rem;
+    line-height: 1.38;
+  }
+
+  .site-shell.site-benchmark-report-shell .hero-actions {
+    gap: 8px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-summary {
+    gap: 8px;
+    padding-top: 8px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-card {
+    gap: 5px;
+    padding: 11px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-card p {
+    font-size: 0.8rem;
+    line-height: 1.34;
+  }
+
   .auth-shell {
     align-items: start;
     padding: 8px 0;
@@ -3218,5 +3257,65 @@ a.button-secondary {
   .site-shell.site-benchmark-shell .site-lead {
     font-size: 0.88rem;
     line-height: 1.42;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-header {
+    padding-bottom: 8px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-header-main,
+  .site-shell.site-benchmark-report-shell .site-header-actions,
+  .site-shell.site-benchmark-report-shell .site-hero-copy {
+    gap: 5px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-hero {
+    gap: 6px;
+    padding-top: 8px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-hero-copy h1 {
+    font-size: clamp(1.48rem, 7.8vw, 1.92rem);
+    line-height: 0.98;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-lead {
+    font-size: 0.84rem;
+    line-height: 1.36;
+  }
+
+  .site-shell.site-benchmark-report-shell .button,
+  .site-shell.site-benchmark-report-shell a.button {
+    min-height: 2.24rem;
+    padding: 0.48rem 0.78rem;
+    font-size: 0.86rem;
+  }
+
+  .site-shell.site-benchmark-report-shell .hero-actions {
+    gap: 5px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-summary {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-card {
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-card h2 {
+    font-size: 0.92rem;
+    line-height: 1.04;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-card p {
+    font-size: 0.76rem;
+    line-height: 1.3;
+  }
+
+  .site-shell.site-benchmark-report-shell .site-benchmark-mobile-value {
+    font-size: 0.98rem;
   }
 }
