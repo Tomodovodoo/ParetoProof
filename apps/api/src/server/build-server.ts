@@ -33,6 +33,30 @@ function shouldAllowLocalhostCors() {
   return process.env.CORS_ALLOW_LOCALHOST === "true";
 }
 
+function isStateChangingMethod(method: string) {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+}
+
+function parseHeaderOrigin(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeOrigin(new URL(value).origin);
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedRequestOrigin(origin: string, allowedOrigins: string[]) {
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  return shouldAllowLocalhostCors() && isAllowedLocalOrigin(origin);
+}
+
 export async function buildServer() {
   const app = Fastify({
     logger: true
@@ -64,6 +88,27 @@ export async function buildServer() {
     }
   });
   await app.register(formbody);
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!isStateChangingMethod(request.method)) {
+      return;
+    }
+
+    const originHeader = request.headers.origin;
+    const refererHeader = request.headers.referer;
+    const requestOrigin =
+      parseHeaderOrigin(originHeader) ?? parseHeaderOrigin(refererHeader);
+
+    if (!requestOrigin) {
+      return;
+    }
+
+    if (!isAllowedRequestOrigin(requestOrigin, allowedOrigins)) {
+      await reply.code(403).send({
+        error: "forbidden_origin"
+      });
+    }
+  });
 
   registerHealthRoute(app);
   registerPortalRoutes(app, db, requireAccess);
