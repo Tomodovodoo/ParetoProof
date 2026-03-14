@@ -2842,6 +2842,36 @@ a.button-secondary {
     display: inline-flex;
   }
 
+  .site-shell.site-home-shell .site-header-actions {
+    display: none;
+  }
+
+  .site-shell.site-home-shell .site-header {
+    padding-bottom: 10px;
+  }
+
+  .site-shell.site-home-shell .site-hero {
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .site-shell.site-home-shell .site-hero-copy {
+    gap: 8px;
+  }
+
+  .site-shell.site-home-shell .site-hero-copy h1 {
+    font-size: clamp(1.68rem, 8.7vw, 2.18rem);
+    line-height: 0.98;
+  }
+
+  .site-shell.site-home-shell .site-lead {
+    font-size: 0.9rem;
+  }
+
+  .site-shell.site-home-shell .hero-actions {
+    gap: 8px;
+  }
+
   .site-shell.site-benchmark-shell .site-hero {
     gap: 10px;
     padding-top: 12px;
