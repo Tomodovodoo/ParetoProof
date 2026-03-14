@@ -2932,6 +2932,23 @@ a.button-secondary {
     text-align: center;
   }
 
+  .site-project-shell #overview {
+    padding: 12px;
+  }
+
+  .site-project-shell #overview .site-section-copy {
+    gap: 6px;
+  }
+
+  .site-project-shell #overview .site-card-grid {
+    gap: 10px;
+  }
+
+  .site-project-shell #overview .site-panel-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
   .site-project-shell .site-signal-column {
     gap: 0;
     padding-top: 8px;
