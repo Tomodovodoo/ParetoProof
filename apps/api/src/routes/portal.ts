@@ -140,6 +140,58 @@ function buildPortalAuthRetryUrl(redirectPath: string) {
   return authUrl.toString();
 }
 
+const brandedAuthHosts = new Set([
+  "auth.paretoproof.com",
+  "github.auth.paretoproof.com",
+  "google.auth.paretoproof.com"
+]);
+
+function readTrustedBrandedAuthOrigin(request: FastifyRequest) {
+  const originHeader =
+    typeof request.headers.origin === "string" ? request.headers.origin : null;
+
+  if (originHeader) {
+    try {
+      const originUrl = new URL(originHeader);
+
+      if (originUrl.protocol === "https:" && brandedAuthHosts.has(originUrl.hostname)) {
+        return originUrl.origin;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  const refererHeader =
+    typeof request.headers.referer === "string" ? request.headers.referer : null;
+
+  if (!refererHeader) {
+    return null;
+  }
+
+  try {
+    const refererUrl = new URL(refererHeader);
+
+    if (refererUrl.protocol === "https:" && brandedAuthHosts.has(refererUrl.hostname)) {
+      return refererUrl.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function buildBrandedFinalizeRelayUrl(origin: string, redirectPath: string) {
+  const relayUrl = new URL("/api/access/finalize", origin);
+
+  if (redirectPath !== "/") {
+    relayUrl.searchParams.set("redirect", redirectPath);
+  }
+
+  return relayUrl.toString();
+}
+
 function toPortalProfile(options: {
   currentSubject: string;
   fallbackEmail: string | null;
@@ -360,6 +412,63 @@ export function registerPortalRoutes(
     return handlePortalSessionCompletion(request, reply);
   };
 
+  const handlePortalSessionFinalizeSubmit = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const parsedBody =
+      typeof request.body === "object" && request.body !== null
+        ? (request.body as { redirect?: string })
+        : undefined;
+    const redirectPath = sanitizePortalRedirectPath(
+      parsedBody?.redirect ??
+        (request.query as { redirect?: string } | undefined)?.redirect ??
+        null
+    );
+
+    try {
+      const accessContext = await resolvePortalAccess(request);
+
+      if (!accessContext) {
+        const brandedOrigin = readTrustedBrandedAuthOrigin(request);
+
+        if (brandedOrigin) {
+          reply.code(307).header(
+            "location",
+            buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath)
+          );
+          return reply.send();
+        }
+
+        reply.code(401).send({
+          error: "access_assertion_required"
+        });
+        return;
+      }
+    } catch (error) {
+      if (isAccessAssertionVerificationError(error)) {
+        const brandedOrigin = readTrustedBrandedAuthOrigin(request);
+
+        if (brandedOrigin) {
+          reply.code(307).header(
+            "location",
+            buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath)
+          );
+          return reply.send();
+        }
+
+        reply.code(401).send({
+          error: "invalid_access_assertion"
+        });
+        return;
+      }
+
+      throw error;
+    }
+
+    return handlePortalSessionCompletion(request, reply);
+  };
+
   app.get(
     "/portal/me",
     {
@@ -395,10 +504,7 @@ export function registerPortalRoutes(
 
   app.post(
     "/portal/session/finalize/submit",
-    {
-      preHandler: requireAccess("authenticated_access_identity")
-    },
-    handlePortalSessionCompletion
+    handlePortalSessionFinalizeSubmit
   );
 
   app.get(
