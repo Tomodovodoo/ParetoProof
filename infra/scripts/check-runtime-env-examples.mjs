@@ -7,7 +7,7 @@ const checks = [
   {
     file: "apps/api/.env.example",
     markers: [
-      "# The authoritative mode split lives in docs/runtime-env-contract-baseline.md.",
+      "# The authoritative mode split lives in docs/runtime.md.",
       "# App runtime config for local API startup. Required for routine local API development.",
       "# Owner-ops config. Only set these when you are intentionally running owner workflows.",
       "# App runtime config for local Cloudflare Access parity and internal worker auth.",
@@ -41,7 +41,7 @@ const checks = [
   {
     file: "apps/web/.env.example",
     markers: [
-      "# The authoritative mode split lives in docs/runtime-env-contract-baseline.md.",
+      "# The authoritative mode split lives in docs/runtime.md.",
       "# Public build-time config. Optional in local development because the app can usually derive the API origin.",
       "# Hosted web runtime note:"
     ],
@@ -51,7 +51,7 @@ const checks = [
   {
     file: "apps/worker/.env.example",
     markers: [
-      "# The authoritative mode split lives in docs/runtime-env-contract-baseline.md.",
+      "# The authoritative mode split lives in docs/runtime.md.",
       "# Current local development mode:",
       "# Hosted-parity worker runtime config. Leave commented unless you are running claim-loop style flows.",
       "# Mode-specific hosted provider auth. Trusted-local Codex auth does not belong in this file.",
@@ -73,21 +73,21 @@ const readmeChecks = [
   {
     file: "apps/api/README.md",
     requiredSnippets: [
-      "docs/runtime-env-contract-baseline.md",
+      "docs/runtime.md",
       "`.env.example`"
     ]
   },
   {
     file: "apps/web/README.md",
     requiredSnippets: [
-      "docs/runtime-env-contract-baseline.md",
+      "docs/runtime.md",
       "`.env.example`"
     ]
   },
   {
     file: "apps/worker/README.md",
     requiredSnippets: [
-      "docs/runtime-env-contract-baseline.md",
+      "docs/runtime.md",
       "`.env.example`"
     ]
   }

@@ -1,13 +1,16 @@
 # Architecture
 
-ParetoProof is being built as a small set of separate deployable services that share one data model and one evaluation workflow. The web layer is responsible for the public site and the authenticated portal. The API layer owns application logic, orchestration, permissions, run state, and data access. The worker layer executes Lean and model-related jobs without exposing that execution model directly to the browser.
+ParetoProof has three user-facing web surfaces and one worker/control-plane backbone.
 
-For the MVP, the repository is intentionally centered on one language family. TypeScript is the default language across the web app, API, worker control code, and shared contracts. Bun is the workspace tool that holds the monorepo together, but the deployed API and worker services are still expected to target the conservative Node-compatible runtime path inside containers.
+- `paretoproof.com` is the public site for project context and released benchmark reporting.
+- `auth.paretoproof.com` plus provider-specific auth hosts handle sign-in and access-request entry.
+- `portal.paretoproof.com` is the authenticated contributor and admin workspace.
+- `api.paretoproof.com` is the Fastify control plane for state, authz, ingest, and worker coordination.
 
-The web application is a React application built with Vite. That keeps the frontend straightforward and works cleanly with Cloudflare-hosted deployment. The API is a Fastify service because it gives the project a predictable TypeScript backend without adding unnecessary framework surface area. Database schema, migrations, and typed queries are handled with Drizzle, while Neon remains the managed Postgres host rather than the schema tool itself.
+Execution is intentionally split away from the browser.
 
-Operationally, the system is split in a way that matches risk. Cloudflare serves the public and gated web surfaces. Railway runs the control-plane API. Modal runs workers so compute can scale separately from the API. Neon stores structured application data, and Cloudflare R2 is reserved for larger artifacts such as logs, traces, exported bundles, and other run outputs that should not live inside Postgres.
+- `apps/api` owns control-plane state and contracts.
+- `apps/web` owns the public site, auth entry UI, and portal UI.
+- `apps/worker` owns package materialization, local attempts, offline ingest, and the hosted claim loop.
 
-This means the browser talks to the API, the API owns the authoritative state, and workers report back through defined contracts rather than acting like a second backend. That separation is the core architectural rule the repository now assumes.
-
-The intended data flow follows the same pattern. The public site and portal are both web surfaces, not data authorities. Requests that need application state go to the API. The API reads and writes Postgres, coordinates worker work, and decides which artifact references belong in the database and which raw files belong in R2. Workers execute jobs, report progress and results back to the API, and upload large outputs through the artifact path defined by the backend. GHCR is the image distribution path for containerized services, not a source of runtime truth by itself.
+The current benchmark kernel is the repository-owned `benchmarks/firstproof/problem9` slice. Public reporting is narrow, and deeper run evidence stays in the portal or worker artifacts instead of the public site.

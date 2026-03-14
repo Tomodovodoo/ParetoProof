@@ -1,10 +1,10 @@
 # API
 
-`apps/api` is the Fastify control plane. It owns authentication mapping, run orchestration, database access, and the internal contracts that separate the browser from worker execution.
+`apps/api` is the Fastify control plane. It owns auth mapping, run orchestration, ingest, database access, and the API boundary between the browser and worker execution.
 
 Runtime env guidance:
 
-- use [docs/runtime-env-contract-baseline.md](../../docs/runtime-env-contract-baseline.md) as the authoritative source for required versus optional API variables by mode
+- use [docs/runtime.md](../../docs/runtime.md) as the runtime baseline
 - use [`.env.example`](./.env.example) only as the local developer-facing example for routine startup and owner ops
 
 ## Offline Problem 9 ingest

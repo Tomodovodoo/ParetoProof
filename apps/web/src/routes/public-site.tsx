@@ -49,7 +49,7 @@ const publicBenchmarkReports = {
       "Public release for the Problem 9 proof-generation benchmark slice under the current offline run-bundle contract.",
     includedConfigs: "3 configs",
     latestStatus: "mixed",
-    methodologyHref: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
+    methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
       "Complete public release for the current disclosed slice. Held-out or internal-only benchmark material remains out of scope for this report.",
     qualityState: "complete",
@@ -95,7 +95,7 @@ const publicBenchmarkReports = {
       "Public pilot release for statement-formalization reporting while the remaining package stays withheld for methodology and verification review.",
     includedConfigs: "2 configs",
     latestStatus: "partial",
-    methodologyHref: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
+    methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
       "Partial publication: some intended rows are still withheld while the canonical formal-statement verification policy is finalized.",
     qualityState: "partial",
@@ -291,23 +291,23 @@ const projectResources: Array<{
     body:
       "Read how public benchmark releases should be presented without turning the site into an analyst console.",
     external: true,
-    href: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
+    href: buildDocsUrl("benchmarks.md"),
     icon: "flask",
     label: "Open reporting baseline",
     title: "Benchmark reporting"
   },
   {
     body:
-      "See how canonical updates and release notes should land on the public surface as the project matures.",
+      "Read the short architecture summary for how the public site, auth entry, portal, API, and workers fit together.",
     external: true,
-    href: buildDocsUrl("product/release-notes-and-updates-baseline.md"),
+    href: buildDocsUrl("architecture.md"),
     icon: "spark",
-    label: "Open updates baseline",
-    title: "Updates and release notes"
+    label: "Open architecture",
+    title: "Architecture and surfaces"
   },
   {
     body:
-      "Follow the working methodology and architecture docs while the product surface is still being built out in public.",
+      "Use the docs index for the small remaining in-repo documentation instead of digging through a giant policy archive.",
     external: true,
     href: buildDocsUrl("README.md"),
     icon: "server",
