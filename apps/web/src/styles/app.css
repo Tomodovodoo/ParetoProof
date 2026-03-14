@@ -2497,19 +2497,26 @@ a.button-secondary {
   }
 
   .auth-provider-panel {
-    padding: 16px;
-    gap: 10px;
+    padding: 14px;
+    gap: 8px;
+  }
+
+  .auth-provider-panel .section-tag,
+  .auth-provider-panel .auth-panel-copy,
+  .auth-provider-panel-notes,
+  .auth-card-footer p {
+    display: none;
   }
 
   .auth-provider-button {
-    grid-template-columns: 38px minmax(0, 1fr) 18px;
-    gap: 10px;
-    padding: 12px 0;
+    grid-template-columns: 36px minmax(0, 1fr) 16px;
+    gap: 8px;
+    padding: 10px 0;
   }
 
   .auth-provider-mark {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
 
   .auth-check-list {
@@ -2524,6 +2531,12 @@ a.button-secondary {
   .auth-check-mark {
     width: 28px;
     height: 28px;
+  }
+
+  .auth-card-footer {
+    padding-top: 10px;
+    gap: 10px;
+    align-items: stretch;
   }
 }
 
