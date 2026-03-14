@@ -9,6 +9,7 @@
   "scripts": {
     "check:bidi": "node infra/scripts/check-bidi-chars.mjs",
     "check:env-contract": "node infra/scripts/check-runtime-env-examples.mjs",
+    "check:trusted-local-boundary": "node infra/scripts/check-trusted-local-boundaries.mjs",
     "report:dead-end-issues": "node infra/scripts/report-dead-end-issues.mjs",
     "test:bidi": "node --test infra/scripts/check-bidi-chars.test.mjs",
     "build": "bun run build:shared && bun run build:web && bun run build:api && bun run build:worker",

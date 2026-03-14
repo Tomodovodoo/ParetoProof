@@ -81,6 +81,7 @@ Trusted-local devbox wrapper:
 - the repo-owned launcher defaults to `--image paretoproof-problem9-devbox:local`; pass `--image <docker-image>` only when you intentionally need a different local devbox tag
 - the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
+- do not copy `.codex/auth.json` into this repository, worker fixtures, or Docker build contexts; trusted-local auth stays host-local and enters the devbox only through the read-only file mount above
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
 - the supplied Docker image must already include the Codex CLI and the worker runtime; if it cannot run `codex login status`, trusted-local preflight fails before any attempt starts
 

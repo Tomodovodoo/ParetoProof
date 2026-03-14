@@ -14,5 +14,6 @@ Thumbs.db
 dist/
 coverage/
 node_modules/
+.codex/
 .codex-*.pid
 *.tsbuildinfo
