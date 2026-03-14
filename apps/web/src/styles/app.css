@@ -433,6 +433,15 @@ a.button-secondary {
   letter-spacing: -0.03em;
 }
 
+.site-benchmark-card-grid-compact .site-panel-card {
+  padding: 12px;
+  gap: 8px;
+}
+
+.site-benchmark-card-grid-compact .site-panel-copy {
+  gap: 6px;
+}
+
 .site-footer {
   border: 1px solid var(--line);
   border-radius: 18px;
