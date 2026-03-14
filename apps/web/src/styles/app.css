@@ -1761,9 +1761,48 @@ a.button-secondary {
   }
 
   .portal-sidebar {
-    order: 2;
+    order: 1;
+    padding: 14px 12px;
     border-radius: 0;
     min-height: auto;
+  }
+
+  .portal-brand-copy,
+  .portal-nav-summary,
+  .portal-sidebar-footer {
+    display: none;
+  }
+
+  .portal-brand-block {
+    gap: 10px;
+  }
+
+  .portal-sidebar h1 {
+    font-size: 1.2rem;
+  }
+
+  .portal-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .portal-nav-group {
+    display: contents;
+  }
+
+  .portal-nav-group + .portal-nav-group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .portal-nav-group-label {
+    display: none;
+  }
+
+  .portal-nav-link {
+    gap: 10px;
+    padding: 10px;
   }
 
   .site-band + .site-band {
@@ -1782,7 +1821,7 @@ a.button-secondary {
   }
 
   .portal-main {
-    order: 1;
+    order: 2;
     padding: 16px 14px 18px;
     border-radius: 0;
   }
