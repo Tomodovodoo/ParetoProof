@@ -2298,6 +2298,38 @@ a.button-secondary {
 }
 
 @media (max-width: 360px) {
+  .portal-grid-profile-compact .portal-profile-form-panel {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .portal-grid-profile-compact .portal-profile-form-panel h2 {
+    display: none;
+  }
+
+  .portal-grid-profile-compact .auth-form {
+    gap: 6px;
+  }
+
+  .portal-grid-profile-compact .auth-field {
+    gap: 4px;
+  }
+
+  .portal-grid-profile-compact .auth-field span {
+    font-size: 0.84rem;
+  }
+
+  .portal-grid-profile-compact .auth-input,
+  .portal-grid-profile-compact .auth-field input {
+    padding: 0.64rem 0.76rem;
+  }
+
+  .portal-grid-profile-compact .portal-profile-form-panel .button,
+  .portal-grid-profile-compact .portal-profile-form-panel a.button {
+    min-height: 2.24rem;
+    padding: 0.5rem 0.82rem;
+  }
+
   .portal-overview-actions-compact {
     gap: 8px;
     padding-top: 0;
