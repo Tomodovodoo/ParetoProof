@@ -28,6 +28,9 @@ Runtime env guidance:
 - use [`.env.example`](./.env.example) only as the local developer-facing example
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
 - the checked-in `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
+- use `bun --cwd apps/worker test:cli-smoke` or the root alias `bun run test:worker:cli-smoke` to run the spawn-based CLI smoke suite locally or in CI
+- the smoke suite covers success paths for the repo-owned materializers, `run-problem9-attempt --auth-mode local_stub`, and offline ingest against a local stub server; it also pins clear-failure behavior for the trusted-local devbox wrapper and hosted claim loop when local Codex auth or hosted worker credentials are absent
+- devbox success and hosted claim-loop success remain credential-gated/manual because they require Docker plus trusted-local Codex auth or live worker bootstrap credentials; the default smoke suite makes those boundaries explicit instead of silently skipping them
 
 Package materialization:
 

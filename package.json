@@ -37,6 +37,7 @@
     "run:problem9-attempt": "bun --cwd apps/worker run:problem9-attempt",
     "run:problem9-attempt:trusted-local": "node infra/scripts/run-problem9-trusted-local-attempt.mjs",
     "run:worker-claim-loop": "bun --cwd apps/worker run:worker-claim-loop",
+    "test:worker:cli-smoke": "bun --cwd apps/worker test:cli-smoke",
     "build:shared": "bun --cwd packages/shared build",
     "test:api": "bun run build:shared && bun --cwd apps/api test",
     "typecheck:web": "bun --cwd apps/web typecheck",
