@@ -1071,6 +1071,120 @@ a.button-secondary {
   color: var(--rose);
 }
 
+/* ── Chart components ── */
+
+.chart-card {
+  background: var(--paper-elevated);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.chart-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chart-card p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.chart-grid-wide {
+  grid-template-columns: 1fr;
+}
+
+/* ── Portal loading skeleton ── */
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.15; }
+}
+
+@keyframes skeleton-spin {
+  to { transform: rotate(360deg); }
+}
+
+.portal-shell-loading {
+  pointer-events: none;
+}
+
+.portal-sidebar-skeleton {
+  opacity: 0.6;
+}
+
+.portal-sidebar-skeleton .portal-nav-group {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line-short {
+  width: 60%;
+}
+
+.skeleton-line-heading {
+  width: 50%;
+  height: 20px;
+}
+
+.portal-topbar-skeleton {
+  opacity: 0.5;
+}
+
+.portal-content-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.portal-skeleton-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.portal-skeleton-spinner {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--line);
+  border-top-color: var(--indigo);
+  border-radius: 50%;
+  animation: skeleton-spin 0.8s linear infinite;
+}
+
 .portal-shell {
   min-height: 100vh;
   padding: 10px;

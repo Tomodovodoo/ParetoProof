@@ -12,7 +12,8 @@
   "dependencies": {
     "@paretoproof/shared": "workspace:*",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "recharts": "^3.8.0"
   },
   "devDependencies": {
     "@types/react": "latest",
