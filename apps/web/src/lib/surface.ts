@@ -112,23 +112,44 @@ function buildLocalSurfaceUrl(
   return surfaceUrl.toString();
 }
 
+export function mergeLocalPortalStateSearch(
+  targetSearch: string,
+  currentSearch: string
+) {
+  const targetParams = new URLSearchParams(targetSearch);
+  const currentParams = new URLSearchParams(currentSearch);
+  const currentAccess = currentParams.get("access");
+
+  for (const key of localPortalStateParamKeys) {
+    if (targetParams.has(key)) {
+      continue;
+    }
+
+    const value = currentParams.get(key);
+
+    if (!value) {
+      continue;
+    }
+
+    if (key === "reason" && currentAccess !== "denied") {
+      continue;
+    }
+
+    targetParams.set(key, value);
+  }
+
+  return targetParams.toString();
+}
+
 function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
   if (!isLocalOrigin(currentLocation.hostname)) {
     return;
   }
 
-  const currentParams = new URLSearchParams(currentLocation.search);
-
-  for (const key of localPortalStateParamKeys) {
-    if (targetUrl.searchParams.has(key)) {
-      continue;
-    }
-    const value = currentParams.get(key);
-
-    if (value) {
-      targetUrl.searchParams.set(key, value);
-    }
-  }
+  targetUrl.search = mergeLocalPortalStateSearch(
+    targetUrl.search,
+    currentLocation.search
+  );
 }
 
 export function buildAuthUrl(targetPath = "/", hostname = window.location.hostname) {
