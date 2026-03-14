@@ -2304,4 +2304,44 @@ a.button-secondary {
   .site-shell:not(.site-project-shell) .site-hero-copy h1 {
     font-size: clamp(1.75rem, 9vw, 2.3rem);
   }
+
+  .site-shell.site-benchmark-shell {
+    gap: 14px;
+  }
+
+  .site-shell.site-benchmark-shell .site-header,
+  .site-shell.site-benchmark-shell .site-hero,
+  .site-shell.site-benchmark-shell .site-footer {
+    padding: 14px;
+  }
+
+  .site-shell.site-benchmark-shell .site-header-main,
+  .site-shell.site-benchmark-shell .site-header-actions,
+  .site-shell.site-benchmark-shell .site-hero-copy {
+    gap: 6px;
+  }
+
+  .site-shell.site-benchmark-shell .site-tagline,
+  .site-shell.site-benchmark-shell .site-signal-column {
+    display: none;
+  }
+
+  .site-shell.site-benchmark-shell .site-primary-nav,
+  .site-shell.site-benchmark-shell .site-header-actions .button-secondary {
+    display: none;
+  }
+
+  .site-shell.site-benchmark-shell .site-hero {
+    gap: 10px;
+    padding-top: 12px;
+  }
+
+  .site-shell.site-benchmark-shell .site-hero-copy h1 {
+    font-size: clamp(1.68rem, 8.7vw, 2.2rem);
+    line-height: 0.98;
+  }
+
+  .site-shell.site-benchmark-shell .site-lead {
+    font-size: 0.92rem;
+  }
 }
