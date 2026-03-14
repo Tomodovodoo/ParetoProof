@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import {
+  buildAccessRequestUrl,
   buildAccessStartUrl,
+  buildAuthUrl,
   buildPortalUrl,
   buildPublicUrl,
   isLocalHostname
@@ -12,15 +14,51 @@ type AuthEntryProps = {
   redirectPath: string;
 };
 
-const authChecks = [
+const signInChecks = [
   "We match this provider to your existing ParetoProof account whenever possible.",
-  "If your account still needs approval, we will say that clearly before portal entry.",
-  "If sign-in or recovery needs attention, you stay on a branded surface with next steps."
+  "If your account still needs approval, we will let you know clearly before portal entry.",
+  "If sign-in or recovery needs attention, you will see clear next steps."
 ];
 
+const accessRequestChecks = [
+  "New collaborators verify identity before submitting an access request.",
+  "After verification, you will be taken to the contributor access request form.",
+  "Approval is manual — requesting access is separate from approved sign-in."
+];
+
+export function resolveAuthEntryMode(redirectPath: string) {
+  return redirectPath === "/access-request" ? "access_request" : "sign_in";
+}
+
+export function buildAuthEntrySessionCheckRequestInit(signal: AbortSignal): RequestInit {
+  return {
+    credentials: "include",
+    headers: {
+      Accept: "application/json"
+    },
+    redirect: "manual",
+    signal
+  };
+}
+
+export function resolveAuthEntrySessionCheckAction(response: Pick<Response, "ok" | "status" | "type">) {
+  if (response.ok) {
+    return "redirect_portal";
+  }
+
+  if (response.type === "opaqueredirect" || response.status === 401) {
+    return "stay_on_auth_entry";
+  }
+
+  return "stay_on_auth_entry";
+}
+
 export function AuthEntry({ redirectPath }: AuthEntryProps) {
+  const mode = resolveAuthEntryMode(redirectPath);
   const githubStartUrl = buildAccessStartUrl("github", redirectPath);
   const googleStartUrl = buildAccessStartUrl("google", redirectPath);
+  const approvedSignInUrl = buildAuthUrl("/");
+  const accessRequestUrl = buildAccessRequestUrl();
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const portalUrl = useMemo(() => buildPortalUrl(redirectPath), [redirectPath]);
@@ -29,6 +67,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const showFailedNotice = handoffMode === "failed";
   const showRetryNotice = handoffMode === "retry";
   const showAuxiliaryStatus = showFailedNotice || showRetryNotice || isCheckingSession;
+  const authChecks = mode === "access_request" ? accessRequestChecks : signInChecks;
 
   useEffect(() => {
     if (isLocal) {
@@ -39,15 +78,13 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
 
     async function resolveExistingSession() {
       try {
-        const response = await fetch(`${apiBaseUrl}/portal/me`, {
-          credentials: "include",
-          headers: {
-            Accept: "application/json"
-          },
-          signal: controller.signal
-        });
+        const response = await fetch(
+          `${apiBaseUrl}/portal/me`,
+          buildAuthEntrySessionCheckRequestInit(controller.signal)
+        );
+        const action = resolveAuthEntrySessionCheckAction(response);
 
-        if (response.ok) {
+        if (action === "redirect_portal") {
           window.location.replace(portalUrl);
           return;
         }
@@ -83,36 +120,47 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
             </span>
             ParetoProof portal
           </p>
-          <h1>Sign in to the contributor portal.</h1>
+          <h1>
+            {mode === "access_request"
+              ? "Request contributor access."
+              : "Sign in to the contributor portal."}
+          </h1>
           <p className="auth-lead">
-            Use GitHub or Google to continue. If this browser already has an approved
-            ParetoProof session, we will take you straight into the portal.
+            {mode === "access_request"
+              ? "Use GitHub or Google to verify your identity. After that, we will take you to the access request form."
+              : "Use GitHub or Google to continue. If you already have an active session, we will take you straight into the portal."}
           </p>
           {showRetryNotice ? (
             <p className="auth-panel-copy">
-              That sign-in handoff did not finish cleanly. Start again here and we will
-              retry from a fresh branded entry.
+              Sign-in did not complete. Please try again.
             </p>
           ) : null}
           {showFailedNotice ? (
             <p className="auth-panel-copy">
-              The provider handoff could not be started cleanly. Start again here and we
-              will open a fresh sign-in flow.
+              Something went wrong during sign-in. Please try again.
             </p>
           ) : null}
           {isCheckingSession ? (
             <p className="auth-panel-copy">
-              Checking whether this browser already has a valid portal session.
+              Checking for an existing session...
             </p>
           ) : null}
         </div>
 
         <div className="auth-provider-layout">
           <section className="auth-provider-panel">
-            <p className="section-tag">Sign in</p>
-            <h2>Choose a sign-in method</h2>
+            <p className="section-tag">
+              {mode === "access_request" ? "Verify identity" : "Sign in"}
+            </p>
+            <h2>
+              {mode === "access_request"
+                ? "Choose the identity you want reviewed"
+                : "Choose a sign-in method"}
+            </h2>
             <p className="auth-panel-copy">
-              Pick the provider that matches the identity you use for ParetoProof.
+              {mode === "access_request"
+                ? "Choose the provider you want linked to your access request."
+                : "Choose the provider linked to your ParetoProof account."}
             </p>
             <div className="auth-provider-list">
               <a className="auth-provider-button" href={githubStartUrl}>
@@ -161,9 +209,19 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
         <div className="auth-card-footer">
           <p>
             {isLocal
-              ? "This development build can open a seeded approved portal session without Cloudflare Access."
-              : "Not approved yet? Sign in first, then submit your contributor access request from inside the portal."}
+              ? "Running locally — authentication is bypassed for development."
+              : mode === "access_request"
+                ? "Already have an account? Use the sign-in entry instead."
+                : "New here? Request contributor access to get started."}
           </p>
+          <a
+            className="button"
+            href={mode === "access_request" ? approvedSignInUrl : accessRequestUrl}
+          >
+            {mode === "access_request"
+              ? "Approved contributor sign in"
+              : "Request collaborator access"}
+          </a>
           <a className="button button-secondary" href={buildPublicUrl("/")}>
             Back to paretoproof.com
           </a>

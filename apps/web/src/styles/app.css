@@ -671,6 +671,7 @@ a.button-secondary {
   border-radius: 14px;
   background:
     radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.03), transparent 50%),
+    radial-gradient(circle at top left, rgba(185, 117, 20, 0.04), transparent 40%),
     rgba(255, 255, 255, 0.72);
 }
 
@@ -698,12 +699,14 @@ a.button-secondary {
   border-radius: 14px;
   background:
     radial-gradient(circle at top left, rgba(8, 145, 178, 0.04), transparent 50%),
+    radial-gradient(circle at bottom right, rgba(185, 117, 20, 0.05), transparent 34%),
     rgba(255, 255, 255, 0.76);
 }
 
 .site-step-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
@@ -720,16 +723,24 @@ a.button-secondary {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background:
+    radial-gradient(circle at right center, rgba(185, 117, 20, 0.06), transparent 32%),
+    rgba(255, 255, 255, 0.72);
   transition:
     border-color 160ms ease,
-    background-color 160ms ease;
+    background-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .site-link-row:hover,
 .site-link-row:focus-visible {
   border-color: var(--indigo-border);
-  background: rgba(79, 70, 229, 0.03);
+  background:
+    radial-gradient(circle at right center, rgba(8, 145, 178, 0.08), transparent 34%),
+    rgba(79, 70, 229, 0.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(16, 42, 103, 0.06);
 }
 
 .site-link-row-copy {
@@ -749,8 +760,8 @@ a.button-secondary {
 
 .site-inline-note {
   padding: 14px 18px;
-  border-left: 3px solid var(--violet-border);
-  background: var(--violet-soft);
+  border-left: 3px solid rgba(168, 71, 94, 0.28);
+  background: rgba(168, 71, 94, 0.08);
   border-radius: 0 10px 10px 0;
 }
 
@@ -766,6 +777,7 @@ a.button-secondary {
   background:
     radial-gradient(ellipse at 10% 50%, rgba(8, 145, 178, 0.05), transparent 40%),
     radial-gradient(ellipse at 90% 50%, rgba(79, 70, 229, 0.04), transparent 40%),
+    radial-gradient(ellipse at 55% 10%, rgba(185, 117, 20, 0.05), transparent 26%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(249, 251, 255, 0.96));
   padding: 24px;
 }
@@ -781,6 +793,7 @@ a.button-secondary {
   border-radius: 16px;
   background:
     radial-gradient(circle at top left, rgba(109, 40, 217, 0.03), transparent 50%),
+    radial-gradient(circle at bottom right, rgba(8, 145, 178, 0.05), transparent 36%),
     rgba(255, 255, 255, 0.76);
   padding: 18px;
   display: grid;
@@ -801,6 +814,18 @@ a.button-secondary {
   padding: 24px;
   display: grid;
   gap: 12px;
+}
+
+.site-band:nth-child(3n + 1) .section-tag {
+  color: var(--teal);
+}
+
+.site-band:nth-child(3n + 2) .section-tag {
+  color: var(--violet);
+}
+
+.site-band:nth-child(3n + 3) .section-tag {
+  color: var(--amber);
 }
 
 .site-band + .site-band {
