@@ -256,6 +256,9 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
 
   const request = parsedRequest.data as Problem9OfflineIngestRequest;
   const bundle = request.bundle;
+  assertSafeObjectKeySegment(bundle.runBundle.runId, "runBundle.runId");
+  assertSafeObjectKeySegment(bundle.runBundle.attemptId, "runBundle.attemptId");
+  assertSafeArtifactManifestPaths(bundle.artifactManifest);
   const manifestEntriesByPath = new Map<string, Problem9OfflineArtifactManifestEntry>(
     bundle.artifactManifest.artifacts.map((entry) => [entry.relativePath, entry])
   );
@@ -480,6 +483,12 @@ function assertNoDuplicateManifestPaths(artifactManifest: Problem9OfflineArtifac
     }
 
     seenPaths.add(artifact.relativePath);
+  }
+}
+
+function assertSafeArtifactManifestPaths(artifactManifest: Problem9OfflineArtifactManifest) {
+  for (const artifact of artifactManifest.artifacts) {
+    assertSafeRelativePath(artifact.relativePath, "artifactManifest.relativePath");
   }
 }
 
