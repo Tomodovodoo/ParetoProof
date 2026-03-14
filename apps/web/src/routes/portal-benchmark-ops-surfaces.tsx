@@ -126,6 +126,10 @@ export function getCompactRunsSectionOrder() {
   return ["runsSlice", "quickFilters", "resultsPanel", "supportPanel"] as const;
 }
 
+export function isCurrentBenchmarkOpsRequest(requestId: number, currentRequestId: number) {
+  return requestId === currentRequestId;
+}
+
 function updateRunsQuery(
   pathname: string,
   currentQuery: PortalRunsListQuery,
@@ -170,6 +174,7 @@ export function PortalBenchmarkOpsSurface({
   const [runDetailState, setRunDetailState] = useState<LoadState<PortalRunDetailResponse>>(createLoadState);
   const [launchState, setLaunchState] = useState<LoadState<PortalLaunchViewResponse>>(createLoadState);
   const [workersState, setWorkersState] = useState<LoadState<PortalWorkersViewResponse>>(createLoadState);
+  const runsRequestIdRef = useRef(0);
   const runDetailRequestIdRef = useRef(0);
   const [launchSelection, setLaunchSelection] = useState<LaunchSelectionState>({
     benchmarkVersionId: "",
@@ -179,8 +184,16 @@ export function PortalBenchmarkOpsSurface({
 
   const loadRuns = useCallback(async () => {
     setRunsState((current) => ({ ...current, error: null, isLoading: true }));
+    runsRequestIdRef.current += 1;
+    const requestId = runsRequestIdRef.current;
+
     try {
       const data = await fetchPortalRunsView(runsQuery);
+
+      if (!isCurrentBenchmarkOpsRequest(requestId, runsRequestIdRef.current)) {
+        return;
+      }
+
       setRunsState({
         data,
         error: null,
@@ -188,6 +201,10 @@ export function PortalBenchmarkOpsSurface({
         lastUpdatedAt: new Date().toISOString()
       });
     } catch (error) {
+      if (!isCurrentBenchmarkOpsRequest(requestId, runsRequestIdRef.current)) {
+        return;
+      }
+
       setRunsState((current) => ({
         ...current,
         error: toDisplayError(error),
@@ -208,7 +225,7 @@ export function PortalBenchmarkOpsSurface({
     try {
       const data = await fetchPortalRunDetail(activeRunId);
 
-      if (requestId !== runDetailRequestIdRef.current) {
+      if (!isCurrentBenchmarkOpsRequest(requestId, runDetailRequestIdRef.current)) {
         return;
       }
 
@@ -219,7 +236,7 @@ export function PortalBenchmarkOpsSurface({
         lastUpdatedAt: new Date().toISOString()
       });
     } catch (error) {
-      if (requestId !== runDetailRequestIdRef.current) {
+      if (!isCurrentBenchmarkOpsRequest(requestId, runDetailRequestIdRef.current)) {
         return;
       }
 

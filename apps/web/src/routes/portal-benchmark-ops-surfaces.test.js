@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
   buildRunDetailTargetPath,
   buildRunsIndexTargetPath,
-  getCompactRunsSectionOrder
+  getCompactRunsSectionOrder,
+  isCurrentBenchmarkOpsRequest
 } from "./portal-benchmark-ops-surfaces.tsx";
 
 describe("portal benchmark ops route targets", () => {
@@ -45,5 +46,15 @@ describe("portal benchmark ops route targets", () => {
       "resultsPanel",
       "supportPanel"
     ]);
+  });
+});
+
+describe("isCurrentBenchmarkOpsRequest", () => {
+  it("accepts the latest in-flight request id", () => {
+    expect(isCurrentBenchmarkOpsRequest(4, 4)).toBe(true);
+  });
+
+  it("rejects stale responses from older list or detail requests", () => {
+    expect(isCurrentBenchmarkOpsRequest(3, 4)).toBe(false);
   });
 });

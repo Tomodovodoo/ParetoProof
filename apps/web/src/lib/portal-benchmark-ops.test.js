@@ -15,8 +15,25 @@ describe("parsePortalRunsQuery", () => {
     expect(query).toEqual({
       ...defaultPortalRunsQuery,
       providerFamily: "openai",
-      q: "PP-318"
+      q: "PP-318",
+      runLifecycle: ["queued"],
+      verdict: ["pass"]
     });
+  });
+
+  it("drops malformed csv fragments while preserving valid unique entries", () => {
+    const query = parsePortalRunsQuery(
+      "?verdict=invalid_result,pass,invalid_result,wrong&runLifecycle=running,,queued,broken,running"
+    );
+
+    expect(query.verdict).toEqual([
+      "invalid_result",
+      "pass"
+    ]);
+    expect(query.runLifecycle).toEqual([
+      "running",
+      "queued"
+    ]);
   });
 
   it("keeps valid enum and csv params when they parse cleanly", () => {

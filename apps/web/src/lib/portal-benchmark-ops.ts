@@ -1,4 +1,5 @@
 import {
+  evaluationVerdictClassSchema,
   portalLaunchViewResponseSchema,
   portalRunDetailResponseSchema,
   portalRunsLifecycleBuckets,
@@ -14,6 +15,7 @@ import {
   type PortalRunsSortId,
   type PortalWorkerIncidentSeverity,
   type PortalWorkersViewResponse,
+  runLifecycleStateSchema,
   runKindSchema,
   type RunLifecycleState
 } from "@paretoproof/shared";
@@ -712,6 +714,37 @@ function parseQueryField<TValue>(
   return result.success ? result.data : fallback;
 }
 
+function parseCsvEnumField<TValue extends string>(
+  parser: { safeParse: (value: unknown) => { success: true; data: TValue } | { success: false } },
+  value: string | null
+) {
+  if (!value) {
+    return [];
+  }
+
+  const items: TValue[] = [];
+  const seen = new Set<TValue>();
+
+  for (const candidate of value.split(",")) {
+    const normalizedCandidate = parseNullableParam(candidate);
+
+    if (!normalizedCandidate) {
+      continue;
+    }
+
+    const parsedCandidate = parser.safeParse(normalizedCandidate);
+
+    if (!parsedCandidate.success || seen.has(parsedCandidate.data)) {
+      continue;
+    }
+
+    seen.add(parsedCandidate.data);
+    items.push(parsedCandidate.data);
+  }
+
+  return items;
+}
+
 function createRunsListResponse(query: PortalRunsListQuery): PortalRunsListResponse {
   const filteredItems = sortPortalRuns(
     localRunItems.filter((item) => matchesPortalRunsQuery(item, query)),
@@ -910,19 +943,11 @@ export function parsePortalRunsQuery(search: string): PortalRunsListQuery {
       parseNullableParam(params.get("runKind")),
       defaultPortalRunsQuery.runKind
     ),
-    runLifecycle: parseQueryField(
-      portalRunsListQuerySchema.shape.runLifecycle,
-      params.get("runLifecycle") ?? undefined,
-      defaultPortalRunsQuery.runLifecycle
-    ),
+    runLifecycle: parseCsvEnumField(runLifecycleStateSchema, params.get("runLifecycle")),
     runMode: parseNullableParam(params.get("runMode")),
     sort,
     toolProfile: parseNullableParam(params.get("toolProfile")),
-    verdict: parseQueryField(
-      portalRunsListQuerySchema.shape.verdict,
-      params.get("verdict") ?? undefined,
-      defaultPortalRunsQuery.verdict
-    )
+    verdict: parseCsvEnumField(evaluationVerdictClassSchema, params.get("verdict"))
   } satisfies PortalRunsListQuery;
 
   const parsedQuery = portalRunsListQuerySchema.safeParse(candidateQuery);
