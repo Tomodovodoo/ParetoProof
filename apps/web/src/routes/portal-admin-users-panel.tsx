@@ -22,6 +22,13 @@ type UserFilters = {
   search: string;
 };
 
+type UserActionFeedback =
+  | {
+      message: string;
+      tone: "error" | "success";
+    }
+  | null;
+
 const initialFilters: UserFilters = {
   accessPosture: "all",
   activeRole: "all",
@@ -42,6 +49,13 @@ export function resolveSelectedAdminUserId(
 
 export function getCompactAdminUsersSectionOrder() {
   return ["userList", "filterFields"] as const;
+}
+
+export function isSelectedAdminUserDetailCurrent(
+  detailItem: Awaited<ReturnType<typeof loadPortalAdminUserDetail>> | null,
+  selectedUserId: string | null
+) {
+  return Boolean(detailItem && selectedUserId && detailItem.userId === selectedUserId);
 }
 
 function formatTimestamp(timestamp: string | null) {
@@ -84,7 +98,7 @@ function filterUsers(items: PortalAdminUserListItem[], filters: UserFilters) {
 }
 
 export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<UserActionFeedback>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<Awaited<
     ReturnType<typeof loadPortalAdminUserDetail>
@@ -203,10 +217,22 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
       setUsers(nextItems);
       setListError(null);
       markUpdated();
+
+      if (selectedUserId) {
+        const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, selectedUserId);
+        setDetailItem(nextDetail);
+        setDetailError(null);
+      }
     } catch (error) {
-      setListError(
-        error instanceof Error ? error.message : "The admin user directory could not be loaded."
-      );
+      const message =
+        error instanceof Error ? error.message : "The admin user directory could not be loaded.";
+
+      if (selectedUserId) {
+        setDetailItem(null);
+        setDetailError(message);
+      } else {
+        setListError(message);
+      }
     } finally {
       if (initialLoad) {
         setIsLoading(false);
@@ -230,28 +256,34 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     }
 
     try {
-      setActionMessage(null);
+      setActionFeedback(null);
       setIsMutating(true);
       const result = await revokePortalAdminUserRole(apiBaseUrl, detailItem.userId, {
         reason: revocationReason
       });
 
       if (!result.ok) {
-        setActionMessage(result.message);
+        setActionFeedback({
+          message: result.message,
+          tone: "error"
+        });
         return;
       }
 
       await refreshUsers();
-      const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, detailItem.userId);
-      setDetailItem(nextDetail);
       setRevocationReason("");
-      setActionMessage("Active contributor role revoked and current sessions cleared.");
+      setActionFeedback({
+        message: "Active contributor role revoked and current sessions cleared.",
+        tone: "success"
+      });
     } catch (error) {
-      setActionMessage(
-        error instanceof Error
-          ? error.message
-          : "The role revocation could not be completed."
-      );
+      setActionFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The role revocation could not be completed.",
+        tone: "error"
+      });
     } finally {
       setIsMutating(false);
     }
@@ -402,7 +434,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               key={item.userId}
               onClick={() => {
                 revealSelectedUserDetail(item.userId);
-                setActionMessage(null);
+                setActionFeedback(null);
               }}
               type="button"
             >
@@ -461,6 +493,11 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
             <h3>User detail unavailable</h3>
             <p>{detailError}</p>
           </article>
+        ) : isDetailLoading || !isSelectedAdminUserDetailCurrent(detailItem, selectedUserId) ? (
+          <article className="portal-admin-card portal-admin-card-empty">
+            <h3>Loading user detail</h3>
+            <p>Pulling account posture, linked identities, and corrective-action context.</p>
+          </article>
         ) : detailItem ? (
           <>
             <article className="portal-admin-card">
@@ -484,15 +521,11 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
                   Latest session expiry {formatTimestamp(detailItem.sessionPosture.latestSessionExpiresAt)}
                 </span>
               </div>
-              {actionMessage ? (
+              {actionFeedback ? (
                 <p
-                  className={`portal-admin-feedback ${
-                    actionMessage.includes("could not") || actionMessage.includes("no active")
-                      ? "portal-admin-feedback-error"
-                      : "portal-admin-feedback-success"
-                  }`}
+                  className={`portal-admin-feedback portal-admin-feedback-${actionFeedback.tone}`}
                 >
-                  {actionMessage}
+                  {actionFeedback.message}
                 </p>
               ) : null}
             </article>

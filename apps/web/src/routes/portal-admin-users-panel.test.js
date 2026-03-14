@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   getCompactAdminUsersSectionOrder,
+  isSelectedAdminUserDetailCurrent,
   resolveSelectedAdminUserId
 } from "./portal-admin-users-panel.tsx";
 
@@ -41,5 +42,29 @@ describe("getCompactAdminUsersSectionOrder", () => {
       "userList",
       "filterFields"
     ]);
+  });
+});
+
+describe("isSelectedAdminUserDetailCurrent", () => {
+  it("returns false when the currently loaded detail belongs to a different user", () => {
+    expect(
+      isSelectedAdminUserDetailCurrent(
+        {
+          userId: "user-ada"
+        },
+        "user-lin"
+      )
+    ).toBe(false);
+  });
+
+  it("returns true when the loaded detail matches the active selection", () => {
+    expect(
+      isSelectedAdminUserDetailCurrent(
+        {
+          userId: "user-ada"
+        },
+        "user-ada"
+      )
+    ).toBe(true);
   });
 });
