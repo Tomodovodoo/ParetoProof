@@ -3090,6 +3090,13 @@ a.button-secondary {
     gap: 6px;
   }
 
+  .site-shell.site-benchmark-shell .button,
+  .site-shell.site-benchmark-shell a.button {
+    min-height: 2.34rem;
+    padding: 0.52rem 0.82rem;
+    font-size: 0.9rem;
+  }
+
   .site-shell.site-benchmark-shell .site-tagline,
   .site-shell.site-benchmark-shell .site-signal-column {
     display: none;
@@ -3101,7 +3108,7 @@ a.button-secondary {
   }
 
   .site-shell.site-benchmark-shell .hero-actions .button-secondary {
-    display: none;
+    display: inline-flex;
   }
 
   .site-shell.site-benchmark-report-shell .hero-actions .button-secondary {
@@ -3199,16 +3206,17 @@ a.button-secondary {
   }
 
   .site-shell.site-benchmark-shell .site-hero {
-    gap: 10px;
-    padding-top: 12px;
+    gap: 8px;
+    padding-top: 10px;
   }
 
   .site-shell.site-benchmark-shell .site-hero-copy h1 {
-    font-size: clamp(1.68rem, 8.7vw, 2.2rem);
+    font-size: clamp(1.58rem, 8.1vw, 2.02rem);
     line-height: 0.98;
   }
 
   .site-shell.site-benchmark-shell .site-lead {
-    font-size: 0.92rem;
+    font-size: 0.88rem;
+    line-height: 1.42;
   }
 }
