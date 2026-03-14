@@ -2298,6 +2298,57 @@ a.button-secondary {
 }
 
 @media (max-width: 360px) {
+  .auth-card {
+    gap: 12px;
+  }
+
+  .auth-card-intro {
+    gap: 8px;
+  }
+
+  .auth-card h1 {
+    font-size: clamp(1.62rem, 8.5vw, 2.1rem);
+  }
+
+  .auth-lead,
+  .auth-panel-copy {
+    font-size: 0.9rem;
+  }
+
+  .auth-provider-panel {
+    padding: 14px;
+    gap: 8px;
+  }
+
+  .auth-provider-panel .section-tag,
+  .auth-provider-panel .auth-panel-copy {
+    display: none;
+  }
+
+  .auth-provider-panel h2 {
+    font-size: 1.12rem;
+  }
+
+  .auth-provider-button {
+    grid-template-columns: 36px minmax(0, 1fr) 16px;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .auth-provider-button small {
+    margin-top: 2px;
+    font-size: 0.84rem;
+  }
+
+  .auth-provider-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .auth-provider-panel-notes {
+    display: none;
+  }
+
   .portal-grid-profile-compact .portal-profile-form-panel {
     gap: 6px;
     padding-top: 6px;
