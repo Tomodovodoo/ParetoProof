@@ -853,7 +853,7 @@ test("stale-lease recovery does not downgrade a run while another job is still a
   assert.equal(updateCalls[2].state, "claimed");
 });
 
-test("heartbeat preserves the current job token while extending the lease", async () => {
+test("heartbeat rotates the job token while extending the lease", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
@@ -916,9 +916,10 @@ test("heartbeat preserves the current job token while extending the lease", asyn
   const response = await control.heartbeat(buildHeartbeatRequest(), buildJobAuthContext());
 
   assert.equal(response.cancelRequested, false);
-  assert.equal(response.jobToken, "job-token-1");
+  assert.ok(typeof response.jobToken === "string" && response.jobToken.length > 0);
+  assert.notEqual(response.jobToken, "job-token-1");
   assert.ok(response.jobTokenExpiresAt);
-  assert.equal(updateCalls[0].jobTokenHash, undefined);
+  assert.equal(typeof updateCalls[0].jobTokenHash, "string");
   assert.equal(updateCalls[1].state, "running");
   assert.equal(updateCalls[2].state, "active");
   assert.equal(updateCalls[3].state, "running");

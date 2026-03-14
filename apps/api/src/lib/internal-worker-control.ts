@@ -1150,10 +1150,12 @@ export function createInternalWorkerControlService(db: DbClient) {
 
         const nextLeaseExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
         const nextJobTokenExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
+        const nextJobToken = issueJobToken();
 
         const renewedLeases = await tx
           .update(workerJobLeases)
           .set({
+            jobTokenHash: nextJobToken.tokenHash,
             jobTokenExpiresAt: nextJobTokenExpiresAt,
             lastEventSequence: acknowledgedEventSequence,
             lastHeartbeatAt: now,
@@ -1186,7 +1188,7 @@ export function createInternalWorkerControlService(db: DbClient) {
         return {
           acknowledgedEventSequence,
           cancelRequested: false,
-          jobToken: authContext.jobToken,
+          jobToken: nextJobToken.token,
           jobTokenExpiresAt: nextJobTokenExpiresAt.toISOString(),
           leaseExpiresAt: nextLeaseExpiresAt.toISOString(),
           leaseStatus: "active"
