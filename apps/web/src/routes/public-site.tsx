@@ -1,7 +1,7 @@
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
@@ -375,28 +375,31 @@ function PublicHeader({
   currentPath: string;
   homeHref?: string;
 }) {
+  const isHome = currentPath === "/" || currentPath === "";
   const isProjectRoute = currentPath === projectRoute || currentPath.startsWith(`${projectRoute}/`);
   const isBenchmarksRoute =
     currentPath === benchmarksRoute ||
     currentPath.startsWith(`${benchmarksRoute}/`) ||
     currentPath.startsWith(reportsRoutePrefix);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <header className="site-header">
-      <div className="site-header-main">
-        <div className="site-brand">
+      <div className="site-header-bar">
+        <a className="site-brand" href={homeHref ?? buildPublicUrl("/")}>
           <span className="site-brand-mark" aria-hidden="true">
             <AppIcon name="spark" />
           </span>
-          <div>
-            <p className="eyebrow">ParetoProof</p>
-            <p className="site-tagline">
-              Formal benchmark infrastructure for mathematical reasoning systems.
-            </p>
-          </div>
-        </div>
+          <span className="site-brand-name">ParetoProof</span>
+        </a>
 
         <nav className="site-primary-nav" aria-label="Primary">
+          <a
+            className={`site-nav-link${isHome ? " site-nav-link-active" : ""}`}
+            href={buildPublicUrl("/")}
+          >
+            Home
+          </a>
           <a
             className={`site-nav-link${isProjectRoute ? " site-nav-link-active" : ""}`}
             href={buildPublicUrl(projectRoute)}
@@ -410,18 +413,57 @@ function PublicHeader({
             Benchmarks
           </a>
         </nav>
+
+        <div className="site-header-actions">
+          <a className="button button-secondary site-header-github" href={githubDiscussionsUrl} rel="noreferrer" target="_blank">
+            <span className="inline-icon" aria-hidden="true"><AppIcon name="github" /></span>
+            GitHub
+          </a>
+          <a className="button" href={buildAuthUrl("/")}>
+            Sign in
+          </a>
+          <button
+            className="site-mobile-toggle"
+            onClick={() => { setMobileNavOpen((open) => !open); }}
+            type="button"
+            aria-expanded={mobileNavOpen}
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+          >
+            <span className="site-mobile-toggle-icon" aria-hidden="true">
+              <AppIcon name={mobileNavOpen ? "panel-left" : "grid"} />
+            </span>
+          </button>
+        </div>
       </div>
 
-      <div className="site-header-actions">
-        {homeHref ? (
-          <a className="button button-secondary" href={homeHref}>
-            Return to apex home
+      {mobileNavOpen ? (
+        <nav className="site-mobile-nav" aria-label="Mobile navigation">
+          <a
+            className={`site-mobile-nav-link${isHome ? " site-mobile-nav-link-active" : ""}`}
+            href={buildPublicUrl("/")}
+          >
+            Home
           </a>
-        ) : null}
-        <a className="button" href={buildAuthUrl("/")}>
-          Contributor sign in
-        </a>
-      </div>
+          <a
+            className={`site-mobile-nav-link${isProjectRoute ? " site-mobile-nav-link-active" : ""}`}
+            href={buildPublicUrl(projectRoute)}
+          >
+            Project
+          </a>
+          <a
+            className={`site-mobile-nav-link${isBenchmarksRoute ? " site-mobile-nav-link-active" : ""}`}
+            href={buildPublicUrl(benchmarksRoute)}
+          >
+            Benchmarks
+          </a>
+          <a className="site-mobile-nav-link" href={githubDiscussionsUrl} rel="noreferrer" target="_blank">
+            GitHub Discussions
+          </a>
+          <a className="button site-mobile-nav-cta" href={buildAuthUrl("/")}>
+            Contributor sign in
+          </a>
+        </nav>
+      ) : null}
     </header>
   );
 }

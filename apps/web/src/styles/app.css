@@ -202,34 +202,100 @@ a.button-secondary {
 }
 
 .site-header {
-  padding: 20px 24px;
+  position: sticky;
+  top: 12px;
+  z-index: 100;
+  padding: 14px 20px;
+  display: grid;
+  gap: 0;
+  background: var(--paper-elevated);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 1px 3px rgba(16, 42, 103, 0.06), 0 4px 16px rgba(16, 42, 103, 0.04);
+}
+
+.site-header-bar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
-.site-header-main {
-  display: grid;
-  gap: 14px;
-}
-
 .site-brand {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.site-brand-name {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+  color: var(--navy);
 }
 
 .site-brand-mark {
   display: inline-flex;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--line-accent);
+  border-radius: 10px;
+  background: var(--indigo-soft);
+  color: var(--indigo);
+}
+
+.site-mobile-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(17, 42, 103, 0.06);
-  color: var(--navy);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+}
+
+.site-mobile-toggle-icon {
+  display: inline-flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-mobile-nav {
+  display: grid;
+  gap: 4px;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.site-mobile-nav-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--ink);
+  transition: background-color 140ms ease;
+}
+
+.site-mobile-nav-link:hover,
+.site-mobile-nav-link:focus-visible {
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.site-mobile-nav-link-active {
+  color: var(--indigo);
+  background: var(--indigo-soft);
+}
+
+.site-mobile-nav-cta {
+  margin-top: 4px;
 }
 
 .site-tagline,
@@ -286,7 +352,6 @@ a.button-secondary {
 }
 
 .hero-actions,
-.site-header-actions,
 .site-pill-row,
 .site-footer-links,
 .portal-link-actions,
@@ -297,13 +362,49 @@ a.button-secondary {
   gap: 12px;
 }
 
-.site-primary-nav {
+.site-header-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
-.site-nav-link,
+.site-primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.site-nav-link:hover,
+.site-nav-link:focus-visible {
+  color: var(--ink);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.site-nav-link-active {
+  color: var(--indigo);
+  background: var(--indigo-soft);
+  border-color: var(--indigo-border);
+  font-weight: 700;
+}
+
 .site-footer-link {
   display: inline-flex;
   align-items: center;
@@ -321,8 +422,6 @@ a.button-secondary {
     background-color 160ms ease;
 }
 
-.site-nav-link:hover,
-.site-nav-link:focus-visible,
 .site-footer-link:hover,
 .site-footer-link:focus-visible,
 .site-panel-card-link:hover,
@@ -333,10 +432,10 @@ a.button-secondary {
   transform: translateY(-1px);
 }
 
-.site-nav-link-active {
-  background: rgba(17, 42, 103, 0.08);
-  border-color: rgba(17, 42, 103, 0.16);
-  color: var(--navy);
+.site-header-github {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.88rem;
 }
 
 .site-signal-column {
@@ -2142,6 +2241,20 @@ a.button-secondary {
   .auth-shell {
     width: min(100%, calc(100% - 24px));
     padding: 12px 0;
+  }
+
+  .site-primary-nav {
+    display: none;
+  }
+
+  .site-header-github {
+    display: none;
+  }
+
+  .site-mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .site-header,
