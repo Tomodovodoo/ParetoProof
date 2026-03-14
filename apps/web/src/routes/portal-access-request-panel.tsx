@@ -6,7 +6,7 @@ import {
   type PortalAdminApprovedRole,
   type PortalIdentityProvider
 } from "@paretoproof/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import {
   approvePortalAdminAccessRequest,
@@ -75,6 +75,9 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const [isMutatingId, setIsMutatingId] = useState<string | null>(null);
   const [requests, setRequests] = useState<PortalAdminAccessRequestListItem[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const detailPanelRef = useRef<HTMLElement | null>(null);
+  const detailActionRef = useRef<HTMLElement | null>(null);
+  const pendingCompactRevealRequestIdRef = useRef<string | null>(null);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const isCompactLayout = useCompactLayout();
   const {
@@ -246,6 +249,34 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
     };
   }, [apiBaseUrl, selectedRequestId]);
 
+  useEffect(() => {
+    if (
+      !isCompactLayout ||
+      !selectedRequestId ||
+      pendingCompactRevealRequestIdRef.current !== selectedRequestId
+    ) {
+      return;
+    }
+
+    const detailPanel = detailActionRef.current ?? detailPanelRef.current;
+
+    if (!detailPanel) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      detailPanel.scrollIntoView({
+        behavior: "auto",
+        block: "start"
+      });
+      pendingCompactRevealRequestIdRef.current = null;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isCompactLayout, selectedRequestId]);
+
   function applyRequests(nextItems: PortalAdminAccessRequestListItem[]) {
     setDrafts((currentDrafts) => {
       const nextDrafts: Record<string, RequestDraftState> = {};
@@ -329,6 +360,19 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
     } finally {
       setIsMutatingId(null);
     }
+  }
+
+  function revealSelectedRequestDetail(requestId: string) {
+    if (isCompactLayout && requestId === selectedRequestId) {
+      (detailActionRef.current ?? detailPanelRef.current)?.scrollIntoView({
+        behavior: "auto",
+        block: "start"
+      });
+      return;
+    }
+
+    pendingCompactRevealRequestIdRef.current = requestId;
+    setSelectedRequestId(requestId);
   }
 
   if (isLoading) {
@@ -474,7 +518,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               className={`portal-admin-record${isSelected ? " portal-admin-record-active" : ""}`}
               key={requestItem.id}
               onClick={() => {
-                setSelectedRequestId(requestItem.id);
+                revealSelectedRequestDetail(requestItem.id);
               }}
               type="button"
             >
@@ -538,7 +582,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
         {isCompactLayout ? filterFields : queueContent}
       </article>
 
-      <article className="portal-panel portal-admin-detail-panel">
+      <article className="portal-panel portal-admin-detail-panel" ref={detailPanelRef}>
         {!selectedRequest ? (
           <div className="portal-admin-empty-state">
             <p className="section-tag">Selection</p>
@@ -577,6 +621,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
             onReject={() => {
               void handleDecision("reject");
             }}
+            actionSectionRef={detailActionRef}
           />
         )}
       </article>
@@ -592,6 +637,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
 }
 
 type AccessRequestDetailCardProps = {
+  actionSectionRef: React.RefObject<HTMLElement | null>;
   detail: PortalAdminAccessRequestDetail;
   draft: RequestDraftState;
   isMutating: boolean;
@@ -601,6 +647,7 @@ type AccessRequestDetailCardProps = {
 };
 
 function AccessRequestDetailCard({
+  actionSectionRef,
   detail,
   draft,
   isMutating,
@@ -751,7 +798,7 @@ function AccessRequestDetailCard({
         </article>
       </div>
 
-      <article className="portal-admin-card">
+      <article className="portal-admin-card" ref={actionSectionRef}>
         <p className="section-tag">Decision action</p>
         <h3>Admin actions stay request-scoped.</h3>
         <div className="auth-form">
