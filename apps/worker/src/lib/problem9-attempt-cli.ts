@@ -1,5 +1,6 @@
 import path from "node:path";
 import { runProblem9Attempt } from "./problem9-attempt.js";
+import { parseProblem9AuthMode } from "./problem9-auth.js";
 
 export async function runProblem9AttemptCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
@@ -25,12 +26,7 @@ export async function runProblem9AttemptCli(args: string[]): Promise<void> {
   };
 
   const result = await runProblem9Attempt({
-    authMode: getOptionalValue("--auth-mode") as
-      | "trusted_local_user"
-      | "machine_api_key"
-      | "machine_oauth"
-      | "local_stub"
-      | undefined,
+    authMode: parseOptionalAuthMode(getOptionalValue("--auth-mode")),
     benchmarkPackageRoot: path.resolve(getRequiredValue("--benchmark-package-root")),
     modelSnapshotId: getOptionalValue("--model-snapshot-id"),
     outputRoot: path.resolve(getRequiredValue("--output")),
@@ -51,4 +47,8 @@ export async function runProblem9AttemptCli(args: string[]): Promise<void> {
   });
 
   console.log(JSON.stringify(result, null, 2));
+}
+
+function parseOptionalAuthMode(rawAuthMode: string | undefined) {
+  return rawAuthMode ? parseProblem9AuthMode(rawAuthMode) : undefined;
 }

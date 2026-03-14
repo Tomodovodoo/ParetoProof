@@ -15,6 +15,19 @@ export const problem9AuthModes = [
 
 export type Problem9AuthMode = (typeof problem9AuthModes)[number];
 
+export function parseProblem9AuthMode(
+  rawAuthMode: string,
+  flagName = "--auth-mode"
+): Problem9AuthMode {
+  if (isProblem9AuthMode(rawAuthMode)) {
+    return rawAuthMode;
+  }
+
+  throw new Error(
+    `Unsupported ${flagName} value "${rawAuthMode}". Expected one of: ${problem9AuthModes.join(", ")}.`
+  );
+}
+
 export type Problem9AuthPreflight =
   | {
       authJsonPath: string;
@@ -42,6 +55,10 @@ export async function preflightProblem9AuthMode(
     case "machine_oauth":
       throw new Error("Auth mode machine_oauth is not implemented for run-problem9-attempt.");
   }
+}
+
+function isProblem9AuthMode(value: string): value is Problem9AuthMode {
+  return problem9AuthModes.includes(value as Problem9AuthMode);
 }
 
 async function preflightTrustedLocalUser(): Promise<Problem9AuthPreflight> {
