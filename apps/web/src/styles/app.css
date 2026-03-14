@@ -2873,6 +2873,39 @@ a.button-secondary {
     font-size: 0.74rem;
   }
 
+  .portal-shell-overview-active .portal-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-shell-overview-active .portal-metric-cell {
+    gap: 2px;
+    padding: 10px 10px 12px;
+  }
+
+  .portal-shell-overview-active .portal-metric-cell + .portal-metric-cell {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+
+  .portal-shell-overview-active .portal-metric-cell:nth-child(3),
+  .portal-shell-overview-active .portal-metric-cell:nth-child(4) {
+    border-top: 1px solid var(--line);
+  }
+
+  .portal-shell-overview-active .portal-metric-cell:nth-child(3) {
+    border-left: 0;
+  }
+
+  .portal-shell-overview-active .portal-metric-cell span,
+  .portal-shell-overview-active .portal-metric-cell small {
+    font-size: 0.72rem;
+    line-height: 1.24;
+  }
+
+  .portal-shell-overview-active .portal-metric-cell strong {
+    font-size: 1.3rem;
+  }
+
   .portal-shell-profile-active .portal-nav {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
