@@ -6,7 +6,7 @@ import {
   type PortalAdminApprovedRole,
   type PortalIdentityProvider
 } from "@paretoproof/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import {
   approvePortalAdminAccessRequest,
@@ -63,6 +63,10 @@ export function resolveSelectedAccessRequestId(
   }
 
   return filteredRequests[0]?.id ?? null;
+}
+
+export function getCompactAccessRequestSectionOrder() {
+  return ["queueContent", "filterFields"] as const;
 }
 
 export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProps) {
@@ -568,18 +572,33 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const layout = (
     <section className="portal-admin-layout">
       <article className="portal-panel portal-admin-list-panel">
-        <div className="portal-panel-header">
-          <div>
-            <p className="section-tag">Queue</p>
-            <h2>Scoped filters keep pending work visible.</h2>
+        {!isCompactLayout ? (
+          <div className="portal-panel-header">
+            <div>
+              <p className="section-tag">Queue</p>
+              <h2>Scoped filters keep pending work visible.</h2>
+            </div>
+            <span className="role-chip role-chip-tonal">
+              {filteredRequests.length} visible
+            </span>
           </div>
-          <span className="role-chip role-chip-tonal">
-            {filteredRequests.length} visible
-          </span>
-        </div>
+        ) : null}
 
-        {isCompactLayout ? filterFields : queueContent}
-        {isCompactLayout ? queueContent : filterFields}
+        {isCompactLayout
+          ? getCompactAccessRequestSectionOrder().map((sectionId) => {
+              const sections = {
+                filterFields,
+                queueContent
+              };
+
+              return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+            })
+          : (
+              <>
+                {queueContent}
+                {filterFields}
+              </>
+            )}
       </article>
 
       <article className="portal-panel portal-admin-detail-panel" ref={detailPanelRef}>
