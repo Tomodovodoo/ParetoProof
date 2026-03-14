@@ -43,7 +43,7 @@ export function AccessRequestScreen({
         });
 
         if (!parsed.success) {
-          setErrorMessage("Check the request details and try again.");
+          setErrorMessage("Add a short recovery note before submitting.");
           return;
         }
 
@@ -59,7 +59,7 @@ export function AccessRequestScreen({
       });
 
       if (!parsed.success) {
-        setErrorMessage("Check the request details and try again.");
+        setErrorMessage("Add a short note explaining why you need access.");
         return;
       }
 

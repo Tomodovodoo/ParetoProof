@@ -3,12 +3,12 @@ export type PortalSelfServiceAccessRequestRole = "collaborator" | "helper";
 export type PortalAccessRequestKind = "access_request" | "identity_recovery";
 
 export type PortalAccessRequestInput = {
-  rationale: string | null;
+  rationale: string;
   requestedRole: PortalSelfServiceAccessRequestRole;
 };
 
 export type PortalAccessRecoveryInput = {
-  rationale: string | null;
+  rationale: string;
 };
 
 export type PortalAdminApprovedRole = "collaborator" | "helper";
