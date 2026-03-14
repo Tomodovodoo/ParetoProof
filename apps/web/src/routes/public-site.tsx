@@ -321,6 +321,16 @@ export function getCompactBenchmarkIndexSectionOrder() {
   return ["benchmarkCards", "summarySupport", "reportingRules"] as const;
 }
 
+export function getCompactProjectPackSectionOrder() {
+  return [
+    "overviewSection",
+    "coverageSupport",
+    "contributorsSection",
+    "contactSection",
+    "resourcesSection"
+  ] as const;
+}
+
 export function resolvePublicSiteRoute(pathname: string) {
   if (pathname === projectRoute || pathname.startsWith(`${projectRoute}/`)) {
     return { kind: "project" as const };
@@ -857,6 +867,7 @@ function PublicBenchmarkReport({
 
 function PublicProjectPack() {
   const isCompactLayout = useCompactLayout(480);
+  const showInFlowCoverage = useCompactLayout(640);
 
   useEffect(() => {
     function scrollProjectHashIntoView() {
@@ -886,8 +897,200 @@ function PublicProjectPack() {
     };
   }, []);
 
+  const overviewSection = (
+    <article className="site-project-section" id="overview">
+      <div className="site-section-copy">
+        <p className="section-tag">Project overview</p>
+        <h2>Explain the product without duplicating the whole methodology archive.</h2>
+        <p className="site-lead">
+          The public site should state the product purpose, the trust boundary, and the
+          surface split clearly, then route readers outward to the deeper benchmark and
+          methodology material instead of burying them in one giant wall of copy.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {projectOverviewCards.map((card) => (
+          <article className="site-panel-card" key={card.title}>
+            <span className="site-panel-mark" aria-hidden="true">
+              <AppIcon name={card.icon} />
+            </span>
+            <div className="site-panel-copy">
+              <h3>{card.title}</h3>
+              <p>{card.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </article>
+  );
+
+  const coverageSupport = showInFlowCoverage ? (
+    <article className="site-project-section site-project-pack-coverage-support">
+      <div className="site-section-copy">
+        <p className="section-tag">Project pack coverage</p>
+        <h2>Coverage cues stay available after the actual project overview.</h2>
+        <p className="site-lead">
+          The support summary still spells out the three route responsibilities without
+          displacing the anchored overview section from the first mobile viewport.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {packCoverage.map((item) => (
+          <article className="site-panel-card" key={item.label}>
+            <div className="site-panel-copy">
+              <p className="section-tag">{item.value}</p>
+              <h3>{item.label}</h3>
+              <p>{item.detail}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </article>
+  ) : null;
+
+  const contributorsSection = (
+    <article className="site-project-section" id="contributors">
+      <div className="site-section-copy">
+        <p className="section-tag">Contributor path</p>
+        <h2>Move serious contributors into auth and portal work without promising open enrollment.</h2>
+        <p className="site-lead">
+          ParetoProof is not using the public site as a broad volunteer funnel. The
+          contributor path explains how technical contributors enter the branded auth
+          flow, how approval stays manual, and where actual work happens once someone is
+          inside.
+        </p>
+      </div>
+
+      {isCompactLayout ? (
+        <div className="hero-actions">
+          <a className="button" href={buildAuthUrl("/")}>
+            Start contributor sign in
+          </a>
+          <a className="button button-secondary" href={githubDiscussionsUrl}>
+            Ask a public question first
+          </a>
+        </div>
+      ) : null}
+
+      <div className="site-card-grid">
+        {contributorSteps.map((step) => (
+          <article className="site-panel-card" key={step.title}>
+            <span className="site-panel-mark" aria-hidden="true">
+              <AppIcon name={step.icon} />
+            </span>
+            <div className="site-panel-copy">
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {!isCompactLayout ? (
+        <div className="hero-actions">
+          <a className="button" href={buildAuthUrl("/")}>
+            Start contributor sign in
+          </a>
+          <a className="button button-secondary" href={githubDiscussionsUrl}>
+            Ask a public question first
+          </a>
+        </div>
+      ) : null}
+    </article>
+  );
+
+  const contactSection = (
+    <article className="site-project-section" id="contact">
+      <div className="site-section-copy">
+        <p className="section-tag">Contact rules</p>
+        <h2>Keep public contact narrow, manual, and honest.</h2>
+        <p className="site-lead">
+          The MVP public contact entry is GitHub Discussions. Access and recovery stay in
+          the sign-in or portal flow, and the site should never invite people to post
+          secrets or sensitive account details in public.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {contactCards.map((card) => {
+          const content = (
+            <>
+              <span className="site-panel-mark" aria-hidden="true">
+                <AppIcon name={card.icon} />
+              </span>
+              <div className="site-panel-copy">
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </div>
+            </>
+          );
+
+          if (!card.href) {
+            return (
+              <article className="site-panel-card" key={card.title}>
+                {content}
+              </article>
+            );
+          }
+
+          return (
+            <a
+              className="site-panel-card site-panel-card-link"
+              href={card.href}
+              key={card.title}
+              rel={card.external ? "noreferrer" : undefined}
+              target={card.external ? "_blank" : undefined}
+            >
+              {content}
+            </a>
+          );
+        })}
+      </div>
+    </article>
+  );
+
+  const resourcesSection = (
+    <article className="site-project-section">
+      <div className="site-section-copy">
+        <p className="section-tag">Working surfaces</p>
+        <h2>Route outward to the benchmark, update, and methodology material that already exists.</h2>
+        <p className="site-lead">
+          The project pack should not try to restate every benchmark, release, or policy
+          detail inline. It should send readers to the current working sources that
+          explain those slices more deeply.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {projectResources.map((resource) => (
+          <a
+            className="site-panel-card site-panel-card-link"
+            href={resource.href}
+            key={resource.title}
+            rel={resource.external ? "noreferrer" : undefined}
+            target={resource.external ? "_blank" : undefined}
+          >
+            <span className="site-panel-mark" aria-hidden="true">
+              <AppIcon name={resource.icon} />
+            </span>
+            <div className="site-panel-copy">
+              <h3>{resource.title}</h3>
+              <p>{resource.body}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </article>
+  );
+
   return (
-    <main className="site-shell site-project-shell">
+    <main
+      className={`site-shell site-project-shell${
+        showInFlowCoverage ? " site-project-pack-shell-compact" : ""
+      }`}
+    >
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
 
       <section className="site-hero site-hero-project">
@@ -918,174 +1121,42 @@ function PublicProjectPack() {
           </div>
         </div>
 
-        <aside className="site-signal-column" aria-label="Project pack coverage">
-          {packCoverage.map((item) => (
-            <article className="site-signal-row" key={item.label}>
-              <span className="site-signal-value">{item.value}</span>
-              <div>
-                <h2>{item.label}</h2>
-                <p>{item.detail}</p>
-              </div>
-            </article>
-          ))}
-        </aside>
+        {!showInFlowCoverage ? (
+          <aside className="site-signal-column" aria-label="Project pack coverage">
+            {packCoverage.map((item) => (
+              <article className="site-signal-row" key={item.label}>
+                <span className="site-signal-value">{item.value}</span>
+                <div>
+                  <h2>{item.label}</h2>
+                  <p>{item.detail}</p>
+                </div>
+              </article>
+            ))}
+          </aside>
+        ) : null}
       </section>
 
       <section className="site-section-stack" aria-label="Project pack sections">
-        <article className="site-project-section" id="overview">
-          <div className="site-section-copy">
-            <p className="section-tag">Project overview</p>
-            <h2>Explain the product without duplicating the whole methodology archive.</h2>
-            <p className="site-lead">
-              The public site should state the product purpose, the trust boundary, and the
-              surface split clearly, then route readers outward to the deeper benchmark and
-              methodology material instead of burying them in one giant wall of copy.
-            </p>
-          </div>
+        {showInFlowCoverage
+          ? getCompactProjectPackSectionOrder().map((sectionId) => {
+              const sections = {
+                contactSection,
+                contributorsSection,
+                coverageSupport,
+                overviewSection,
+                resourcesSection
+              };
 
-          <div className="site-card-grid">
-            {projectOverviewCards.map((card) => (
-              <article className="site-panel-card" key={card.title}>
-                <span className="site-panel-mark" aria-hidden="true">
-                  <AppIcon name={card.icon} />
-                </span>
-                <div className="site-panel-copy">
-                  <h3>{card.title}</h3>
-                  <p>{card.body}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-
-        <article className="site-project-section" id="contributors">
-          <div className="site-section-copy">
-            <p className="section-tag">Contributor path</p>
-            <h2>Move serious contributors into auth and portal work without promising open enrollment.</h2>
-            <p className="site-lead">
-              ParetoProof is not using the public site as a broad volunteer funnel. The
-              contributor path explains how technical contributors enter the branded auth
-              flow, how approval stays manual, and where actual work happens once someone is
-              inside.
-            </p>
-          </div>
-
-          {isCompactLayout ? (
-            <div className="hero-actions">
-              <a className="button" href={buildAuthUrl("/")}>
-                Start contributor sign in
-              </a>
-              <a className="button button-secondary" href={githubDiscussionsUrl}>
-                Ask a public question first
-              </a>
-            </div>
-          ) : null}
-
-          <div className="site-card-grid">
-            {contributorSteps.map((step) => (
-              <article className="site-panel-card" key={step.title}>
-                <span className="site-panel-mark" aria-hidden="true">
-                  <AppIcon name={step.icon} />
-                </span>
-                <div className="site-panel-copy">
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {!isCompactLayout ? (
-            <div className="hero-actions">
-              <a className="button" href={buildAuthUrl("/")}>
-                Start contributor sign in
-              </a>
-              <a className="button button-secondary" href={githubDiscussionsUrl}>
-                Ask a public question first
-              </a>
-            </div>
-          ) : null}
-        </article>
-
-        <article className="site-project-section" id="contact">
-          <div className="site-section-copy">
-            <p className="section-tag">Contact rules</p>
-            <h2>Keep public contact narrow, manual, and honest.</h2>
-            <p className="site-lead">
-              The MVP public contact entry is GitHub Discussions. Access and recovery stay in
-              the sign-in or portal flow, and the site should never invite people to post
-              secrets or sensitive account details in public.
-            </p>
-          </div>
-
-          <div className="site-card-grid">
-            {contactCards.map((card) => {
-              const content = (
-                <>
-                  <span className="site-panel-mark" aria-hidden="true">
-                    <AppIcon name={card.icon} />
-                  </span>
-                  <div className="site-panel-copy">
-                    <h3>{card.title}</h3>
-                    <p>{card.body}</p>
-                  </div>
-                </>
-              );
-
-              if (!card.href) {
-                return (
-                  <article className="site-panel-card" key={card.title}>
-                    {content}
-                  </article>
-                );
-              }
-
-              return (
-                <a
-                  className="site-panel-card site-panel-card-link"
-                  href={card.href}
-                  key={card.title}
-                  rel={card.external ? "noreferrer" : undefined}
-                  target={card.external ? "_blank" : undefined}
-                >
-                  {content}
-                </a>
-              );
-            })}
-          </div>
-        </article>
-
-        <article className="site-project-section">
-          <div className="site-section-copy">
-            <p className="section-tag">Working surfaces</p>
-            <h2>Route outward to the benchmark, update, and methodology material that already exists.</h2>
-            <p className="site-lead">
-              The project pack should not try to restate every benchmark, release, or policy
-              detail inline. It should send readers to the current working sources that
-              explain those slices more deeply.
-            </p>
-          </div>
-
-          <div className="site-card-grid">
-            {projectResources.map((resource) => (
-              <a
-                className="site-panel-card site-panel-card-link"
-                href={resource.href}
-                key={resource.title}
-                rel={resource.external ? "noreferrer" : undefined}
-                target={resource.external ? "_blank" : undefined}
-              >
-                <span className="site-panel-mark" aria-hidden="true">
-                  <AppIcon name={resource.icon} />
-                </span>
-                <div className="site-panel-copy">
-                  <h3>{resource.title}</h3>
-                  <p>{resource.body}</p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </article>
+              return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+            })
+          : (
+              <>
+                {overviewSection}
+                {contributorsSection}
+                {contactSection}
+                {resourcesSection}
+              </>
+            )}
       </section>
 
       <PublicFooter isProjectRoute />

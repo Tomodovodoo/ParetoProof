@@ -105,6 +105,22 @@ describe("PublicSite", () => {
     expect(html.indexOf("Released slices")).toBeLessThan(html.indexOf("Problem 9"));
   });
 
+  it("keeps compact project pack overview ahead of the coverage support section", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/project", 320);
+
+    expect(html).toContain("site-project-pack-shell-compact");
+    expect(html.indexOf("Explain the product without duplicating the whole methodology archive.")).toBeLessThan(
+      html.indexOf("Coverage cues stay available after the actual project overview.")
+    );
+  });
+
+  it("keeps the wide project pack coverage in the hero rail", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/project", 1280);
+
+    expect(html).not.toContain("site-project-pack-shell-compact");
+    expect(html).not.toContain("Coverage cues stay available after the actual project overview.");
+  });
+
   it("keeps the project pack route intact", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/project");
 
