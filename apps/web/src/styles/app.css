@@ -950,6 +950,38 @@ a.button-secondary {
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.92fr);
 }
 
+.portal-grid-profile-compact .portal-panel {
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.portal-grid-profile-compact .portal-profile-form-panel {
+  gap: 8px;
+}
+
+.portal-grid-profile-compact .portal-profile-context-panel {
+  gap: 8px;
+}
+
+.portal-grid-profile-compact .portal-profile-form-panel h2 {
+  font-size: 1.08rem;
+  line-height: 1.05;
+}
+
+.portal-grid-profile-compact .auth-form {
+  gap: 8px;
+  margin-top: 0;
+}
+
+.portal-grid-profile-compact .portal-panel-muted {
+  font-size: 0.88rem;
+}
+
+.portal-grid-profile-compact .portal-freshness-card {
+  gap: 8px;
+  padding-top: 8px;
+}
+
 .portal-grid-stack {
   grid-template-columns: minmax(0, 1fr);
 }

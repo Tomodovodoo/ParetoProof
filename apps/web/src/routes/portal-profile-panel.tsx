@@ -13,6 +13,7 @@ import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalHostname } from "../lib/surface";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalProfilePanelProps = {
   email: string | null;
@@ -199,6 +200,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   );
   const [isSaving, setIsSaving] = useState(false);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const compactLayout = useCompactLayout(480);
 
   useEffect(() => {
     let cancelled = false;
@@ -436,6 +438,109 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
     );
   }
 
+  const profileForm = (
+    <form className="auth-form" onSubmit={handleSave}>
+      <label className="auth-field">
+        <span>Display name</span>
+        <input
+          className="auth-input"
+          name="displayName"
+          onChange={(event) => {
+            setDisplayNameInput(event.currentTarget.value);
+          }}
+          placeholder="How your name should appear in the portal"
+          value={displayNameInput}
+        />
+      </label>
+      <label className="auth-field">
+        <span>Primary email</span>
+        <input className="auth-input" disabled name="email" value={profile.email ?? ""} />
+      </label>
+      {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
+      <button className="button" disabled={isSaving} type="submit">
+        {isSaving ? "Saving..." : "Save profile"}
+      </button>
+    </form>
+  );
+
+  const identityPanel = (
+    <article className="portal-panel">
+      <p className="eyebrow">Sign-in methods</p>
+      <h2>Linked Access identities</h2>
+      <div className="portal-identity-list">
+        {profile.identities.map((identity) => (
+          <div className="portal-identity-row" key={identity.id}>
+            <div>
+              <p className="portal-action-title">{formatIdentityProviderLabel(identity.provider)}</p>
+              <p className="portal-action-copy">
+                {identity.providerEmail ?? "No provider email available"}
+              </p>
+            </div>
+            {identity.current ? (
+              <span className="portal-action-badge">Current</span>
+            ) : (
+              <span className="portal-action-badge">Linked</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="portal-link-actions">
+        {linkableProviders.map((provider) => {
+          const providerCanonical = normalizeIdentityProvider(provider.key);
+          const alreadyLinked = profile.identities.some(
+            (identity) => normalizeIdentityProvider(identity.provider) === providerCanonical
+          );
+
+          return (
+            <button
+              className="button button-secondary"
+              disabled={alreadyLinked || linkingProvider !== null}
+              key={provider.key}
+              onClick={() => {
+                startTransition(() => {
+                  void handleStartLink(provider.key);
+                });
+              }}
+              type="button"
+            >
+              {alreadyLinked
+                ? `${provider.label} linked`
+                : linkingProvider === provider.key
+                  ? `Connecting ${provider.label}...`
+                  : `Add ${provider.label}`}
+            </button>
+          );
+        })}
+      </div>
+      <p className="portal-panel-muted">
+        Link an extra sign-in method from here. The portal only marks it as linked after the
+        Cloudflare Access handoff returns and the backend confirms the new identity.
+      </p>
+      {linkMessage ? <p className="portal-panel-muted">{linkMessage}</p> : null}
+    </article>
+  );
+
+  if (compactLayout) {
+    return (
+      <section className="portal-grid portal-grid-profile portal-grid-profile-compact">
+        <article className="portal-panel portal-profile-form-panel">
+          <h2>Save your profile details.</h2>
+          {profileForm}
+        </article>
+
+        <article className="portal-panel portal-profile-context-panel">
+          <p className="portal-panel-muted">
+            Update the supported contributor details and attach an extra GitHub or Google
+            sign-in method without changing your approved portal account.
+          </p>
+          <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
+        </article>
+
+        {identityPanel}
+      </section>
+    );
+  }
+
   return (
     <section className="portal-grid portal-grid-profile">
       <article className="portal-panel">
@@ -446,89 +551,10 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           sign-in method without changing your approved portal account.
         </p>
         <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
-        <form className="auth-form" onSubmit={handleSave}>
-          <label className="auth-field">
-            <span>Display name</span>
-            <input
-              className="auth-input"
-              name="displayName"
-              onChange={(event) => {
-                setDisplayNameInput(event.currentTarget.value);
-              }}
-              placeholder="How your name should appear in the portal"
-              value={displayNameInput}
-            />
-          </label>
-          <label className="auth-field">
-            <span>Primary email</span>
-            <input
-              className="auth-input"
-              disabled
-              name="email"
-              value={profile.email ?? ""}
-            />
-          </label>
-          {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
-          <button className="button" disabled={isSaving} type="submit">
-            {isSaving ? "Saving..." : "Save profile"}
-          </button>
-        </form>
+        {profileForm}
       </article>
 
-      <article className="portal-panel">
-        <p className="eyebrow">Sign-in methods</p>
-        <h2>Linked Access identities</h2>
-        <div className="portal-identity-list">
-          {profile.identities.map((identity) => (
-            <div className="portal-identity-row" key={identity.id}>
-              <div>
-                <p className="portal-action-title">{formatIdentityProviderLabel(identity.provider)}</p>
-                <p className="portal-action-copy">
-                  {identity.providerEmail ?? "No provider email available"}
-                </p>
-              </div>
-              {identity.current ? (
-                <span className="portal-action-badge">Current</span>
-              ) : (
-                <span className="portal-action-badge">Linked</span>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="portal-link-actions">
-          {linkableProviders.map((provider) => {
-            const providerCanonical = normalizeIdentityProvider(provider.key);
-            const alreadyLinked = profile.identities.some(
-              (identity) => normalizeIdentityProvider(identity.provider) === providerCanonical
-            );
-
-            return (
-              <button
-                className="button button-secondary"
-                disabled={alreadyLinked || linkingProvider !== null}
-                key={provider.key}
-                onClick={() => {
-                  startTransition(() => {
-                    void handleStartLink(provider.key);
-                  });
-                }}
-                type="button"
-              >
-                {alreadyLinked
-                  ? `${provider.label} linked`
-                  : linkingProvider === provider.key
-                    ? `Connecting ${provider.label}...`
-                    : `Add ${provider.label}`}
-              </button>
-            );
-          })}
-        </div>
-        <p className="portal-panel-muted">
-          Link an extra sign-in method from here. The portal only marks it as linked after the
-          Cloudflare Access handoff returns and the backend confirms the new identity.
-        </p>
-        {linkMessage ? <p className="portal-panel-muted">{linkMessage}</p> : null}
-      </article>
+      {identityPanel}
     </section>
   );
 }
