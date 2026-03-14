@@ -1,7 +1,7 @@
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
@@ -317,6 +317,10 @@ function formatReleaseStatus(status: string) {
   return status.replaceAll("_", " ");
 }
 
+export function getCompactBenchmarkIndexSectionOrder() {
+  return ["benchmarkCards", "summarySupport", "reportingRules"] as const;
+}
+
 export function resolvePublicSiteRoute(pathname: string) {
   if (pathname === projectRoute || pathname.startsWith(`${projectRoute}/`)) {
     return { kind: "project" as const };
@@ -610,8 +614,51 @@ function PublicBenchmarkIndex() {
     </section>
   );
 
+  const reportingRules = (
+    <section className="site-band-grid" aria-label="Reporting rules">
+      <article className="site-band">
+        <p className="section-tag">Release flow</p>
+        <h2>Public reporting stays release-centric.</h2>
+        <p>
+          Benchmark cards route into one release summary page with stable top-line metrics,
+          one visible notice block, and links to methodology rather than private evidence consoles.
+        </p>
+      </article>
+      <article className="site-band">
+        <p className="section-tag">What not to expect</p>
+        <h2>No public run drilldown.</h2>
+        <p>
+          Per-run evidence, artifact inspection, and operational rerun context remain in the
+          authenticated portal. The public site only shows released benchmark slices.
+        </p>
+      </article>
+    </section>
+  );
+
+  const summarySupport = showInFlowSummary ? (
+    <section className="site-project-section site-benchmark-index-summary-support">
+      <div className="site-section-copy">
+        <p className="section-tag">Index support</p>
+        <h2>Benchmark status cues stay available after the released slices.</h2>
+        <p className="site-lead">
+          The support summary still explains coverage, release posture, and data-quality framing
+          without displacing the actual benchmark entries from the first mobile viewport.
+        </p>
+      </div>
+      <PublicBenchmarkSummary
+        ariaLabel="Benchmark index summary"
+        cards={benchmarkIndexSummaryCards}
+        compact
+      />
+    </section>
+  ) : null;
+
   return (
-    <main className="site-shell site-benchmark-shell">
+    <main
+      className={`site-shell site-benchmark-shell${
+        showInFlowSummary ? " site-benchmark-index-shell-compact" : ""
+      }`}
+    >
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
 
       <section className="site-hero">
@@ -633,33 +680,31 @@ function PublicBenchmarkIndex() {
             </a>
           </div>
         </div>
-        <PublicBenchmarkSummary
-          ariaLabel="Benchmark index summary"
-          cards={benchmarkIndexSummaryCards}
-          compact={showInFlowSummary}
-        />
+        {!showInFlowSummary ? (
+          <PublicBenchmarkSummary
+            ariaLabel="Benchmark index summary"
+            cards={benchmarkIndexSummaryCards}
+            compact={false}
+          />
+        ) : null}
       </section>
 
-      {benchmarkCards}
+      {showInFlowSummary
+        ? getCompactBenchmarkIndexSectionOrder().map((sectionId) => {
+            const sections = {
+              benchmarkCards,
+              reportingRules,
+              summarySupport
+            };
 
-      <section className="site-band-grid" aria-label="Reporting rules">
-        <article className="site-band">
-          <p className="section-tag">Release flow</p>
-          <h2>Public reporting stays release-centric.</h2>
-          <p>
-            Benchmark cards route into one release summary page with stable top-line metrics,
-            one visible notice block, and links to methodology rather than private evidence consoles.
-          </p>
-        </article>
-        <article className="site-band">
-          <p className="section-tag">What not to expect</p>
-          <h2>No public run drilldown.</h2>
-          <p>
-            Per-run evidence, artifact inspection, and operational rerun context remain in the
-            authenticated portal. The public site only shows released benchmark slices.
-          </p>
-        </article>
-      </section>
+            return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+          })
+        : (
+            <>
+              {benchmarkCards}
+              {reportingRules}
+            </>
+          )}
 
       <PublicFooter isProjectRoute={false} />
     </main>
