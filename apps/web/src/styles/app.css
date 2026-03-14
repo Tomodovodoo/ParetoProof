@@ -615,6 +615,11 @@ a.button-secondary {
   margin-top: 8px;
 }
 
+.portal-profile-form-compact {
+  gap: 12px;
+  margin-top: 0;
+}
+
 .auth-field {
   display: grid;
   gap: 6px;

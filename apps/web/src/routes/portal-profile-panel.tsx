@@ -13,6 +13,7 @@ import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalHostname } from "../lib/surface";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalProfilePanelProps = {
   email: string | null;
@@ -199,6 +200,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   );
   const [isSaving, setIsSaving] = useState(false);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const isCompactLayout = useCompactLayout(480);
 
   useEffect(() => {
     let cancelled = false;
@@ -441,12 +443,16 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       <article className="portal-panel">
         <p className="eyebrow">Contributor profile</p>
         <h2>Your details</h2>
-        <p>
-          Update the supported contributor details and attach an extra GitHub or Google
-          sign-in method without changing your approved portal account.
-        </p>
-        <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
-        <form className="auth-form" onSubmit={handleSave}>
+        {!isCompactLayout ? (
+          <p>
+            Update the supported contributor details and attach an extra GitHub or Google
+            sign-in method without changing your approved portal account.
+          </p>
+        ) : null}
+        <form
+          className={`auth-form${isCompactLayout ? " portal-profile-form-compact" : ""}`}
+          onSubmit={handleSave}
+        >
           <label className="auth-field">
             <span>Display name</span>
             <input
@@ -459,20 +465,36 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
               value={displayNameInput}
             />
           </label>
-          <label className="auth-field">
-            <span>Primary email</span>
-            <input
-              className="auth-input"
-              disabled
-              name="email"
-              value={profile.email ?? ""}
-            />
-          </label>
+          {!isCompactLayout ? (
+            <label className="auth-field">
+              <span>Primary email</span>
+              <input
+                className="auth-input"
+                disabled
+                name="email"
+                value={profile.email ?? ""}
+              />
+            </label>
+          ) : null}
           {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
           <button className="button" disabled={isSaving} type="submit">
             {isSaving ? "Saving..." : "Save profile"}
           </button>
+          {isCompactLayout ? (
+            <p className="portal-panel-muted">
+              Primary email: <strong>{profile.email ?? "No email available"}</strong>
+            </p>
+          ) : null}
         </form>
+        {isCompactLayout ? (
+          <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
+        ) : null}
+        {isCompactLayout ? (
+          <p className="portal-panel-muted">
+            Attach an extra GitHub or Google sign-in method below without changing the
+            approved portal account.
+          </p>
+        ) : null}
       </article>
 
       <article className="portal-panel">
