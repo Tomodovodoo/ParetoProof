@@ -2099,6 +2099,40 @@ a.button-secondary {
     font-size: 1rem;
   }
 
+  .site-shell.site-benchmark-shell {
+    gap: 14px;
+  }
+
+  .site-shell.site-benchmark-shell .site-header,
+  .site-shell.site-benchmark-shell .site-hero,
+  .site-shell.site-benchmark-shell .site-footer {
+    padding: 14px;
+  }
+
+  .site-shell.site-benchmark-shell .site-header-main,
+  .site-shell.site-benchmark-shell .site-header-actions,
+  .site-shell.site-benchmark-shell .site-hero-copy {
+    gap: 8px;
+  }
+
+  .site-shell.site-benchmark-shell .site-signal-column {
+    display: none;
+  }
+
+  .site-shell.site-benchmark-shell .site-hero {
+    gap: 10px;
+    padding-top: 12px;
+  }
+
+  .site-shell.site-benchmark-shell .site-hero-copy h1 {
+    font-size: clamp(1.82rem, 8.4vw, 2.35rem);
+    line-height: 0.98;
+  }
+
+  .site-shell.site-benchmark-shell .site-lead {
+    font-size: 0.94rem;
+  }
+
   .auth-shell {
     align-items: start;
     padding: 8px 0;
@@ -2328,6 +2362,10 @@ a.button-secondary {
 
   .site-shell.site-benchmark-shell .site-primary-nav,
   .site-shell.site-benchmark-shell .site-header-actions .button-secondary {
+    display: none;
+  }
+
+  .site-shell.site-benchmark-shell .hero-actions .button-secondary {
     display: none;
   }
 
