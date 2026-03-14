@@ -419,9 +419,16 @@ export function resolvePublicSiteRoute(pathname: string) {
 
   if (pathname.startsWith(reportsRoutePrefix)) {
     const benchmarkVersionId = pathname.slice(reportsRoutePrefix.length).split("/")[0] ?? "";
+    let decodedBenchmarkVersionId = benchmarkVersionId;
+
+    try {
+      decodedBenchmarkVersionId = decodeURIComponent(benchmarkVersionId);
+    } catch {
+      decodedBenchmarkVersionId = benchmarkVersionId;
+    }
 
     return {
-      benchmarkVersionId: decodeURIComponent(benchmarkVersionId),
+      benchmarkVersionId: decodedBenchmarkVersionId,
       kind: "report" as const
     };
   }
