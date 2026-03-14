@@ -121,6 +121,22 @@ describe("PublicSite", () => {
     expect(html).not.toContain("Coverage cues stay available after the actual project overview.");
   });
 
+  it("keeps compact home summary bands ahead of the signal support section", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/", 320);
+
+    expect(html).toContain("site-home-shell-compact");
+    expect(html.indexOf("Evidence before hype")).toBeLessThan(
+      html.indexOf("Project signal cues stay available after the summary bands.")
+    );
+  });
+
+  it("keeps the wide home signal rail in the hero", async () => {
+    const html = await renderPublicSiteAt("http://127.0.0.1/", 1280);
+
+    expect(html).not.toContain("site-home-shell-compact");
+    expect(html).not.toContain("Project signal cues stay available after the summary bands.");
+  });
+
   it("keeps the project pack route intact", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/project");
 
