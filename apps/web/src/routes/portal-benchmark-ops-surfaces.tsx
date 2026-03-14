@@ -1192,6 +1192,7 @@ function PortalWorkersSurface({
 }: SurfaceProps<PortalWorkersViewResponse>) {
   const data = loadState.data;
   const isCompactLayout = useCompactLayout(480);
+  const compactEvidenceCards = buildWorkersCompactEvidenceCards(data);
   const freshnessCard = (
     <PortalFreshnessCard
       isRefreshing={loadState.isLoading}
@@ -1227,6 +1228,21 @@ function PortalWorkersSurface({
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
         {data ? (
           <>
+            {isCompactLayout && compactEvidenceCards.length ? (
+              <article className="portal-panel-table-flat portal-workers-quick-evidence">
+                <div className="portal-panel-header">
+                  <div>
+                    <p className="section-tag">Concrete evidence</p>
+                    <h2>Jump straight into the current worker-linked runs.</h2>
+                  </div>
+                </div>
+                <div className="portal-action-list">
+                  {compactEvidenceCards.map((card) => (
+                    <PortalLinkCard copy={card.copy} href={card.href} key={card.title} title={card.title} />
+                  ))}
+                </div>
+              </article>
+            ) : null}
             <div className="portal-summary-grid">
               <article className="portal-summary-card">
                 <span>Queued jobs</span>
@@ -1349,6 +1365,49 @@ function PortalLinkCard({
       </a>
     </article>
   );
+}
+
+function buildWorkersCompactEvidenceCards(data: PortalWorkersViewResponse | null) {
+  if (!data) {
+    return [];
+  }
+
+  const cards: Array<{ copy: string; href: string; title: string }> = [];
+  const seenHrefs = new Set<string>();
+
+  const pushCard = (title: string, copy: string, runId: string | null | undefined) => {
+    if (!runId) {
+      return;
+    }
+
+    const href = buildRunDetailHref(runId);
+    if (seenHrefs.has(href)) {
+      return;
+    }
+
+    seenHrefs.add(href);
+    cards.push({ copy, href, title });
+  };
+
+  const primaryLease = data.activeLeases[0];
+  pushCard(
+    primaryLease ? `${primaryLease.runId} lease` : "Active lease",
+    primaryLease
+      ? `${primaryLease.workerPool} on ${primaryLease.workerId} · ${primaryLease.health}`
+      : "Open the first active lease run detail.",
+    primaryLease?.runId ?? data.workerPools.find((pool) => pool.activeRunIds[0])?.activeRunIds[0]
+  );
+
+  const primaryIncident = data.incidents.find((incident) => incident.affectedRunIds[0]);
+  pushCard(
+    primaryIncident ? `${primaryIncident.affectedRunIds[0]} incident` : "Incident run",
+    primaryIncident
+      ? `${primaryIncident.severity} · ${primaryIncident.workerPool ?? "all pools"}`
+      : "Open the first incident-linked run detail.",
+    primaryIncident?.affectedRunIds[0]
+  );
+
+  return cards;
 }
 
 function PortalErrorState({ error }: { error: string }) {

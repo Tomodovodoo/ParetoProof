@@ -1353,6 +1353,42 @@ a.button-secondary {
   gap: 8px;
 }
 
+.portal-workers-quick-evidence {
+  gap: 8px;
+}
+
+.portal-workers-quick-evidence .portal-action-list {
+  border-top: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.portal-workers-quick-evidence .portal-action-card,
+.portal-workers-quick-evidence .portal-action-card + .portal-action-card {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border-top: 0;
+}
+
+.portal-workers-quick-evidence .portal-action-title {
+  margin-bottom: 2px;
+  font-size: 0.94rem;
+  line-height: 1.18;
+}
+
+.portal-workers-quick-evidence .portal-action-copy {
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.portal-workers-quick-evidence .portal-action-card .button,
+.portal-workers-quick-evidence .portal-action-card a.button {
+  min-height: 2.2rem;
+}
+
 .portal-workers-main-compact h2 {
   font-size: 1.08rem;
   line-height: 1.08;
@@ -2386,6 +2422,14 @@ a.button-secondary {
     min-height: 2.35rem;
     padding: 0.48rem 0.78rem;
   }
+
+  .portal-workers-quick-evidence .portal-action-title {
+    font-size: 0.9rem;
+  }
+
+  .portal-workers-quick-evidence .portal-action-copy {
+    font-size: 0.78rem;
+  }
 }
 
 @media (max-width: 420px) {
@@ -2458,6 +2502,25 @@ a.button-secondary {
 
   .portal-launch-quick-actions .button,
   .portal-launch-quick-actions a.button {
+    min-height: 2.1rem;
+    padding: 0.38rem 0.6rem;
+  }
+
+  .portal-workers-quick-evidence .portal-action-list {
+    gap: 6px;
+  }
+
+  .portal-workers-quick-evidence .portal-action-card,
+  .portal-workers-quick-evidence .portal-action-card + .portal-action-card {
+    gap: 6px;
+  }
+
+  .portal-workers-quick-evidence .portal-action-copy {
+    display: none;
+  }
+
+  .portal-workers-quick-evidence .portal-action-card .button,
+  .portal-workers-quick-evidence .portal-action-card a.button {
     min-height: 2.1rem;
     padding: 0.38rem 0.6rem;
   }
