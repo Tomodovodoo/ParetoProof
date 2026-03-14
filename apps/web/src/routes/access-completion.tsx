@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { AppIcon } from "../components/app-icon";
 import {
   buildAccessFinalizeUrl,
-  buildAuthUrl
+  buildAuthUrl,
+  isLocalHostname
 } from "../lib/surface";
 
 type AccessCompletionProps = {
@@ -14,12 +15,17 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
   const finalizeUrl = buildAccessFinalizeUrl(redirectPath);
   const finalizeFormRef = useRef<HTMLFormElement>(null);
   const retryUrl = new URL(buildAuthUrl(redirectPath));
+  const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
 
   retryUrl.searchParams.set("handoff", "retry");
 
   useEffect(() => {
+    if (isLocal) {
+      return;
+    }
+
     finalizeFormRef.current?.requestSubmit();
-  }, []);
+  }, [isLocal]);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";
 
