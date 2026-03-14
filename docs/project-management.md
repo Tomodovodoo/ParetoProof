@@ -68,6 +68,8 @@ Security-sensitive PRs should not merge with unresolved review comments that ide
 
 The repository also enforces a hidden-Unicode gate in PR CI. Source changes should not introduce bidirectional control characters unless there is a documented and reviewed exception.
 
+That CI gate only scans tracked repository files. GitHub can still show a hidden-Unicode warning on issue bodies, PR bodies, comments, or other pasted text that never becomes a tracked file. When that happens, treat the GitHub banner as a content warning on the discussion text itself, not as evidence that `infra/scripts/check-bidi-chars.mjs` missed a tracked-file change.
+
 ## Status Rules
 
 Execution boards use the same status vocabulary:
