@@ -252,6 +252,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     () => resolveActiveSection(pathname, matchedPortalRoute?.id ?? null, sections),
     [matchedPortalRoute, pathname, sections]
   );
+  const benchmarkOpsRouteActive =
+    activeSection?.id === "runs" ||
+    activeSection?.id === "launch" ||
+    activeSection?.id === "workers";
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
   const activeRouteId = matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
   const activeFreshnessPolicy = useMemo(
@@ -336,6 +340,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <main
       className={`portal-shell${
         activeSection?.id === "profile" ? " portal-shell-profile-active" : ""
+      }${
+        benchmarkOpsRouteActive ? " portal-shell-benchmark-ops-active" : ""
       }`}
     >
       <aside

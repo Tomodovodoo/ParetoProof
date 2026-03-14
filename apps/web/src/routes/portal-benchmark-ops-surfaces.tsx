@@ -398,7 +398,11 @@ function PortalRunsSurface({
       <div className="portal-panel-header">
         <div>
           <p className="section-tag">Run slice</p>
-          <h2>Filtered rows route into canonical detail pages.</h2>
+          <h2>
+            {isCompactLayout
+              ? "Runs route into canonical detail pages."
+              : "Filtered rows route into canonical detail pages."}
+          </h2>
         </div>
         <span className="role-chip role-chip-muted">
           {loadState.data?.summary.returnedCount ?? 0} shown
