@@ -2826,10 +2826,21 @@ a.button-secondary {
   .portal-grid-admin-workspace .portal-admin-list-panel {
     gap: 6px;
     padding-top: 6px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel > * {
+    min-width: 0;
   }
 
   .portal-grid-admin-workspace .portal-admin-list-panel .portal-panel-header {
+    flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-list-panel .portal-panel-header > div {
+    min-width: 0;
+    flex: 1 1 11rem;
   }
 
   .portal-grid-admin-workspace .portal-admin-list-panel .section-tag {
