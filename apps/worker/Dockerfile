@@ -6,6 +6,8 @@ ARG CODEX_CLI_VERSION=0.114.0
 ARG LEAN_LSP_MCP_VERSION=0.24.0
 ARG LEAN422_TOOLCHAIN=leanprover/lean4:v4.22.0
 ARG LEAN424_TOOLCHAIN=leanprover/lean4:v4.24.0
+ARG ELAN_INIT_COMMIT=917c18d0ad52f649c2603dc8b973f5b9fa5f8f43
+ARG ELAN_INIT_SHA256=4bacca9502cb89736fe63d2685abc2947cfbf34dc87673504f1bb4c43eda9264
 
 FROM ${NODE_IMAGE} AS problem9-os-base
 
@@ -25,12 +27,16 @@ FROM problem9-os-base AS problem9-toolchain-base
 
 ARG LEAN422_TOOLCHAIN
 ARG LEAN424_TOOLCHAIN
+ARG ELAN_INIT_COMMIT
+ARG ELAN_INIT_SHA256
 
 ENV ELAN_HOME=/opt/elan
 ENV PATH=${ELAN_HOME}/bin:${PATH}
 
-RUN curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf \
-  | sh -s -- -y --default-toolchain none \
+RUN curl -fsSL -o /tmp/elan-init.sh https://raw.githubusercontent.com/leanprover/elan/${ELAN_INIT_COMMIT}/elan-init.sh \
+  && echo "${ELAN_INIT_SHA256}  /tmp/elan-init.sh" | sha256sum -c - \
+  && sh /tmp/elan-init.sh -y --default-toolchain none \
+  && rm /tmp/elan-init.sh \
   && elan toolchain install ${LEAN422_TOOLCHAIN} \
   && elan toolchain install ${LEAN424_TOOLCHAIN}
 
