@@ -10,25 +10,15 @@ export const portalAccessRequestKindSchema = z.enum([
   "identity_recovery"
 ]);
 
-export const portalAccessRequestInputSchema = z.object({
-  rationale: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
-    if (!value) {
-      return null;
-    }
+const portalRequestRationaleSchema = z.string().trim().min(1).max(500);
 
-    return value;
-  }),
+export const portalAccessRequestInputSchema = z.object({
+  rationale: portalRequestRationaleSchema,
   requestedRole: portalSelfServiceAccessRequestRoleSchema
 });
 
 export const portalAccessRecoveryInputSchema = z.object({
-  rationale: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
-    if (!value) {
-      return null;
-    }
-
-    return value;
-  })
+  rationale: portalRequestRationaleSchema
 });
 
 const portalAccessDecisionNoteSchema = z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
