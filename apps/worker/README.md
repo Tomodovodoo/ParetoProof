@@ -24,9 +24,10 @@ Docker targets:
 Runtime env guidance:
 
 - use [docs/runtime.md](../../docs/runtime.md) as the runtime baseline
+- use [docs/runtime-env-mode-checklists.md](../../docs/runtime-env-mode-checklists.md) for the concrete materializer, trusted-local, offline-ingest, and hosted claim-loop checklists
 - use [`.env.example`](./.env.example) only as the local developer-facing example
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
-- the future `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
+- the checked-in `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
 
 Package materialization:
 
@@ -37,11 +38,16 @@ Package materialization:
   digest-filled `benchmark-package.json`
 - use `bun --cwd apps/worker materialize:problem9-prompt-package -- --output <directory> --benchmark-package-root <directory> --run-id <id> --attempt-id <id> --lane-id <id> --run-mode <mode> --tool-profile <profile> --provider-family <family> --auth-mode <mode> --model-config-id <id> --harness-revision <revision>` to emit the canonical prompt package for one Problem 9 attempt
 - the prompt package writes `prompt-package.json` plus the reviewable raw prompt layers `system.md`, `benchmark.md`, `item.md`, and `run-envelope.json`
-- supported prompt and local-run auth modes now follow the MVP provider contract:
+- supported prompt-package auth modes follow the MVP provider contract:
   - `trusted_local_user`
   - `machine_api_key`
   - `machine_oauth`
   - `local_stub`
+- the checked-in `run-problem9-attempt` execution path currently documents and exercises:
+  - `trusted_local_user`
+  - `machine_api_key`
+  - `local_stub`
+- treat `machine_oauth` as a prompt-package contract value until a follow-up issue documents and exercises the local execution path end to end
 - use `bun --cwd apps/worker materialize:problem9-run-bundle -- --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]` to emit `problem9-run-bundle/` with the canonical manifests, copied package and prompt references, candidate source, verification artifacts, environment snapshot, and deterministic digests
 - the run-bundle command is a supported standalone materializer for fixture generation and later offline-ingest prep; it derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or any bundle input file
 - use `bun --cwd apps/worker test:run-bundle` to run the fixture-backed standalone verification path, which materializes canonical benchmark and prompt inputs, runs the bundle CLI twice on identical fixture evidence, and checks that the resulting digests and root manifests are identical

@@ -7,6 +7,7 @@ Use these files:
 - [architecture.md](./architecture.md) for the product and system shape
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
 - [runtime.md](./runtime.md) for environment, deploy, and worker runtime rules
+- [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) for supported-mode env and operator checklists
 - [project-management.md](./project-management.md) for issue and scope workflow
 
 Everything else should live in code, tests, READMEs, or GitHub issues and PRs.

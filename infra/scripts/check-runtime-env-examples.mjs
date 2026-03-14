@@ -74,6 +74,7 @@ const readmeChecks = [
     file: "apps/api/README.md",
     requiredSnippets: [
       "docs/runtime.md",
+      "docs/runtime-env-mode-checklists.md",
       "`.env.example`"
     ]
   },
@@ -81,6 +82,7 @@ const readmeChecks = [
     file: "apps/web/README.md",
     requiredSnippets: [
       "docs/runtime.md",
+      "docs/runtime-env-mode-checklists.md",
       "`.env.example`"
     ]
   },
@@ -88,7 +90,41 @@ const readmeChecks = [
     file: "apps/worker/README.md",
     requiredSnippets: [
       "docs/runtime.md",
+      "docs/runtime-env-mode-checklists.md",
       "`.env.example`"
+    ]
+  }
+];
+
+const docsChecks = [
+  {
+    file: "docs/README.md",
+    requiredSnippets: [
+      "runtime.md",
+      "runtime-env-mode-checklists.md"
+    ]
+  },
+  {
+    file: "docs/runtime.md",
+    requiredSnippets: ["runtime-env-mode-checklists.md"]
+  },
+  {
+    file: "docs/runtime-env-mode-checklists.md",
+    requiredSnippets: [
+      "# Runtime Env Mode Checklists",
+      "### Local browser build or dev server",
+      "### Pages auth-entry runtime",
+      "### Local API startup",
+      "### Railway API runtime",
+      "### API migration mode",
+      "### API owner bootstrap mode",
+      "### Artifact materializers",
+      "### Local Problem 9 attempt with `local_stub`",
+      "### Local Problem 9 attempt with `machine_api_key`",
+      "### Local Problem 9 attempt with `trusted_local_user`",
+      "### Trusted-local devbox wrapper",
+      "### Offline ingest CLI",
+      "### Hosted claim loop with `machine_api_key`"
     ]
   }
 ];
@@ -152,6 +188,17 @@ for (const check of checks) {
 }
 
 for (const check of readmeChecks) {
+  const contents = readRepoFile(check.file);
+
+  for (const requiredSnippet of check.requiredSnippets) {
+    assert(
+      contents.includes(requiredSnippet),
+      `${check.file} must reference ${requiredSnippet}.`
+    );
+  }
+}
+
+for (const check of docsChecks) {
   const contents = readRepoFile(check.file);
 
   for (const requiredSnippet of check.requiredSnippets) {

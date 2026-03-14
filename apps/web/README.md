@@ -7,5 +7,6 @@ Cloudflare Pages is configured around this app through the local Wrangler config
 Runtime env guidance:
 
 - use [docs/runtime.md](../../docs/runtime.md) as the runtime baseline for browser env versus hosted auth-entry secrets
+- use [docs/runtime-env-mode-checklists.md](../../docs/runtime-env-mode-checklists.md) for the concrete local browser and Pages auth-entry runtime checklists
 - the Pages auth-entry runtime owns the provider-start handlers and a legacy finalize compatibility route, while branded completion now posts into the API audience handoff at `/portal/session/finalize/submit`
 - use [`.env.example`](./.env.example) only as the local browser-build example
