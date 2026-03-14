@@ -34,3 +34,4 @@
 
 - 
 - If this PR supersedes or duplicates another PR, link that PR here and summarize any carried-forward review findings.
+- If this PR reaches 5+ comments or attracts machine-review findings, add a feedback-disposition note on the linked issue before merge.
