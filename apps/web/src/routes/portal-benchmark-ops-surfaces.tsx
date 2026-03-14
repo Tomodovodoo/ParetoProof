@@ -12,6 +12,7 @@ import {
 } from "@paretoproof/shared";
 import {
   type Dispatch,
+  Fragment,
   type SetStateAction,
   useCallback,
   useEffect,
@@ -119,6 +120,10 @@ export function buildRunDetailTargetPath(runId: string, search = "") {
 
 export function buildRunDetailHref(runId: string, search = "") {
   return buildPortalUrl(buildRunDetailTargetPath(runId, search));
+}
+
+export function getCompactRunsSectionOrder() {
+  return ["runsSlice", "quickFilters", "resultsPanel", "supportPanel"] as const;
 }
 
 function updateRunsQuery(
@@ -476,229 +481,243 @@ function PortalRunsSurface({
     </article>
   );
 
+  const quickFiltersPanel = (
+    <article className="portal-panel portal-runs-quick-filter-panel">
+      <div className="portal-panel-header">
+        <div>
+          <p className="section-tag">Quick filters</p>
+          <h2>Refine the slice before dropping into the full list.</h2>
+        </div>
+      </div>
+      <div className="portal-form-grid portal-runs-quick-filter-grid">
+        <label className="portal-field">
+          <span>Search</span>
+          <input
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
+            }}
+            placeholder="run id, package, model, failure"
+            type="search"
+            value={query.q ?? ""}
+          />
+        </label>
+        <label className="portal-field">
+          <span>Lifecycle bucket</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
+              });
+            }}
+            value={query.lifecycleBucket ?? ""}
+          >
+            <option value="">All buckets</option>
+            {portalRunsLifecycleBuckets.map((bucket) => (
+              <option key={bucket.id} value={bucket.id}>
+                {bucket.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </article>
+  );
+
+  const resultsPanel = (
+    <article className="portal-panel portal-results-panel portal-results-panel-compact">
+      <div className="portal-panel-header">
+        <div>
+          <p className="section-tag">Canonical private index</p>
+          <h2>Runs is the benchmark-operations entry point for approved contributors.</h2>
+        </div>
+        <div className="portal-toolbar">
+          <button
+            className="button button-secondary"
+            disabled={!loadState.data?.items.length}
+            onClick={() => {
+              if (loadState.data) {
+                downloadRunsCsv(loadState.data.items);
+              }
+            }}
+            type="button"
+          >
+            Export CSV
+          </button>
+          <a className="button button-secondary" href={buildPortalUrl("/")}>
+            Overview
+          </a>
+        </div>
+      </div>
+      <div className="portal-chip-row">
+        <span className="role-chip role-chip-tonal">
+          {loadState.data?.summary.totalMatches ?? 0} matches
+        </span>
+        <span className="role-chip role-chip-muted">
+          {loadState.data?.summary.activeRuns ?? 0} active
+        </span>
+        <span className="role-chip role-chip-muted">
+          {loadState.data?.summary.failedRuns ?? 0} failed
+        </span>
+      </div>
+    </article>
+  );
+
+  const supportPanel = (
+    <article className="portal-panel portal-runs-support-panel">
+      <div className="portal-panel-header">
+        <div>
+          <p className="section-tag">Refine the slice</p>
+          <h2>Filter and refresh the full private index.</h2>
+        </div>
+      </div>
+      <p className="portal-panel-muted">
+        Filter, export, and triage runs here. Route into one run&apos;s evidence at
+        <code className="portal-inline-code"> /runs/:runId</code>.
+      </p>
+      <PortalFreshnessCard
+        isRefreshing={loadState.isLoading}
+        lastUpdatedAt={loadState.lastUpdatedAt}
+        onRefresh={() => {
+          void onRefresh();
+        }}
+        routeId={activeRouteId}
+      />
+      <div className="portal-form-grid">
+        <label className="portal-field">
+          <span>Search</span>
+          <input
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
+            }}
+            placeholder="run id, package, model, failure"
+            type="search"
+            value={query.q ?? ""}
+          />
+        </label>
+        <label className="portal-field">
+          <span>Lifecycle bucket</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
+              });
+            }}
+            value={query.lifecycleBucket ?? ""}
+          >
+            <option value="">All buckets</option>
+            {portalRunsLifecycleBuckets.map((bucket) => (
+              <option key={bucket.id} value={bucket.id}>
+                {bucket.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="portal-field">
+          <span>Verdict</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                verdict: event.target.value ? [event.target.value as EvaluationVerdictClass] : []
+              });
+            }}
+            value={query.verdict[0] ?? ""}
+          >
+            <option value="">All verdicts</option>
+            <option value="pass">Pass</option>
+            <option value="fail">Fail</option>
+            <option value="invalid_result">Invalid result</option>
+          </select>
+        </label>
+        <label className="portal-field">
+          <span>Sort</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                sort: event.target.value as PortalRunsListQuery["sort"]
+              });
+            }}
+            value={query.sort}
+          >
+            {portalRunsSortOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="portal-field">
+          <span>Provider</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                providerFamily: event.target.value || null
+              });
+            }}
+            value={query.providerFamily ?? ""}
+          >
+            <option value="">All providers</option>
+            {providerOptions.map((provider) => (
+              <option key={provider} value={provider}>
+                {provider}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="portal-field">
+          <span>Model config</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                modelConfigId: event.target.value || null
+              });
+            }}
+            value={query.modelConfigId ?? ""}
+          >
+            <option value="">All configs</option>
+            {modelOptions.map((entry) => (
+              <option key={entry.modelConfigId} value={entry.modelConfigId}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="portal-chip-row">
+        <button
+          className="portal-inline-button"
+          onClick={() => {
+            onReplaceLocation(pathname, "");
+          }}
+          type="button"
+        >
+          Reset filters
+        </button>
+      </div>
+    </article>
+  );
+
   if (isCompactLayout) {
+    const compactSections = {
+      quickFilters: quickFiltersPanel,
+      resultsPanel,
+      runsSlice,
+      supportPanel
+    };
+
     return (
       <section className="portal-grid portal-grid-stack">
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
-
-        <article className="portal-panel portal-runs-quick-filter-panel">
-          <div className="portal-panel-header">
-            <div>
-              <p className="section-tag">Quick filters</p>
-              <h2>Refine the slice before dropping into the full list.</h2>
-            </div>
-          </div>
-          <div className="portal-form-grid portal-runs-quick-filter-grid">
-            <label className="portal-field">
-              <span>Search</span>
-              <input
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
-                }}
-                placeholder="run id, package, model, failure"
-                type="search"
-                value={query.q ?? ""}
-              />
-            </label>
-            <label className="portal-field">
-              <span>Lifecycle bucket</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
-                  });
-                }}
-                value={query.lifecycleBucket ?? ""}
-              >
-                <option value="">All buckets</option>
-                {portalRunsLifecycleBuckets.map((bucket) => (
-                  <option key={bucket.id} value={bucket.id}>
-                    {bucket.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </article>
-
-        <article className="portal-panel portal-results-panel portal-results-panel-compact">
-          <div className="portal-panel-header">
-            <div>
-              <p className="section-tag">Canonical private index</p>
-              <h2>Runs is the benchmark-operations entry point for approved contributors.</h2>
-            </div>
-            <div className="portal-toolbar">
-              <button
-                className="button button-secondary"
-                disabled={!loadState.data?.items.length}
-                onClick={() => {
-                  if (loadState.data) {
-                    downloadRunsCsv(loadState.data.items);
-                  }
-                }}
-                type="button"
-              >
-                Export CSV
-              </button>
-              <a className="button button-secondary" href={buildPortalUrl("/")}>
-                Overview
-              </a>
-            </div>
-          </div>
-          <div className="portal-chip-row">
-            <span className="role-chip role-chip-tonal">
-              {loadState.data?.summary.totalMatches ?? 0} matches
-            </span>
-            <span className="role-chip role-chip-muted">
-              {loadState.data?.summary.activeRuns ?? 0} active
-            </span>
-            <span className="role-chip role-chip-muted">
-              {loadState.data?.summary.failedRuns ?? 0} failed
-            </span>
-          </div>
-        </article>
-
-        <article className="portal-panel portal-runs-support-panel">
-          <div className="portal-panel-header">
-            <div>
-              <p className="section-tag">Refine the slice</p>
-              <h2>Filter and refresh the full private index.</h2>
-            </div>
-          </div>
-          <p className="portal-panel-muted">
-            Filter, export, and triage runs here. Route into one run&apos;s evidence at
-            <code className="portal-inline-code"> /runs/:runId</code>.
-          </p>
-          <PortalFreshnessCard
-            isRefreshing={loadState.isLoading}
-            lastUpdatedAt={loadState.lastUpdatedAt}
-            onRefresh={() => {
-              void onRefresh();
-            }}
-            routeId={activeRouteId}
-          />
-          <div className="portal-form-grid">
-            <label className="portal-field">
-              <span>Search</span>
-              <input
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
-                }}
-                placeholder="run id, package, model, failure"
-                type="search"
-                value={query.q ?? ""}
-              />
-            </label>
-            <label className="portal-field">
-              <span>Lifecycle bucket</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
-                  });
-                }}
-                value={query.lifecycleBucket ?? ""}
-              >
-                <option value="">All buckets</option>
-                {portalRunsLifecycleBuckets.map((bucket) => (
-                  <option key={bucket.id} value={bucket.id}>
-                    {bucket.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="portal-field">
-              <span>Verdict</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    verdict: event.target.value ? [event.target.value as EvaluationVerdictClass] : []
-                  });
-                }}
-                value={query.verdict[0] ?? ""}
-              >
-                <option value="">All verdicts</option>
-                <option value="pass">Pass</option>
-                <option value="fail">Fail</option>
-                <option value="invalid_result">Invalid result</option>
-              </select>
-            </label>
-            <label className="portal-field">
-              <span>Sort</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    sort: event.target.value as PortalRunsListQuery["sort"]
-                  });
-                }}
-                value={query.sort}
-              >
-                {portalRunsSortOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="portal-field">
-              <span>Provider</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    providerFamily: event.target.value || null
-                  });
-                }}
-                value={query.providerFamily ?? ""}
-              >
-                <option value="">All providers</option>
-                {providerOptions.map((provider) => (
-                  <option key={provider} value={provider}>
-                    {provider}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="portal-field">
-              <span>Model config</span>
-              <select
-                className="input"
-                onChange={(event) => {
-                  updateRunsQuery(pathname, query, onReplaceLocation, {
-                    modelConfigId: event.target.value || null
-                  });
-                }}
-                value={query.modelConfigId ?? ""}
-              >
-                <option value="">All configs</option>
-                {modelOptions.map((entry) => (
-                  <option key={entry.modelConfigId} value={entry.modelConfigId}>
-                    {entry.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="portal-chip-row">
-            <button
-              className="portal-inline-button"
-              onClick={() => {
-                onReplaceLocation(pathname, "");
-              }}
-              type="button"
-            >
-            Reset filters
-          </button>
-        </div>
-      </article>
-
-        {runsSlice}
+        {getCompactRunsSectionOrder().map((sectionId) => (
+          <Fragment key={sectionId}>{compactSections[sectionId]}</Fragment>
+        ))}
       </section>
     );
   }

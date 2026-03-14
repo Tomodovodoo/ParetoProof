@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildRunDetailTargetPath,
-  buildRunsIndexTargetPath
+  buildRunsIndexTargetPath,
+  getCompactRunsSectionOrder
 } from "./portal-benchmark-ops-surfaces.tsx";
 
 describe("portal benchmark ops route targets", () => {
@@ -35,5 +36,14 @@ describe("portal benchmark ops route targets", () => {
     ).toBe(
       "/runs?surface=portal&access=approved&roles=helper&providerFamily=google"
     );
+  });
+
+  it("keeps the compact runs slice ahead of the deeper support panel", () => {
+    expect(getCompactRunsSectionOrder()).toEqual([
+      "runsSlice",
+      "quickFilters",
+      "resultsPanel",
+      "supportPanel"
+    ]);
   });
 });
