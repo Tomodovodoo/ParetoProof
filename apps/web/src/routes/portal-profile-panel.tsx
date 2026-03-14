@@ -533,6 +533,8 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           {profileForm}
         </article>
 
+        {identityPanel}
+
         <article className="portal-panel portal-profile-context-panel">
           <p className="portal-panel-muted">
             Update the supported contributor details and attach an extra GitHub or Google
@@ -540,8 +542,6 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           </p>
           <PortalFreshnessCard lastUpdatedAt={lastUpdatedAt} routeId="portal.profile" />
         </article>
-
-        {identityPanel}
       </section>
     );
   }
