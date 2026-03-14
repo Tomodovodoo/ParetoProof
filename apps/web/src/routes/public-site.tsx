@@ -1,6 +1,7 @@
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
+import { useEffect } from "react";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
@@ -764,6 +765,34 @@ function PublicBenchmarkReport({
 }
 
 function PublicProjectPack() {
+  useEffect(() => {
+    function scrollProjectHashIntoView() {
+      if (!window.location.hash) {
+        return;
+      }
+
+      const target = document.querySelector(window.location.hash);
+
+      if (!target) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({
+          behavior: "auto",
+          block: "start"
+        });
+      });
+    }
+
+    scrollProjectHashIntoView();
+    window.addEventListener("hashchange", scrollProjectHashIntoView);
+
+    return () => {
+      window.removeEventListener("hashchange", scrollProjectHashIntoView);
+    };
+  }, []);
+
   return (
     <main className="site-shell site-project-shell">
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
