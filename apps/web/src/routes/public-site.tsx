@@ -512,7 +512,7 @@ function PublicLanding() {
 
 function PublicBenchmarkIndex() {
   return (
-    <main className="site-shell">
+    <main className="site-shell site-benchmark-shell">
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
 
       <section className="site-hero">
