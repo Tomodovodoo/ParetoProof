@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getCompactAccessRequestSectionOrder,
   resolveSelectedAccessRequestId
 } from "./portal-access-request-panel.tsx";
 
@@ -31,5 +32,14 @@ describe("resolveSelectedAccessRequestId", () => {
 
   it("clears the selection when the current filter slice is empty", () => {
     expect(resolveSelectedAccessRequestId("request-pending", [])).toBeNull();
+  });
+});
+
+describe("getCompactAccessRequestSectionOrder", () => {
+  it("shows the review queue before filters on compact layouts", () => {
+    expect(getCompactAccessRequestSectionOrder()).toEqual([
+      "queueContent",
+      "filterFields"
+    ]);
   });
 });
