@@ -6,7 +6,7 @@ export type AccessProvider = "github" | "google";
 const productionPublicOrigin = "https://paretoproof.com";
 const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
-const localPortalStateParamKeys = ["access", "email", "roles"] as const;
+const localPortalStateParamKeys = ["access", "email"] as const;
 const productionProviderAuthOrigins: Record<AccessProvider, string> = {
   github: "https://github.auth.paretoproof.com",
   google: "https://google.auth.paretoproof.com"
@@ -123,6 +123,10 @@ function shouldPreserveLocalPortalReason(
   return targetUrl.pathname === "/access-request" || targetUrl.pathname === "/denied";
 }
 
+function shouldPreserveLocalPortalRoles(currentParams: URLSearchParams) {
+  return currentParams.get("access") === "approved";
+}
+
 export function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
   if (!isLocalOrigin(currentLocation.hostname)) {
     return;
@@ -138,6 +142,17 @@ export function copyLocalPortalState(targetUrl: URL, currentLocation = window.lo
 
     if (value) {
       targetUrl.searchParams.set(key, value);
+    }
+  }
+
+  if (
+    !targetUrl.searchParams.has("roles") &&
+    shouldPreserveLocalPortalRoles(currentParams)
+  ) {
+    const roles = currentParams.get("roles");
+
+    if (roles) {
+      targetUrl.searchParams.set("roles", roles);
     }
   }
 
