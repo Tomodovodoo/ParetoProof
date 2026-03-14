@@ -1041,11 +1041,13 @@ export function buildRunsModelOptions(
 }
 
 function escapeCsvValue(value: string) {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
+  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
+
+  if (/[",\n]/.test(safeValue)) {
+    return `"${safeValue.replaceAll('"', '""')}"`;
   }
 
-  return value;
+  return safeValue;
 }
 
 export function getWorkerIncidentTone(severity: PortalWorkerIncidentSeverity) {
