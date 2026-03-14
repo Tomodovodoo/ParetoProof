@@ -548,8 +548,6 @@ function PublicBenchmarkIndex() {
     <main className="site-shell site-benchmark-shell">
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
 
-      {isCompactLayout ? benchmarkCards : null}
-
       <section className="site-hero">
         <div className="site-hero-copy">
           <p className="eyebrow">
@@ -599,7 +597,7 @@ function PublicBenchmarkIndex() {
         </aside>
       </section>
 
-      {!isCompactLayout ? benchmarkCards : null}
+      {benchmarkCards}
 
       <section className="site-band-grid" aria-label="Reporting rules">
         <article className="site-band">
