@@ -2687,6 +2687,48 @@ a.button-secondary {
     padding-bottom: 10px;
   }
 
+  .portal-shell-overview-active .portal-sidebar {
+    padding-bottom: 10px;
+  }
+
+  .portal-shell-overview-active .portal-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .portal-shell-overview-active .portal-nav-link {
+    gap: 4px;
+    padding: 7px 4px;
+  }
+
+  .portal-shell-overview-active .portal-nav-label {
+    font-size: 0.66rem;
+  }
+
+  .portal-shell-overview-active .portal-main {
+    gap: 10px;
+  }
+
+  .portal-shell-overview-active .portal-topbar {
+    gap: 6px;
+  }
+
+  .portal-shell-overview-active .portal-topbar h1 {
+    font-size: clamp(1.72rem, 8.6vw, 2.1rem);
+  }
+
+  .portal-shell-overview-active .portal-identity {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .portal-shell-overview-active .role-chip {
+    min-height: 1.5rem;
+    padding: 0.18rem 0.42rem;
+    font-size: 0.74rem;
+  }
+
   .portal-shell-profile-active .portal-nav {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
