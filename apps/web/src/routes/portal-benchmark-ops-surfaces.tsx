@@ -1132,27 +1132,39 @@ function PortalWorkersSurface({
   onRefresh
 }: SurfaceProps<PortalWorkersViewResponse>) {
   const data = loadState.data;
+  const isCompactLayout = useCompactLayout(480);
+  const freshnessCard = (
+    <PortalFreshnessCard
+      isRefreshing={loadState.isLoading}
+      lastUpdatedAt={loadState.lastUpdatedAt}
+      onRefresh={() => {
+        void onRefresh();
+      }}
+      routeId={activeRouteId}
+    />
+  );
 
   return (
-    <section className="portal-workspace-grid">
-      <article className="portal-panel portal-surface-main">
+    <section
+      className={`portal-workspace-grid${
+        isCompactLayout ? " portal-workers-workspace-compact" : ""
+      }`}
+    >
+      <article
+        className={`portal-panel portal-surface-main${
+          isCompactLayout ? " portal-workers-main-compact" : ""
+        }`}
+      >
         <div className="portal-panel-header">
           <div>
-            <p className="section-tag">Execution posture</p>
+            {!isCompactLayout ? <p className="section-tag">Execution posture</p> : null}
             <h2>Workers owns queue and lease health.</h2>
           </div>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
             Jump to runs
           </a>
         </div>
-        <PortalFreshnessCard
-          isRefreshing={loadState.isLoading}
-          lastUpdatedAt={loadState.lastUpdatedAt}
-          onRefresh={() => {
-            void onRefresh();
-          }}
-          routeId={activeRouteId}
-        />
+        {!isCompactLayout ? freshnessCard : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
         {data ? (
           <>
@@ -1178,6 +1190,7 @@ function PortalWorkersSurface({
                 <small>Route refresh evidence</small>
               </article>
             </div>
+            {isCompactLayout ? freshnessCard : null}
             <div className="portal-results-contract-grid">
               {data.workerPools.map((pool) => (
                 <article className="portal-results-contract-card" key={pool.workerPool}>
