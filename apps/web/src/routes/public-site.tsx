@@ -666,8 +666,8 @@ function PublicBenchmarkReport({
   }
 
   return (
-    <main className="site-shell">
-      <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl(benchmarksRoute)} />
+    <main className="site-shell site-benchmark-shell site-benchmark-report-shell">
+        <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl(benchmarksRoute)} />
 
       <section className="site-hero">
         <div className="site-hero-copy">

@@ -2838,6 +2838,10 @@ a.button-secondary {
     display: none;
   }
 
+  .site-shell.site-benchmark-report-shell .hero-actions .button-secondary {
+    display: inline-flex;
+  }
+
   .site-shell.site-benchmark-shell .site-hero {
     gap: 10px;
     padding-top: 12px;
