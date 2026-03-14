@@ -2987,6 +2987,10 @@ a.button-secondary {
     display: inline-flex;
   }
 
+  .site-shell.site-report-unavailable-shell .hero-actions .button-secondary {
+    display: inline-flex;
+  }
+
   .site-shell.site-home-shell .site-header-actions {
     display: none;
   }
