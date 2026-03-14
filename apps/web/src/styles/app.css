@@ -1923,6 +1923,79 @@ a.button-secondary {
     padding-block: 0.42rem;
   }
 
+  .portal-shell {
+    padding: 8px;
+  }
+
+  .portal-sidebar {
+    padding: 10px 10px 12px;
+    gap: 10px;
+  }
+
+  .portal-sidebar-header {
+    align-items: center;
+    gap: 10px;
+  }
+
+  .portal-brand-block {
+    gap: 8px;
+  }
+
+  .portal-sidebar h1 {
+    font-size: 1.05rem;
+  }
+
+  .portal-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .portal-nav-link {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 6px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+
+  .portal-nav-summary {
+    display: none;
+  }
+
+  .portal-nav-label {
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  .portal-nav-link-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .portal-main {
+    padding: 12px 12px 16px;
+    gap: 12px;
+  }
+
+  .portal-topbar {
+    gap: 8px;
+  }
+
+  .portal-topbar-copy,
+  .portal-status-strip {
+    display: none;
+  }
+
+  .portal-identity {
+    gap: 8px;
+  }
+
+  .role-chip {
+    min-height: 1.65rem;
+    padding: 0.24rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
   .portal-grid-admin-workspace .portal-admin-filter-grid {
     grid-template-columns: 1fr;
   }
