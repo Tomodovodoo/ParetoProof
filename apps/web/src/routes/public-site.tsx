@@ -1,5 +1,6 @@
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
@@ -511,9 +512,43 @@ function PublicLanding() {
 }
 
 function PublicBenchmarkIndex() {
+  const isCompactLayout = useCompactLayout(480);
+
+  const benchmarkCards = (
+    <section
+      className={`site-card-grid${isCompactLayout ? " site-benchmark-card-grid-compact" : ""}`}
+      aria-label="Public benchmark index"
+    >
+      {publicBenchmarks.map((benchmark) => (
+        <article className="site-panel-card" key={benchmark.benchmarkVersionId}>
+          <div className="site-panel-copy">
+            <p className="section-tag">{benchmark.taskType}</p>
+            <h3>{benchmark.title}</h3>
+            <p>{benchmark.description}</p>
+            <p>
+              Latest release: <strong>{benchmark.latestReleaseLabel}</strong>
+            </p>
+            <p>
+              Status: <strong>{formatReleaseStatus(benchmark.releaseStatus)}</strong>
+            </p>
+            <p>
+              Headline metric: <strong>{benchmark.headlineMetric}</strong>
+            </p>
+            <p>{benchmark.scopeNote}</p>
+          </div>
+          <a className="button button-secondary" href={buildBenchmarkReportUrl(benchmark.benchmarkVersionId)}>
+            Open release summary
+          </a>
+        </article>
+      ))}
+    </section>
+  );
+
   return (
     <main className="site-shell site-benchmark-shell">
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl("/")} />
+
+      {isCompactLayout ? benchmarkCards : null}
 
       <section className="site-hero">
         <div className="site-hero-copy">
@@ -564,30 +599,7 @@ function PublicBenchmarkIndex() {
         </aside>
       </section>
 
-      <section className="site-card-grid" aria-label="Public benchmark index">
-        {publicBenchmarks.map((benchmark) => (
-          <article className="site-panel-card" key={benchmark.benchmarkVersionId}>
-            <div className="site-panel-copy">
-              <p className="section-tag">{benchmark.taskType}</p>
-              <h3>{benchmark.title}</h3>
-              <p>{benchmark.description}</p>
-              <p>
-                Latest release: <strong>{benchmark.latestReleaseLabel}</strong>
-              </p>
-              <p>
-                Status: <strong>{formatReleaseStatus(benchmark.releaseStatus)}</strong>
-              </p>
-              <p>
-                Headline metric: <strong>{benchmark.headlineMetric}</strong>
-              </p>
-              <p>{benchmark.scopeNote}</p>
-            </div>
-            <a className="button button-secondary" href={buildBenchmarkReportUrl(benchmark.benchmarkVersionId)}>
-              Open release summary
-            </a>
-          </article>
-        ))}
-      </section>
+      {!isCompactLayout ? benchmarkCards : null}
 
       <section className="site-band-grid" aria-label="Reporting rules">
         <article className="site-band">
