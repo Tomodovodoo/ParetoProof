@@ -67,6 +67,10 @@ export const defaultPortalRunsQuery: PortalRunsListQuery = {
   verdict: []
 };
 
+const portalRunsQueryParamKeys = Object.keys(defaultPortalRunsQuery) as Array<
+  keyof PortalRunsListQuery
+>;
+
 const localRunItems: PortalRunListItem[] = [
   {
     authMode: "oidc",
@@ -927,6 +931,33 @@ export function parsePortalRunsQuery(search: string): PortalRunsListQuery {
 
   const parsedQuery = portalRunsListQuerySchema.safeParse(candidateQuery);
   return parsedQuery.success ? parsedQuery.data : defaultPortalRunsQuery;
+}
+
+export function extractPortalRunsQueryString(search: string) {
+  const sourceParams = new URLSearchParams(search);
+  const runsParams = new URLSearchParams();
+
+  for (const key of portalRunsQueryParamKeys) {
+    const rawValue = sourceParams.get(key);
+
+    if (rawValue === null) {
+      continue;
+    }
+
+    const trimmedValue = rawValue.trim();
+
+    if (!trimmedValue) {
+      continue;
+    }
+
+    runsParams.set(key, trimmedValue);
+  }
+
+  return runsParams.toString();
+}
+
+export function sanitizePortalRunsQueryString(search: string) {
+  return buildPortalRunsQueryString(parsePortalRunsQuery(search));
 }
 
 export function buildPortalRunsQueryString(query: PortalRunsListQuery) {
