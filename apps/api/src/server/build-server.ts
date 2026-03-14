@@ -9,6 +9,7 @@ import { registerHealthRoute } from "../routes/health.js";
 import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
+import { registerPublicRoutes } from "../routes/public.js";
 import {
   createTrustedMutationOriginHook,
   isAllowedLocalOrigin,
@@ -17,6 +18,8 @@ import {
 
 function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   const baselineOrigins = [
+    "https://paretoproof.com",
+    "https://www.paretoproof.com",
     "https://auth.paretoproof.com",
     "https://github.auth.paretoproof.com",
     "https://google.auth.paretoproof.com",
@@ -70,6 +73,7 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   );
 
   registerHealthRoute(app);
+  registerPublicRoutes(app, db);
   registerPortalRoutes(app, db, requireAccess);
   registerAdminRoutes(app, db, requireAccess);
   registerOfflineIngestRoutes(app, db, requireAccess);

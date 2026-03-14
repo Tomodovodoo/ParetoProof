@@ -131,13 +131,13 @@ export function buildLocalPendingPortalUrl(
 function formatPortalBootstrapError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "Failed to fetch") {
-      return "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
+      return "Could not connect to the ParetoProof API. Please try again in a moment.";
     }
 
-    return "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
+    return "Something went wrong while loading the portal. Please try again.";
   }
 
-  return "The portal could not finish loading right now. Try again in a moment.";
+  return "Something went wrong while loading the portal. Please try again.";
 }
 
 export function PortalBootstrap() {
@@ -327,13 +327,7 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "loading") {
-    return (
-      <PortalStatusCard
-        eyebrow="Portal"
-        title="Checking access"
-        body="Resolving your Cloudflare Access identity and portal approval state."
-      />
-    );
+    return <PortalLoadingSkeleton />;
   }
 
   if (state.status === "unauthenticated") {
@@ -341,7 +335,7 @@ export function PortalBootstrap() {
       <PortalStatusCard
         eyebrow="Portal"
         title="Redirecting to sign in"
-        body="The portal only loads after authentication. You are being sent to the auth entrypoint now."
+        body="Taking you to the sign-in page now."
         action={{ href: buildAuthUrl(currentRelativeUrl), label: "Continue to sign in" }}
       />
     );
@@ -455,6 +449,53 @@ function PortalStatusCard({ action, body, eyebrow, title }: PortalStatusCardProp
             {action.label}
           </a>
         ) : null}
+      </section>
+    </main>
+  );
+}
+
+function PortalLoadingSkeleton() {
+  return (
+    <main className="portal-shell portal-shell-loading">
+      <aside className="portal-sidebar portal-sidebar-skeleton" aria-hidden="true">
+        <div className="portal-sidebar-header">
+          <div className="portal-brand-block">
+            <span className="portal-brand-mark">
+              <AppIcon name="spark" />
+            </span>
+            <div>
+              <p className="eyebrow">Portal</p>
+              <h1>ParetoProof</h1>
+            </div>
+          </div>
+        </div>
+        <nav className="portal-nav">
+          <div className="portal-nav-group">
+            <div className="skeleton-line skeleton-line-short" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+          <div className="portal-nav-group">
+            <div className="skeleton-line skeleton-line-short" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+        </nav>
+      </aside>
+      <section className="portal-main">
+        <header className="portal-topbar portal-topbar-skeleton">
+          <div className="portal-topbar-left">
+            <div className="skeleton-line skeleton-line-heading" />
+            <div className="skeleton-line skeleton-line-short" />
+          </div>
+        </header>
+        <section className="portal-content portal-content-skeleton">
+          <div className="portal-skeleton-status">
+            <span className="portal-skeleton-spinner" />
+            <p>Loading portal...</p>
+          </div>
+        </section>
       </section>
     </main>
   );
