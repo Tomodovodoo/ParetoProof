@@ -66,4 +66,21 @@ describe("resolvePortalRouteRedirect", () => {
     expect(redirect.searchParams.get("email")).toBe("ada@paretoproof.local");
     expect(redirect.searchParams.has("roles")).toBe(false);
   });
+
+  it("does not self-redirect denied access-request routes when query param order differs", () => {
+    setWindowUrl(
+      "http://localhost/access-request?surface=portal&access=denied&reason=access_request_required&email=lin@paretoproof.local"
+    );
+
+    expect(
+      resolvePortalRouteRedirect({
+        pathname: "/access-request",
+        reason: "access_request_required",
+        roles: [],
+        search:
+          "?surface=portal&access=denied&reason=access_request_required&email=lin@paretoproof.local",
+        status: "denied"
+      })
+    ).toBeNull();
+  });
 });

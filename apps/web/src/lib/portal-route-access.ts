@@ -133,6 +133,13 @@ function readRouteDeniedReason(
   return undefined;
 }
 
+function normalizeSearch(search = "") {
+  const params = new URLSearchParams(search);
+  params.sort();
+  const normalizedSearch = params.toString();
+  return normalizedSearch ? `?${normalizedSearch}` : "";
+}
+
 function isCurrentRedirectTarget(
   targetPath: string,
   context: PortalRouteAccessContext
@@ -140,7 +147,7 @@ function isCurrentRedirectTarget(
   const targetUrl = new URL(targetPath, window.location.origin);
   return (
     targetUrl.pathname === context.pathname &&
-    targetUrl.search === (context.search ?? "")
+    normalizeSearch(targetUrl.search) === normalizeSearch(context.search ?? "")
   );
 }
 
