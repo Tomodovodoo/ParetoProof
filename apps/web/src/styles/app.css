@@ -3566,4 +3566,18 @@ a.button-secondary {
   .site-shell.site-benchmark-report-shell .site-benchmark-mobile-value {
     font-size: 0.98rem;
   }
+
+  .site-shell.site-benchmark-report-shell.site-benchmark-report-partial .site-benchmark-mobile-summary {
+    gap: 5px;
+    padding-top: 4px;
+  }
+
+  .site-shell.site-benchmark-report-shell.site-benchmark-report-partial .site-benchmark-mobile-card {
+    gap: 3px;
+    padding: 9px;
+  }
+
+  .site-shell.site-benchmark-report-shell.site-benchmark-report-partial .site-benchmark-mobile-card p {
+    display: none;
+  }
 }
