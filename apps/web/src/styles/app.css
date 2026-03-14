@@ -2833,6 +2833,32 @@ a.button-secondary {
     min-width: 0;
   }
 
+  .portal-grid-admin-workspace .portal-admin-detail-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-grid-admin-workspace .portal-admin-detail-panel > * {
+    min-width: 0;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-record-list,
+  .portal-grid-admin-workspace .portal-admin-detail-stack,
+  .portal-grid-admin-workspace .portal-admin-simple-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-grid-admin-workspace .portal-admin-record,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-panel-header,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-summary-grid,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-card,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-detail-columns,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-metric-card,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-list-row,
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-alert-block {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .portal-grid-admin-workspace .portal-admin-list-panel .portal-panel-header {
     flex-wrap: wrap;
     gap: 8px;
@@ -2841,6 +2867,20 @@ a.button-secondary {
   .portal-grid-admin-workspace .portal-admin-list-panel .portal-panel-header > div {
     min-width: 0;
     flex: 1 1 11rem;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-panel-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-panel-header > div {
+    min-width: 0;
+    flex: 1 1 11rem;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-detail-panel .portal-admin-list-row {
+    flex-wrap: wrap;
   }
 
   .portal-grid-admin-workspace .portal-admin-list-panel .section-tag {
