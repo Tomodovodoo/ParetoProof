@@ -12,6 +12,14 @@ type UsePortalPollingOptions = {
   routeId: string;
 };
 
+export function canPortalRefreshOnDemand(policy: PortalLiveViewFreshnessEntry | null) {
+  return policy !== null;
+}
+
+export function shouldPortalAutoPoll(policy: PortalLiveViewFreshnessEntry | null) {
+  return Boolean(policy && policy.mode === "polling" && policy.pollIntervalMs);
+}
+
 function formatDuration(ms: number) {
   if (ms < 1000) {
     return "under 1 second";
@@ -109,7 +117,7 @@ export function usePortalPolling({
   onPollRef.current = onPoll;
 
   async function pollNow() {
-    if (!policy || policy.mode !== "polling" || isPollingRef.current) {
+    if (!canPortalRefreshOnDemand(policy) || isPollingRef.current) {
       return;
     }
 
@@ -126,7 +134,13 @@ export function usePortalPolling({
   }
 
   useEffect(() => {
-    if (!enabled || !policy || policy.mode !== "polling" || !policy.pollIntervalMs) {
+    if (!enabled || !policy || !shouldPortalAutoPoll(policy)) {
+      return;
+    }
+
+    const pollIntervalMs = policy.pollIntervalMs;
+
+    if (!pollIntervalMs) {
       return;
     }
 
@@ -142,7 +156,7 @@ export function usePortalPolling({
       void pollNow().catch(() => {
         // The owning view already controls its error state.
       });
-    }, policy.pollIntervalMs);
+    }, pollIntervalMs);
 
     return () => {
       window.clearInterval(intervalId);

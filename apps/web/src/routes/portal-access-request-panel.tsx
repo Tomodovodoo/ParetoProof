@@ -51,6 +51,37 @@ const requestStatusPriority: Record<PortalAdminAccessRequestListItem["status"], 
   withdrawn: 3
 };
 
+export function sortAccessRequestsForDisplay(
+  items: PortalAdminAccessRequestListItem[],
+  filters: RequestFilterState
+) {
+  return [...items].sort((left, right) => {
+    const statusOrder =
+      requestStatusPriority[left.status] - requestStatusPriority[right.status];
+
+    if (statusOrder !== 0) {
+      return statusOrder;
+    }
+
+    if (filters.sortOrder === "newest") {
+      return right.createdAt.localeCompare(left.createdAt);
+    }
+
+    if (filters.sortOrder === "recently_reviewed") {
+      return (right.reviewedAt ?? "").localeCompare(left.reviewedAt ?? "");
+    }
+
+    return left.createdAt.localeCompare(right.createdAt);
+  });
+}
+
+export function isSelectedAccessRequestDetailCurrent(
+  detail: PortalAdminAccessRequestDetail | null,
+  selectedRequestId: string | null
+) {
+  return Boolean(detail && selectedRequestId && detail.id === selectedRequestId);
+}
+
 export function resolveSelectedAccessRequestId(
   selectedRequestId: string | null,
   filteredRequests: PortalAdminAccessRequestListItem[]
@@ -126,24 +157,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
       return true;
     });
 
-    return [...nextItems].sort((left, right) => {
-      const statusOrder =
-        requestStatusPriority[left.status] - requestStatusPriority[right.status];
-
-      if (statusOrder !== 0) {
-        return statusOrder;
-      }
-
-      if (filters.sortOrder === "newest") {
-        return right.createdAt.localeCompare(left.createdAt);
-      }
-
-      if (filters.sortOrder === "recently_reviewed") {
-        return (right.reviewedAt ?? "").localeCompare(left.reviewedAt ?? "");
-      }
-
-      return left.createdAt.localeCompare(right.createdAt);
-    });
+    return sortAccessRequestsForDisplay(nextItems, filters);
   }, [filters, requests]);
 
   const selectedRequest = useMemo(
@@ -300,12 +314,13 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
 
   async function refreshWorkspace() {
     const nextRequests = await loadPortalAdminAccessRequests(apiBaseUrl);
+    const detailRequestId = selectedRequestId;
 
     applyRequests(nextRequests);
     markUpdated();
 
-    if (selectedRequestId) {
-      const nextDetail = await loadPortalAdminAccessRequestDetail(apiBaseUrl, selectedRequestId);
+    if (detailRequestId) {
+      const nextDetail = await loadPortalAdminAccessRequestDetail(apiBaseUrl, detailRequestId);
       setDetail(nextDetail);
     }
   }
@@ -360,7 +375,15 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
         return;
       }
 
-      await refreshWorkspace();
+      try {
+        await refreshWorkspace();
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "The admin request queue could not be refreshed."
+        );
+      }
     } finally {
       setIsMutatingId(null);
     }
@@ -602,47 +625,63 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
       </article>
 
       <article className="portal-panel portal-admin-detail-panel" ref={detailPanelRef}>
-        {!selectedRequest ? (
-          <div className="portal-admin-empty-state">
-            <p className="section-tag">Selection</p>
-            <h2>Choose a request to inspect the full workflow context.</h2>
-            <p>
-              Request review stays local to this route, so the queue and the evidence
-              stay visible together.
-            </p>
-          </div>
-        ) : isDetailLoading || !detail ? (
-          <div className="portal-admin-empty-state">
-            <p className="section-tag">Selection</p>
-            <h2>Loading request detail</h2>
-            <p>Pulling linked identities, related history, and audit echoes.</p>
-          </div>
-        ) : (
-          <AccessRequestDetailCard
-            detail={detail}
-            draft={
-              drafts[detail.id] ?? {
-                approvedRole:
-                  detail.requestedRole === "collaborator" ? "collaborator" : "helper",
-                decisionNote: detail.decisionNote ?? ""
+        {(() => {
+          const currentDetail = isSelectedAccessRequestDetailCurrent(detail, selectedRequestId)
+            ? detail
+            : null;
+
+          if (!selectedRequest) {
+            return (
+              <div className="portal-admin-empty-state">
+                <p className="section-tag">Selection</p>
+                <h2>Choose a request to inspect the full workflow context.</h2>
+                <p>
+                  Request review stays local to this route, so the queue and the evidence
+                  stay visible together.
+                </p>
+              </div>
+            );
+          }
+
+          if (isDetailLoading || !currentDetail) {
+            return (
+              <div className="portal-admin-empty-state">
+                <p className="section-tag">Selection</p>
+                <h2>Loading request detail</h2>
+                <p>Pulling linked identities, related history, and audit echoes.</p>
+              </div>
+            );
+          }
+
+          return (
+            <AccessRequestDetailCard
+              detail={currentDetail}
+              draft={
+                drafts[currentDetail.id] ?? {
+                  approvedRole:
+                    currentDetail.requestedRole === "collaborator"
+                      ? "collaborator"
+                      : "helper",
+                  decisionNote: currentDetail.decisionNote ?? ""
+                }
               }
-            }
-            isMutating={isMutatingId === detail.id}
-            onApprove={() => {
-              void handleDecision("approve");
-            }}
-            onChangeDraft={(nextDraft) => {
-              setDrafts((current) => ({
-                ...current,
-                [detail.id]: nextDraft
-              }));
-            }}
-            onReject={() => {
-              void handleDecision("reject");
-            }}
-            actionSectionRef={detailActionRef}
-          />
-        )}
+              isMutating={isMutatingId === currentDetail.id}
+              onApprove={() => {
+                void handleDecision("approve");
+              }}
+              onChangeDraft={(nextDraft) => {
+                setDrafts((current) => ({
+                  ...current,
+                  [currentDetail.id]: nextDraft
+                }));
+              }}
+              onReject={() => {
+                void handleDecision("reject");
+              }}
+              actionSectionRef={detailActionRef}
+            />
+          );
+        })()}
       </article>
     </section>
   );
