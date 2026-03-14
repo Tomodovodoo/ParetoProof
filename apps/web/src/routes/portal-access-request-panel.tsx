@@ -69,6 +69,67 @@ export function getCompactAccessRequestSectionOrder() {
   return ["queueContent", "filterFields"] as const;
 }
 
+export function getVisibleAccessRequests(
+  requests: PortalAdminAccessRequestListItem[],
+  filters: RequestFilterState
+) {
+  const nextItems = requests.filter((requestItem) => {
+    if (filters.status !== "all" && requestItem.status !== filters.status) {
+      return false;
+    }
+
+    if (
+      filters.requestKind !== "all" &&
+      requestItem.requestKind !== filters.requestKind
+    ) {
+      return false;
+    }
+
+    if (
+      filters.requestedRole !== "all" &&
+      requestItem.requestedRole !== filters.requestedRole
+    ) {
+      return false;
+    }
+
+    if (filters.reviewerState === "reviewed" && requestItem.reviewer === null) {
+      return false;
+    }
+
+    if (filters.reviewerState === "unreviewed" && requestItem.reviewer !== null) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return [...nextItems].sort((left, right) => {
+    const statusOrder =
+      requestStatusPriority[left.status] - requestStatusPriority[right.status];
+
+    if (statusOrder !== 0) {
+      return statusOrder;
+    }
+
+    if (filters.sortOrder === "newest") {
+      return right.createdAt.localeCompare(left.createdAt);
+    }
+
+    if (filters.sortOrder === "recently_reviewed") {
+      return (right.reviewedAt ?? "").localeCompare(left.reviewedAt ?? "");
+    }
+
+    return left.createdAt.localeCompare(right.createdAt);
+  });
+}
+
+export function hasCurrentAccessRequestDetail(
+  selectedRequestId: string | null,
+  detail: PortalAdminAccessRequestDetail | null
+) {
+  return Boolean(selectedRequestId && detail?.id === selectedRequestId);
+}
+
 export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProps) {
   const [detail, setDetail] = useState<PortalAdminAccessRequestDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, RequestDraftState>>({});
@@ -79,72 +140,31 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const [isMutatingId, setIsMutatingId] = useState<string | null>(null);
   const [requests, setRequests] = useState<PortalAdminAccessRequestListItem[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const detailRequestIdRef = useRef(0);
   const detailPanelRef = useRef<HTMLElement | null>(null);
   const detailActionRef = useRef<HTMLElement | null>(null);
   const pendingCompactRevealRequestIdRef = useRef<string | null>(null);
+  const selectedRequestIdRef = useRef<string | null>(null);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const isCompactLayout = useCompactLayout();
   const {
     isPolling,
     lastUpdatedAt,
-    markUpdated,
-    pollNow
+    markUpdated
   } = usePortalPolling({
     enabled: !isLoading && !isDetailLoading && isMutatingId === null,
     onPoll: refreshWorkspace,
     routeId: "portal.admin.access-requests"
   });
 
-  const filteredRequests = useMemo(() => {
-    const nextItems = requests.filter((requestItem) => {
-      if (filters.status !== "all" && requestItem.status !== filters.status) {
-        return false;
-      }
+  const filteredRequests = useMemo(
+    () => getVisibleAccessRequests(requests, filters),
+    [filters, requests]
+  );
+  const hasSelectedDetail = hasCurrentAccessRequestDetail(selectedRequestId, detail);
+  const selectedDetail = hasSelectedDetail ? detail : null;
 
-      if (
-        filters.requestKind !== "all" &&
-        requestItem.requestKind !== filters.requestKind
-      ) {
-        return false;
-      }
-
-      if (
-        filters.requestedRole !== "all" &&
-        requestItem.requestedRole !== filters.requestedRole
-      ) {
-        return false;
-      }
-
-      if (filters.reviewerState === "reviewed" && requestItem.reviewer === null) {
-        return false;
-      }
-
-      if (filters.reviewerState === "unreviewed" && requestItem.reviewer !== null) {
-        return false;
-      }
-
-      return true;
-    });
-
-    return [...nextItems].sort((left, right) => {
-      const statusOrder =
-        requestStatusPriority[left.status] - requestStatusPriority[right.status];
-
-      if (statusOrder !== 0) {
-        return statusOrder;
-      }
-
-      if (filters.sortOrder === "newest") {
-        return right.createdAt.localeCompare(left.createdAt);
-      }
-
-      if (filters.sortOrder === "recently_reviewed") {
-        return (right.reviewedAt ?? "").localeCompare(left.reviewedAt ?? "");
-      }
-
-      return left.createdAt.localeCompare(right.createdAt);
-    });
-  }, [filters, requests]);
+  selectedRequestIdRef.current = selectedRequestId;
 
   const selectedRequest = useMemo(
     () =>
@@ -204,54 +224,53 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
 
   useEffect(() => {
     if (!selectedRequestId) {
+      detailRequestIdRef.current += 1;
       setDetail(null);
       setIsDetailLoading(false);
       return;
     }
 
-    let cancelled = false;
+    setErrorMessage(null);
+    void loadSelectedRequestDetail(selectedRequestId, true);
+  }, [apiBaseUrl, selectedRequestId]);
+
+  async function loadSelectedRequestDetail(requestId: string, clearCurrentDetail = false) {
+    const loadId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = loadId;
     setIsDetailLoading(true);
 
-    async function loadDetail() {
-      const currentRequestId = selectedRequestId;
-
-      if (!currentRequestId) {
-        return;
-      }
-
-      try {
-        const nextDetail = await loadPortalAdminAccessRequestDetail(apiBaseUrl, currentRequestId);
-
-        if (cancelled) {
-          return;
-        }
-
-        setDetail(nextDetail);
-        setErrorMessage(null);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setDetail(null);
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "The selected request could not be loaded."
-        );
-      } finally {
-        if (!cancelled) {
-          setIsDetailLoading(false);
-        }
-      }
+    if (clearCurrentDetail) {
+      setDetail(null);
     }
 
-    void loadDetail();
+    try {
+      const nextDetail = await loadPortalAdminAccessRequestDetail(apiBaseUrl, requestId);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBaseUrl, selectedRequestId]);
+      if (detailRequestIdRef.current !== loadId || selectedRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      setDetail(nextDetail);
+      setErrorMessage(null);
+      return true;
+    } catch (error) {
+      if (detailRequestIdRef.current !== loadId || selectedRequestIdRef.current !== requestId) {
+        return false;
+      }
+
+      setDetail(null);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "The selected request could not be loaded."
+      );
+      return false;
+    } finally {
+      if (detailRequestIdRef.current === loadId && selectedRequestIdRef.current === requestId) {
+        setIsDetailLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     if (
@@ -300,14 +319,27 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
 
   async function refreshWorkspace() {
     const nextRequests = await loadPortalAdminAccessRequests(apiBaseUrl);
+    const nextSelectedRequestId = resolveSelectedAccessRequestId(
+      selectedRequestIdRef.current,
+      getVisibleAccessRequests(nextRequests, filters)
+    );
 
     applyRequests(nextRequests);
     markUpdated();
 
-    if (selectedRequestId) {
-      const nextDetail = await loadPortalAdminAccessRequestDetail(apiBaseUrl, selectedRequestId);
-      setDetail(nextDetail);
+    if (nextSelectedRequestId !== selectedRequestIdRef.current) {
+      setSelectedRequestId(nextSelectedRequestId);
+      return;
     }
+
+    if (nextSelectedRequestId) {
+      await loadSelectedRequestDetail(nextSelectedRequestId);
+      return;
+    }
+
+    detailRequestIdRef.current += 1;
+    setDetail(null);
+    setIsDetailLoading(false);
   }
 
   async function handleDecision(action: "approve" | "reject") {
@@ -361,6 +393,12 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
       }
 
       await refreshWorkspace();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "The admin request action could not be completed."
+      );
     } finally {
       setIsMutatingId(null);
     }
@@ -404,7 +442,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
         isRefreshing={isPolling || isDetailLoading || isMutatingId !== null}
         lastUpdatedAt={lastUpdatedAt}
         onRefresh={() => {
-          void pollNow().catch(() => {
+          void refreshWorkspace().catch(() => {
             setErrorMessage("The admin request queue could not be refreshed.");
           });
         }}
@@ -611,7 +649,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
               stay visible together.
             </p>
           </div>
-        ) : isDetailLoading || !detail ? (
+        ) : isDetailLoading || !selectedDetail ? (
           <div className="portal-admin-empty-state">
             <p className="section-tag">Selection</p>
             <h2>Loading request detail</h2>
@@ -619,22 +657,22 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
           </div>
         ) : (
           <AccessRequestDetailCard
-            detail={detail}
+            detail={selectedDetail}
             draft={
-              drafts[detail.id] ?? {
+              drafts[selectedDetail.id] ?? {
                 approvedRole:
-                  detail.requestedRole === "collaborator" ? "collaborator" : "helper",
-                decisionNote: detail.decisionNote ?? ""
+                  selectedDetail.requestedRole === "collaborator" ? "collaborator" : "helper",
+                decisionNote: selectedDetail.decisionNote ?? ""
               }
             }
-            isMutating={isMutatingId === detail.id}
+            isMutating={isMutatingId === selectedDetail.id}
             onApprove={() => {
               void handleDecision("approve");
             }}
             onChangeDraft={(nextDraft) => {
               setDrafts((current) => ({
                 ...current,
-                [detail.id]: nextDraft
+                [selectedDetail.id]: nextDraft
               }));
             }}
             onReject={() => {

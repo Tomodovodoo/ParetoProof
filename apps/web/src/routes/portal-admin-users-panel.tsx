@@ -1,4 +1,4 @@
-import type { PortalAdminUserListItem } from "@paretoproof/shared";
+import type { PortalAdminUserDetail, PortalAdminUserListItem } from "@paretoproof/shared";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
@@ -22,6 +22,11 @@ type UserFilters = {
   search: string;
 };
 
+type ActionFeedback = {
+  message: string;
+  tone: "error" | "success";
+};
+
 const initialFilters: UserFilters = {
   accessPosture: "all",
   activeRole: "all",
@@ -42,6 +47,13 @@ export function resolveSelectedAdminUserId(
 
 export function getCompactAdminUsersSectionOrder() {
   return ["userList", "filterFields"] as const;
+}
+
+export function hasCurrentAdminUserDetail(
+  selectedUserId: string | null,
+  detailItem: PortalAdminUserDetail | null
+) {
+  return Boolean(selectedUserId && detailItem?.userId === selectedUserId);
 }
 
 function formatTimestamp(timestamp: string | null) {
@@ -84,7 +96,7 @@ function filterUsers(items: PortalAdminUserListItem[], filters: UserFilters) {
 }
 
 export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<Awaited<
     ReturnType<typeof loadPortalAdminUserDetail>
@@ -97,22 +109,28 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   const [revocationReason, setRevocationReason] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [users, setUsers] = useState<PortalAdminUserListItem[]>([]);
+  const detailRequestIdRef = useRef(0);
   const detailShellRef = useRef<HTMLElement | null>(null);
   const correctiveActionRef = useRef<HTMLElement | null>(null);
   const pendingCompactRevealUserIdRef = useRef<string | null>(null);
+  const selectedUserIdRef = useRef<string | null>(null);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const isCompactLayout = useCompactLayout();
   const {
     isPolling,
     lastUpdatedAt,
-    markUpdated,
-    pollNow
+    markUpdated
   } = usePortalPolling({
     enabled: !isLoading && !isMutating,
-    onPoll: refreshUsers,
+    onPoll: async () => {
+      await refreshUsers();
+    },
     routeId: "portal.admin.users"
   });
   const visibleUsers = useMemo(() => filterUsers(users, filters), [filters, users]);
+  const hasSelectedDetail = hasCurrentAdminUserDetail(selectedUserId, detailItem);
+
+  selectedUserIdRef.current = selectedUserId;
 
   useEffect(() => {
     void refreshUsers(true);
@@ -120,54 +138,54 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
 
   useEffect(() => {
     if (!selectedUserId) {
+      detailRequestIdRef.current += 1;
       setDetailItem(null);
       setDetailError(null);
       setIsDetailLoading(false);
+      setActionFeedback(null);
       return;
     }
 
-    let cancelled = false;
-    setDetailItem(null);
+    setActionFeedback(null);
+    void loadSelectedUserDetail(selectedUserId, true);
+  }, [apiBaseUrl, selectedUserId]);
+
+  async function loadSelectedUserDetail(userId: string, clearCurrentDetail = false) {
+    const requestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = requestId;
     setDetailError(null);
     setRevocationReason("");
     setIsDetailLoading(true);
 
-    async function loadDetail() {
-      const currentUserId = selectedUserId;
-
-      if (!currentUserId) {
-        return;
-      }
-
-      try {
-        const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, currentUserId);
-
-        if (cancelled) {
-          return;
-        }
-
-        setDetailError(null);
-        setDetailItem(nextDetail);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setDetailItem(null);
-        setDetailError(error instanceof Error ? error.message : "The user detail could not be loaded.");
-      } finally {
-        if (!cancelled) {
-          setIsDetailLoading(false);
-        }
-      }
+    if (clearCurrentDetail) {
+      setDetailItem(null);
     }
 
-    void loadDetail();
+    try {
+      const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, userId);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBaseUrl, selectedUserId]);
+      if (detailRequestIdRef.current !== requestId || selectedUserIdRef.current !== userId) {
+        return false;
+      }
+
+      setDetailItem(nextDetail);
+      return true;
+    } catch (error) {
+      if (detailRequestIdRef.current !== requestId || selectedUserIdRef.current !== userId) {
+        return false;
+      }
+
+      setDetailItem(null);
+      setDetailError(
+        error instanceof Error ? error.message : "The user detail could not be loaded."
+      );
+      return false;
+    } finally {
+      if (detailRequestIdRef.current === requestId && selectedUserIdRef.current === userId) {
+        setIsDetailLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     if (
@@ -200,13 +218,35 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   async function refreshUsers(initialLoad = false) {
     try {
       const nextItems = await loadPortalAdminUsers(apiBaseUrl);
+      const nextVisibleUsers = filterUsers(nextItems, filters);
+      const nextSelectedUserId = resolveSelectedAdminUserId(
+        selectedUserIdRef.current,
+        nextVisibleUsers
+      );
+
       setUsers(nextItems);
       setListError(null);
       markUpdated();
+
+      if (nextSelectedUserId !== selectedUserIdRef.current) {
+        setSelectedUserId(nextSelectedUserId);
+        return true;
+      }
+
+      if (nextSelectedUserId) {
+        return await loadSelectedUserDetail(nextSelectedUserId);
+      }
+
+      detailRequestIdRef.current += 1;
+      setDetailItem(null);
+      setDetailError(null);
+      setIsDetailLoading(false);
+      return true;
     } catch (error) {
       setListError(
         error instanceof Error ? error.message : "The admin user directory could not be loaded."
       );
+      return false;
     } finally {
       if (initialLoad) {
         setIsLoading(false);
@@ -230,28 +270,42 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
     }
 
     try {
-      setActionMessage(null);
+      setActionFeedback(null);
       setIsMutating(true);
       const result = await revokePortalAdminUserRole(apiBaseUrl, detailItem.userId, {
         reason: revocationReason
       });
 
       if (!result.ok) {
-        setActionMessage(result.message);
+        setActionFeedback({
+          message: result.message,
+          tone: "error"
+        });
         return;
       }
 
-      await refreshUsers();
-      const nextDetail = await loadPortalAdminUserDetail(apiBaseUrl, detailItem.userId);
-      setDetailItem(nextDetail);
-      setRevocationReason("");
-      setActionMessage("Active contributor role revoked and current sessions cleared.");
+      const refreshSucceeded = await refreshUsers();
+
+      if (!refreshSucceeded) {
+        setActionFeedback({
+          message: "The role was revoked, but the refreshed user data could not be loaded.",
+          tone: "error"
+        });
+        return;
+      }
+
+      setActionFeedback({
+        message: "Active contributor role revoked and current sessions cleared.",
+        tone: "success"
+      });
     } catch (error) {
-      setActionMessage(
-        error instanceof Error
-          ? error.message
-          : "The role revocation could not be completed."
-      );
+      setActionFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The role revocation could not be completed.",
+        tone: "error"
+      });
     } finally {
       setIsMutating(false);
     }
@@ -295,7 +349,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
         isRefreshing={isPolling || isMutating}
         lastUpdatedAt={lastUpdatedAt}
         onRefresh={() => {
-          void pollNow().catch(() => {
+          void refreshUsers().catch(() => {
             // refreshUsers already exposes the visible error state.
           });
         }}
@@ -402,7 +456,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
               key={item.userId}
               onClick={() => {
                 revealSelectedUserDetail(item.userId);
-                setActionMessage(null);
+                setActionFeedback(null);
               }}
               type="button"
             >
@@ -456,7 +510,12 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
       </aside>
 
       <section className="portal-admin-detail-shell" ref={detailShellRef}>
-        {detailError ? (
+        {selectedUserId && (isDetailLoading || !hasSelectedDetail) ? (
+          <article className="portal-admin-card portal-admin-card-empty">
+            <h3>Loading user detail</h3>
+            <p>Fetching account posture, linked identities, and recent admin activity.</p>
+          </article>
+        ) : detailError ? (
           <article className="portal-admin-card portal-admin-card-empty">
             <h3>User detail unavailable</h3>
             <p>{detailError}</p>
@@ -484,15 +543,11 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
                   Latest session expiry {formatTimestamp(detailItem.sessionPosture.latestSessionExpiresAt)}
                 </span>
               </div>
-              {actionMessage ? (
+              {actionFeedback ? (
                 <p
-                  className={`portal-admin-feedback ${
-                    actionMessage.includes("could not") || actionMessage.includes("no active")
-                      ? "portal-admin-feedback-error"
-                      : "portal-admin-feedback-success"
-                  }`}
+                  className={`portal-admin-feedback portal-admin-feedback-${actionFeedback.tone}`}
                 >
-                  {actionMessage}
+                  {actionFeedback.message}
                 </p>
               ) : null}
             </article>

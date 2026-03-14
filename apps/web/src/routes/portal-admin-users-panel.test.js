@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   getCompactAdminUsersSectionOrder,
+  hasCurrentAdminUserDetail,
   resolveSelectedAdminUserId
 } from "./portal-admin-users-panel.tsx";
 
@@ -41,5 +42,23 @@ describe("getCompactAdminUsersSectionOrder", () => {
       "userList",
       "filterFields"
     ]);
+  });
+});
+
+describe("hasCurrentAdminUserDetail", () => {
+  it("rejects stale detail cards after the selection changes", () => {
+    expect(
+      hasCurrentAdminUserDetail("user-lin", {
+        userId: "user-ada"
+      })
+    ).toBe(false);
+  });
+
+  it("accepts detail payloads that match the current selection", () => {
+    expect(
+      hasCurrentAdminUserDetail("user-ada", {
+        userId: "user-ada"
+      })
+    ).toBe(true);
   });
 });
