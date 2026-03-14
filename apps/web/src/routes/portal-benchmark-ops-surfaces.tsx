@@ -481,7 +481,47 @@ function PortalRunsSurface({
       <section className="portal-grid portal-grid-stack">
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
 
-        {runsSlice}
+        <article className="portal-panel portal-runs-quick-filter-panel">
+          <div className="portal-panel-header">
+            <div>
+              <p className="section-tag">Quick filters</p>
+              <h2>Refine the slice before dropping into the full list.</h2>
+            </div>
+          </div>
+          <div className="portal-form-grid portal-runs-quick-filter-grid">
+            <label className="portal-field">
+              <span>Search</span>
+              <input
+                className="input"
+                onChange={(event) => {
+                  updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
+                }}
+                placeholder="run id, package, model, failure"
+                type="search"
+                value={query.q ?? ""}
+              />
+            </label>
+            <label className="portal-field">
+              <span>Lifecycle bucket</span>
+              <select
+                className="input"
+                onChange={(event) => {
+                  updateRunsQuery(pathname, query, onReplaceLocation, {
+                    lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
+                  });
+                }}
+                value={query.lifecycleBucket ?? ""}
+              >
+                <option value="">All buckets</option>
+                {portalRunsLifecycleBuckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </article>
 
         <article className="portal-panel portal-results-panel portal-results-panel-compact">
           <div className="portal-panel-header">
@@ -653,10 +693,12 @@ function PortalRunsSurface({
               }}
               type="button"
             >
-              Reset filters
-            </button>
-          </div>
-        </article>
+            Reset filters
+          </button>
+        </div>
+      </article>
+
+        {runsSlice}
       </section>
     );
   }
