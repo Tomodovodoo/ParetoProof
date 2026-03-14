@@ -1083,16 +1083,6 @@ function PortalLaunchSurface({
           />
         ) : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
-        {isCompactLayout ? (
-          <div className="portal-launch-quick-actions" aria-label="Launch next steps">
-            <a className="button button-secondary" href={launchEvidenceHref}>
-              Open evidence
-            </a>
-            <a className="button button-secondary" href={buildPortalUrl("/runs")}>
-              Review runs
-            </a>
-          </div>
-        ) : null}
         <div className="portal-form-grid">
           <label className="portal-field">
             <span>Benchmark package</span>
@@ -1152,6 +1142,16 @@ function PortalLaunchSurface({
             }}
             routeId={activeRouteId}
           />
+        ) : null}
+        {isCompactLayout ? (
+          <div className="portal-launch-quick-actions" aria-label="Launch next steps">
+            <a className="button button-secondary" href={launchEvidenceHref}>
+              Open evidence
+            </a>
+            <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+              Review runs
+            </a>
+          </div>
         ) : null}
         {benchmark && modelConfig ? (
           <div className="portal-results-contract-grid">
