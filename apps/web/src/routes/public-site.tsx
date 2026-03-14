@@ -456,7 +456,7 @@ function PublicFooter({ isProjectRoute }: { isProjectRoute: boolean }) {
 
 function PublicLanding() {
   return (
-    <main className="site-shell">
+    <main className="site-shell site-home-shell">
       <PublicHeader currentPath={window.location.pathname} />
 
       <section className="site-hero">
