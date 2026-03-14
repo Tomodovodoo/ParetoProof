@@ -24,35 +24,35 @@
   --space-3xl: 64px;
   --site-margin: clamp(1.5rem, 1.08rem + 1.78vw, 3rem);
 
-  /* Surfaces — warm cream base */
-  --bg: #f6f4f1;
-  --bg-strong: #eae7e2;
+  /* Surfaces — clean white/blue */
+  --bg: #f5f7fb;
+  --bg-strong: #e8edf6;
   --bg-warm: #f5f3f0;
-  --paper: rgba(255, 255, 255, 0.88);
-  --paper-strong: #faf9f7;
-  --paper-elevated: rgba(255, 255, 255, 0.95);
+  --paper: rgba(255, 255, 255, 0.92);
+  --paper-strong: #f9fbff;
+  --paper-elevated: rgba(255, 255, 255, 0.96);
 
-  /* Text — warm near-black */
-  --ink: #1a1a1a;
-  --ink-soft: #6b6560;
-  --ink-faint: #9a938c;
+  /* Text */
+  --ink: #0f1729;
+  --ink-soft: #475569;
+  --ink-faint: #94a3b8;
 
-  /* Borders — warm gray */
-  --line: rgba(26, 26, 26, 0.1);
-  --line-strong: rgba(26, 26, 26, 0.18);
-  --line-accent: rgba(199, 108, 76, 0.2);
+  /* Borders */
+  --line: rgba(15, 23, 41, 0.1);
+  --line-strong: rgba(15, 23, 41, 0.18);
+  --line-accent: rgba(37, 99, 235, 0.18);
 
-  /* Primary — warm dark */
-  --navy: #1a1a1a;
-  --navy-strong: #0d0d0d;
+  /* Primary — navy/blue */
+  --navy: #0f1729;
+  --navy-strong: #0a0f1d;
   --blue: #2563eb;
   --blue-soft: #5b8def;
 
-  /* Accent — terracotta (single warm accent) */
-  --accent: #c76c4c;
-  --accent-hover: #b85e3e;
-  --accent-soft: rgba(199, 108, 76, 0.1);
-  --accent-border: rgba(199, 108, 76, 0.2);
+  /* Accent — blue (primary accent) */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-border: rgba(37, 99, 235, 0.16);
 
   /* Accent — violet (secondary) */
   --violet: #6d28d9;
@@ -75,11 +75,11 @@
   --rose: #a8475e;
 
   /* Sidebar */
-  --sidebar-from: #1a1a1a;
-  --sidebar-to: #111111;
-  --sidebar-accent: var(--accent);
+  --sidebar-from: #0f1729;
+  --sidebar-to: #0a0f1d;
+  --sidebar-accent: var(--blue-soft);
   --sidebar-hover: rgba(255, 255, 255, 0.07);
-  --sidebar-text-muted: rgba(200, 195, 188, 0.78);
+  --sidebar-text-muted: rgba(186, 206, 255, 0.78);
 }
 
 * {
@@ -178,7 +178,7 @@ a.button {
   padding: 0.8rem 1.4rem;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--ink);
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
   font-size: var(--text-sm);
@@ -191,7 +191,7 @@ a.button {
 
 .button:hover,
 .button:focus-visible {
-  background: var(--navy-strong);
+  background: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
@@ -246,7 +246,7 @@ a.button-secondary {
   padding: 0 var(--space-lg);
   display: grid;
   gap: 0;
-  background: rgba(246, 244, 241, 0.85);
+  background: rgba(245, 247, 251, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
