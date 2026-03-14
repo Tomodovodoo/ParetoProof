@@ -233,7 +233,7 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   }
 
   return (
-    <section className="portal-grid portal-grid-stack">
+    <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
       <article className="portal-panel">
         <p className="section-tag">Admin users</p>
         <h2>Inspect approved accounts and apply corrective access changes.</h2>

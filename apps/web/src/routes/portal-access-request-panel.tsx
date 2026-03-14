@@ -342,7 +342,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   }
 
   return (
-    <section className="portal-grid portal-grid-stack">
+    <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
       <article className="portal-panel">
         <p className="section-tag">Admin requests</p>
         <h2>Request review stays anchored to one queue and one detail pane.</h2>
