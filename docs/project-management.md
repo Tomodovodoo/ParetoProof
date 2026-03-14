@@ -68,6 +68,15 @@ If a branch or PR contains work for multiple issues, do not close those issues e
 
 Security-sensitive PRs should not merge with unresolved review comments that identify real auth, CSRF, secret-handling, or data-exposure risk. If a fix does not land in the same PR, the PR must link the follow-up issue explicitly and describe the accepted temporary risk.
 
+If a PR is closed as a duplicate or superseded by another PR, do not let actionable review findings disappear with that closure.
+
+- Before closing the old PR, leave a closing comment on that same PR with a short review-finding handoff.
+- For each still-relevant review finding, say whether it is:
+  - resolved in the replacement PR, with the replacement PR or commit linked directly, or
+  - still open, with a properly formed follow-up issue linked directly.
+- This applies to Codex review comments as well as human review comments.
+- Do not create malformed placeholder issues just to preserve review feedback. The durable record should live on the superseded PR itself, and any remaining work should move into a normal execution issue.
+
 The repository also enforces a hidden-Unicode gate in PR CI. Source changes should not introduce bidirectional control characters unless there is a documented and reviewed exception.
 
 That CI gate only scans tracked repository files. GitHub can still show a hidden-Unicode warning on issue bodies, PR bodies, comments, or other pasted text that never becomes a tracked file. When that happens, treat the GitHub banner as a content warning on the discussion text itself, not as evidence that `infra/scripts/check-bidi-chars.mjs` missed a tracked-file change.
