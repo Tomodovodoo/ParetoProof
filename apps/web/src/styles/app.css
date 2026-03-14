@@ -2317,6 +2317,25 @@ a.button-secondary {
 }
 
 @media (max-width: 420px) {
+  .site-benchmark-mobile-summary {
+    gap: 10px;
+    padding-top: 10px;
+  }
+
+  .site-benchmark-mobile-card {
+    gap: 6px;
+    padding: 12px;
+  }
+
+  .site-benchmark-mobile-card p {
+    font-size: 0.84rem;
+    line-height: 1.4;
+  }
+
+  .site-benchmark-mobile-value {
+    font-size: 1.05rem;
+  }
+
   .portal-overview-actions-compact {
     gap: 8px;
     padding-top: 0;
