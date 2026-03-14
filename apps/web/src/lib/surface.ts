@@ -184,6 +184,10 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
   return authUrl.toString();
 }
 
+export function buildAccessRequestUrl(hostname = window.location.hostname) {
+  return buildAuthUrl("/access-request", hostname);
+}
+
 export function buildPublicUrl(targetPath = "/", hostname = window.location.hostname) {
   const normalizedTargetPath = normalizeTargetPath(targetPath);
 

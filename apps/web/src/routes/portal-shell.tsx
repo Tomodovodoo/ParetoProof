@@ -127,19 +127,19 @@ const overviewTimeline = [
 
 const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
-    "Review contributor requests, resolve stale identities, and leave decision notes that other admins can trust.",
+    "Review and respond to contributor access requests.",
   launch:
-    "Create benchmark execution intent here, then move into run detail once the run exists.",
+    "Create a new benchmark run.",
   overview:
-    "Use the landing summary to enter the benchmark-operations cluster without turning overview into a second run index.",
+    "Your portal dashboard — check status, recent runs, and quick actions.",
   profile:
-    "Confirm your linked sign-in methods, update the supported profile fields, and recover access when something drifts.",
+    "Manage your linked sign-in methods and profile details.",
   runs:
-    "Treat Runs as the canonical private index, then move into /runs/:runId for one run's evidence.",
+    "Browse all benchmark runs and their results.",
   users:
-    "Manage contributor accounts and roles from the same authenticated workspace.",
+    "Manage contributor accounts and roles.",
   workers:
-    "Inspect worker and queue posture here, then jump back into run detail for concrete evidence."
+    "Monitor worker status and execution queues."
 };
 
 function coercePortalRoles(rawRoles: string[]): PortalRole[] {
@@ -578,7 +578,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <section className="portal-panel">
                 <p>{activeSection?.summary}</p>
                 <p className="portal-panel-muted">
-                  This section is ready for live data as backend features come online.
+                  Content will appear here once there is data to display.
                 </p>
                 {activeFreshnessPolicy ? (
                   <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />

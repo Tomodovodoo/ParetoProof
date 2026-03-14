@@ -1,6 +1,6 @@
 # Worker
 
-`apps/worker` holds the control code that remote worker runtimes will execute. The exact image contents and Lean toolchain policy remain a separate scope, but the worker service boundary is now fixed.
+`apps/worker` holds the CLI and runtime code for benchmark package materialization, local attempts, offline ingest, and the hosted claim loop.
 
 Docker targets:
 
@@ -23,12 +23,10 @@ Docker targets:
 
 Runtime env guidance:
 
-- use [docs/runtime-env-contract-baseline.md](../../docs/runtime-env-contract-baseline.md) as the authoritative source for required versus optional worker variables by mode
+- use [docs/runtime.md](../../docs/runtime.md) as the runtime baseline
 - use [`.env.example`](./.env.example) only as the local developer-facing example
-- hosted Modal secret inventory still lives in [docs/modal-worker-secrets-baseline.md](../../docs/modal-worker-secrets-baseline.md)
-- local-versus-Modal injection rules still live in [docs/worker-secret-injection-baseline.md](../../docs/worker-secret-injection-baseline.md)
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
-- the future `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; MVP offline ingest uses an explicit portal-audience `Cf-Access-Jwt-Assertion` supplied by an approved admin at invocation time, as defined in [docs/offline-ingest-auth-baseline.md](../../docs/offline-ingest-auth-baseline.md)
+- the future `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
 
 Package materialization:
 

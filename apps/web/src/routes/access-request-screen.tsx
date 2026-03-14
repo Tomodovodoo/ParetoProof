@@ -93,8 +93,8 @@ export function AccessRequestScreen({
         </h1>
         <p>
           {mode === "identity_recovery"
-            ? `Signed in${email ? ` as ${email}` : ""}. This account already has portal access, but your current Cloudflare Access identity is not linked yet. Submit a recovery request so an admin can attach this login method.`
-            : `Signed in${email ? ` as ${email}` : ""}. Tell us what level of access you need so an admin can review it.`}
+            ? `Signed in${email ? ` as ${email}` : ""}. Your account has portal access, but this sign-in method is not linked yet. Submit a recovery request so an admin can connect it.`
+            : `Signed in${email ? ` as ${email}` : ""}. Tell us what level of access you need and an admin will review your request.`}
         </p>
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === "access_request" ? (

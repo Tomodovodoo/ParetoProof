@@ -40,11 +40,11 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
         </p>
         <h1>Completing {providerLabel} sign in</h1>
         <p>
-          Your Cloudflare Access session is active. Finishing the portal handoff now.
+          Your session is active. Redirecting you to the portal now.
         </p>
         <p>
-          If you are not redirected automatically, use the secure handoff below or{" "}
-          <a href={retryUrl.toString()}>retry sign in</a>.
+          If you are not redirected automatically,{" "}
+          <a href={retryUrl.toString()}>try signing in again</a> or use the button below.
         </p>
         <form
           ref={finalizeFormRef}
