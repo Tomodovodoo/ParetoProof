@@ -36,11 +36,10 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
     return;
   }
 
+  const options = parseDevboxWrapperOptions(args);
   await parseWorkerRuntimeEnv({
     commandFamily: "trusted_local_devbox"
   });
-
-  const options = parseDevboxWrapperOptions(args);
   const authPreflight = await preflightProblem9AuthMode("trusted_local_user");
 
   if (authPreflight.authMode !== "trusted_local_user") {
