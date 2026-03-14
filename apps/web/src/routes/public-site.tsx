@@ -331,6 +331,10 @@ export function getCompactProjectPackSectionOrder() {
   ] as const;
 }
 
+export function getCompactHomeSectionOrder() {
+  return ["summaryBands", "signalsSupport"] as const;
+}
+
 export function resolvePublicSiteRoute(pathname: string) {
   if (pathname === projectRoute || pathname.startsWith(`${projectRoute}/`)) {
     return { kind: "project" as const };
@@ -514,8 +518,50 @@ function PublicBenchmarkSummary({
 }
 
 function PublicLanding() {
+  const showInFlowSignals = useCompactLayout(640);
+
+  const summaryBands = (
+    <section className="site-band-grid" aria-label="Project summary">
+      {publicBands.map((band) => (
+        <article className="site-band" key={band.title}>
+          <p className="section-tag">{band.eyebrow}</p>
+          <h2>{band.title}</h2>
+          <p>{band.body}</p>
+        </article>
+      ))}
+    </section>
+  );
+
+  const signalsSupport = showInFlowSignals ? (
+    <section className="site-project-section site-home-signals-support">
+      <div className="site-section-copy">
+        <p className="section-tag">Project signals</p>
+        <h2>Project signal cues stay available after the summary bands.</h2>
+        <p className="site-lead">
+          The support metrics still explain reproducibility, approval posture, and the
+          API-versus-worker split without pushing the actual project summary below the first
+          mobile viewport.
+        </p>
+      </div>
+
+      <div className="site-card-grid">
+        {publicSignals.map((signal) => (
+          <article className="site-panel-card" key={signal.label}>
+            <div className="site-panel-copy">
+              <p className="section-tag">{signal.value}</p>
+              <h3>{signal.label}</h3>
+              <p>{signal.detail}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  ) : null;
+
   return (
-    <main className="site-shell site-home-shell">
+    <main
+      className={`site-shell site-home-shell${showInFlowSignals ? " site-home-shell-compact" : ""}`}
+    >
       <PublicHeader currentPath={window.location.pathname} />
 
       <section className="site-hero">
@@ -542,28 +588,31 @@ function PublicLanding() {
           </div>
         </div>
 
-        <aside className="site-signal-column" aria-label="Project signals">
-          {publicSignals.map((signal) => (
-            <article className="site-signal-row" key={signal.label}>
-              <span className="site-signal-value">{signal.value}</span>
-              <div>
-                <h2>{signal.label}</h2>
-                <p>{signal.detail}</p>
-              </div>
-            </article>
-          ))}
-        </aside>
+        {!showInFlowSignals ? (
+          <aside className="site-signal-column" aria-label="Project signals">
+            {publicSignals.map((signal) => (
+              <article className="site-signal-row" key={signal.label}>
+                <span className="site-signal-value">{signal.value}</span>
+                <div>
+                  <h2>{signal.label}</h2>
+                  <p>{signal.detail}</p>
+                </div>
+              </article>
+            ))}
+          </aside>
+        ) : null}
       </section>
 
-      <section className="site-band-grid" aria-label="Project summary">
-        {publicBands.map((band) => (
-          <article className="site-band" key={band.title}>
-            <p className="section-tag">{band.eyebrow}</p>
-            <h2>{band.title}</h2>
-            <p>{band.body}</p>
-          </article>
-        ))}
-      </section>
+      {showInFlowSignals
+        ? getCompactHomeSectionOrder().map((sectionId) => {
+            const sections = {
+              signalsSupport,
+              summaryBands
+            };
+
+            return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+          })
+        : summaryBands}
 
       <PublicFooter isProjectRoute={false} />
     </main>
