@@ -28,6 +28,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const handoffMode = new URLSearchParams(window.location.search).get("handoff");
   const showFailedNotice = handoffMode === "failed";
   const showRetryNotice = handoffMode === "retry";
+  const showAuxiliaryStatus = showFailedNotice || showRetryNotice || isCheckingSession;
 
   useEffect(() => {
     if (isLocal) {
@@ -70,7 +71,11 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
 
   return (
     <main className="auth-shell">
-      <section className="auth-card auth-card-polished">
+      <section
+        className={`auth-card auth-card-polished${
+          showAuxiliaryStatus ? " auth-card-handoff-state" : ""
+        }`}
+      >
         <div className="auth-card-intro">
           <p className="eyebrow">
             <span className="inline-icon" aria-hidden="true">
