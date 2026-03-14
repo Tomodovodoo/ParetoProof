@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getCompactAdminUsersSectionOrder,
   resolveSelectedAdminUserId
 } from "./portal-admin-users-panel.tsx";
 
@@ -31,5 +32,14 @@ describe("resolveSelectedAdminUserId", () => {
 
   it("clears the selection when the current filter slice is empty", () => {
     expect(resolveSelectedAdminUserId("user-ada", [])).toBeNull();
+  });
+});
+
+describe("getCompactAdminUsersSectionOrder", () => {
+  it("shows the directory before filters on compact layouts", () => {
+    expect(getCompactAdminUsersSectionOrder()).toEqual([
+      "userList",
+      "filterFields"
+    ]);
   });
 });
