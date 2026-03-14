@@ -1,3 +1,5 @@
+import { isLocalDevelopmentLocation } from "./local-development";
+
 function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
@@ -9,7 +11,7 @@ export function getApiBaseUrl() {
     return trimTrailingSlash(configuredBaseUrl);
   }
 
-  if (window.location.hostname.endsWith("paretoproof.com")) {
+  if (!isLocalDevelopmentLocation(window.location) && window.location.hostname.endsWith("paretoproof.com")) {
     return "https://api.paretoproof.com";
   }
 

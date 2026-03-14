@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { buildPortalUrl } from "./surface.ts";
+import { buildAccessFinalizeUrl, buildPortalUrl } from "./surface.ts";
 
 const originalWindow = globalThis.window;
 
@@ -61,5 +61,13 @@ describe("buildPortalUrl", () => {
     expect(portalUrl.searchParams.get("access")).toBe("pending");
     expect(portalUrl.searchParams.get("email")).toBe("ada@paretoproof.local");
     expect(portalUrl.searchParams.has("roles")).toBe(false);
+  });
+
+  it("uses the local finalize endpoint on loopback-mapped branded auth hosts", () => {
+    setWindowUrl("http://github.auth.paretoproof.com:4371/");
+
+    expect(buildAccessFinalizeUrl("/profile")).toBe(
+      "http://github.auth.paretoproof.com:3000/portal/session/finalize?redirect=%2Fprofile"
+    );
   });
 });

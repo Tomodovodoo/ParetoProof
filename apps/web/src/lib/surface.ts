@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "./api-base-url";
+import { isLocalDevelopmentLocation } from "./local-development";
 
 export type WebSurface = "public" | "auth" | "portal";
 export type AccessProvider = "github" | "google";
@@ -22,12 +23,11 @@ function readLocalSurfaceOverride() {
 }
 
 export function isLocalHostname(hostname: string) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.endsWith(".localhost")
-  );
+  return isLocalDevelopmentLocation({
+    hostname,
+    port: window.location.port,
+    protocol: window.location.protocol
+  });
 }
 
 function isLocalOrigin(hostname = window.location.hostname) {
