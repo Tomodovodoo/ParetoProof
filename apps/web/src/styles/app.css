@@ -1268,6 +1268,51 @@ a.button-secondary {
   gap: 8px;
 }
 
+.portal-workers-main-compact {
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.portal-workers-main-compact .portal-panel-header {
+  gap: 8px;
+}
+
+.portal-workers-main-compact h2 {
+  font-size: 1.08rem;
+  line-height: 1.08;
+}
+
+.portal-workers-main-compact .portal-summary-grid {
+  gap: 8px;
+}
+
+.portal-workers-main-compact .portal-summary-card {
+  padding: 10px;
+  gap: 4px;
+}
+
+.portal-workers-main-compact .portal-summary-card small {
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.portal-workers-main-compact .portal-freshness-card {
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.portal-workers-main-compact .portal-freshness-card .eyebrow {
+  display: none;
+}
+
+.portal-workers-main-compact .portal-freshness-card h3 {
+  font-size: 0.92rem;
+}
+
+.portal-workers-main-compact .portal-freshness-actions {
+  gap: 8px;
+}
+
 .portal-run-card-header,
 .portal-run-card-footer {
   display: flex;
@@ -2199,6 +2244,12 @@ a.button-secondary {
 
   .portal-run-detail-main-compact .portal-panel-header .button,
   .portal-run-detail-main-compact .portal-panel-header a.button {
+    min-height: 2.35rem;
+    padding: 0.48rem 0.78rem;
+  }
+
+  .portal-workers-main-compact .portal-panel-header .button,
+  .portal-workers-main-compact .portal-panel-header a.button {
     min-height: 2.35rem;
     padding: 0.48rem 0.78rem;
   }
