@@ -112,13 +112,15 @@ function buildRoleGrant(
 function buildSession(
   overrides: Partial<typeof sessions.$inferSelect> = {}
 ): typeof sessions.$inferSelect {
+  const now = Date.now();
+
   return {
-    createdAt: new Date("2026-03-13T18:00:00.000Z"),
-    expiresAt: new Date("2026-03-14T18:00:00.000Z"),
+    createdAt: new Date(now - 60 * 60 * 1000),
+    expiresAt: new Date(now + 60 * 60 * 1000),
     id: "55555555-5555-4555-8555-555555555555",
     identityId: "22222222-2222-4222-8222-222222222222",
     ipAddress: null,
-    lastSeenAt: new Date("2026-03-13T18:30:00.000Z"),
+    lastSeenAt: new Date(now - 30 * 60 * 1000),
     revokedAt: null,
     tokenHash: "token-hash",
     userAgent: "test-agent",
