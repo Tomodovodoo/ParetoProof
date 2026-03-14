@@ -716,7 +716,11 @@ function PublicBenchmarkReport({
   }));
 
   return (
-    <main className="site-shell site-benchmark-shell site-benchmark-report-shell">
+    <main
+      className={`site-shell site-benchmark-shell site-benchmark-report-shell${
+        report.completeness === "partial" ? " site-benchmark-report-partial" : ""
+      }`}
+    >
       <PublicHeader currentPath={window.location.pathname} homeHref={buildPublicUrl(benchmarksRoute)} />
 
       <section className="site-hero">

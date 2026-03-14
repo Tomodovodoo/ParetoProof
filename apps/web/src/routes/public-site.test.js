@@ -65,7 +65,17 @@ describe("PublicSite", () => {
 
     expect(html).toContain("Problem 9 public release");
     expect(html).toContain("One release table, presented as calm mobile-safe rows.");
+    expect(html).not.toContain("site-benchmark-report-partial");
     expect(html).not.toContain("Measure frontier reasoning with reproducible proof workflows.");
+  });
+
+  it("marks partial release reports for compact-only layout tuning", async () => {
+    const html = await renderPublicSiteAt(
+      "http://127.0.0.1/reports/statement-formalization-pilot-v1"
+    );
+
+    expect(html).toContain("Statement formalization pilot release");
+    expect(html).toContain("site-benchmark-report-partial");
   });
 
   it("keeps the project pack route intact", async () => {
