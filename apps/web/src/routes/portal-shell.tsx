@@ -333,7 +333,11 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   );
 
   return (
-    <main className="portal-shell">
+    <main
+      className={`portal-shell${
+        activeSection?.id === "profile" ? " portal-shell-profile-active" : ""
+      }`}
+    >
       <aside
         aria-label="Portal navigation"
         className={`portal-sidebar${navigationCollapsed ? " portal-sidebar-collapsed" : ""}`}
