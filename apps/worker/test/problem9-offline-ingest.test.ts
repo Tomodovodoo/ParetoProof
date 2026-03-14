@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -372,6 +372,51 @@ test("runProblem9OfflineIngest converts transport failures into rejected output"
       }
     ],
     stage: "remote_rejection",
+    status: "rejected"
+  });
+});
+
+test("runProblem9OfflineIngest rejects symlinked required bundle files", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const candidatePath = path.join(bundleRoot, "candidate", "Candidate.lean");
+  const outsideFilePath = path.join(tempRoot, "outside-secret.txt");
+  await writeFile(outsideFilePath, "super secret\n", "utf8");
+  await unlink(candidatePath);
+  await symlink(outsideFilePath, candidatePath);
+
+  const result = await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      fetchImpl: async () => {
+        throw new Error("fetch should not be called for invalid local bundles");
+      },
+      runtimeEnv: {
+        API_BASE_URL: "https://api.paretoproof.com"
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    bundleRoot,
+    endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
+    error: "invalid_problem9_offline_ingest_bundle_root",
+    issues: [
+      {
+        message: "Missing required offline ingest bundle file candidate/Candidate.lean.",
+        path: "candidate/Candidate.lean"
+      }
+    ],
+    stage: "local_validation",
     status: "rejected"
   });
 });

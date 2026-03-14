@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   problem9OfflineIngestRequestSchema,
@@ -169,40 +169,48 @@ async function loadProblem9OfflineIngestRequest(
   bundleRoot: string
 ): Promise<Problem9OfflineIngestRequest> {
   await ensureBundleRoot(bundleRoot);
+  const bundleRootRealPath = await realpath(bundleRoot);
 
   const request: unknown = {
     bundle: {
       artifactManifest: await loadJsonFile<Problem9OfflineArtifactManifest>(
-        path.join(bundleRoot, "artifact-manifest.json")
+        bundleRootRealPath,
+        "artifact-manifest.json"
       ),
       benchmarkPackage: await loadJsonFile<Problem9BenchmarkPackageManifest>(
-        path.join(bundleRoot, "package", "benchmark-package.json")
+        bundleRootRealPath,
+        "package/benchmark-package.json"
       ),
-      candidateSource: await loadTextFile(path.join(bundleRoot, "candidate", "Candidate.lean")),
+      candidateSource: await loadTextFile(bundleRootRealPath, "candidate/Candidate.lean"),
       compilerDiagnostics: await loadJsonFile(
-        path.join(bundleRoot, "verification", "compiler-diagnostics.json")
+        bundleRootRealPath,
+        "verification/compiler-diagnostics.json"
       ),
-      compilerOutput: await loadTextFile(
-        path.join(bundleRoot, "verification", "compiler-output.txt")
-      ),
+      compilerOutput: await loadTextFile(bundleRootRealPath, "verification/compiler-output.txt"),
       environment: await loadJsonFile<Problem9EnvironmentManifest>(
-        path.join(bundleRoot, "environment", "environment.json")
+        bundleRootRealPath,
+        "environment/environment.json"
       ),
       packageRef: await loadJsonFile<Problem9PackageRef>(
-        path.join(bundleRoot, "package", "package-ref.json")
+        bundleRootRealPath,
+        "package/package-ref.json"
       ),
       promptPackage: await loadJsonFile<Problem9PromptPackageManifest>(
-        path.join(bundleRoot, "prompt", "prompt-package.json")
+        bundleRootRealPath,
+        "prompt/prompt-package.json"
       ),
       runBundle: await loadJsonFile<Problem9RunBundleManifest>(
-        path.join(bundleRoot, "run-bundle.json")
+        bundleRootRealPath,
+        "run-bundle.json"
       ),
-      usage: await loadOptionalJsonFile(path.join(bundleRoot, "execution", "usage.json")),
+      usage: await loadOptionalJsonFile(bundleRootRealPath, "execution/usage.json"),
       verifierOutput: await loadJsonFile<unknown>(
-        path.join(bundleRoot, "verification", "verifier-output.json")
+        bundleRootRealPath,
+        "verification/verifier-output.json"
       ),
       verdict: await loadJsonFile<Problem9VerifierVerdict>(
-        path.join(bundleRoot, "verification", "verdict.json")
+        bundleRootRealPath,
+        "verification/verdict.json"
       )
     },
     ingestRequestSchemaVersion: "1"
@@ -250,46 +258,97 @@ async function ensureBundleRoot(bundleRoot: string): Promise<void> {
     );
   }
 
-  for (const relativePath of requiredBundleFiles) {
-    const fullPath = path.join(bundleRoot, relativePath);
-    const fileStats = await stat(fullPath).catch(() => null);
+  const bundleRootRealPath = await realpath(bundleRoot);
 
-    if (!fileStats?.isFile()) {
-      throw new Error(
-        JSON.stringify(
-          {
-            code: "invalid_problem9_offline_ingest_bundle_root",
-            issues: [
-              {
-                message: `Missing required offline ingest bundle file ${relativePath}.`,
-                path: relativePath
-              }
-            ]
-          },
-          null,
-          2
-        )
-      );
-    }
+  for (const relativePath of requiredBundleFiles) {
+    await resolveBundleFilePath(bundleRootRealPath, relativePath);
   }
 }
 
-async function loadTextFile(filePath: string): Promise<string> {
+async function loadTextFile(bundleRootRealPath: string, relativePath: string): Promise<string> {
+  const filePath = await resolveBundleFilePath(bundleRootRealPath, relativePath);
+
   return normalizeText(await readFile(filePath, "utf8"));
 }
 
-async function loadJsonFile<TValue>(filePath: string): Promise<TValue> {
-  return JSON.parse(await loadTextFile(filePath)) as TValue;
+async function loadJsonFile<TValue>(
+  bundleRootRealPath: string,
+  relativePath: string
+): Promise<TValue> {
+  return JSON.parse(await loadTextFile(bundleRootRealPath, relativePath)) as TValue;
 }
 
-async function loadOptionalJsonFile<TValue>(filePath: string): Promise<TValue | null> {
-  const fileStats = await stat(filePath).catch(() => null);
+async function loadOptionalJsonFile<TValue>(
+  bundleRootRealPath: string,
+  relativePath: string
+): Promise<TValue | null> {
+  const fullPath = path.join(bundleRootRealPath, relativePath);
+  const fileStats = await lstat(fullPath).catch(() => null);
 
-  if (!fileStats?.isFile()) {
+  if (!fileStats) {
     return null;
   }
 
-  return loadJsonFile<TValue>(filePath);
+  if (!fileStats.isFile()) {
+    return null;
+  }
+
+  await resolveBundleFilePath(bundleRootRealPath, relativePath);
+
+  return loadJsonFile<TValue>(bundleRootRealPath, relativePath);
+}
+
+async function resolveBundleFilePath(
+  bundleRootRealPath: string,
+  relativePath: string
+): Promise<string> {
+  const fullPath = path.join(bundleRootRealPath, relativePath);
+  const fileStats = await lstat(fullPath).catch(() => null);
+
+  if (!fileStats?.isFile() || fileStats.isSymbolicLink()) {
+    throw new Error(
+      JSON.stringify(
+        {
+          code: "invalid_problem9_offline_ingest_bundle_root",
+          issues: [
+            {
+              message: `Missing required offline ingest bundle file ${relativePath}.`,
+              path: relativePath
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  const resolvedFilePath = await realpath(fullPath);
+  const relativeResolvedPath = path.relative(bundleRootRealPath, resolvedFilePath);
+
+  if (
+    relativeResolvedPath.startsWith("..") ||
+    path.isAbsolute(relativeResolvedPath) ||
+    relativeResolvedPath.length === 0
+  ) {
+    throw new Error(
+      JSON.stringify(
+        {
+          code: "invalid_problem9_offline_ingest_bundle_root",
+          issues: [
+            {
+              message: `Offline ingest bundle file ${relativePath} must stay within the bundle root.`,
+              path: relativePath
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  return fullPath;
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {
