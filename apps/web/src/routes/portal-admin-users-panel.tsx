@@ -1,5 +1,5 @@
 import type { PortalAdminUserListItem } from "@paretoproof/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import {
@@ -38,6 +38,10 @@ export function resolveSelectedAdminUserId(
   }
 
   return visibleUsers[0]?.userId ?? null;
+}
+
+export function getCompactAdminUsersSectionOrder() {
+  return ["userList", "filterFields"] as const;
 }
 
 function formatTimestamp(timestamp: string | null) {
@@ -434,8 +438,21 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
   const layout = (
     <section className="portal-admin-layout">
       <aside className="portal-admin-list-shell">
-        {isCompactLayout ? filterFields : userList}
-        {isCompactLayout ? userList : filterFields}
+        {isCompactLayout
+          ? getCompactAdminUsersSectionOrder().map((sectionId) => {
+              const sections = {
+                filterFields,
+                userList
+              };
+
+              return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+            })
+          : (
+              <>
+                {userList}
+                {filterFields}
+              </>
+            )}
       </aside>
 
       <section className="portal-admin-detail-shell" ref={detailShellRef}>
