@@ -476,6 +476,11 @@ a.button-secondary {
   gap: 6px;
 }
 
+.site-benchmark-index-summary-support .site-benchmark-mobile-summary {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .site-footer {
   border: 1px solid var(--line);
   border-radius: 18px;
