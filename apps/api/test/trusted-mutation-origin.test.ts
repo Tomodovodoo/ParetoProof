@@ -103,6 +103,40 @@ test("trusted mutation origin hook also protects admin role revocation mutations
   });
 });
 
+test("trusted mutation origin hook also protects portal-admin offline ingest mutations", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOrigins: ["https://portal.paretoproof.com"]
+    })
+  );
+
+  app.post("/portal/admin/offline-ingest/problem9-run-bundles", async () => ({ ok: true }));
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      bundle: {}
+    },
+    url: "/portal/admin/offline-ingest/problem9-run-bundles",
+    headers: {
+      origin: "https://evil.example"
+    }
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.json(), {
+    error: "trusted_origin_not_allowed"
+  });
+});
+
 test("trusted mutation origin hook allows trusted portal origins and safe GET redirects", async (t) => {
   const app = Fastify();
 
