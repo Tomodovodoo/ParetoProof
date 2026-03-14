@@ -79,7 +79,7 @@ export function AccessRequestScreen({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card auth-card-polished auth-status-card">
+      <section className="auth-card auth-card-polished auth-status-card auth-access-request-card">
         <p className="eyebrow">
           <span className="inline-icon" aria-hidden="true">
             <AppIcon name="key" />

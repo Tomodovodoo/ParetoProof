@@ -618,6 +618,10 @@ a.button-secondary {
   width: min(840px, 100%);
 }
 
+.auth-access-request-card {
+  width: min(780px, 100%);
+}
+
 .auth-form {
   display: grid;
   gap: 14px;
@@ -2342,6 +2346,46 @@ a.button-secondary {
 }
 
 @media (max-width: 360px) {
+  .auth-access-request-card {
+    gap: 10px;
+  }
+
+  .auth-access-request-card .eyebrow {
+    display: none;
+  }
+
+  .auth-access-request-card p {
+    font-size: 0.9rem;
+  }
+
+  .auth-access-request-card .auth-form {
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .auth-access-request-card .auth-field {
+    gap: 4px;
+  }
+
+  .auth-access-request-card .auth-field span {
+    font-size: 0.84rem;
+  }
+
+  .auth-access-request-card .auth-field select,
+  .auth-access-request-card .auth-field textarea {
+    padding: 0.64rem 0.76rem;
+  }
+
+  .auth-access-request-card .auth-field textarea {
+    min-height: 6.25rem;
+  }
+
+  .auth-access-request-card .button,
+  .auth-access-request-card a.button {
+    min-height: 2.24rem;
+    padding: 0.5rem 0.82rem;
+  }
+
   .portal-grid-admin-workspace .portal-admin-list-panel {
     gap: 6px;
     padding-top: 6px;
