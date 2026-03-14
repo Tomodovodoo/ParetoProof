@@ -123,3 +123,68 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   assert.match(setCookies[0], /^PortalAccessProvider=/);
   assert.match(setCookies[1], /^PortalLinkIntent=;/);
 });
+
+test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      resolvePortalAccess: async () => null
+    }
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?redirect=/profile",
+    headers: {
+      accept: "text/html",
+      origin: "https://google.auth.paretoproof.com",
+      referer: "https://google.auth.paretoproof.com/"
+    }
+  });
+
+  assert.equal(response.statusCode, 307);
+  assert.equal(
+    response.headers.location,
+    "https://google.auth.paretoproof.com/api/access/finalize?redirect=%2Fprofile"
+  );
+});
+
+test("POST /portal/session/finalize/submit still returns JSON auth errors for non-branded callers without access", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      resolvePortalAccess: async () => null
+    }
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit",
+    headers: {
+      accept: "application/json"
+    }
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().error, "access_assertion_required");
+});

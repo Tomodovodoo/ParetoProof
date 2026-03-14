@@ -184,6 +184,10 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
   return authUrl.toString();
 }
 
+export function buildAccessRequestUrl(hostname = window.location.hostname) {
+  return buildAuthUrl("/access-request", hostname);
+}
+
 export function buildPublicUrl(targetPath = "/", hostname = window.location.hostname) {
   const normalizedTargetPath = normalizeTargetPath(targetPath);
 
@@ -240,7 +244,18 @@ export function buildAccessStartUrl(
 
 export function buildAccessFinalizeUrl(targetPath = "/") {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
-  const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
+
+  if (isLocalOrigin()) {
+    const completionUrl = new URL("/portal/session/finalize", getApiBaseUrl());
+
+    if (normalizedTargetPath !== "/") {
+      completionUrl.searchParams.set("redirect", normalizedTargetPath);
+    }
+
+    return completionUrl.toString();
+  }
+
+  const completionUrl = new URL("/api/access/finalize", window.location.origin);
 
   if (normalizedTargetPath !== "/") {
     completionUrl.searchParams.set("redirect", normalizedTargetPath);
