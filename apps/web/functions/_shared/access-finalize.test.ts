@@ -124,6 +124,26 @@ describe("handleAccessFinalize", () => {
     );
   });
 
+  it("redirects back to the branded retry surface when branded state cookies exist without a usable Access session", async () => {
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          cookie: "PortalAccessProvider=signed; PortalLinkIntent=intent-1",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+    );
+  });
+
   it("redirects back to the branded retry surface when the API finalize call fails", async () => {
     globalThis.fetch = async () =>
       new Response(

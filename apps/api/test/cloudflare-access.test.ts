@@ -22,3 +22,13 @@ test("readAccessJwtAssertion prefers the Access header over the cookie fallback"
 
   assert.equal(assertion, "header-assertion");
 });
+
+test("readAccessJwtAssertion returns null when no usable Access assertion is present", () => {
+  const assertion = readAccessJwtAssertion({
+    headers: {
+      cookie: "PortalAccessProvider=signed"
+    }
+  } as never);
+
+  assert.equal(assertion, null);
+});
