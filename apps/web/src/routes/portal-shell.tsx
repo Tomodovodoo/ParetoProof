@@ -9,7 +9,7 @@ import {
   type PortalRole,
   type PortalSectionDefinition
 } from "@paretoproof/shared";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
@@ -221,6 +221,10 @@ function formatVerdictClass(verdict: EvaluationVerdictClass | null) {
   return verdict ? evaluationVerdictLabels[verdict] : "Pending";
 }
 
+export function getCompactOverviewSectionOrder() {
+  return ["recentRuns", "metrics", "overviewLead", "actions"] as const;
+}
+
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const compactLayout = useCompactLayout();
@@ -335,6 +339,108 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         ))}
       </div>
     </aside>
+  );
+  const overviewMetricStrip = (
+    <section className="portal-metric-strip" aria-label="Portal metrics">
+      {overviewMetrics.map((metric) => (
+        <article className="portal-metric-cell" key={metric.label}>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+          <small>{metric.note}</small>
+        </article>
+      ))}
+    </section>
+  );
+  const overviewLeadSection = (
+    <section className="portal-overview-grid">
+      <article className="portal-panel portal-overview-lead">
+        <p className="section-tag">Portal overview</p>
+        <h2>Start from the current state of the portal.</h2>
+        <p>
+          Overview is the landing summary for approved contributors. Use it to scan
+          service posture, spot active benchmark work, and move into Runs, Launch,
+          or Workers without treating this page like a second queue.
+        </p>
+        {activeFreshnessPolicy ? (
+          <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+        ) : null}
+        <div className="portal-section-notes">
+          <ul className="portal-note-list">
+            <li>Keep recent runs, approval posture, and service health visible in one pass.</li>
+            <li>Use Runs as the canonical private index and /runs/:runId as the evidence destination.</li>
+            <li>Keep Launch for new execution intent and Workers for execution posture only.</li>
+          </ul>
+        </div>
+      </article>
+
+      {!compactLayout ? overviewActionRail : null}
+    </section>
+  );
+  const overviewRecentRunsSection = (
+    <section className="portal-overview-grid portal-overview-grid-secondary">
+      <article className="portal-panel-table-flat">
+        <div className="portal-panel-header">
+          <div>
+            {!compactLayout ? <p className="section-tag">Benchmark operations</p> : null}
+            <h2>
+              {compactLayout
+                ? "Recent runs"
+                : "Recent runs route back into the canonical cluster."}
+            </h2>
+          </div>
+          <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+            {compactLayout ? "All runs" : "View all runs"}
+          </a>
+        </div>
+
+        <div className="portal-table-shell" role="table" aria-label="Recent runs">
+          <div className="portal-table-head" role="row">
+            <span>Run</span>
+            <span>Model</span>
+            <span>Target</span>
+            <span>Branch</span>
+            <span>Lifecycle</span>
+            <span>Verdict</span>
+          </div>
+          {overviewRuns.map((row) => (
+            <div className="portal-table-row" key={row.id} role="row">
+              <span>
+                <a className="portal-inline-link" href={buildRunDetailHref(row.id)}>
+                  {row.id}
+                </a>
+              </span>
+              <span>{row.model}</span>
+              <span>{row.target}</span>
+              <span>{row.branch}</span>
+              <span className={`portal-state-badge portal-state-${row.runState}`}>
+                {formatRunLifecycleState(row.runState)}
+              </span>
+              <span
+                className={`portal-verdict-badge${
+                  row.verdict ? ` portal-verdict-${row.verdict}` : ""
+                }`}
+              >
+                {formatVerdictClass(row.verdict)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <aside className="portal-overview-timeline">
+        <p className="section-tag">Approvals</p>
+        <h2>Identity and review timeline</h2>
+        <div className="portal-timeline">
+          {overviewTimeline.map((item) => (
+            <article className="portal-timeline-item" key={item.title}>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+              <small>{item.meta}</small>
+            </article>
+          ))}
+        </div>
+      </aside>
+    </section>
   );
 
   return (
@@ -462,101 +568,24 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
         {activeSection?.id === "overview" ? (
           <>
-            {compactLayout ? overviewActionRail : null}
-            <section className="portal-metric-strip" aria-label="Portal metrics">
-              {overviewMetrics.map((metric) => (
-                <article className="portal-metric-cell" key={metric.label}>
-                  <span>{metric.label}</span>
-                  <strong>{metric.value}</strong>
-                  <small>{metric.note}</small>
-                </article>
-              ))}
-            </section>
+            {compactLayout
+              ? getCompactOverviewSectionOrder().map((sectionId) => {
+                  const sections = {
+                    actions: overviewActionRail,
+                    metrics: overviewMetricStrip,
+                    overviewLead: overviewLeadSection,
+                    recentRuns: overviewRecentRunsSection
+                  };
 
-            <section className="portal-overview-grid">
-              <article className="portal-panel portal-overview-lead">
-                <p className="section-tag">Portal overview</p>
-                <h2>Start from the current state of the portal.</h2>
-                <p>
-                  Overview is the landing summary for approved contributors. Use it to scan
-                  service posture, spot active benchmark work, and move into Runs, Launch,
-                  or Workers without treating this page like a second queue.
-                </p>
-                {activeFreshnessPolicy ? (
-                  <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
-                ) : null}
-                <div className="portal-section-notes">
-                  <ul className="portal-note-list">
-                    <li>Keep recent runs, approval posture, and service health visible in one pass.</li>
-                    <li>Use Runs as the canonical private index and /runs/:runId as the evidence destination.</li>
-                    <li>Keep Launch for new execution intent and Workers for execution posture only.</li>
-                  </ul>
-                </div>
-              </article>
-
-              {!compactLayout ? overviewActionRail : null}
-            </section>
-
-            <section className="portal-overview-grid portal-overview-grid-secondary">
-              <article className="portal-panel-table-flat">
-                <div className="portal-panel-header">
-                  <div>
-                    <p className="section-tag">Benchmark operations</p>
-                    <h2>Recent runs route back into the canonical cluster.</h2>
-                  </div>
-                  <a className="button button-secondary" href={buildPortalUrl("/runs")}>
-                    View all runs
-                  </a>
-                </div>
-
-                <div className="portal-table-shell" role="table" aria-label="Recent runs">
-                  <div className="portal-table-head" role="row">
-                    <span>Run</span>
-                    <span>Model</span>
-                    <span>Target</span>
-                    <span>Branch</span>
-                    <span>Lifecycle</span>
-                    <span>Verdict</span>
-                  </div>
-                  {overviewRuns.map((row) => (
-                    <div className="portal-table-row" key={row.id} role="row">
-                      <span>
-                        <a className="portal-inline-link" href={buildRunDetailHref(row.id)}>
-                          {row.id}
-                        </a>
-                      </span>
-                      <span>{row.model}</span>
-                      <span>{row.target}</span>
-                      <span>{row.branch}</span>
-                      <span className={`portal-state-badge portal-state-${row.runState}`}>
-                        {formatRunLifecycleState(row.runState)}
-                      </span>
-                      <span
-                        className={`portal-verdict-badge${
-                          row.verdict ? ` portal-verdict-${row.verdict}` : ""
-                        }`}
-                      >
-                        {formatVerdictClass(row.verdict)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <aside className="portal-overview-timeline">
-                <p className="section-tag">Approvals</p>
-                <h2>Identity and review timeline</h2>
-                <div className="portal-timeline">
-                  {overviewTimeline.map((item) => (
-                    <article className="portal-timeline-item" key={item.title}>
-                      <strong>{item.title}</strong>
-                      <p>{item.detail}</p>
-                      <small>{item.meta}</small>
-                    </article>
-                  ))}
-                </div>
-              </aside>
-            </section>
+                  return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
+                })
+              : (
+                  <>
+                    {overviewMetricStrip}
+                    {overviewLeadSection}
+                    {overviewRecentRunsSection}
+                  </>
+                )}
           </>
         ) : (
           <section className="portal-content">
