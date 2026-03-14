@@ -1007,6 +1007,17 @@ a.button-secondary {
   padding-top: 12px;
 }
 
+.portal-launch-quick-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.portal-launch-quick-actions .button,
+.portal-launch-quick-actions a.button {
+  min-height: 2.2rem;
+}
+
 .portal-launch-panel-compact .portal-form-grid {
   margin-top: -2px;
 }
@@ -2417,6 +2428,16 @@ a.button-secondary {
   .portal-overview-actions-compact .portal-action-copy,
   .portal-overview-actions-compact .portal-action-hint {
     display: none;
+  }
+
+  .portal-launch-quick-actions {
+    gap: 6px;
+  }
+
+  .portal-launch-quick-actions .button,
+  .portal-launch-quick-actions a.button {
+    min-height: 2.1rem;
+    padding: 0.38rem 0.6rem;
   }
 
   .site-shell:not(.site-project-shell) {
