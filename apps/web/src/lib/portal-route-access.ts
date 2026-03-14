@@ -3,7 +3,7 @@ import {
   type AppRouteMatrixEntry,
   type RouteRedirectTarget
 } from "@paretoproof/shared";
-import { buildPublicUrl, isLocalHostname } from "./surface";
+import { buildPublicUrl, copyLocalPortalState, isLocalHostname } from "./surface";
 
 type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
 
@@ -102,20 +102,17 @@ function preserveLocalPortalState(targetPath: string, location = window.location
   }
 
   const redirectUrl = new URL(targetPath, location.origin);
-  const currentParams = new URLSearchParams(location.search);
-
-  for (const key of ["surface", "access", "email", "reason", "roles"]) {
-    if (redirectUrl.searchParams.has(key)) {
-      continue;
-    }
-    const value = currentParams.get(key);
-
-    if (value) {
-      redirectUrl.searchParams.set(key, value);
-    }
-  }
+  redirectUrl.searchParams.set("surface", "portal");
+  copyLocalPortalState(redirectUrl, location);
 
   return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+}
+
+function stripRouteDeniedReason(search = "") {
+  const params = new URLSearchParams(search);
+  params.delete("reason");
+  const nextSearch = params.toString();
+  return nextSearch ? `?${nextSearch}` : "";
 }
 
 function readRouteDeniedReason(
@@ -168,6 +165,16 @@ export function findMatchedPortalRoute(pathname: string) {
 export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
   const matchedRoute = findPortalRoute(context.pathname);
   const routeDeniedReason = readRouteDeniedReason(context.search);
+
+  if (
+    context.status === "approved" &&
+    routeDeniedReason &&
+    matchedRoute?.id !== "portal.denied"
+  ) {
+    return preserveLocalPortalState(
+      `${context.pathname}${stripRouteDeniedReason(context.search)}`
+    );
+  }
 
   if (context.status === "approved" && matchedRoute?.id === "portal.pending") {
     return preserveLocalPortalState("/");

@@ -6,7 +6,7 @@ export type AccessProvider = "github" | "google";
 const productionPublicOrigin = "https://paretoproof.com";
 const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
-const localPortalStateParamKeys = ["access", "email", "roles", "reason"] as const;
+const localPortalStateParamKeys = ["access", "email", "roles"] as const;
 const productionProviderAuthOrigins: Record<AccessProvider, string> = {
   github: "https://github.auth.paretoproof.com",
   google: "https://google.auth.paretoproof.com"
@@ -112,7 +112,18 @@ function buildLocalSurfaceUrl(
   return surfaceUrl.toString();
 }
 
-function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
+function shouldPreserveLocalPortalReason(
+  targetUrl: URL,
+  currentParams: URLSearchParams
+) {
+  if (currentParams.get("access") !== "denied") {
+    return false;
+  }
+
+  return targetUrl.pathname === "/access-request" || targetUrl.pathname === "/denied";
+}
+
+export function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
   if (!isLocalOrigin(currentLocation.hostname)) {
     return;
   }
@@ -127,6 +138,17 @@ function copyLocalPortalState(targetUrl: URL, currentLocation = window.location)
 
     if (value) {
       targetUrl.searchParams.set(key, value);
+    }
+  }
+
+  if (
+    !targetUrl.searchParams.has("reason") &&
+    shouldPreserveLocalPortalReason(targetUrl, currentParams)
+  ) {
+    const reason = currentParams.get("reason");
+
+    if (reason) {
+      targetUrl.searchParams.set("reason", reason);
     }
   }
 }
