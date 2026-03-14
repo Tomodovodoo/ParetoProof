@@ -65,6 +65,8 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
   const outputRoot = options.preflightOnly
     ? null
     : await prepareWritableTarget(options.outputRoot, "Output root");
+  const workspaceMountRoot = workspaceRoot ? path.dirname(workspaceRoot) : null;
+  const outputMountRoot = outputRoot ? path.dirname(outputRoot) : null;
 
   if (!options.preflightOnly && !options.providerModel) {
     throw new Error(
@@ -72,39 +74,39 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
     );
   }
 
-  if (benchmarkPackageRoot && workspaceRoot) {
+  if (benchmarkPackageRoot && workspaceMountRoot) {
     assertNoHostPathOverlap(
       benchmarkPackageRoot,
-      workspaceRoot,
+      workspaceMountRoot,
       "Benchmark package root",
-      "Workspace root"
+      "Workspace mount parent"
     );
   }
 
-  if (promptPackageRoot && workspaceRoot) {
+  if (promptPackageRoot && workspaceMountRoot) {
     assertNoHostPathOverlap(
       promptPackageRoot,
-      workspaceRoot,
+      workspaceMountRoot,
       "Prompt package root",
-      "Workspace root"
+      "Workspace mount parent"
     );
   }
 
-  if (benchmarkPackageRoot && outputRoot) {
+  if (benchmarkPackageRoot && outputMountRoot) {
     assertNoHostPathOverlap(
       benchmarkPackageRoot,
-      outputRoot,
+      outputMountRoot,
       "Benchmark package root",
-      "Output root"
+      "Output mount parent"
     );
   }
 
-  if (promptPackageRoot && outputRoot) {
+  if (promptPackageRoot && outputMountRoot) {
     assertNoHostPathOverlap(
       promptPackageRoot,
-      outputRoot,
+      outputMountRoot,
       "Prompt package root",
-      "Output root"
+      "Output mount parent"
     );
   }
 
@@ -155,17 +157,17 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
     );
   }
 
-  if (workspaceRoot) {
+  if (workspaceMountRoot) {
     dockerArgs.push(
       "--mount",
-      buildBindMountArg(path.dirname(workspaceRoot), workspaceParentContainerRoot, false)
+      buildBindMountArg(workspaceMountRoot, workspaceParentContainerRoot, false)
     );
   }
 
-  if (outputRoot) {
+  if (outputMountRoot) {
     dockerArgs.push(
       "--mount",
-      buildBindMountArg(path.dirname(outputRoot), outputParentContainerRoot, false)
+      buildBindMountArg(outputMountRoot, outputParentContainerRoot, false)
     );
   }
 
