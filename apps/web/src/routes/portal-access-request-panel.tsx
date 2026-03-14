@@ -578,8 +578,8 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
           </span>
         </div>
 
-        {isCompactLayout ? queueContent : filterFields}
         {isCompactLayout ? filterFields : queueContent}
+        {isCompactLayout ? queueContent : filterFields}
       </article>
 
       <article className="portal-panel portal-admin-detail-panel" ref={detailPanelRef}>
