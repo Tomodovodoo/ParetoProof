@@ -114,7 +114,7 @@ function buildSession(
 ): typeof sessions.$inferSelect {
   return {
     createdAt: new Date("2026-03-13T18:00:00.000Z"),
-    expiresAt: new Date("2026-03-14T18:00:00.000Z"),
+    expiresAt: new Date("2099-03-14T18:00:00.000Z"),
     id: "55555555-5555-4555-8555-555555555555",
     identityId: "22222222-2222-4222-8222-222222222222",
     ipAddress: null,
