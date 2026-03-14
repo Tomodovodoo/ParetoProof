@@ -2582,6 +2582,48 @@ a.button-secondary {
     display: none;
   }
 
+  .auth-card-handoff-state {
+    gap: 10px;
+  }
+
+  .auth-card-handoff-state .auth-card-intro {
+    gap: 6px;
+  }
+
+  .auth-card-handoff-state h1 {
+    font-size: clamp(1.56rem, 8.1vw, 2rem);
+  }
+
+  .auth-card-handoff-state .auth-lead,
+  .auth-card-handoff-state .auth-panel-copy,
+  .auth-card-handoff-state .auth-card-footer p {
+    font-size: 0.86rem;
+    line-height: 1.42;
+  }
+
+  .auth-card-handoff-state .auth-provider-panel {
+    padding: 12px;
+    gap: 6px;
+  }
+
+  .auth-card-handoff-state .auth-provider-panel .section-tag,
+  .auth-card-handoff-state .auth-provider-panel .auth-panel-copy {
+    display: none;
+  }
+
+  .auth-card-handoff-state .auth-provider-panel h2 {
+    font-size: 1.05rem;
+  }
+
+  .auth-card-handoff-state .auth-provider-button {
+    padding: 8px 0;
+  }
+
+  .auth-card-handoff-state .auth-provider-button small {
+    margin-top: 1px;
+    font-size: 0.8rem;
+  }
+
   .portal-grid-profile-compact .portal-profile-form-panel {
     gap: 6px;
     padding-top: 6px;
