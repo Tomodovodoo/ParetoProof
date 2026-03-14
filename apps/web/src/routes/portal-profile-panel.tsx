@@ -438,6 +438,8 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
     );
   }
 
+  const showCompactLinkFeedback = compactLayout && Boolean(linkMessage);
+
   const profileForm = (
     <form className="auth-form" onSubmit={handleSave}>
       <label className="auth-field">
@@ -452,10 +454,13 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           value={displayNameInput}
         />
       </label>
-      <label className="auth-field">
-        <span>Primary email</span>
-        <input className="auth-input" disabled name="email" value={profile.email ?? ""} />
-      </label>
+      {!showCompactLinkFeedback ? (
+        <label className="auth-field">
+          <span>Primary email</span>
+          <input className="auth-input" disabled name="email" value={profile.email ?? ""} />
+        </label>
+      ) : null}
+      {showCompactLinkFeedback ? <p className="portal-panel-muted">{linkMessage}</p> : null}
       {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
       <button className="button" disabled={isSaving} type="submit">
         {isSaving ? "Saving..." : "Save profile"}
@@ -516,7 +521,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         Link an extra sign-in method from here. The portal only marks it as linked after the
         Cloudflare Access handoff returns and the backend confirms the new identity.
       </p>
-      {linkMessage ? <p className="portal-panel-muted">{linkMessage}</p> : null}
+      {!compactLayout && linkMessage ? <p className="portal-panel-muted">{linkMessage}</p> : null}
     </article>
   );
 
