@@ -264,6 +264,44 @@ test("buildProblem9OfflineIngestPlan rejects digest mismatches", async (t) => {
   );
 });
 
+test("buildProblem9OfflineIngestPlan rejects path traversal in identifiers", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  request.bundle.runBundle.runId = "../other-run";
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "invalid_problem9_offline_ingest_payload"
+  );
+});
+
+test("buildProblem9OfflineIngestPlan rejects path traversal in artifact relative paths", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  request.bundle.artifactManifest.artifacts[0]!.relativePath = "../escape.txt";
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "invalid_problem9_offline_ingest_payload"
+  );
+});
+
 test("POST /portal/admin/offline-ingest/problem9-run-bundles returns created responses", async (t) => {
   const app = Fastify();
   let receivedActorUserId: string | null = null;

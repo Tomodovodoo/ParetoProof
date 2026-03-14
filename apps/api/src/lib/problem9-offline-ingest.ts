@@ -256,6 +256,9 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
 
   const request = parsedRequest.data as Problem9OfflineIngestRequest;
   const bundle = request.bundle;
+  assertSafeObjectKeySegment(bundle.runBundle.runId, "runBundle.runId");
+  assertSafeObjectKeySegment(bundle.runBundle.attemptId, "runBundle.attemptId");
+  assertSafeArtifactManifestPaths(bundle.artifactManifest);
   const manifestEntriesByPath = new Map<string, Problem9OfflineArtifactManifestEntry>(
     bundle.artifactManifest.artifacts.map((entry) => [entry.relativePath, entry])
   );
@@ -480,6 +483,12 @@ function assertNoDuplicateManifestPaths(artifactManifest: Problem9OfflineArtifac
     }
 
     seenPaths.add(artifact.relativePath);
+  }
+}
+
+function assertSafeArtifactManifestPaths(artifactManifest: Problem9OfflineArtifactManifest) {
+  for (const artifact of artifactManifest.artifacts) {
+    assertSafeRelativePath(artifact.relativePath, "artifactManifest.relativePath");
   }
 }
 
@@ -897,6 +906,9 @@ function buildObjectKey(options: {
   relativePath: string;
   runId: string;
 }) {
+  const runId = assertSafeObjectKeySegment(options.runId, "runBundle.runId");
+  const attemptId = assertSafeObjectKeySegment(options.attemptId, "runBundle.attemptId");
+  const relativePath = assertSafeRelativePath(options.relativePath, "artifactManifest.relativePath");
   const prefixRoot =
     options.prefixFamily === "run_logs"
       ? "logs"
@@ -904,9 +916,7 @@ function buildObjectKey(options: {
         ? "traces"
         : "artifacts";
 
-  return normalizePath(
-    `runs/${options.runId}/${prefixRoot}/${options.attemptId}/${options.relativePath}`
-  );
+  return `runs/${runId}/${prefixRoot}/${attemptId}/${relativePath}`;
 }
 
 function mapPrefixFamily(
@@ -978,6 +988,42 @@ function validationError(code: string, message: string, path?: string) {
 
 function normalizePath(relativePath: string) {
   return relativePath.split("\\").join("/");
+}
+
+function assertSafeObjectKeySegment(value: string, path: string) {
+  if (normalizePath(value) !== value || value.includes("/") || value === "." || value === "..") {
+    throw validationError(
+      "invalid_problem9_offline_ingest_payload",
+      "Run and attempt IDs must be path-safe segments.",
+      path
+    );
+  }
+
+  return value;
+}
+
+function assertSafeRelativePath(value: string, path: string) {
+  const normalizedPath = normalizePath(value);
+
+  if (normalizedPath.startsWith("/") || normalizedPath.endsWith("/")) {
+    throw validationError(
+      "invalid_problem9_offline_ingest_payload",
+      "Artifact paths must be relative and cannot start or end with '/'.",
+      path
+    );
+  }
+
+  for (const segment of normalizedPath.split("/")) {
+    if (segment === "" || segment === "." || segment === "..") {
+      throw validationError(
+        "invalid_problem9_offline_ingest_payload",
+        "Artifact paths must not contain traversal or empty path segments.",
+        path
+      );
+    }
+  }
+
+  return normalizedPath;
 }
 
 function normalizeText(text: string) {
