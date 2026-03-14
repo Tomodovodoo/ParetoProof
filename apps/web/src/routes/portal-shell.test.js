@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
-  it("puts compact admin overview actions before the metric strip", async () => {
+  it("puts compact admin recent-run evidence before the action rail", async () => {
     const html = await renderPortalShell({
       email: "ada@paretoproof.local",
       roles: ["admin"],
@@ -62,7 +62,12 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html.indexOf("Review runs")).toBeLessThan(html.indexOf("Approval state"));
+    expect(html.indexOf("Recent runs route back into the canonical cluster.")).toBeLessThan(
+      html.indexOf("Approval state")
+    );
+    expect(html.indexOf("Recent runs route back into the canonical cluster.")).toBeLessThan(
+      html.indexOf("Review runs")
+    );
   });
 
   it("keeps the wide admin overview metric strip before the action rail", async () => {
