@@ -2150,6 +2150,50 @@ a.button-secondary {
 }
 
 @media (max-width: 420px) {
+  .portal-overview-actions-compact {
+    gap: 8px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .portal-overview-actions-compact .section-tag,
+  .portal-overview-actions-compact h2 {
+    display: none;
+  }
+
+  .portal-overview-actions-compact .portal-action-list {
+    border-top: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+    gap: 8px;
+  }
+
+  .portal-overview-actions-compact .portal-action-card,
+  .portal-overview-actions-compact .portal-action-card + .portal-action-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .portal-overview-actions-compact .portal-action-card .button,
+  .portal-overview-actions-compact .portal-action-card a.button {
+    min-height: 2.1rem;
+    padding: 0.38rem 0.68rem;
+  }
+
+  .portal-overview-actions-compact .portal-action-title {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    line-height: 1.2;
+  }
+
+  .portal-overview-actions-compact .portal-action-copy,
+  .portal-overview-actions-compact .portal-action-hint {
+    display: none;
+  }
+
   .site-shell:not(.site-project-shell) {
     gap: 16px;
   }
@@ -2422,40 +2466,6 @@ a.button-secondary {
   .portal-grid-profile-compact .portal-profile-form-panel a.button {
     min-height: 2.24rem;
     padding: 0.5rem 0.82rem;
-  }
-
-  .portal-overview-actions-compact {
-    gap: 8px;
-    padding-top: 0;
-    border-top: 0;
-  }
-
-  .portal-overview-actions-compact .portal-action-list {
-    border-top: 0;
-  }
-
-  .portal-overview-actions-compact .portal-action-card {
-    align-items: center;
-    flex-direction: row;
-    gap: 10px;
-    padding: 8px 0;
-  }
-
-  .portal-overview-actions-compact .portal-action-card .button,
-  .portal-overview-actions-compact .portal-action-card a.button {
-    width: auto;
-    min-height: 2.1rem;
-    padding: 0.38rem 0.7rem;
-    flex-shrink: 0;
-  }
-
-  .portal-overview-actions-compact .portal-action-title {
-    margin-bottom: 0;
-  }
-
-  .portal-overview-actions-compact .portal-action-copy,
-  .portal-overview-actions-compact .portal-action-hint {
-    display: none;
   }
 
   .site-project-shell {
