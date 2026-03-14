@@ -240,18 +240,7 @@ export function buildAccessStartUrl(
 
 export function buildAccessFinalizeUrl(targetPath = "/") {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
-
-  if (isLocalOrigin()) {
-    const completionUrl = new URL("/portal/session/finalize", getApiBaseUrl());
-
-    if (normalizedTargetPath !== "/") {
-      completionUrl.searchParams.set("redirect", normalizedTargetPath);
-    }
-
-    return completionUrl.toString();
-  }
-
-  const completionUrl = new URL("/api/access/finalize", window.location.origin);
+  const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
 
   if (normalizedTargetPath !== "/") {
     completionUrl.searchParams.set("redirect", normalizedTargetPath);
