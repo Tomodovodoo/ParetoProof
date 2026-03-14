@@ -63,19 +63,19 @@ describe("buildPortalUrl", () => {
     expect(portalUrl.searchParams.has("roles")).toBe(false);
   });
 
-  it("uses the local finalize endpoint on loopback-mapped branded auth hosts", () => {
+  it("uses the local API finalize endpoint on loopback-mapped branded auth hosts", () => {
     setWindowUrl("http://github.auth.paretoproof.com:4371/");
 
     expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?redirect=%2Fprofile"
+      "http://github.auth.paretoproof.com:3000/portal/session/finalize?redirect=%2Fprofile"
     );
   });
 
-  it("uses the protected API finalize submit endpoint on branded auth hosts", () => {
+  it("uses the branded finalize relay endpoint on branded auth hosts", () => {
     setWindowUrl("https://google.auth.paretoproof.com/");
 
     expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fprofile"
+      "https://google.auth.paretoproof.com/api/access/finalize?redirect=%2Fprofile"
     );
   });
 });

@@ -188,3 +188,80 @@ test("POST /portal/session/finalize/submit still returns JSON auth errors for no
   assert.equal(response.statusCode, 401);
   assert.equal(response.json().error, "access_assertion_required");
 });
+
+test("POST /portal/session/finalize/submit completes a pending-user handoff from cookie-backed branded access", async (t) => {
+  const app = Fastify();
+  const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+
+  t.after(async () => {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = originalSecret;
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      transaction: async () => {
+        throw new Error("pending sign-in finalize submit should not hit the identity-link mutation path");
+      }
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      resolvePortalAccess: async (request) => {
+        assert.equal(request.headers["cf-access-jwt-assertion"], undefined);
+        assert.match(
+          String(request.headers.cookie),
+          /CF_Authorization=session-cookie/
+        );
+        request.accessIdentity = {
+          email: "pending@example.com",
+          issuer: "https://paretoproof.cloudflareaccess.com",
+          provider: "cloudflare_google",
+          subject: "subject-pending"
+        };
+        request.accessRbacContext = {
+          email: "pending@example.com",
+          identityId: "identity-pending",
+          roles: [],
+          status: "pending",
+          subject: "subject-pending",
+          userId: "user-pending"
+        };
+
+        return request.accessRbacContext;
+      }
+    }
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?redirect=/access-request",
+    headers: {
+      accept: "text/html",
+      cookie: [
+        "CF_Authorization=session-cookie",
+        buildSignedAccessCookie(
+          "PortalAccessProvider",
+          "cloudflare_google|subject-pending"
+        )
+      ].join("; "),
+      origin: "https://google.auth.paretoproof.com",
+      referer: "https://google.auth.paretoproof.com/"
+    }
+  });
+
+  assert.equal(response.statusCode, 302);
+  assert.equal(
+    response.headers.location,
+    "https://portal.paretoproof.com/access-request"
+  );
+
+  const setCookies = response.headers["set-cookie"];
+  assert.ok(Array.isArray(setCookies));
+  assert.equal(setCookies.length, 2);
+  assert.match(setCookies[0], /^PortalAccessProvider=/);
+  assert.match(setCookies[1], /^PortalLinkIntent=;/);
+});
