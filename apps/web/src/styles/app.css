@@ -1,20 +1,57 @@
 :root {
   color-scheme: light;
   font-family: "Aptos", "Segoe UI Variable", "Segoe UI", sans-serif;
+
+  /* Surfaces */
   --bg: #eef3f9;
   --bg-strong: #dde6f2;
+  --bg-warm: #f5f3f0;
   --paper: rgba(255, 255, 255, 0.88);
   --paper-strong: #f9fbff;
+  --paper-elevated: rgba(255, 255, 255, 0.95);
+
+  /* Text */
   --ink: #10203d;
   --ink-soft: #546a8a;
+  --ink-faint: #8a9bba;
+
+  /* Borders */
   --line: rgba(16, 42, 103, 0.13);
   --line-strong: rgba(16, 42, 103, 0.22);
+  --line-accent: rgba(99, 102, 241, 0.18);
+
+  /* Primary */
   --navy: #112a67;
   --navy-strong: #0b1d49;
   --blue: #2563eb;
+  --blue-soft: #5b8def;
+
+  /* Accent — violet */
+  --violet: #6d28d9;
+  --violet-soft: rgba(109, 40, 217, 0.1);
+  --violet-border: rgba(109, 40, 217, 0.18);
+
+  /* Accent — teal */
+  --teal: #0891b2;
+  --teal-soft: rgba(8, 145, 178, 0.1);
+  --teal-border: rgba(8, 145, 178, 0.18);
+
+  /* Accent — indigo */
+  --indigo: #4f46e5;
+  --indigo-soft: rgba(79, 70, 229, 0.08);
+  --indigo-border: rgba(79, 70, 229, 0.16);
+
+  /* Semantic */
   --mint: #0e8b73;
   --amber: #b97514;
   --rose: #a8475e;
+
+  /* Sidebar */
+  --sidebar-from: #1a2e6e;
+  --sidebar-to: #0d1a3f;
+  --sidebar-accent: rgba(99, 140, 255, 0.95);
+  --sidebar-hover: rgba(255, 255, 255, 0.07);
+  --sidebar-text-muted: rgba(186, 206, 255, 0.78);
 }
 
 * {
@@ -31,9 +68,10 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(17, 42, 103, 0.11), transparent 28%),
-    linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.09), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(8, 145, 178, 0.07), transparent 32%),
+    radial-gradient(circle at 60% 80%, rgba(109, 40, 217, 0.05), transparent 24%),
+    linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
   color: var(--ink);
 }
 
@@ -87,7 +125,7 @@ ul {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--blue);
+  color: var(--indigo);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -114,7 +152,7 @@ a.button {
   padding: 0.8rem 1.15rem;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: linear-gradient(180deg, #173b92 0%, var(--navy) 100%);
+  background: linear-gradient(135deg, var(--indigo) 0%, var(--navy) 100%);
   color: #fff;
   font-weight: 700;
   transition:
@@ -543,7 +581,8 @@ a.button-secondary {
 
 .auth-card-polished {
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.09), transparent 28%),
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.05), transparent 24%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.98));
 }
 
@@ -723,7 +762,7 @@ a.button-secondary {
 .portal-sidebar {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 2px;
-  background: linear-gradient(180deg, #153178 0%, var(--navy-strong) 100%);
+  background: linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%);
   color: #fff;
   padding: 16px 12px 14px;
   display: flex;
@@ -755,7 +794,7 @@ a.button-secondary {
 }
 
 .portal-sidebar .eyebrow {
-  color: rgba(186, 206, 255, 0.84);
+  color: var(--sidebar-text-muted);
 }
 
 .portal-sidebar h1 {
@@ -767,7 +806,7 @@ a.button-secondary {
 .portal-sidebar-footer-label,
 .portal-sidebar-footer-value,
 .portal-nav-summary {
-  color: rgba(218, 227, 250, 0.76);
+  color: var(--sidebar-text-muted);
 }
 
 .sidebar-toggle {
@@ -806,7 +845,7 @@ a.button-secondary {
 
 .portal-nav-group-label {
   margin: 0 10px 2px;
-  color: rgba(186, 206, 255, 0.78);
+  color: var(--sidebar-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -826,12 +865,12 @@ a.button-secondary {
 
 .portal-nav-link:hover,
 .portal-nav-link:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--sidebar-hover);
 }
 
 .portal-nav-link-active {
   background: rgba(255, 255, 255, 0.05);
-  border-left-color: rgba(130, 173, 255, 0.95);
+  border-left-color: var(--sidebar-accent);
 }
 
 .portal-nav-link-icon {
@@ -888,8 +927,8 @@ a.button-secondary {
 }
 
 .portal-nav-link-active {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 140, 255, 0.22);
+  background: rgba(99, 140, 255, 0.1);
 }
 
 .portal-main {
@@ -1137,7 +1176,7 @@ a.button-secondary {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--blue);
+  background: var(--indigo);
 }
 
 .portal-inline-link {
