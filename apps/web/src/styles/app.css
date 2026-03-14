@@ -2004,3 +2004,65 @@ a.button-secondary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+@media (max-width: 420px) {
+  .auth-shell {
+    align-items: start;
+    padding: 8px 0;
+  }
+
+  .auth-card,
+  .auth-inline-status {
+    padding: 16px;
+  }
+
+  .auth-card {
+    gap: 16px;
+  }
+
+  .auth-card-intro {
+    gap: 10px;
+  }
+
+  .auth-card h1,
+  .auth-inline-status h1 {
+    font-size: clamp(1.75rem, 9vw, 2.4rem);
+    line-height: 0.98;
+  }
+
+  .auth-lead,
+  .auth-panel-copy,
+  .auth-card-footer p {
+    font-size: 0.95rem;
+  }
+
+  .auth-provider-panel {
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .auth-provider-button {
+    grid-template-columns: 38px minmax(0, 1fr) 18px;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .auth-provider-mark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .auth-check-list {
+    gap: 10px;
+  }
+
+  .auth-check-list li {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .auth-check-mark {
+    width: 28px;
+    height: 28px;
+  }
+}
