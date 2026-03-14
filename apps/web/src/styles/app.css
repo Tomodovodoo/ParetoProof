@@ -70,6 +70,8 @@ body {
   background:
     radial-gradient(circle at top left, rgba(99, 102, 241, 0.09), transparent 28%),
     radial-gradient(circle at bottom right, rgba(8, 145, 178, 0.07), transparent 32%),
+    radial-gradient(circle at 18% 78%, rgba(185, 117, 20, 0.06), transparent 26%),
+    radial-gradient(circle at 82% 24%, rgba(168, 71, 94, 0.05), transparent 24%),
     radial-gradient(circle at 60% 80%, rgba(109, 40, 217, 0.05), transparent 24%),
     linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
   color: var(--ink);
@@ -211,7 +213,10 @@ a.button-secondary {
   background: var(--paper-elevated);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 1px 3px rgba(16, 42, 103, 0.06), 0 4px 16px rgba(16, 42, 103, 0.04);
+  box-shadow:
+    0 1px 3px rgba(16, 42, 103, 0.06),
+    0 4px 16px rgba(16, 42, 103, 0.04),
+    inset 0 1px 0 rgba(8, 145, 178, 0.08);
 }
 
 .site-header-bar {
@@ -241,9 +246,11 @@ a.button-secondary {
   height: 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line-accent);
+  border: 1px solid var(--indigo-border);
   border-radius: 10px;
-  background: var(--indigo-soft);
+  background:
+    linear-gradient(135deg, rgba(8, 145, 178, 0.12), rgba(109, 40, 217, 0.08)),
+    rgba(255, 255, 255, 0.82);
   color: var(--indigo);
 }
 
@@ -328,6 +335,11 @@ a.button-secondary {
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.92fr);
   gap: 28px;
   align-items: start;
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(79, 70, 229, 0.06), transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(8, 145, 178, 0.05), transparent 40%),
+    radial-gradient(ellipse at 70% 14%, rgba(185, 117, 20, 0.06), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(249, 251, 255, 0.96));
 }
 
 .site-hero-copy,
@@ -395,7 +407,7 @@ a.button-secondary {
 .site-nav-link:hover,
 .site-nav-link:focus-visible {
   color: var(--ink);
-  background: rgba(79, 70, 229, 0.06);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.06), rgba(8, 145, 178, 0.06));
 }
 
 .site-nav-link-active {
@@ -493,7 +505,9 @@ a.button-secondary {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 255, 0.98));
+  background:
+    radial-gradient(circle at top right, rgba(8, 145, 178, 0.05), transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 255, 0.98));
 }
 
 .site-benchmark-mobile-card h2 {
@@ -530,7 +544,10 @@ a.button-secondary {
 .site-project-section {
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(249, 251, 255, 0.96));
+  background:
+    radial-gradient(ellipse at 90% 10%, rgba(109, 40, 217, 0.04), transparent 35%),
+    radial-gradient(ellipse at 14% 84%, rgba(8, 145, 178, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(249, 251, 255, 0.96));
   padding: 24px;
   display: grid;
   gap: 18px;
@@ -568,7 +585,9 @@ a.button-secondary {
 .site-panel-card {
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.74);
+  background:
+    radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.03), transparent 50%),
+    rgba(255, 255, 255, 0.78);
   padding: 18px;
   display: grid;
   gap: 12px;
@@ -587,10 +606,10 @@ a.button-secondary {
   height: 38px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--indigo-border);
   border-radius: 12px;
-  background: rgba(17, 42, 103, 0.06);
-  color: var(--navy);
+  background: var(--indigo-soft);
+  color: var(--indigo);
 }
 
 .site-panel-copy {
@@ -618,10 +637,136 @@ a.button-secondary {
   border-top: 0;
 }
 
+.site-editorial-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.site-editorial-copy {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.site-editorial-copy p {
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+.site-topic-list {
+  display: grid;
+  gap: 16px;
+}
+
+.site-topic-list-compact {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.site-topic-item {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.03), transparent 50%),
+    rgba(255, 255, 255, 0.72);
+}
+
+.site-topic-item h3 {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.site-topic-item p {
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.site-step-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.site-step-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(8, 145, 178, 0.04), transparent 50%),
+    rgba(255, 255, 255, 0.76);
+}
+
+.site-step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-link-list {
+  display: grid;
+  gap: 8px;
+}
+
+.site-link-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.site-link-row:hover,
+.site-link-row:focus-visible {
+  border-color: var(--indigo-border);
+  background: rgba(79, 70, 229, 0.03);
+}
+
+.site-link-row-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.site-link-row-copy h3 {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.site-link-row-copy p {
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.site-inline-note {
+  padding: 14px 18px;
+  border-left: 3px solid var(--violet-border);
+  background: var(--violet-soft);
+  border-radius: 0 10px 10px 0;
+}
+
+.site-inline-note p {
+  color: var(--ink-soft);
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
 .site-footer {
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(249, 251, 255, 0.96));
+  background:
+    radial-gradient(ellipse at 10% 50%, rgba(8, 145, 178, 0.05), transparent 40%),
+    radial-gradient(ellipse at 90% 50%, rgba(79, 70, 229, 0.04), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(249, 251, 255, 0.96));
   padding: 24px;
 }
 
@@ -634,7 +779,9 @@ a.button-secondary {
 .site-footer-panel {
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background:
+    radial-gradient(circle at top left, rgba(109, 40, 217, 0.03), transparent 50%),
+    rgba(255, 255, 255, 0.76);
   padding: 18px;
   display: grid;
   gap: 12px;
@@ -664,6 +811,10 @@ a.button-secondary {
   min-height: 100vh;
   display: grid;
   align-items: center;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(79, 70, 229, 0.07), transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(8, 145, 178, 0.06), transparent 50%),
+    radial-gradient(ellipse at 50% 60%, rgba(109, 40, 217, 0.04), transparent 40%);
 }
 
 .auth-card,
@@ -680,17 +831,24 @@ a.button-secondary {
 
 .auth-card-polished {
   background:
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.05), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.98));
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.1), transparent 40%),
+    radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.07), transparent 30%),
+    radial-gradient(circle at 30% 80%, rgba(109, 40, 217, 0.05), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 251, 255, 0.99));
+  border-color: var(--indigo-border);
+  box-shadow:
+    0 1px 3px rgba(79, 70, 229, 0.06),
+    0 8px 32px rgba(16, 42, 103, 0.05);
 }
 
 .auth-provider-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
-  border: 1px solid var(--line);
+  border: 1px solid var(--indigo-border);
   border-radius: 16px;
-  background: rgba(251, 252, 255, 0.84);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.04), transparent 40%),
+    rgba(251, 252, 255, 0.88);
 }
 
 .auth-provider-panel {
@@ -700,7 +858,8 @@ a.button-secondary {
 }
 
 .auth-provider-panel-notes {
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--indigo-border);
+  background: rgba(79, 70, 229, 0.03);
 }
 
 .auth-provider-list {
@@ -712,12 +871,23 @@ a.button-secondary {
   grid-template-columns: 42px minmax(0, 1fr) 20px;
   gap: 14px;
   align-items: center;
-  padding: 16px 0;
+  padding: 16px 12px;
+  margin: 0 -12px;
+  border-radius: 12px;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-provider-button:hover,
+.auth-provider-button:focus-visible {
+  background: rgba(79, 70, 229, 0.05);
+  box-shadow: 0 0 0 1px var(--indigo-border);
 }
 
 .auth-provider-button:hover .auth-provider-arrow,
 .auth-provider-button:focus-visible .auth-provider-arrow {
-  color: var(--navy);
+  color: var(--indigo);
 }
 
 .auth-provider-button strong,
@@ -738,10 +908,10 @@ a.button-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--indigo-border);
   border-radius: 11px;
-  background: rgba(17, 42, 103, 0.06);
-  color: var(--navy);
+  background: var(--indigo-soft);
+  color: var(--indigo);
 }
 
 .auth-provider-mark,
@@ -776,11 +946,14 @@ a.button-secondary {
 .auth-check-mark {
   width: 32px;
   height: 32px;
+  border-color: var(--teal-border);
+  background: var(--teal-soft);
+  color: var(--teal);
 }
 
 .auth-card-footer {
   padding-top: 18px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--indigo-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -789,6 +962,13 @@ a.button-secondary {
 
 .auth-shell-compact .auth-inline-status {
   width: min(720px, 100%);
+  border-color: var(--teal-border);
+  background:
+    radial-gradient(circle at top right, rgba(8, 145, 178, 0.08), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 253, 255, 0.98));
+  box-shadow:
+    0 1px 3px rgba(8, 145, 178, 0.06),
+    0 8px 32px rgba(16, 42, 103, 0.04);
 }
 
 .auth-status-card {
@@ -797,6 +977,14 @@ a.button-secondary {
 
 .auth-access-request-card {
   width: min(780px, 100%);
+  border-color: var(--violet-border);
+  background:
+    radial-gradient(circle at top left, rgba(109, 40, 217, 0.08), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.05), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(250, 248, 255, 0.99));
+  box-shadow:
+    0 1px 3px rgba(109, 40, 217, 0.06),
+    0 8px 32px rgba(16, 42, 103, 0.04);
 }
 
 .auth-form {
@@ -819,16 +1007,24 @@ a.button-secondary {
   padding: 0.9rem 0.95rem;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   color: var(--ink);
+  transition: border-color 160ms ease, outline 160ms ease, box-shadow 160ms ease;
+}
+
+.auth-input:hover,
+.auth-field input:hover,
+.auth-field select:hover,
+.auth-field textarea:hover {
+  border-color: var(--line-strong);
 }
 
 .auth-input:focus,
 .auth-field input:focus,
 .auth-field select:focus,
 .auth-field textarea:focus {
-  outline: 2px solid rgba(37, 99, 235, 0.18);
-  border-color: rgba(37, 99, 235, 0.42);
+  outline: 2px solid rgba(79, 70, 229, 0.2);
+  border-color: rgba(79, 70, 229, 0.4);
 }
 
 .auth-input:disabled,
@@ -2246,7 +2442,8 @@ a.button-secondary {
   .portal-topbar,
   .portal-status-strip,
   .auth-card-footer,
-  .portal-results-contract-grid {
+  .portal-results-contract-grid,
+  .site-editorial-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
@@ -2281,7 +2478,7 @@ a.button-secondary {
 
   .auth-provider-panel-notes {
     border-left: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--indigo-border);
   }
 
   .site-signal-column {

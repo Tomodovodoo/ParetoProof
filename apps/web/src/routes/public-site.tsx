@@ -1,5 +1,5 @@
 import { AppIcon, type AppIconName } from "../components/app-icon";
-import { buildAuthUrl, buildPublicUrl } from "../lib/surface";
+import { buildAccessRequestUrl, buildAuthUrl, buildPublicUrl } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
 import { Fragment, useEffect, useState } from "react";
 
@@ -9,6 +9,11 @@ const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/
 const projectRoute = "/project";
 const benchmarksRoute = "/benchmarks";
 const reportsRoutePrefix = "/reports/";
+
+function buildDocsUrl(path: string) {
+  const normalizedPath = path.replace(/^\/+/, "");
+  return `${publicDocsBaseUrl}/${normalizedPath}`;
+}
 
 const publicBenchmarks = [
   {
@@ -44,7 +49,7 @@ const publicBenchmarkReports = {
       "Public release for the Problem 9 proof-generation benchmark slice under the current offline run-bundle contract.",
     includedConfigs: "3 configs",
     latestStatus: "mixed",
-    methodologyHref: `${publicDocsBaseUrl}/public-benchmark-reporting-ux-baseline.md`,
+    methodologyHref: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
     qualityNotice:
       "Complete public release for the current disclosed slice. Held-out or internal-only benchmark material remains out of scope for this report.",
     qualityState: "complete",
@@ -90,7 +95,7 @@ const publicBenchmarkReports = {
       "Public pilot release for statement-formalization reporting while the remaining package stays withheld for methodology and verification review.",
     includedConfigs: "2 configs",
     latestStatus: "partial",
-    methodologyHref: `${publicDocsBaseUrl}/public-benchmark-reporting-ux-baseline.md`,
+    methodologyHref: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
     qualityNotice:
       "Partial publication: some intended rows are still withheld while the canonical formal-statement verification policy is finalized.",
     qualityState: "partial",
@@ -125,40 +130,40 @@ const publicBenchmarkReports = {
 
 const publicSignals = [
   {
-    detail: "versioned harness inputs, environment metadata, and comparable outputs",
+    detail: "versioned harness, locked inputs, full environment metadata per run",
     label: "Reproducible runs",
     value: "22"
   },
   {
-    detail: "researchers, mathematicians, and admins see distinct surfaces",
-    label: "Approval model",
-    value: "role aware"
+    detail: "proof generation and statement formalization with public release tracking",
+    label: "Benchmark types",
+    value: "2 active"
   },
   {
-    detail: "API control plane separated from heavier Lean and model execution",
-    label: "Execution split",
-    value: "API / workers"
+    detail: "GPT, Claude, and Gemini families evaluated under identical conditions",
+    label: "Models tested",
+    value: "3 families"
   }
 ];
 
 const publicBands = [
   {
     body:
-      "ParetoProof tracks what actually ran, under which identities, and with which execution contracts instead of publishing one-off benchmark claims.",
-    eyebrow: "Benchmark ledger",
-    title: "Evidence before hype"
+      "Every benchmark run is tied to a versioned harness, locked inputs, and full environment metadata — so results are comparable across time and models.",
+    eyebrow: "Reproducibility",
+    title: "Every run is verifiable"
   },
   {
     body:
-      "Contributor approval, identity linking, and recovery are product surfaces. They do not live in a side spreadsheet bolted onto auth.",
-    eyebrow: "Access model",
-    title: "Operational trust"
+      "Results ship with methodology docs, scope notes, and data-quality flags instead of a single headline number. Partial publication is labeled, not hidden.",
+    eyebrow: "Transparency",
+    title: "No hidden conditions"
   },
   {
     body:
-      "Cloudflare owns entry, Railway owns the control plane, Neon owns structured state, and workers stay separate from the public backend.",
-    eyebrow: "Hosting posture",
-    title: "Control-plane split"
+      "Coming soon: fully containerized Docker images where you can replay any benchmark run, bring your own API keys, and verify results independently.",
+    eyebrow: "Coming soon",
+    title: "Reproducible Docker replay"
   }
 ];
 
@@ -180,33 +185,25 @@ const packCoverage = [
   }
 ];
 
-const projectOverviewCards: Array<{
-  body: string;
-  icon: AppIconName;
-  title: string;
-}> = [
+const projectOverviewPoints = [
   {
     body:
       "ParetoProof measures what frontier systems can do on formal mathematical tasks under reproducible benchmark and execution conditions.",
-    icon: "compass",
     title: "What it is"
   },
   {
     body:
       "The public site explains released work, the auth surface handles sign-in, and the portal holds contributor and admin workflows.",
-    icon: "grid",
     title: "How the surfaces split"
   },
   {
     body:
       "Released results are tied to benchmark packages, environment details, and explicit auth or approval boundaries instead of marketing claims.",
-    icon: "shield",
     title: "Why trust matters"
   },
   {
     body:
       "The project is still an active MVP build-out. It is not an open compute playground or a finished self-serve research platform yet.",
-    icon: "spark",
     title: "Current posture"
   }
 ];
@@ -214,39 +211,45 @@ const projectOverviewCards: Array<{
 const contributorSteps: Array<{
   body: string;
   icon: AppIconName;
+  kicker: string;
   title: string;
 }> = [
   {
     body:
       "Start with the project pack, benchmark reporting, and update surfaces so you understand the current product boundary before requesting access.",
     icon: "compass",
+    kicker: "Step 1",
     title: "Understand the project"
   },
   {
     body:
-      "Use the branded sign-in entry. GitHub and Google remain the supported human providers for reaching the portal flow.",
+      "Approved contributors use the dedicated sign-in entry. GitHub and Google remain the supported human providers for reaching the portal flow.",
     icon: "key",
-    title: "Sign in cleanly"
+    kicker: "Step 2",
+    title: "Approved sign-in"
   },
   {
     body:
-      "Approval is manual and role-aware. The MVP does not promise open enrollment, public run launch for every account, or automated invitations.",
+      "New collaborators start with a separate access-request entry that verifies identity first, then lands them on the request form for manual review.",
     icon: "users",
-    title: "Request or recover access"
+    kicker: "Step 3",
+    title: "Request access separately"
   },
   {
     body:
       "Approved work happens inside the portal, where profile, access, admin review, and future benchmark operations belong.",
     icon: "server",
+    kicker: "Step 4",
     title: "Do the work in portal"
   }
 ];
 
-const contactCards: Array<{
+const contactRoutes: Array<{
   body: string;
   external?: boolean;
-  href?: string;
+  href: string;
   icon: AppIconName;
+  label: string;
   title: string;
 }> = [
   {
@@ -255,20 +258,24 @@ const contactCards: Array<{
     external: true,
     href: githubDiscussionsUrl,
     icon: "github",
+    label: "Open discussions",
     title: "GitHub Discussions"
   },
   {
     body:
-      "If the problem is reaching the portal or understanding which auth path to use, go through the sign-in and recovery flow instead of posting account details publicly.",
+      "Approved contributors should use the branded sign-in entry rather than trying to solve account state through public threads.",
     href: buildAuthUrl("/"),
     icon: "key",
-    title: "Access and recovery stay in auth"
+    label: "Approved sign in",
+    title: "Sign-in stays on auth"
   },
   {
     body:
-      "Do not post secrets, personal recovery details, or anything that needs confidential handling. The public site does not publish a support mailbox or private intake form in MVP.",
-    icon: "shield",
-    title: "Keep sensitive details out of public threads"
+      "First-time collaborators should verify identity and start from the dedicated access-request path instead of the portal sign-in route.",
+    href: buildAccessRequestUrl(),
+    icon: "users",
+    label: "Request access",
+    title: "New collaborators use a separate intake"
   }
 ];
 
@@ -277,30 +284,34 @@ const projectResources: Array<{
   external?: boolean;
   href: string;
   icon: AppIconName;
+  label: string;
   title: string;
 }> = [
   {
     body:
       "Read how public benchmark releases should be presented without turning the site into an analyst console.",
     external: true,
-    href: `${publicDocsBaseUrl}/public-benchmark-reporting-ux-baseline.md`,
+    href: buildDocsUrl("product/public-benchmark-reporting-ux-baseline.md"),
     icon: "flask",
+    label: "Open reporting baseline",
     title: "Benchmark reporting"
   },
   {
     body:
       "See how canonical updates and release notes should land on the public surface as the project matures.",
     external: true,
-    href: `${publicDocsBaseUrl}/release-notes-and-updates-baseline.md`,
+    href: buildDocsUrl("product/release-notes-and-updates-baseline.md"),
     icon: "spark",
+    label: "Open updates baseline",
     title: "Updates and release notes"
   },
   {
     body:
       "Follow the working methodology and architecture docs while the product surface is still being built out in public.",
     external: true,
-    href: `${publicDocsBaseUrl}/README.md`,
+    href: buildDocsUrl("README.md"),
     icon: "server",
+    label: "Open docs index",
     title: "Working docs"
   }
 ];
@@ -412,6 +423,9 @@ function PublicHeader({
           >
             Benchmarks
           </a>
+          <a className="site-nav-link" href={buildDocsUrl("README.md")} rel="noreferrer" target="_blank">
+            Docs
+          </a>
         </nav>
 
         <div className="site-header-actions">
@@ -459,8 +473,14 @@ function PublicHeader({
           <a className="site-mobile-nav-link" href={githubDiscussionsUrl} rel="noreferrer" target="_blank">
             GitHub Discussions
           </a>
+          <a className="site-mobile-nav-link" href={buildDocsUrl("README.md")} rel="noreferrer" target="_blank">
+            Docs
+          </a>
           <a className="button site-mobile-nav-cta" href={buildAuthUrl("/")}>
-            Contributor sign in
+            Approved sign in
+          </a>
+          <a className="button button-secondary site-mobile-nav-cta" href={buildAccessRequestUrl()}>
+            Request access
           </a>
         </nav>
       ) : null}
@@ -473,13 +493,11 @@ function PublicFooter({ isProjectRoute }: { isProjectRoute: boolean }) {
     <footer className="site-footer" aria-label="Project entry points">
       <div className="site-footer-grid">
         <section className="site-footer-panel">
-          <p className="section-tag">Project route</p>
-          <h2>One public entry, three anchored sections.</h2>
-          <p>
-            The public site exposes one consolidated `Project` destination, then routes
-            readers into the exact section they need.
-          </p>
+          <h2>Explore</h2>
           <div className="site-footer-links">
+            <a className="site-footer-link" href={buildPublicUrl(benchmarksRoute)}>
+              Benchmarks
+            </a>
             {footerProjectLinks.map((link) => (
               <a
                 className="site-footer-link"
@@ -489,30 +507,28 @@ function PublicFooter({ isProjectRoute }: { isProjectRoute: boolean }) {
                 {link.label}
               </a>
             ))}
+            <a
+              className="site-footer-link"
+              href={buildDocsUrl("README.md")}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Docs
+            </a>
           </div>
         </section>
 
         <section className="site-footer-panel">
-          <p className="section-tag">Public routing</p>
-          <h2>Keep discoverability on the apex surface.</h2>
-          <p>
-            Contributor sign-in still routes into auth, public questions still route to
-            GitHub Discussions, and the apex site keeps the project explanation in one place.
-          </p>
+          <h2>Contribute</h2>
           <div className="site-footer-links">
             <a className="site-footer-link" href={buildAuthUrl("/")}>
-              Contributor sign in
+              Sign in
+            </a>
+            <a className="site-footer-link" href={buildAccessRequestUrl()}>
+              Request access
             </a>
             <a className="site-footer-link" href={githubDiscussionsUrl} rel="noreferrer" target="_blank">
               GitHub Discussions
-            </a>
-            <a
-              className="site-footer-link"
-              href={`${publicDocsBaseUrl}/README.md`}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Working docs
             </a>
           </div>
         </section>
@@ -576,16 +592,6 @@ function PublicLanding() {
 
   const signalsSupport = showInFlowSignals ? (
     <section className="site-project-section site-home-signals-support">
-      <div className="site-section-copy">
-        <p className="section-tag">Project signals</p>
-        <h2>Project signal cues stay available after the summary bands.</h2>
-        <p className="site-lead">
-          The support metrics still explain reproducibility, approval posture, and the
-          API-versus-worker split without pushing the actual project summary below the first
-          mobile viewport.
-        </p>
-      </div>
-
       <div className="site-card-grid">
         {publicSignals.map((signal) => (
           <article className="site-panel-card" key={signal.label}>
@@ -614,18 +620,18 @@ function PublicLanding() {
             </span>
             Formal math evaluation
           </p>
-          <h1>Measure frontier reasoning with reproducible proof workflows.</h1>
+          <h1>Reproducible benchmarks for frontier math reasoning.</h1>
           <p className="site-lead">
-            ParetoProof exists to answer what frontier systems can actually do on formal
-            mathematical tasks without hiding the auth, approval, or execution conditions
-            that make the result trustworthy.
+            ParetoProof measures what frontier AI systems can actually do on formal
+            mathematical tasks — with fully reproducible execution, transparent methodology,
+            and results you can verify yourself via containerized replay.
           </p>
           <div className="hero-actions">
-            <a className="button" href={buildPublicUrl("/project")}>
-              Open the project pack
+            <a className="button" href={buildPublicUrl(benchmarksRoute)}>
+              View benchmarks
             </a>
-            <a className="button button-secondary" href={buildAuthUrl("/")}>
-              Contributor sign in
+            <a className="button button-secondary" href={buildPublicUrl(projectRoute)}>
+              About the project
             </a>
           </div>
         </div>
@@ -664,9 +670,7 @@ function PublicLanding() {
 function PublicBenchmarkIndex() {
   const isCompactLayout = useCompactLayout(480);
   const showInFlowSummary = useCompactLayout(640);
-  const benchmarkIndexLead = showInFlowSummary
-    ? "The benchmark index shows which slices are public, which release is current, and whether publication is complete, partial, or withheld."
-    : "The benchmark index is release-oriented, not run-oriented. It shows which benchmark slices are public, which release is current, and whether the visible numbers are complete, partial, or historically superseded.";
+  const benchmarkIndexLead = "Browse released benchmark slices, see which models were tested, and open detailed release summaries with methodology and results.";
   const benchmarkIndexSummaryCards: PublicBenchmarkSummaryCard[] = [
     {
       detail: "Public benchmark release summaries listed on the apex site.",
@@ -738,14 +742,6 @@ function PublicBenchmarkIndex() {
 
   const summarySupport = showInFlowSummary ? (
     <section className="site-project-section site-benchmark-index-summary-support">
-      <div className="site-section-copy">
-        <p className="section-tag">Index support</p>
-        <h2>Benchmark status cues stay available after the released slices.</h2>
-        <p className="site-lead">
-          The support summary still explains coverage, release posture, and data-quality framing
-          without displacing the actual benchmark entries from the first mobile viewport.
-        </p>
-      </div>
       <PublicBenchmarkSummary
         ariaLabel="Benchmark index summary"
         cards={benchmarkIndexSummaryCards}
@@ -770,7 +766,7 @@ function PublicBenchmarkIndex() {
             </span>
             Public benchmark releases
           </p>
-          <h1>Read the current public benchmark slices without dropping into portal internals.</h1>
+          <h1>Public benchmark releases.</h1>
           <p className="site-lead">{benchmarkIndexLead}</p>
           <div className="hero-actions">
             <a className="button" href={buildBenchmarkReportUrl(publicBenchmarks[0].benchmarkVersionId)}>
@@ -925,10 +921,9 @@ function PublicBenchmarkReport({
       <section className="site-project-section" aria-label="Public results table">
         <div className="site-section-copy">
           <p className="section-tag">Primary public results</p>
-          <h2>One release table, presented as calm mobile-safe rows.</h2>
+          <h2>Results by model</h2>
           <p className="site-lead">
-            Public reporting keeps one visible results surface per release. It distinguishes
-            benchmark outcome from data quality instead of collapsing everything into one badge.
+            Each model family is evaluated under identical benchmark conditions.
           </p>
         </div>
 
@@ -992,49 +987,46 @@ function PublicProjectPack() {
     <article className="site-project-section" id="overview">
       <div className="site-section-copy">
         <p className="section-tag">Project overview</p>
-        <h2>Explain the product without duplicating the whole methodology archive.</h2>
+        <h2>What is ParetoProof?</h2>
         <p className="site-lead">
-          The public site should state the product purpose, the trust boundary, and the
-          surface split clearly, then route readers outward to the deeper benchmark and
-          methodology material instead of burying them in one giant wall of copy.
+          A reproducible benchmark platform for evaluating frontier AI systems on formal
+          mathematical tasks — with transparent methodology and verifiable results.
         </p>
       </div>
 
-      <div className="site-card-grid">
-        {projectOverviewCards.map((card) => (
-          <article className="site-panel-card" key={card.title}>
-            <span className="site-panel-mark" aria-hidden="true">
-              <AppIcon name={card.icon} />
-            </span>
-            <div className="site-panel-copy">
-              <h3>{card.title}</h3>
-              <p>{card.body}</p>
-            </div>
-          </article>
-        ))}
+      <div className="site-editorial-grid">
+        <div className="site-editorial-copy">
+          <p>
+            ParetoProof is a benchmark platform first, not a generic AI showcase. The public
+            site should explain the mission, make the trust boundary obvious, and point
+            people toward the right next step without turning every idea into its own page.
+          </p>
+          <p>
+            That means one coherent public project route, one benchmark route, and one docs
+            index. Everything else should either live in the portal or stay in implementation
+            docs until it becomes a real user-facing surface.
+          </p>
+        </div>
+        <div className="site-topic-list" aria-label="Project overview points">
+          {projectOverviewPoints.map((point) => (
+            <article className="site-topic-item" key={point.title}>
+              <h3>{point.title}</h3>
+              <p>{point.body}</p>
+            </article>
+          ))}
+        </div>
       </div>
     </article>
   );
 
   const coverageSupport = showInFlowCoverage ? (
     <article className="site-project-section site-project-pack-coverage-support">
-      <div className="site-section-copy">
-        <p className="section-tag">Project pack coverage</p>
-        <h2>Coverage cues stay available after the actual project overview.</h2>
-        <p className="site-lead">
-          The support summary still spells out the three route responsibilities without
-          displacing the anchored overview section from the first mobile viewport.
-        </p>
-      </div>
-
-      <div className="site-card-grid">
+      <div className="site-topic-list site-topic-list-compact">
         {packCoverage.map((item) => (
-          <article className="site-panel-card" key={item.label}>
-            <div className="site-panel-copy">
-              <p className="section-tag">{item.value}</p>
-              <h3>{item.label}</h3>
-              <p>{item.detail}</p>
-            </div>
+          <article className="site-topic-item" key={item.label}>
+            <p className="section-tag">{item.value}</p>
+            <h3>{item.label}</h3>
+            <p>{item.detail}</p>
           </article>
         ))}
       </div>
@@ -1045,19 +1037,20 @@ function PublicProjectPack() {
     <article className="site-project-section" id="contributors">
       <div className="site-section-copy">
         <p className="section-tag">Contributor path</p>
-        <h2>Move serious contributors into auth and portal work without promising open enrollment.</h2>
+        <h2>How to contribute</h2>
         <p className="site-lead">
-          ParetoProof is not using the public site as a broad volunteer funnel. The
-          contributor path explains how technical contributors enter the branded auth
-          flow, how approval stays manual, and where actual work happens once someone is
-          inside.
+          Contributors go through a manual approval process. Once approved, all work
+          happens inside the portal.
         </p>
       </div>
 
       {isCompactLayout ? (
         <div className="hero-actions">
           <a className="button" href={buildAuthUrl("/")}>
-            Start contributor sign in
+            Approved contributor sign in
+          </a>
+          <a className="button button-secondary" href={buildAccessRequestUrl()}>
+            Request collaborator access
           </a>
           <a className="button button-secondary" href={githubDiscussionsUrl}>
             Ask a public question first
@@ -1065,12 +1058,15 @@ function PublicProjectPack() {
         </div>
       ) : null}
 
-      <div className="site-card-grid">
+      <div className="site-step-grid">
         {contributorSteps.map((step) => (
-          <article className="site-panel-card" key={step.title}>
-            <span className="site-panel-mark" aria-hidden="true">
-              <AppIcon name={step.icon} />
-            </span>
+          <article className="site-step-card" key={step.title}>
+            <div className="site-step-head">
+              <span className="site-panel-mark" aria-hidden="true">
+                <AppIcon name={step.icon} />
+              </span>
+              <p className="section-tag">{step.kicker}</p>
+            </div>
             <div className="site-panel-copy">
               <h3>{step.title}</h3>
               <p>{step.body}</p>
@@ -1082,7 +1078,10 @@ function PublicProjectPack() {
       {!isCompactLayout ? (
         <div className="hero-actions">
           <a className="button" href={buildAuthUrl("/")}>
-            Start contributor sign in
+            Approved contributor sign in
+          </a>
+          <a className="button button-secondary" href={buildAccessRequestUrl()}>
+            Request collaborator access
           </a>
           <a className="button button-secondary" href={githubDiscussionsUrl}>
             Ask a public question first
@@ -1096,48 +1095,40 @@ function PublicProjectPack() {
     <article className="site-project-section" id="contact">
       <div className="site-section-copy">
         <p className="section-tag">Contact rules</p>
-        <h2>Keep public contact narrow, manual, and honest.</h2>
+        <h2>Get in touch</h2>
         <p className="site-lead">
-          The MVP public contact entry is GitHub Discussions. Access and recovery stay in
-          the sign-in or portal flow, and the site should never invite people to post
-          secrets or sensitive account details in public.
+          Public questions go to GitHub Discussions. Access requests and account recovery
+          are handled through the auth surface.
         </p>
       </div>
 
-      <div className="site-card-grid">
-        {contactCards.map((card) => {
-          const content = (
-            <>
-              <span className="site-panel-mark" aria-hidden="true">
-                <AppIcon name={card.icon} />
-              </span>
-              <div className="site-panel-copy">
-                <h3>{card.title}</h3>
-                <p>{card.body}</p>
-              </div>
-            </>
-          );
+      <div className="site-link-list">
+        {contactRoutes.map((route) => (
+          <a
+            className="site-link-row"
+            href={route.href}
+            key={route.title}
+            rel={route.external ? "noreferrer" : undefined}
+            target={route.external ? "_blank" : undefined}
+          >
+            <span className="site-panel-mark" aria-hidden="true">
+              <AppIcon name={route.icon} />
+            </span>
+            <div className="site-link-row-copy">
+              <p className="section-tag">{route.label}</p>
+              <h3>{route.title}</h3>
+              <p>{route.body}</p>
+            </div>
+          </a>
+        ))}
+      </div>
 
-          if (!card.href) {
-            return (
-              <article className="site-panel-card" key={card.title}>
-                {content}
-              </article>
-            );
-          }
-
-          return (
-            <a
-              className="site-panel-card site-panel-card-link"
-              href={card.href}
-              key={card.title}
-              rel={card.external ? "noreferrer" : undefined}
-              target={card.external ? "_blank" : undefined}
-            >
-              {content}
-            </a>
-          );
-        })}
+      <div className="site-inline-note">
+        <p>
+          Do not post secrets, recovery details, or private approval context in public
+          threads. MVP does not expose a support mailbox or private contact form from the
+          public website.
+        </p>
       </div>
     </article>
   );
@@ -1146,18 +1137,16 @@ function PublicProjectPack() {
     <article className="site-project-section">
       <div className="site-section-copy">
         <p className="section-tag">Working surfaces</p>
-        <h2>Route outward to the benchmark, update, and methodology material that already exists.</h2>
+        <h2>Resources</h2>
         <p className="site-lead">
-          The project pack should not try to restate every benchmark, release, or policy
-          detail inline. It should send readers to the current working sources that
-          explain those slices more deeply.
+          Methodology docs, release notes, and working documentation.
         </p>
       </div>
 
-      <div className="site-card-grid">
+      <div className="site-link-list">
         {projectResources.map((resource) => (
           <a
-            className="site-panel-card site-panel-card-link"
+            className="site-link-row"
             href={resource.href}
             key={resource.title}
             rel={resource.external ? "noreferrer" : undefined}
@@ -1166,7 +1155,8 @@ function PublicProjectPack() {
             <span className="site-panel-mark" aria-hidden="true">
               <AppIcon name={resource.icon} />
             </span>
-            <div className="site-panel-copy">
+            <div className="site-link-row-copy">
+              <p className="section-tag">{resource.label}</p>
               <h3>{resource.title}</h3>
               <p>{resource.body}</p>
             </div>
@@ -1192,11 +1182,10 @@ function PublicProjectPack() {
             </span>
             Project pack
           </p>
-          <h1>One public pack for project context, contributor entry, and contact rules.</h1>
+          <h1>About ParetoProof.</h1>
           <p className="site-lead">
-            This route family is the apex-owned answer to three questions: what ParetoProof
-            is, how a contributor actually gets into the portal flow, and where public
-            questions go without pretending the MVP already has a support desk.
+            What the project is, how contributors get involved, and where to direct
+            questions — all in one place.
           </p>
 
           <div className="site-pill-row" aria-label="Project pack sections">
