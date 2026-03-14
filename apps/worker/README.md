@@ -29,6 +29,19 @@ Runtime env guidance:
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
 - the checked-in `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
 
+CLI contract:
+
+- `0`: success or `--help`
+- `2`: validation, unsupported-mode, usage, or local setup failures; non-ingest commands print `Validation error: ...` to stderr, while offline-ingest keeps its machine-readable rejected JSON on stderr for `setup_failure` and `local_validation`
+- `3`: runtime or remote failures after command setup; non-ingest commands print `Runtime error: ...` to stderr, while offline-ingest keeps its machine-readable rejected JSON on stderr for `remote_rejection`
+- `1`: unexpected internal failures; commands print `Internal error: ...` to stderr so the failure is still distinguishable from operator mistakes
+- use `bun --cwd apps/worker test:cli-contract` or the root alias `bun run test:worker:cli-contract` to verify the contract on representative command-entry paths
+- success JSON remains on stdout and pins the durable artifact/result locations:
+  - materializers print `outputRoot`
+  - `run-problem9-attempt` prints the emitted run-bundle `outputRoot`
+  - `run-worker-claim-loop` prints the overall loop summary while per-job outputs live under `<output-root>/<job-id>/`
+  - offline-ingest accepted output prints `bundleRoot` plus the target `endpoint`
+
 Package materialization:
 
 - use `bun --cwd apps/worker materialize:problem9-package -- --output <directory>` to

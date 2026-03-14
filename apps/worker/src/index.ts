@@ -1,6 +1,7 @@
 import { runProblem9AttemptCli } from "./lib/problem9-attempt-cli.js";
 import { runProblem9OfflineIngestCli } from "./lib/problem9-offline-ingest-cli.js";
 import { runProblem9AttemptInDevboxCli } from "./lib/problem9-attempt-devbox-cli.js";
+import { reportWorkerCliError, workerCliExitCodes } from "./lib/cli-contract.js";
 import { runProblem9PackageCli } from "./lib/problem9-package-cli.js";
 import { runProblem9PromptPackageCli } from "./lib/problem9-prompt-package-cli.js";
 import { runProblem9RunBundleCli } from "./lib/problem9-run-bundle-cli.js";
@@ -24,50 +25,29 @@ const showWorkerUsage = () => {
 
 if (!command || command === "--help") {
   showWorkerUsage();
-  process.exitCode = command === "--help" ? 0 : 1;
+  process.exitCode =
+    command === "--help" ? workerCliExitCodes.success : workerCliExitCodes.validation;
 } else if (command === "materialize-problem9-package") {
-  void runProblem9PackageCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9PackageCli, args);
 } else if (command === "materialize-problem9-prompt-package") {
-  void runProblem9PromptPackageCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9PromptPackageCli, args);
 } else if (command === "materialize-problem9-run-bundle") {
-  void runProblem9RunBundleCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9RunBundleCli, args);
 } else if (command === "run-problem9-attempt") {
-  void runProblem9AttemptCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9AttemptCli, args);
 } else if (command === "run-problem9-attempt-in-devbox") {
-  void runProblem9AttemptInDevboxCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9AttemptInDevboxCli, args);
 } else if (command === "ingest-problem9-run-bundle") {
-  void runProblem9OfflineIngestCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runProblem9OfflineIngestCli, args);
 } else if (command === "run-worker-claim-loop") {
-  void runWorkerClaimLoopCli(args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exitCode = 1;
-  });
+  void runWorkerCliCommand(runWorkerClaimLoopCli, args);
 } else {
-  console.error(`Unknown worker command: ${command}`);
-  process.exitCode = 1;
+  process.exitCode = reportWorkerCliError(new Error(`Unknown worker command: ${command}`));
+  showWorkerUsage();
+}
+
+function runWorkerCliCommand(handler: (args: string[]) => Promise<void>, args: string[]) {
+  return handler(args).catch((error: unknown) => {
+    process.exitCode = reportWorkerCliError(error);
+  });
 }

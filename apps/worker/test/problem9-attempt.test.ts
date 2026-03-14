@@ -95,11 +95,11 @@ test("run-problem9-attempt rejects unsupported auth-mode values at the CLI bound
     }
   );
 
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 2);
   assert.match(
     result.stderr,
     new RegExp(
-      `Unsupported --auth-mode value "trusted_local_usr"\\. Expected one of: ${problem9AuthModes.join(", ")}\\.`
+      `^Validation error: Unsupported --auth-mode value "trusted_local_usr"\\. Expected one of: ${problem9AuthModes.join(", ")}\\.\r?\n$`
     )
   );
   assert.equal(result.stdout, "");
