@@ -446,6 +446,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   return (
     <main
       className={`portal-shell${
+        navigationCollapsed ? " portal-shell-collapsed" : ""
+      }${
         overviewRouteActive ? " portal-shell-overview-active" : ""
       }${
         activeSection?.id === "profile" ? " portal-shell-profile-active" : ""
@@ -535,17 +537,11 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
       <section className="portal-main">
         <header className="portal-topbar">
-          <div>
-            <p className="eyebrow">
-              <span className="inline-icon" aria-hidden="true">
-                <AppIcon name="grid" />
-              </span>
-              Authenticated portal
-            </p>
+          <div className="portal-topbar-left">
             <h1>{activeSection?.navLabel ?? "Portal"}</h1>
-            <p className="portal-topbar-copy">
+            <span className="portal-topbar-breadcrumb">
               {activeSection?.description ?? "Contributor and benchmark control surface."}
-            </p>
+            </span>
           </div>
           <div className="portal-identity">
             <span className="role-chip">{email ?? "Signed in"}</span>
@@ -556,15 +552,6 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             ))}
           </div>
         </header>
-
-        <section className="portal-status-strip">
-          <p className="portal-status-copy">
-            {activeSection ? portalSectionBodyCopy[activeSection.id] : ""}
-          </p>
-          <span className="role-chip role-chip-tonal">
-            {approvedRoles.join(" / ") || "authenticated"}
-          </span>
-        </section>
 
         {activeSection?.id === "overview" ? (
           <>
