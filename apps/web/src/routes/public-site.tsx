@@ -765,6 +765,8 @@ function PublicBenchmarkReport({
 }
 
 function PublicProjectPack() {
+  const isCompactLayout = useCompactLayout(480);
+
   useEffect(() => {
     function scrollProjectHashIntoView() {
       if (!window.location.hash) {
@@ -877,6 +879,17 @@ function PublicProjectPack() {
             </p>
           </div>
 
+          {isCompactLayout ? (
+            <div className="hero-actions">
+              <a className="button" href={buildAuthUrl("/")}>
+                Start contributor sign in
+              </a>
+              <a className="button button-secondary" href={githubDiscussionsUrl}>
+                Ask a public question first
+              </a>
+            </div>
+          ) : null}
+
           <div className="site-card-grid">
             {contributorSteps.map((step) => (
               <article className="site-panel-card" key={step.title}>
@@ -891,14 +904,16 @@ function PublicProjectPack() {
             ))}
           </div>
 
-          <div className="hero-actions">
-            <a className="button" href={buildAuthUrl("/")}>
-              Start contributor sign in
-            </a>
-            <a className="button button-secondary" href={githubDiscussionsUrl}>
-              Ask a public question first
-            </a>
-          </div>
+          {!isCompactLayout ? (
+            <div className="hero-actions">
+              <a className="button" href={buildAuthUrl("/")}>
+                Start contributor sign in
+              </a>
+              <a className="button button-secondary" href={githubDiscussionsUrl}>
+                Ask a public question first
+              </a>
+            </div>
+          ) : null}
         </article>
 
         <article className="site-project-section" id="contact">
