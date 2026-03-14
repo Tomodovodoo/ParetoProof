@@ -1826,6 +1826,15 @@ a.button-secondary {
     border-radius: 0;
   }
 
+  .portal-grid-admin-workspace .portal-admin-list-panel {
+    padding-top: 8px;
+    gap: 8px;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .portal-metric-cell + .portal-metric-cell {
     border-left: 0;
     border-top: 1px solid var(--line);
@@ -1912,6 +1921,10 @@ a.button-secondary {
   .site-project-shell .site-pill-link {
     min-height: 2rem;
     padding-block: 0.42rem;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-filter-grid {
+    grid-template-columns: 1fr;
   }
 
   .portal-sidebar-collapsed .portal-nav {
