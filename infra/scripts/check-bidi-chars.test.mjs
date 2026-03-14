@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { formatOffender, scanTrackedFiles } from "./check-bidi-chars.mjs";
+import { findForbiddenCodePoints, formatOffender, scanTrackedFiles } from "./check-bidi-chars.mjs";
 
 const fixturesRoot = resolve(fileURLToPath(new URL("./fixtures/check-bidi-chars", import.meta.url)));
 const allowedFixtures = JSON.parse(readFileSync(resolve(fixturesRoot, "allowed.json"), "utf8"));
@@ -94,4 +94,8 @@ test("CLI exits nonzero for a tracked file with GitHub warning-class hidden Unic
   } finally {
     disposeTempRepo(repoRoot);
   }
+});
+
+test("findForbiddenCodePoints detects the BOM GitHub warns about in issue and PR bodies", () => {
+  assert.deepEqual(findForbiddenCodePoints("\uFEFF## Summary"), [0xFEFF]);
 });
