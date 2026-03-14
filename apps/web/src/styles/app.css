@@ -1889,6 +1889,31 @@ a.button-secondary {
     font-size: clamp(2rem, 10vw, 3rem);
   }
 
+  .site-project-shell .site-header {
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+
+  .site-project-shell .site-header-main,
+  .site-project-shell .site-header-actions,
+  .site-project-shell .site-hero-copy {
+    gap: 10px;
+  }
+
+  .site-project-shell .site-hero {
+    gap: 18px;
+    padding-top: 16px;
+  }
+
+  .site-project-shell .site-pill-row {
+    gap: 8px;
+  }
+
+  .site-project-shell .site-pill-link {
+    min-height: 2rem;
+    padding-block: 0.42rem;
+  }
+
   .portal-sidebar-collapsed .portal-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
