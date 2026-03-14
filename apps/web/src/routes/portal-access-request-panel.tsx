@@ -17,6 +17,7 @@ import {
 } from "../lib/portal-admin";
 import { usePortalPolling } from "../lib/portal-freshness";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalAccessRequestPanelProps = {
   email: string | null;
@@ -75,6 +76,7 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
   const [requests, setRequests] = useState<PortalAdminAccessRequestListItem[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const isCompactLayout = useCompactLayout();
   const {
     isPolling,
     lastUpdatedAt,
@@ -341,235 +343,250 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
     );
   }
 
-  return (
-    <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
-      <article className="portal-panel">
-        <p className="section-tag">Admin requests</p>
-        <h2>Request review stays anchored to one queue and one detail pane.</h2>
-        <p>
-          Signed in{email ? ` as ${email}` : ""}. Review access requests and recovery
-          requests here, keep the request object explicit, and surface visible notes for
-          every decision.
-        </p>
-        <PortalFreshnessCard
-          isRefreshing={isPolling || isDetailLoading || isMutatingId !== null}
-          lastUpdatedAt={lastUpdatedAt}
-          onRefresh={() => {
-            void pollNow().catch(() => {
-              setErrorMessage("The admin request queue could not be refreshed.");
-            });
+  const introPanel = (
+    <article className="portal-panel">
+      <p className="section-tag">Admin requests</p>
+      <h2>Request review stays anchored to one queue and one detail pane.</h2>
+      <p>
+        Signed in{email ? ` as ${email}` : ""}. Review access requests and recovery
+        requests here, keep the request object explicit, and surface visible notes for
+        every decision.
+      </p>
+      <PortalFreshnessCard
+        isRefreshing={isPolling || isDetailLoading || isMutatingId !== null}
+        lastUpdatedAt={lastUpdatedAt}
+        onRefresh={() => {
+          void pollNow().catch(() => {
+            setErrorMessage("The admin request queue could not be refreshed.");
+          });
+        }}
+        routeId="portal.admin.access-requests"
+      />
+      {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
+    </article>
+  );
+
+  const filterFields = (
+    <div className="portal-admin-filter-grid">
+      <label className="auth-field">
+        <span>Status</span>
+        <select
+          onChange={(event) => {
+            const value = event.currentTarget.value as RequestFilterState["status"];
+            setFilters((current) => ({
+              ...current,
+              status: value
+            }));
           }}
-          routeId="portal.admin.access-requests"
-        />
-        {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
+          value={filters.status}
+        >
+          <option value="all">All statuses</option>
+          <option value="pending">Pending first</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </label>
+      <label className="auth-field">
+        <span>Request kind</span>
+        <select
+          onChange={(event) => {
+            const value = event.currentTarget.value as RequestFilterState["requestKind"];
+            setFilters((current) => ({
+              ...current,
+              requestKind: value
+            }));
+          }}
+          value={filters.requestKind}
+        >
+          <option value="all">All kinds</option>
+          <option value="access_request">Access requests</option>
+          <option value="identity_recovery">Recovery requests</option>
+        </select>
+      </label>
+      <label className="auth-field">
+        <span>Requested role</span>
+        <select
+          onChange={(event) => {
+            const value = event.currentTarget.value as RequestFilterState["requestedRole"];
+            setFilters((current) => ({
+              ...current,
+              requestedRole: value
+            }));
+          }}
+          value={filters.requestedRole}
+        >
+          <option value="all">Any role</option>
+          <option value="collaborator">Collaborator</option>
+          <option value="helper">Helper</option>
+        </select>
+      </label>
+      <label className="auth-field">
+        <span>Reviewer state</span>
+        <select
+          onChange={(event) => {
+            const value = event.currentTarget.value as RequestFilterState["reviewerState"];
+            setFilters((current) => ({
+              ...current,
+              reviewerState: value
+            }));
+          }}
+          value={filters.reviewerState}
+        >
+          <option value="all">Reviewed and unreviewed</option>
+          <option value="unreviewed">Unreviewed</option>
+          <option value="reviewed">Reviewed</option>
+        </select>
+      </label>
+      <label className="auth-field">
+        <span>Sort</span>
+        <select
+          onChange={(event) => {
+            const value = event.currentTarget.value as RequestFilterState["sortOrder"];
+            setFilters((current) => ({
+              ...current,
+              sortOrder: value
+            }));
+          }}
+          value={filters.sortOrder}
+        >
+          <option value="oldest">Oldest submitted</option>
+          <option value="newest">Newest submitted</option>
+          <option value="recently_reviewed">Recently reviewed</option>
+        </select>
+      </label>
+    </div>
+  );
+
+  const queueContent =
+    filteredRequests.length === 0 ? (
+      <div className="portal-admin-empty-state">
+        <p className="section-tag">Empty state</p>
+        <h2>No requests match the current slice.</h2>
+        <p>Change the filters to bring back recently reviewed or different request kinds.</p>
+      </div>
+    ) : (
+      <div className="portal-admin-record-list">
+        {filteredRequests.map((requestItem) => {
+          const isSelected = requestItem.id === selectedRequestId;
+
+          return (
+            <button
+              className={`portal-admin-record${isSelected ? " portal-admin-record-active" : ""}`}
+              key={requestItem.id}
+              onClick={() => {
+                setSelectedRequestId(requestItem.id);
+              }}
+              type="button"
+            >
+              <div className="portal-admin-record-header">
+                <strong>{requestItem.email}</strong>
+                <span
+                  className={`portal-state-badge portal-admin-status-${requestItem.status}`}
+                >
+                  {formatRequestStatusLabel(requestItem.status)}
+                </span>
+              </div>
+              <p className="portal-panel-muted">
+                {requestItem.requestKind === "identity_recovery"
+                  ? `Identity recovery - preserve ${requestItem.requestedRole}`
+                  : `Access request - ${requestItem.requestedRole}`}
+              </p>
+              <div className="portal-admin-meta-row">
+                <span>Submitted {formatDateTime(requestItem.createdAt)}</span>
+                <span>
+                  {requestItem.reviewer
+                    ? `Reviewed by ${requestItem.reviewer.label}`
+                    : "Awaiting reviewer"}
+                </span>
+              </div>
+              <div className="portal-filter-chip-row">
+                {requestItem.matchedUserPosture ? (
+                  <span className="role-chip role-chip-muted">
+                    {formatAccessPostureLabel(
+                      requestItem.matchedUserPosture.accessPosture
+                    )}
+                  </span>
+                ) : null}
+                {requestItem.matchedUser ? (
+                  <span className="role-chip role-chip-muted">
+                    User {requestItem.matchedUser.userId.slice(0, 8)}
+                  </span>
+                ) : (
+                  <span className="role-chip role-chip-muted">No matched user</span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+
+  const layout = (
+    <section className="portal-admin-layout">
+      <article className="portal-panel portal-admin-list-panel">
+        <div className="portal-panel-header">
+          <div>
+            <p className="section-tag">Queue</p>
+            <h2>Scoped filters keep pending work visible.</h2>
+          </div>
+          <span className="role-chip role-chip-tonal">
+            {filteredRequests.length} visible
+          </span>
+        </div>
+
+        {isCompactLayout ? queueContent : filterFields}
+        {isCompactLayout ? filterFields : queueContent}
       </article>
 
-      <section className="portal-admin-layout">
-        <article className="portal-panel portal-admin-list-panel">
-          <div className="portal-panel-header">
-            <div>
-              <p className="section-tag">Queue</p>
-              <h2>Scoped filters keep pending work visible.</h2>
-            </div>
-            <span className="role-chip role-chip-tonal">
-              {filteredRequests.length} visible
-            </span>
+      <article className="portal-panel portal-admin-detail-panel">
+        {!selectedRequest ? (
+          <div className="portal-admin-empty-state">
+            <p className="section-tag">Selection</p>
+            <h2>Choose a request to inspect the full workflow context.</h2>
+            <p>
+              Request review stays local to this route, so the queue and the evidence
+              stay visible together.
+            </p>
           </div>
-
-          <div className="portal-admin-filter-grid">
-            <label className="auth-field">
-              <span>Status</span>
-              <select
-                onChange={(event) => {
-                  const value = event.currentTarget.value as RequestFilterState["status"];
-                  setFilters((current) => ({
-                    ...current,
-                    status: value
-                  }));
-                }}
-                value={filters.status}
-              >
-                <option value="all">All statuses</option>
-                <option value="pending">Pending first</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </label>
-            <label className="auth-field">
-              <span>Request kind</span>
-              <select
-                onChange={(event) => {
-                  const value = event.currentTarget.value as RequestFilterState["requestKind"];
-                  setFilters((current) => ({
-                    ...current,
-                    requestKind: value
-                  }));
-                }}
-                value={filters.requestKind}
-              >
-                <option value="all">All kinds</option>
-                <option value="access_request">Access requests</option>
-                <option value="identity_recovery">Recovery requests</option>
-              </select>
-            </label>
-            <label className="auth-field">
-              <span>Requested role</span>
-              <select
-                onChange={(event) => {
-                  const value = event.currentTarget.value as RequestFilterState["requestedRole"];
-                  setFilters((current) => ({
-                    ...current,
-                    requestedRole: value
-                  }));
-                }}
-                value={filters.requestedRole}
-              >
-                <option value="all">Any role</option>
-                <option value="collaborator">Collaborator</option>
-                <option value="helper">Helper</option>
-              </select>
-            </label>
-            <label className="auth-field">
-              <span>Reviewer state</span>
-              <select
-                onChange={(event) => {
-                  const value = event.currentTarget.value as RequestFilterState["reviewerState"];
-                  setFilters((current) => ({
-                    ...current,
-                    reviewerState: value
-                  }));
-                }}
-                value={filters.reviewerState}
-              >
-                <option value="all">Reviewed and unreviewed</option>
-                <option value="unreviewed">Unreviewed</option>
-                <option value="reviewed">Reviewed</option>
-              </select>
-            </label>
-            <label className="auth-field">
-              <span>Sort</span>
-              <select
-                onChange={(event) => {
-                  const value = event.currentTarget.value as RequestFilterState["sortOrder"];
-                  setFilters((current) => ({
-                    ...current,
-                    sortOrder: value
-                  }));
-                }}
-                value={filters.sortOrder}
-              >
-                <option value="oldest">Oldest submitted</option>
-                <option value="newest">Newest submitted</option>
-                <option value="recently_reviewed">Recently reviewed</option>
-              </select>
-            </label>
+        ) : isDetailLoading || !detail ? (
+          <div className="portal-admin-empty-state">
+            <p className="section-tag">Selection</p>
+            <h2>Loading request detail</h2>
+            <p>Pulling linked identities, related history, and audit echoes.</p>
           </div>
-
-          {filteredRequests.length === 0 ? (
-            <div className="portal-admin-empty-state">
-              <p className="section-tag">Empty state</p>
-              <h2>No requests match the current slice.</h2>
-              <p>Change the filters to bring back recently reviewed or different request kinds.</p>
-            </div>
-          ) : (
-            <div className="portal-admin-record-list">
-              {filteredRequests.map((requestItem) => {
-                const isSelected = requestItem.id === selectedRequestId;
-
-                return (
-                  <button
-                    className={`portal-admin-record${isSelected ? " portal-admin-record-active" : ""}`}
-                    key={requestItem.id}
-                    onClick={() => {
-                      setSelectedRequestId(requestItem.id);
-                    }}
-                    type="button"
-                  >
-                    <div className="portal-admin-record-header">
-                      <strong>{requestItem.email}</strong>
-                      <span
-                        className={`portal-state-badge portal-admin-status-${requestItem.status}`}
-                      >
-                        {formatRequestStatusLabel(requestItem.status)}
-                      </span>
-                    </div>
-                    <p className="portal-panel-muted">
-                      {requestItem.requestKind === "identity_recovery"
-                        ? `Identity recovery - preserve ${requestItem.requestedRole}`
-                        : `Access request - ${requestItem.requestedRole}`}
-                    </p>
-                    <div className="portal-admin-meta-row">
-                      <span>Submitted {formatDateTime(requestItem.createdAt)}</span>
-                      <span>
-                        {requestItem.reviewer ? `Reviewed by ${requestItem.reviewer.label}` : "Awaiting reviewer"}
-                      </span>
-                    </div>
-                    <div className="portal-filter-chip-row">
-                      {requestItem.matchedUserPosture ? (
-                        <span className="role-chip role-chip-muted">
-                          {formatAccessPostureLabel(
-                            requestItem.matchedUserPosture.accessPosture
-                          )}
-                        </span>
-                      ) : null}
-                      {requestItem.matchedUser ? (
-                        <span className="role-chip role-chip-muted">
-                          User {requestItem.matchedUser.userId.slice(0, 8)}
-                        </span>
-                      ) : (
-                        <span className="role-chip role-chip-muted">No matched user</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </article>
-
-        <article className="portal-panel portal-admin-detail-panel">
-          {!selectedRequest ? (
-            <div className="portal-admin-empty-state">
-              <p className="section-tag">Selection</p>
-              <h2>Choose a request to inspect the full workflow context.</h2>
-              <p>
-                Request review stays local to this route, so the queue and the evidence
-                stay visible together.
-              </p>
-            </div>
-          ) : isDetailLoading || !detail ? (
-            <div className="portal-admin-empty-state">
-              <p className="section-tag">Selection</p>
-              <h2>Loading request detail</h2>
-              <p>Pulling linked identities, related history, and audit echoes.</p>
-            </div>
-          ) : (
-            <AccessRequestDetailCard
-              detail={detail}
-              draft={
-                drafts[detail.id] ?? {
-                  approvedRole:
-                    detail.requestedRole === "collaborator" ? "collaborator" : "helper",
-                  decisionNote: detail.decisionNote ?? ""
-                }
+        ) : (
+          <AccessRequestDetailCard
+            detail={detail}
+            draft={
+              drafts[detail.id] ?? {
+                approvedRole:
+                  detail.requestedRole === "collaborator" ? "collaborator" : "helper",
+                decisionNote: detail.decisionNote ?? ""
               }
-              isMutating={isMutatingId === detail.id}
-              onApprove={() => {
-                void handleDecision("approve");
-              }}
-              onChangeDraft={(nextDraft) => {
-                setDrafts((current) => ({
-                  ...current,
-                  [detail.id]: nextDraft
-                }));
-              }}
-              onReject={() => {
-                void handleDecision("reject");
-              }}
-            />
-          )}
-        </article>
-      </section>
+            }
+            isMutating={isMutatingId === detail.id}
+            onApprove={() => {
+              void handleDecision("approve");
+            }}
+            onChangeDraft={(nextDraft) => {
+              setDrafts((current) => ({
+                ...current,
+                [detail.id]: nextDraft
+              }));
+            }}
+            onReject={() => {
+              void handleDecision("reject");
+            }}
+          />
+        )}
+      </article>
+    </section>
+  );
+
+  return (
+    <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
+      {isCompactLayout ? layout : introPanel}
+      {isCompactLayout ? introPanel : layout}
     </section>
   );
 }

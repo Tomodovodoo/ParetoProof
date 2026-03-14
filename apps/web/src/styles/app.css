@@ -1826,39 +1826,12 @@ a.button-secondary {
     border-radius: 0;
   }
 
-  .portal-grid-admin-workspace {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .portal-grid-admin-workspace > .portal-admin-layout {
-    order: 1;
-  }
-
-  .portal-grid-admin-workspace > .portal-panel {
-    order: 2;
-  }
-
-  .portal-grid-admin-workspace .portal-admin-list-panel,
-  .portal-grid-admin-workspace .portal-admin-list-shell {
-    display: flex;
-    flex-direction: column;
-  }
-
   .portal-grid-admin-workspace .portal-admin-list-panel {
     padding-top: 8px;
     gap: 8px;
   }
 
-  .portal-grid-admin-workspace .portal-admin-record-list,
-  .portal-grid-admin-workspace .portal-admin-list,
-  .portal-grid-admin-workspace .portal-admin-list-panel > .portal-admin-empty-state,
-  .portal-grid-admin-workspace .portal-admin-list-shell > .portal-admin-card-empty {
-    order: 1;
-  }
-
   .portal-grid-admin-workspace .portal-admin-filter-grid {
-    order: 2;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
