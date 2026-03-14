@@ -1168,6 +1168,91 @@ a.button-secondary {
   gap: 12px;
 }
 
+.portal-results-panel-compact {
+  gap: 10px;
+}
+
+.portal-results-panel-compact .portal-panel-header {
+  gap: 10px;
+}
+
+.portal-results-panel-compact .portal-toolbar {
+  width: 100%;
+}
+
+.portal-runs-support-panel {
+  gap: 10px;
+}
+
+.portal-run-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.portal-run-slice-compact {
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.portal-run-slice-compact .portal-panel-header {
+  gap: 8px;
+}
+
+.portal-run-slice-compact .section-tag {
+  display: none;
+}
+
+.portal-run-slice-compact h2 {
+  font-size: 1.08rem;
+  line-height: 1.08;
+}
+
+.portal-run-card {
+  border-top: 1px solid var(--line);
+  padding: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.portal-run-slice-compact .portal-run-card {
+  padding-top: 8px;
+  gap: 4px;
+}
+
+.portal-run-card-header,
+.portal-run-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.portal-run-card-link {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.portal-run-card-title {
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.portal-run-card-meta,
+.portal-run-card-timestamp {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.portal-run-card-meta {
+  font-size: 0.92rem;
+}
+
+.portal-run-card-timestamp {
+  font-size: 0.84rem;
+  text-align: right;
+}
+
 .portal-field {
   display: grid;
   gap: 6px;
@@ -2052,6 +2137,15 @@ a.button-secondary {
 
   .portal-sidebar-collapsed .portal-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-results-panel-compact .portal-toolbar .button,
+  .portal-results-panel-compact .portal-toolbar a.button {
+    min-height: 2.45rem;
+  }
+
+  .portal-run-card-timestamp {
+    font-size: 0.8rem;
   }
 }
 
