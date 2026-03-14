@@ -462,6 +462,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
 
         {activeSection?.id === "overview" ? (
           <>
+            {compactLayout ? overviewActionRail : null}
             <section className="portal-metric-strip" aria-label="Portal metrics">
               {overviewMetrics.map((metric) => (
                 <article className="portal-metric-cell" key={metric.label}>
@@ -471,7 +472,6 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 </article>
               ))}
             </section>
-            {compactLayout ? overviewActionRail : null}
 
             <section className="portal-overview-grid">
               <article className="portal-panel portal-overview-lead">
