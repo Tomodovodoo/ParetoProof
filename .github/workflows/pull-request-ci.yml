@@ -28,6 +28,9 @@ jobs:
       - name: Check runtime env examples
         run: node infra/scripts/check-runtime-env-examples.mjs
 
+      - name: Check trusted-local auth boundaries
+        run: node infra/scripts/check-trusted-local-boundaries.mjs
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:

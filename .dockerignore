@@ -5,6 +5,8 @@ node_modules
 dist
 **/dist
 coverage
+.codex
+.codex/**
 .env
 .env.*
 .DS_Store

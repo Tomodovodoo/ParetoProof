@@ -28,6 +28,21 @@ type DevboxWrapperOptions = {
   workspaceRoot?: string;
 };
 
+type TrustedLocalDevboxDockerArgsOptions = {
+  authJsonPath: string;
+  benchmarkPackageRoot: string | null;
+  image: string;
+  modelSnapshotId?: string;
+  outputMountRoot: string | null;
+  outputRoot: string | null;
+  preflightOnly: boolean;
+  promptPackageRoot: string | null;
+  providerFamily: "openai";
+  providerModel?: string;
+  workspaceMountRoot: string | null;
+  workspaceRoot: string | null;
+};
+
 export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
     console.error(
@@ -113,64 +128,20 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
     assertNoHostPathOverlap(workspaceRoot, outputRoot, "Workspace root", "Output root");
   }
 
-  const workspaceContainerRoot = workspaceRoot
-    ? path.posix.join(workspaceParentContainerRoot, path.basename(workspaceRoot))
-    : null;
-  const outputContainerRoot = outputRoot
-    ? path.posix.join(outputParentContainerRoot, path.basename(outputRoot))
-    : null;
-  const shellCommands = buildContainerShellCommands({
-    benchmarkPackageContainerRoot,
+  const dockerArgs = buildTrustedLocalDevboxDockerArgs({
+    authJsonPath: authPreflight.authJsonPath,
+    benchmarkPackageRoot,
+    image: options.image,
     modelSnapshotId: options.modelSnapshotId,
-    outputContainerRoot,
+    outputMountRoot,
+    outputRoot,
     preflightOnly: options.preflightOnly,
-    promptPackageContainerRoot,
+    promptPackageRoot,
     providerFamily: options.providerFamily ?? "openai",
     providerModel: options.providerModel,
-    workspaceContainerRoot
+    workspaceMountRoot,
+    workspaceRoot
   });
-  const dockerArgs = [
-    "run",
-    "--rm",
-    "--entrypoint",
-    "sh",
-    "--workdir",
-    "/app",
-    "--env",
-    `CODEX_HOME=${trustedLocalCodexContainerHome}`,
-    "--mount",
-    buildBindMountArg(authPreflight.authJsonPath, trustedLocalCodexContainerAuthJsonPath, true)
-  ];
-
-  if (benchmarkPackageRoot) {
-    dockerArgs.push(
-      "--mount",
-      buildBindMountArg(benchmarkPackageRoot, benchmarkPackageContainerRoot, true)
-    );
-  }
-
-  if (promptPackageRoot) {
-    dockerArgs.push(
-      "--mount",
-      buildBindMountArg(promptPackageRoot, promptPackageContainerRoot, true)
-    );
-  }
-
-  if (workspaceMountRoot) {
-    dockerArgs.push(
-      "--mount",
-      buildBindMountArg(workspaceMountRoot, workspaceParentContainerRoot, false)
-    );
-  }
-
-  if (outputMountRoot) {
-    dockerArgs.push(
-      "--mount",
-      buildBindMountArg(outputMountRoot, outputParentContainerRoot, false)
-    );
-  }
-
-  dockerArgs.push(options.image, "-lc", shellCommands.join(" && "));
 
   if (options.printDockerCommand) {
     console.error(formatDockerCommand(dockerArgs));
@@ -193,6 +164,75 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
       )
     );
   }
+}
+
+export function buildTrustedLocalDevboxDockerArgs(
+  options: TrustedLocalDevboxDockerArgsOptions
+): string[] {
+  const workspaceContainerRoot = options.workspaceRoot
+    ? path.posix.join(workspaceParentContainerRoot, path.basename(options.workspaceRoot))
+    : null;
+  const outputContainerRoot = options.outputRoot
+    ? path.posix.join(outputParentContainerRoot, path.basename(options.outputRoot))
+    : null;
+  const shellCommands = buildContainerShellCommands({
+    benchmarkPackageContainerRoot,
+    modelSnapshotId: options.modelSnapshotId,
+    outputContainerRoot,
+    preflightOnly: options.preflightOnly,
+    promptPackageContainerRoot,
+    providerFamily: options.providerFamily,
+    providerModel: options.providerModel,
+    workspaceContainerRoot
+  });
+  const dockerArgs = [
+    "run",
+    "--rm",
+    "--entrypoint",
+    "sh",
+    "--workdir",
+    "/app",
+    "--env",
+    `CODEX_HOME=${trustedLocalCodexContainerHome}`,
+    "--mount",
+    buildBindMountArg(
+      options.authJsonPath,
+      trustedLocalCodexContainerAuthJsonPath,
+      true
+    )
+  ];
+
+  if (options.benchmarkPackageRoot) {
+    dockerArgs.push(
+      "--mount",
+      buildBindMountArg(options.benchmarkPackageRoot, benchmarkPackageContainerRoot, true)
+    );
+  }
+
+  if (options.promptPackageRoot) {
+    dockerArgs.push(
+      "--mount",
+      buildBindMountArg(options.promptPackageRoot, promptPackageContainerRoot, true)
+    );
+  }
+
+  if (options.workspaceMountRoot) {
+    dockerArgs.push(
+      "--mount",
+      buildBindMountArg(options.workspaceMountRoot, workspaceParentContainerRoot, false)
+    );
+  }
+
+  if (options.outputMountRoot) {
+    dockerArgs.push(
+      "--mount",
+      buildBindMountArg(options.outputMountRoot, outputParentContainerRoot, false)
+    );
+  }
+
+  dockerArgs.push(options.image, "-lc", shellCommands.join(" && "));
+
+  return dockerArgs;
 }
 
 function parseDevboxWrapperOptions(args: string[]): DevboxWrapperOptions {
