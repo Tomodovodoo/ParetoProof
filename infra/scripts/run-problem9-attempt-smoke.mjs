@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,10 @@ Options:
   --image <image-ref>  Docker image to use for the smoke run. Default: paretoproof-problem9-devbox:local
   --help               Show this help output.
 `;
+
+const containerHomeRoot = "/smoke/container-home";
+const containerCacheRoot = `${containerHomeRoot}/.cache`;
+const containerTmpRoot = `${containerHomeRoot}/tmp`;
 
 function fail(message) {
   console.error(message);
@@ -51,8 +55,16 @@ function runWorkerCommand(image, hostRoot, args) {
   const dockerArgs = [
     "run",
     "--rm",
+    "--workdir",
+    "/app",
     "--volume",
     `${hostRoot}:/smoke`,
+    "--env",
+    `HOME=${containerHomeRoot}`,
+    "--env",
+    `XDG_CACHE_HOME=${containerCacheRoot}`,
+    "--env",
+    `TMPDIR=${containerTmpRoot}`,
   ];
 
   if (typeof process.getuid === "function" && typeof process.getgid === "function") {
@@ -94,6 +106,11 @@ async function main() {
 
   try {
     console.log(`Running Problem 9 attempt smoke in ${options.image}`);
+    await Promise.all([
+      mkdir(hostPath(tempRoot, "container-home"), { recursive: true }),
+      mkdir(hostPath(tempRoot, "container-home", ".cache"), { recursive: true }),
+      mkdir(hostPath(tempRoot, "container-home", "tmp"), { recursive: true }),
+    ]);
 
     const packagePayload = runWorkerCommand(options.image, tempRoot, [
       "materialize-problem9-package",
@@ -145,8 +162,12 @@ async function main() {
       "exact_canonical",
     ]);
 
-    assert.equal(passPayload.result, "pass");
-    assert.equal(passPayload.stopReason, "verification_passed");
+    assert.equal(passPayload.result, "pass", `Expected pass payload to pass, received: ${JSON.stringify(passPayload)}`);
+    assert.equal(
+      passPayload.stopReason,
+      "verification_passed",
+      `Expected pass payload stopReason to be verification_passed, received: ${JSON.stringify(passPayload)}`
+    );
 
     const passVerdict = JSON.parse(
       await readFile(hostPath(tempRoot, "attempt-pass-output", "problem9-run-bundle", "verification", "verdict.json"), "utf8")
@@ -171,8 +192,12 @@ async function main() {
       "compile_failure",
     ]);
 
-    assert.equal(failPayload.result, "fail");
-    assert.equal(failPayload.stopReason, "compile_failed");
+    assert.equal(failPayload.result, "fail", `Expected fail payload to fail, received: ${JSON.stringify(failPayload)}`);
+    assert.equal(
+      failPayload.stopReason,
+      "compile_failed",
+      `Expected fail payload stopReason to be compile_failed, received: ${JSON.stringify(failPayload)}`
+    );
 
     const failVerdict = JSON.parse(
       await readFile(hostPath(tempRoot, "attempt-fail-output", "problem9-run-bundle", "verification", "verdict.json"), "utf8")
