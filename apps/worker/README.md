@@ -132,6 +132,7 @@ Hosted claim loop:
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
   - `CODEX_API_KEY`
+- hosted claim-loop execution fails closed if proxy env or provider base-URL override env is present, and modal workers reject raw-IP or loopback control-plane origins instead of treating them as normal hosted targets
 - hosted and packaged modes reject the trusted-local mount marker and the canonical `/run/paretoproof/codex-home/auth.json` path instead of silently attempting to reuse contributor auth material
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
 - if a heartbeat returns `cancel_requested` or `expired`, the loop exits that claim without sending a stale terminal finalize
