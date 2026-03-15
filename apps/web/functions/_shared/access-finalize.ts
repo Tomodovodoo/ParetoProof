@@ -121,6 +121,21 @@ function resolvePortalRedirectTarget(rawRedirectTarget: unknown, fallbackRedirec
   }
 }
 
+function buildApiSessionBootstrapUrl(requestUrl: URL, portalRedirectTarget: string) {
+  const portalUrl = new URL(portalRedirectTarget);
+  const apiBootstrapUrl = new URL(
+    "/portal/session/finalize/submit",
+    resolveApiBaseUrl(requestUrl)
+  );
+  const redirectPath = `${portalUrl.pathname}${portalUrl.search}${portalUrl.hash}` || "/";
+
+  if (redirectPath !== "/") {
+    apiBootstrapUrl.searchParams.set("redirect", redirectPath);
+  }
+
+  return apiBootstrapUrl.toString();
+}
+
 function readSetCookieHeaders(headers: Headers) {
   const cookieHeaders = headers as Headers & {
     getAll?: (name: string) => string[];
@@ -246,5 +261,8 @@ export async function handleAccessFinalize(request: Request) {
     return buildRedirectResponse(retryUrl, finalizeResponse.headers);
   }
 
-  return buildRedirectResponse(redirectTarget, finalizeResponse.headers);
+  return buildRedirectResponse(
+    buildApiSessionBootstrapUrl(requestUrl, redirectTarget),
+    finalizeResponse.headers
+  );
 }
