@@ -14,7 +14,7 @@ describe("handleAccessFinalize", () => {
 
   it("relays a successful finalize response back to the portal and forwards cookies", async () => {
     globalThis.fetch = async (input, init) => {
-      expect(input).toBe("https://api.paretoproof.com/portal/session/finalize");
+      expect(input).toBe("https://api.paretoproof.com/portal/session/finalize/submit");
       expect(init?.method).toBe("POST");
       expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBe("assertion-1");
       expect((init?.headers as Headers).get("cookie")).toContain("PortalAccessProvider=");
@@ -103,6 +103,40 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/access-request");
+  });
+
+  it("targets the API finalize-submit boundary for branded relay handoffs", async () => {
+    const relayTargets: string[] = [];
+
+    globalThis.fetch = async (input) => {
+      relayTargets.push(String(input));
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/profile"
+        }),
+        {
+          status: 200
+        }
+      );
+    };
+
+    await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-3",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(relayTargets).toEqual([
+      "https://api.paretoproof.com/portal/session/finalize/submit"
+    ]);
   });
 
   it("redirects back to the branded retry surface when the branded handoff lacks both Access header and session cookie", async () => {
