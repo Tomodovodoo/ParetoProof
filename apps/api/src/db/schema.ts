@@ -1,5 +1,12 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  attemptLifecycleStates,
+  evaluationVerdictClasses,
+  jobLifecycleStates,
+  runKindValues,
+  runLifecycleStates
+} from "@paretoproof/shared";
+import {
   boolean,
   foreignKey,
   index,
@@ -56,46 +63,18 @@ export const auditSeverityEnum = pgEnum("audit_severity", [
   "critical"
 ]);
 
-export const runKindEnum = pgEnum("run_kind", [
-  "full_benchmark",
-  "benchmark_slice",
-  "single_run",
-  "repeated_n"
-]);
+export const runKindEnum = pgEnum("run_kind", runKindValues);
 
-export const runStateEnum = pgEnum("run_state", [
-  "created",
-  "queued",
-  "running",
-  "cancel_requested",
-  "succeeded",
-  "failed",
-  "cancelled"
-]);
+export const runStateEnum = pgEnum("run_state", runLifecycleStates);
 
-export const jobStateEnum = pgEnum("job_state", [
-  "queued",
-  "claimed",
-  "running",
-  "cancel_requested",
-  "completed",
-  "failed",
-  "cancelled"
-]);
+export const jobStateEnum = pgEnum("job_state", jobLifecycleStates);
 
-export const attemptStateEnum = pgEnum("attempt_state", [
-  "prepared",
-  "active",
-  "succeeded",
-  "failed",
-  "cancelled"
-]);
+export const attemptStateEnum = pgEnum("attempt_state", attemptLifecycleStates);
 
-export const evaluationVerdictClassEnum = pgEnum("evaluation_verdict_class", [
-  "pass",
-  "fail",
-  "invalid_result"
-]);
+export const evaluationVerdictClassEnum = pgEnum(
+  "evaluation_verdict_class",
+  evaluationVerdictClasses
+);
 
 export const artifactClassEnum = pgEnum("artifact_class", [
   "run_manifest",

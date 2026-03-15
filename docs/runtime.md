@@ -26,6 +26,12 @@ This repo uses a small number of runtime rules.
 - Hosted runs must use machine auth only.
 - Offline ingest is a control-plane import path, not a worker-bootstrap-token flow.
 
+## Lifecycle Vocab
+
+- Canonical run, job, and attempt lifecycle exports live in `@paretoproof/shared` `run-control` exports.
+- Shared response contracts and the API Postgres enums must import those exports instead of re-declaring lifecycle strings locally.
+- `apps/api/test/run-control-state-parity.test.ts` is the drift gate for catalogs, shared schemas, and API DB enum parity.
+
 ## Main-Branch Promotion Gate
 
 Use the PR's `Pull Request CI / ci` run as the pre-merge promotion gate for worker, image, auth, and runtime slices.

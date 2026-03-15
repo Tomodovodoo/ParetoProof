@@ -1,45 +1,66 @@
 import { z } from "zod";
+import {
+  attemptLifecycleStates,
+  evaluationVerdictClasses,
+  jobLifecycleStates,
+  offlineIngestAttemptLifecycleStates,
+  offlineIngestJobLifecycleStates,
+  offlineIngestRunLifecycleStates,
+  runKindValues,
+  runLifecycleStates,
+  workerResultAttemptLifecycleStates,
+  workerResultJobLifecycleStates,
+  workerResultRunLifecycleStates,
+  workerTerminalFailureAttemptLifecycleStates,
+  workerTerminalFailureJobLifecycleStates,
+  workerTerminalFailureRunLifecycleStates
+} from "../types/run-control.js";
 
-export const runKindSchema = z.enum([
-  "full_benchmark",
-  "benchmark_slice",
-  "single_run",
-  "repeated_n"
-]);
+export const runKindSchema = z.enum(runKindValues);
 
-export const runLifecycleStateSchema = z.enum([
-  "created",
-  "queued",
-  "running",
-  "cancel_requested",
-  "succeeded",
-  "failed",
-  "cancelled"
-]);
+export const runLifecycleStateSchema = z.enum(runLifecycleStates);
 
-export const jobLifecycleStateSchema = z.enum([
-  "queued",
-  "claimed",
-  "running",
-  "cancel_requested",
-  "completed",
-  "failed",
-  "cancelled"
-]);
+export const jobLifecycleStateSchema = z.enum(jobLifecycleStates);
 
-export const attemptLifecycleStateSchema = z.enum([
-  "prepared",
-  "active",
-  "succeeded",
-  "failed",
-  "cancelled"
-]);
+export const attemptLifecycleStateSchema = z.enum(attemptLifecycleStates);
 
-export const evaluationVerdictClassSchema = z.enum([
-  "pass",
-  "fail",
-  "invalid_result"
-]);
+export const evaluationVerdictClassSchema = z.enum(evaluationVerdictClasses);
+
+export const offlineIngestRunLifecycleStateSchema = z.enum(
+  offlineIngestRunLifecycleStates
+);
+
+export const offlineIngestJobLifecycleStateSchema = z.enum(
+  offlineIngestJobLifecycleStates
+);
+
+export const offlineIngestAttemptLifecycleStateSchema = z.enum(
+  offlineIngestAttemptLifecycleStates
+);
+
+export const workerResultRunLifecycleStateSchema = z.enum(
+  workerResultRunLifecycleStates
+);
+
+export const workerResultJobLifecycleStateSchema = z.enum(
+  workerResultJobLifecycleStates
+);
+
+export const workerResultAttemptLifecycleStateSchema = z.enum(
+  workerResultAttemptLifecycleStates
+);
+
+export const workerTerminalFailureRunLifecycleStateSchema = z.enum(
+  workerTerminalFailureRunLifecycleStates
+);
+
+export const workerTerminalFailureJobLifecycleStateSchema = z.enum(
+  workerTerminalFailureJobLifecycleStates
+);
+
+export const workerTerminalFailureAttemptLifecycleStateSchema = z.enum(
+  workerTerminalFailureAttemptLifecycleStates
+);
 
 export const runKindCatalogEntrySchema = z.object({
   description: z.string(),

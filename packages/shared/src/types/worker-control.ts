@@ -1,4 +1,12 @@
-import type { RunKind } from "./run-control.js";
+import type {
+  RunKind,
+  WorkerResultAttemptLifecycleState,
+  WorkerResultJobLifecycleState,
+  WorkerResultRunLifecycleState,
+  WorkerTerminalFailureAttemptLifecycleState,
+  WorkerTerminalFailureJobLifecycleState,
+  WorkerTerminalFailureRunLifecycleState
+} from "./run-control.js";
 
 export type WorkerControlEndpointId =
   | "internal.worker.claim"
@@ -317,9 +325,9 @@ export type WorkerResultMessageRequest = {
 
 export type WorkerResultMessageResponse = {
   acceptedAt: string;
-  attemptState: "succeeded";
-  jobState: "completed";
-  runState: "succeeded";
+  attemptState: WorkerResultAttemptLifecycleState;
+  jobState: WorkerResultJobLifecycleState;
+  runState: WorkerResultRunLifecycleState;
 };
 
 export type WorkerTerminalFailureRequest = {
@@ -334,16 +342,16 @@ export type WorkerTerminalFailureRequest = {
   leaseId: string;
   runId: string;
   summary: string;
-  terminalState: "failed" | "cancelled";
+  terminalState: WorkerTerminalFailureAttemptLifecycleState;
   verifierVerdict: WorkerVerifierVerdict | null;
   verdictDigest: string | null;
 };
 
 export type WorkerTerminalFailureResponse = {
   acceptedAt: string;
-  attemptState: "failed" | "cancelled";
-  jobState: "failed" | "cancelled";
-  runState: "failed" | "cancelled";
+  attemptState: WorkerTerminalFailureAttemptLifecycleState;
+  jobState: WorkerTerminalFailureJobLifecycleState;
+  runState: WorkerTerminalFailureRunLifecycleState;
 };
 
 export type WorkerExecutionEventCatalogEntry = {

@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  offlineIngestAttemptLifecycleStateSchema,
+  offlineIngestJobLifecycleStateSchema,
+  offlineIngestRunLifecycleStateSchema
+} from "./run-control.js";
+import {
   workerArtifactManifestEntrySchema,
   workerFailureClassificationSchema,
   workerFailureCodeSchema
@@ -220,17 +225,17 @@ export const problem9OfflineIngestResponseSchema = z.object({
   attempt: z.object({
     id: z.string().min(1),
     sourceAttemptId: z.string().min(1),
-    state: z.enum(["succeeded", "failed"]),
+    state: offlineIngestAttemptLifecycleStateSchema,
     verdictClass: z.enum(["pass", "fail"])
   }),
   job: z.object({
     id: z.string().min(1),
     sourceJobId: z.string().min(1).nullable(),
-    state: z.enum(["completed", "failed"])
+    state: offlineIngestJobLifecycleStateSchema
   }),
   run: z.object({
     id: z.string().min(1),
     sourceRunId: z.string().min(1),
-    state: z.enum(["succeeded", "failed"])
+    state: offlineIngestRunLifecycleStateSchema
   })
 });
