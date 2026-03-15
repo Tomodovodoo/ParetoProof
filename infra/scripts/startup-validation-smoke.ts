@@ -26,6 +26,7 @@ await expectPass("API startup accepts the documented local runtime contract", ()
   assert.equal(
     parseApiRuntimeEnv({
       ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+      CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
       CF_ACCESS_PORTAL_AUD: "portal-audience",
       CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
       DATABASE_URL: "postgres://localhost:5432/paretoproof",
@@ -44,7 +45,7 @@ await expectFailure(
       CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
       DATABASE_URL: "postgres://localhost:5432/paretoproof"
     }),
-  /WORKER_BOOTSTRAP_TOKEN: is required/
+  /CF_ACCESS_BRANDED_AUDS: is required; WORKER_BOOTSTRAP_TOKEN: is required|WORKER_BOOTSTRAP_TOKEN: is required; CF_ACCESS_BRANDED_AUDS: is required/
 );
 
 await expectPass("worker local_stub startup keeps hosted env vars optional", async () => {

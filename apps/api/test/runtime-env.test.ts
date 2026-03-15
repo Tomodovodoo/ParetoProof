@@ -5,6 +5,7 @@ import { parseApiRuntimeEnv } from "../src/config/runtime.ts";
 test("parseApiRuntimeEnv accepts the documented local API runtime contract", () => {
   const runtimeEnv = parseApiRuntimeEnv({
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
@@ -13,6 +14,10 @@ test("parseApiRuntimeEnv accepts the documented local API runtime contract", () 
 
   assert.deepEqual(runtimeEnv, {
     accessProviderStateSecret: "state-secret",
+    brandedAccessAudiences: [
+      "github-audience",
+      "google-audience"
+    ],
     corsAllowedOrigins: [],
     corsAllowLocalhost: false,
     databaseUrl: "postgres://localhost:5432/paretoproof",
@@ -30,6 +35,7 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
   const runtimeEnv = parseApiRuntimeEnv({
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
     CF_ACCESS_AUD: "legacy-audience",
+    CF_ACCESS_BRANDED_AUDS: "github-audience, google-audience , github-audience",
     CF_ACCESS_INTERNAL_AUD: "internal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     CORS_ALLOWED_ORIGINS: "https://staging.paretoproof.com, https://admin.paretoproof.com ",
@@ -43,6 +49,10 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
 
   assert.deepEqual(runtimeEnv, {
     accessProviderStateSecret: "state-secret",
+    brandedAccessAudiences: [
+      "github-audience",
+      "google-audience"
+    ],
     corsAllowedOrigins: [
       "https://staging.paretoproof.com",
       "https://admin.paretoproof.com"
@@ -64,6 +74,7 @@ test("parseApiRuntimeEnv rejects runtimes without a portal access audience", () 
     () =>
       parseApiRuntimeEnv({
         ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+        CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
         CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
         DATABASE_URL: "postgres://localhost:5432/paretoproof",
         WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
@@ -80,7 +91,7 @@ test("parseApiRuntimeEnv reports omitted required variables explicitly", () => {
         CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
         DATABASE_URL: "postgres://localhost:5432/paretoproof"
       }),
-    /ACCESS_PROVIDER_STATE_SECRET: is required; WORKER_BOOTSTRAP_TOKEN: is required|WORKER_BOOTSTRAP_TOKEN: is required; ACCESS_PROVIDER_STATE_SECRET: is required/
+    /ACCESS_PROVIDER_STATE_SECRET: is required; CF_ACCESS_BRANDED_AUDS: is required; WORKER_BOOTSTRAP_TOKEN: is required|ACCESS_PROVIDER_STATE_SECRET: is required; WORKER_BOOTSTRAP_TOKEN: is required; CF_ACCESS_BRANDED_AUDS: is required|CF_ACCESS_BRANDED_AUDS: is required; ACCESS_PROVIDER_STATE_SECRET: is required; WORKER_BOOTSTRAP_TOKEN: is required|CF_ACCESS_BRANDED_AUDS: is required; WORKER_BOOTSTRAP_TOKEN: is required; ACCESS_PROVIDER_STATE_SECRET: is required|WORKER_BOOTSTRAP_TOKEN: is required; ACCESS_PROVIDER_STATE_SECRET: is required; CF_ACCESS_BRANDED_AUDS: is required|WORKER_BOOTSTRAP_TOKEN: is required; CF_ACCESS_BRANDED_AUDS: is required; ACCESS_PROVIDER_STATE_SECRET: is required/
   );
 });
 
@@ -89,6 +100,7 @@ test("parseApiRuntimeEnv rejects missing and malformed values with explicit fiel
     () =>
       parseApiRuntimeEnv({
         ACCESS_PROVIDER_STATE_SECRET: "   ",
+        CF_ACCESS_BRANDED_AUDS: " ",
         CF_ACCESS_PORTAL_AUD: "portal-audience",
         CF_ACCESS_TEAM_DOMAIN: "",
         CORS_ALLOW_LOCALHOST: "maybe",
@@ -96,6 +108,6 @@ test("parseApiRuntimeEnv rejects missing and malformed values with explicit fiel
         PORT: "70000",
         WORKER_BOOTSTRAP_TOKEN: " "
       }),
-    /ACCESS_PROVIDER_STATE_SECRET: must not be empty; CF_ACCESS_TEAM_DOMAIN: must not be empty; CORS_ALLOW_LOCALHOST: Invalid enum value\..*DATABASE_URL: must not be empty; PORT: must be at most 65535; WORKER_BOOTSTRAP_TOKEN: must not be empty/
+    /ACCESS_PROVIDER_STATE_SECRET: must not be empty; CF_ACCESS_BRANDED_AUDS: must not be empty; CF_ACCESS_TEAM_DOMAIN: must not be empty; CORS_ALLOW_LOCALHOST: Invalid enum value\..*DATABASE_URL: must not be empty; PORT: must be at most 65535; WORKER_BOOTSTRAP_TOKEN: must not be empty/
   );
 });

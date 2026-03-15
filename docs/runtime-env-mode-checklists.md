@@ -58,6 +58,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `ACCESS_PROVIDER_STATE_SECRET`
   - `CF_ACCESS_TEAM_DOMAIN`
   - one of `CF_ACCESS_PORTAL_AUD` or `CF_ACCESS_AUD`
+  - `CF_ACCESS_BRANDED_AUDS`
   - `WORKER_BOOTSTRAP_TOKEN`
 - Optional env:
   - `HOST`
@@ -72,6 +73,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `WORKER_BOOTSTRAP_TOKEN`
 - Notes:
   - `CF_ACCESS_INTERNAL_AUD` falls back to the portal audience when omitted
+  - `CF_ACCESS_BRANDED_AUDS` is the comma-separated allowlist of branded provider-host Access audiences accepted only on the finalize-submit handoff boundary
   - `HOST` defaults to `0.0.0.0`
   - `PORT` defaults to `3000`
 
@@ -85,6 +87,7 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
   - `ACCESS_PROVIDER_STATE_SECRET`
   - `CF_ACCESS_TEAM_DOMAIN`
   - one of `CF_ACCESS_PORTAL_AUD` or `CF_ACCESS_AUD`
+  - `CF_ACCESS_BRANDED_AUDS`
   - `WORKER_BOOTSTRAP_TOKEN`
 - Optional env:
   - `HOST`

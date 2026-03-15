@@ -23,6 +23,7 @@ const checks = [
       { name: "OWNER_EMAIL", commented: false },
       { name: "CF_ACCESS_TEAM_DOMAIN", commented: false },
       { name: "CF_ACCESS_PORTAL_AUD", commented: false },
+      { name: "CF_ACCESS_BRANDED_AUDS", commented: false },
       { name: "CF_ACCESS_INTERNAL_AUD", commented: false },
       { name: "ACCESS_PROVIDER_STATE_SECRET", commented: false },
       { name: "WORKER_BOOTSTRAP_TOKEN", commented: false },

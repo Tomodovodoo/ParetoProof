@@ -52,11 +52,13 @@ function parseVerifiedProviderHintPayload(payload: string) {
 }
 
 export type CloudflareAccessVerifier = {
+  audiences: string[];
   issuer: string;
   verifyAssertion: (assertion: string) => Promise<CloudflareAccessIdentity>;
 };
 
 export type CloudflareAccessVerifierSet = {
+  brandedRelay: CloudflareAccessVerifier;
   internal: CloudflareAccessVerifier;
   portal: CloudflareAccessVerifier;
 };
@@ -199,7 +201,7 @@ export function readAccessJwtAssertion(
 }
 
 export function createCloudflareAccessVerifier(options: {
-  audience: string;
+  audiences: string[];
   teamDomain: string;
 }): CloudflareAccessVerifier {
   const normalizedTeamDomain = normalizeTeamDomain(options.teamDomain);
@@ -209,13 +211,14 @@ export function createCloudflareAccessVerifier(options: {
   );
 
   return {
+    audiences: [...options.audiences],
     issuer,
     async verifyAssertion(assertion) {
       const { payload } = await jwtVerify<CloudflareAccessTokenClaims>(
         assertion,
         jwks,
         {
-          audience: options.audience,
+          audience: options.audiences,
           issuer
         }
       );
@@ -242,19 +245,35 @@ export function selectCloudflareAccessVerifier(
 ) {
   const routePath = request.routeOptions?.url ?? request.raw.url ?? "";
 
-  return routePath.startsWith("/internal/") ? verifiers.internal : verifiers.portal;
+  if (routePath.startsWith("/internal/")) {
+    return verifiers.internal;
+  }
+
+  if (routePath === "/portal/session/finalize/submit") {
+    return verifiers.brandedRelay;
+  }
+
+  return verifiers.portal;
 }
 
 export function createCloudflareAccessVerifierSetFromEnv() {
   const runtimeEnv = parseApiRuntimeEnv();
+  const brandedRelayAudiences = [
+    runtimeEnv.portalAccessAudience,
+    ...runtimeEnv.brandedAccessAudiences
+  ];
 
   return {
+    brandedRelay: createCloudflareAccessVerifier({
+      audiences: [...new Set(brandedRelayAudiences)],
+      teamDomain: runtimeEnv.teamDomain
+    }),
     internal: createCloudflareAccessVerifier({
-      audience: runtimeEnv.internalAccessAudience,
+      audiences: [runtimeEnv.internalAccessAudience],
       teamDomain: runtimeEnv.teamDomain
     }),
     portal: createCloudflareAccessVerifier({
-      audience: runtimeEnv.portalAccessAudience,
+      audiences: [runtimeEnv.portalAccessAudience],
       teamDomain: runtimeEnv.teamDomain
     })
   };
