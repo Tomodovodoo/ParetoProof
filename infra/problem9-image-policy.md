@@ -52,6 +52,7 @@ The authoritative source of truth for the Problem 9 image graph is [`infra/docke
 - If a local image-store issue blocks `--load`, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and pass `--rootfs <directory>` to `infra/scripts/verify-problem9-image-toolchains.mjs`.
 - The verifier also checks the worker/shared workspace-local runtime dependency paths because Bun may keep packages such as `@paretoproof/shared` and `zod` under those workspace trees instead of hoisting them into repo-root `node_modules`.
 - Pull-request CI is the authoritative pre-merge image smoke gate: it builds `paretoproof-problem9-execution:pr-smoke` and `paretoproof-problem9-devbox:pr-smoke` without publishing, then runs `infra/scripts/verify-problem9-image-toolchains.mjs` against those loaded images so the `lean`, `codex`, `lean-lsp-mcp`, and runtime-dependency surfaces fail before merge.
-- The publish workflows now build a local rootfs export and run `infra/scripts/verify-problem9-image-toolchains.mjs` before they push mutable or immutable tags, so a toolchain mismatch fails the publish path before new tags move.
+- The worker-image publish workflow verifies an exported `problem9-execution` rootfs before it pushes mutable or immutable tags.
+- The devbox publish workflow verifies a loaded `paretoproof-problem9-devbox:verify` image before publish instead of exporting a local rootfs, because the rootfs export path can stall on GitHub Actions for the larger devbox target.
 - For rollback, identify the required digest from the workflow artifact, re-publish or deploy by digest, and record the chosen digest in the release evidence instead of relying on `main`.
 

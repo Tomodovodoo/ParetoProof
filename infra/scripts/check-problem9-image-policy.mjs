@@ -77,6 +77,35 @@ for (const image of manifest.images) {
     fail(`${workflowPath} is missing the immutable sha tag rule`);
   }
 
+  if (image.target === "problem9-execution") {
+    const requiredExecutionVerificationSnippets = [
+      "Build execution rootfs for toolchain verification",
+      "--output type=local,dest=.tmp/problem9-execution-rootfs",
+      "--rootfs .tmp/problem9-execution-rootfs",
+    ];
+
+    for (const snippet of requiredExecutionVerificationSnippets) {
+      if (!workflowContent.includes(snippet)) {
+        fail(`${workflowPath} is missing execution verification snippet "${snippet}"`);
+      }
+    }
+  }
+
+  if (image.target === "problem9-devbox") {
+    const requiredDevboxVerificationSnippets = [
+      "Build devbox image for toolchain verification",
+      "--tag paretoproof-problem9-devbox:verify",
+      "--load",
+      "--image paretoproof-problem9-devbox:verify",
+    ];
+
+    for (const snippet of requiredDevboxVerificationSnippets) {
+      if (!workflowContent.includes(snippet)) {
+        fail(`${workflowPath} is missing devbox verification snippet "${snippet}"`);
+      }
+    }
+  }
+
   const buildScript = packageJson.scripts?.[image.localBuildScript];
   if (!buildScript) {
     fail(`package.json is missing script ${image.localBuildScript}`);
@@ -148,6 +177,14 @@ for (const snippet of prCiRequiredSnippets) {
 
 if (!/pull-request CI/i.test(policyDoc)) {
   fail(`${policyDocPath} must document the pull-request CI image smoke gate`);
+}
+
+if (!policyDoc.includes("verifies an exported `problem9-execution` rootfs")) {
+  fail(`${policyDocPath} must document the execution publish rootfs verification path`);
+}
+
+if (!policyDoc.includes("verifies a loaded `paretoproof-problem9-devbox:verify` image")) {
+  fail(`${policyDocPath} must document the devbox publish image verification path`);
 }
 
 console.log("Problem 9 image policy check passed.");
