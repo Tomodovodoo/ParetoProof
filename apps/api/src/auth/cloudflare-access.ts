@@ -28,6 +28,14 @@ export type VerifiedAccessLinkIntent = {
   intentId: string;
 };
 
+function readAccessProviderStateSecret() {
+  return process.env.ACCESS_PROVIDER_STATE_SECRET;
+}
+
+function readPortalAccessSessionSecret() {
+  return process.env.PORTAL_SESSION_SECRET ?? readAccessProviderStateSecret();
+}
+
 function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 600) {
   const expiresAt = Math.floor(Date.now() / 1000) + maxAgeSeconds;
   const payload = `${value}.${expiresAt}`;
@@ -254,8 +262,11 @@ function readCookieValue(cookieHeader: string | undefined, name: string) {
   return null;
 }
 
-function verifySignedAccessCookie(cookieHeader: string | undefined, cookieName: string) {
-  const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+function verifySignedAccessCookie(
+  cookieHeader: string | undefined,
+  cookieName: string,
+  secret: string | undefined
+) {
   const rawValue = readCookieValue(cookieHeader, cookieName);
 
   if (!secret || !rawValue) {
@@ -299,7 +310,11 @@ export function verifyAccessProviderHint(
   cookieHeader: string | undefined,
   expectedSubject?: string
 ) {
-  const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalAccessProvider");
+  const verifiedCookie = verifySignedAccessCookie(
+    cookieHeader,
+    "PortalAccessProvider",
+    readAccessProviderStateSecret()
+  );
   const parsedPayload = verifiedCookie?.payload
     ? parseVerifiedProviderHintPayload(verifiedCookie.payload)
     : null;
@@ -316,7 +331,11 @@ export function verifyAccessProviderHint(
 }
 
 export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
-  const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalLinkIntent");
+  const verifiedCookie = verifySignedAccessCookie(
+    cookieHeader,
+    "PortalLinkIntent",
+    readAccessProviderStateSecret()
+  );
 
   if (!verifiedCookie?.payload) {
     return null;
@@ -331,17 +350,12 @@ export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
 function buildSignedCookie(
   name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession",
   value: string,
+  secret: string,
   options?: {
     maxAgeSeconds?: number;
     sameSite?: "Strict" | "Lax";
   }
 ) {
-  const secret = process.env.ACCESS_PROVIDER_STATE_SECRET;
-
-  if (!secret) {
-    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
-  }
-
   const maxAgeSeconds = options?.maxAgeSeconds ?? 600;
   const sameSite = options?.sameSite ?? "Strict";
 
@@ -364,7 +378,13 @@ export function buildSignedAccessCookie(
     sameSite?: "Strict" | "Lax";
   }
 ) {
-  return buildSignedCookie(name, value, options);
+  const secret = readAccessProviderStateSecret();
+
+  if (!secret) {
+    throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
+  }
+
+  return buildSignedCookie(name, value, secret, options);
 }
 
 export function buildSignedPortalAccessSessionCookie(
@@ -374,6 +394,14 @@ export function buildSignedPortalAccessSessionCookie(
     maxAgeSeconds?: number;
   }
 ) {
+  const secret = readPortalAccessSessionSecret();
+
+  if (!secret) {
+    throw new Error(
+      "PORTAL_SESSION_SECRET or ACCESS_PROVIDER_STATE_SECRET is required."
+    );
+  }
+
   return buildSignedCookie(
     "PortalAccessSession",
     Buffer.from(
@@ -383,6 +411,7 @@ export function buildSignedPortalAccessSessionCookie(
       }),
       "utf8"
     ).toString("base64url"),
+    secret,
     {
       maxAgeSeconds: options?.maxAgeSeconds ?? 5 * 60,
       sameSite: "Lax"
@@ -391,7 +420,11 @@ export function buildSignedPortalAccessSessionCookie(
 }
 
 export function verifyPortalAccessSession(cookieHeader: string | undefined) {
-  const verifiedCookie = verifySignedAccessCookie(cookieHeader, "PortalAccessSession");
+  const verifiedCookie = verifySignedAccessCookie(
+    cookieHeader,
+    "PortalAccessSession",
+    readPortalAccessSessionSecret()
+  );
 
   if (!verifiedCookie?.payload) {
     return null;

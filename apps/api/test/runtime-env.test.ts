@@ -26,6 +26,7 @@ test("parseApiRuntimeEnv accepts the documented local API runtime contract", () 
     nodeEnv: undefined,
     port: 3000,
     portalAccessAudience: "portal-audience",
+    portalSessionSecret: "state-secret",
     teamDomain: "paretoproof.cloudflareaccess.com",
     workerBootstrapToken: "worker-bootstrap-token"
   });
@@ -44,6 +45,7 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     HOST: "127.0.0.1",
     NODE_ENV: "production",
     PORT: "4310",
+    PORTAL_SESSION_SECRET: "session-secret",
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
   });
 
@@ -64,6 +66,7 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     nodeEnv: "production",
     port: 4310,
     portalAccessAudience: "legacy-audience",
+    portalSessionSecret: "session-secret",
     teamDomain: "paretoproof.cloudflareaccess.com",
     workerBootstrapToken: "worker-bootstrap-token"
   });

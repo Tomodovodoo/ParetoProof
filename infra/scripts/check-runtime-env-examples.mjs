@@ -26,6 +26,7 @@ const checks = [
       { name: "CF_ACCESS_BRANDED_AUDS", commented: false },
       { name: "CF_ACCESS_INTERNAL_AUD", commented: false },
       { name: "ACCESS_PROVIDER_STATE_SECRET", commented: false },
+      { name: "PORTAL_SESSION_SECRET", commented: false },
       { name: "WORKER_BOOTSTRAP_TOKEN", commented: false },
       { name: "CLOUDFLARE_API_TOKEN", commented: false },
       { name: "CLOUDFLARE_EMAIL", commented: false },

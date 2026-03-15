@@ -47,6 +47,7 @@ const rawApiRuntimeEnvSchema = z
     HOST: trimmedOptionalStringSchema,
     NODE_ENV: trimmedOptionalStringSchema,
     PORT: portSchema,
+    PORTAL_SESSION_SECRET: trimmedOptionalStringSchema,
     WORKER_BOOTSTRAP_TOKEN: requiredTrimmedStringSchema
   })
   .superRefine((env, context) => {
@@ -70,6 +71,7 @@ export type ApiRuntimeEnv = {
   nodeEnv?: string;
   port: number;
   portalAccessAudience: string;
+  portalSessionSecret: string;
   teamDomain: string;
   workerBootstrapToken: string;
 };
@@ -137,6 +139,7 @@ export function parseApiRuntimeEnv(
     HOST,
     NODE_ENV,
     PORT,
+    PORTAL_SESSION_SECRET,
     WORKER_BOOTSTRAP_TOKEN
   } = parsed.data;
 
@@ -153,6 +156,7 @@ export function parseApiRuntimeEnv(
     nodeEnv: NODE_ENV,
     port: PORT === undefined ? 3000 : Number(PORT),
     portalAccessAudience,
+    portalSessionSecret: PORTAL_SESSION_SECRET ?? ACCESS_PROVIDER_STATE_SECRET,
     teamDomain: CF_ACCESS_TEAM_DOMAIN,
     workerBootstrapToken: WORKER_BOOTSTRAP_TOKEN
   };
