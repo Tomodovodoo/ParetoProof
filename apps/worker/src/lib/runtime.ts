@@ -1,8 +1,13 @@
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import type { Problem9AuthMode } from "./problem9-auth.js";
+import {
+  linuxMountInfoListsMountPoint,
+  trustedLocalCodexContainerAuthJsonPath,
+  trustedLocalCodexContainerHome
+} from "./trusted-local-codex.js";
 
 function normalizeOptionalEnvValue(value: unknown) {
   if (typeof value !== "string") {
@@ -25,11 +30,19 @@ const workerRawRuntimeEnvSchema = z.object({
   CODEX_API_KEY: trimmedOptionalStringSchema,
   CODEX_HOME: trimmedOptionalStringSchema,
   HOME: trimmedOptionalStringSchema,
+  PARETOPROOF_RUNTIME_CONTEXT: z.enum(["container", "host"]).optional(),
   R2_ACCESS_KEY_ID: trimmedOptionalStringSchema,
   R2_SECRET_ACCESS_KEY: trimmedOptionalStringSchema,
   USERPROFILE: trimmedOptionalStringSchema,
   WORKER_BOOTSTRAP_TOKEN: trimmedOptionalStringSchema
 });
+
+type TrustedLocalRuntimeContext = "container" | "host";
+
+type WorkerRuntimeInspection = {
+  readLinuxMountInfo?: () => Promise<string | null>;
+  runtimeContext?: TrustedLocalRuntimeContext;
+};
 
 export type WorkerRuntimeMode =
   | {
@@ -127,7 +140,14 @@ function resolveCodexHome(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
   return path.join(rawEnv.HOME ?? os.homedir(), ".codex");
 }
 
-async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
+async function resolveTrustedLocalEnv(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>,
+  inspection: WorkerRuntimeInspection
+) {
+  if ((await resolveTrustedLocalRuntimeContext(rawEnv, inspection)) === "container") {
+    return resolveTrustedLocalContainerEnv(rawEnv, inspection);
+  }
+
   const trustedLocalCodexHome = resolveCodexHome(rawEnv);
   const trustedLocalAuthJsonPath = path.join(trustedLocalCodexHome, "auth.json");
 
@@ -148,9 +168,115 @@ async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEn
   } satisfies Pick<WorkerRuntimeEnv, "trustedLocalAuthJsonPath" | "trustedLocalCodexHome">;
 }
 
+async function resolveTrustedLocalContainerEnv(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>,
+  inspection: WorkerRuntimeInspection
+) {
+  const trustedLocalCodexHome = resolveCodexHome(rawEnv);
+
+  if (trustedLocalCodexHome !== trustedLocalCodexContainerHome) {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user inside a container is supported only through the trusted-local devbox auth mount.",
+        `Expected CODEX_HOME=${trustedLocalCodexContainerHome}, received ${trustedLocalCodexHome}.`
+      ].join(" ")
+    );
+  }
+
+  const mountInfo = await (inspection.readLinuxMountInfo?.() ?? readLinuxMountInfo());
+
+  if (
+    mountInfo === null ||
+    !linuxMountInfoListsMountPoint(mountInfo, trustedLocalCodexContainerAuthJsonPath)
+  ) {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user inside a container requires a mounted auth.json, not a baked or copied file.",
+        `Expected a mount entry for ${trustedLocalCodexContainerAuthJsonPath}.`
+      ].join(" ")
+    );
+  }
+
+  try {
+    await access(trustedLocalCodexContainerAuthJsonPath, constants.R_OK);
+  } catch {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires a readable Codex auth.json.",
+        `Expected file at ${trustedLocalCodexContainerAuthJsonPath}.`
+      ].join(" ")
+    );
+  }
+
+  return {
+    trustedLocalAuthJsonPath: trustedLocalCodexContainerAuthJsonPath,
+    trustedLocalCodexHome: trustedLocalCodexContainerHome
+  } satisfies Pick<WorkerRuntimeEnv, "trustedLocalAuthJsonPath" | "trustedLocalCodexHome">;
+}
+
+async function resolveTrustedLocalRuntimeContext(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>,
+  inspection: WorkerRuntimeInspection
+): Promise<TrustedLocalRuntimeContext> {
+  if (inspection.runtimeContext) {
+    return inspection.runtimeContext;
+  }
+
+  if (rawEnv.PARETOPROOF_RUNTIME_CONTEXT) {
+    return rawEnv.PARETOPROOF_RUNTIME_CONTEXT;
+  }
+
+  return (await isContainerizedRuntime()) ? "container" : "host";
+}
+
+async function isContainerizedRuntime(): Promise<boolean> {
+  if (process.platform === "win32") {
+    return false;
+  }
+
+  if (
+    typeof process.env.container === "string" ||
+    typeof process.env.KUBERNETES_SERVICE_HOST === "string"
+  ) {
+    return true;
+  }
+
+  for (const markerPath of ["/.dockerenv", "/run/.containerenv"]) {
+    try {
+      await access(markerPath, constants.F_OK);
+      return true;
+    } catch {}
+  }
+
+  for (const cgroupPath of ["/proc/1/cgroup", "/proc/self/cgroup"]) {
+    try {
+      const cgroupText = await readFile(cgroupPath, "utf8");
+
+      if (/(docker|containerd|kubepods|podman|libpod)/iu.test(cgroupText)) {
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+async function readLinuxMountInfo(): Promise<string | null> {
+  if (process.platform === "win32") {
+    return null;
+  }
+
+  try {
+    return await readFile("/proc/self/mountinfo", "utf8");
+  } catch {
+    return null;
+  }
+}
+
 export async function parseWorkerRuntimeEnv(
   mode: WorkerRuntimeMode,
-  rawEnv: Partial<Record<string, string | undefined>> = process.env
+  rawEnv: Partial<Record<string, string | undefined>> = process.env,
+  inspection: WorkerRuntimeInspection = {}
 ): Promise<WorkerRuntimeEnv> {
   const parsed = workerRawRuntimeEnvSchema.safeParse(rawEnv);
 
@@ -174,10 +300,16 @@ export async function parseWorkerRuntimeEnv(
         case "machine_oauth":
           return {};
         case "trusted_local_user":
-          return resolveTrustedLocalEnv(parsed.data);
+          return resolveTrustedLocalEnv(parsed.data, inspection);
       }
     case "trusted_local_devbox":
-      return resolveTrustedLocalEnv(parsed.data);
+      if ((await resolveTrustedLocalRuntimeContext(parsed.data, inspection)) === "container") {
+        throw new Error(
+          "Invalid worker runtime environment: trusted_local_devbox must start on the host, not from inside a containerized or image-baked worker environment."
+        );
+      }
+
+      return resolveTrustedLocalEnv(parsed.data, inspection);
     case "worker_claim_loop":
       assertRequiredFields([
         ["API_BASE_URL", parsed.data.API_BASE_URL],

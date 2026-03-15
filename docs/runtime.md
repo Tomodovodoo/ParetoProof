@@ -23,6 +23,7 @@ This repo uses a small number of runtime rules.
 
 - Local trusted runs may use host-mounted auth material where explicitly supported.
 - Local trusted auth stays host-local and enters the devbox only as a read-only `auth.json` mount, never as a copied repo file or baked image layer.
+- Containerized trusted-local execution is supported only through that canonical devbox mount path; copied or image-baked auth files must fail closed.
 - Hosted runs must use machine auth only.
 - Offline ingest is a control-plane import path, not a worker-bootstrap-token flow.
 

@@ -6,7 +6,7 @@ import {
 import {
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
-} from "../src/lib/problem9-auth.ts";
+} from "../src/lib/trusted-local-codex.ts";
 
 test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Codex home", () => {
   const authJsonPath = "/host/.codex/auth.json";
@@ -28,6 +28,7 @@ test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Code
   );
 
   assert.ok(dockerArgs.includes(`CODEX_HOME=${trustedLocalCodexContainerHome}`));
+  assert.ok(dockerArgs.includes("PARETOPROOF_RUNTIME_CONTEXT=container"));
   assert.ok(
     mountArgs.includes(
       `type=bind,src=${authJsonPath},dst=${trustedLocalCodexContainerAuthJsonPath},readonly`
@@ -59,5 +60,6 @@ test("buildTrustedLocalDevboxDockerArgs keeps preflight-only runs free of writab
   );
 
   assert.equal(mountArgs.length, 1);
+  assert.ok(dockerArgs.includes("PARETOPROOF_RUNTIME_CONTEXT=container"));
   assert.match(dockerArgs[dockerArgs.length - 1] ?? "", /codex login status/);
 });

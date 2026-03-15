@@ -2,9 +2,10 @@ import { spawn } from "node:child_process";
 import {
   parseWorkerRuntimeEnv
 } from "./runtime.js";
-
-export const trustedLocalCodexContainerHome = "/run/paretoproof/codex-home";
-export const trustedLocalCodexContainerAuthJsonPath = `${trustedLocalCodexContainerHome}/auth.json`;
+import {
+  trustedLocalCodexContainerAuthJsonPath,
+  trustedLocalCodexContainerHome
+} from "./trusted-local-codex.js";
 
 export const problem9AuthModes = [
   "trusted_local_user",

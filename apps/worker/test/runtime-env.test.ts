@@ -4,6 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { parseWorkerRuntimeEnv } from "../src/lib/runtime.ts";
+import {
+  trustedLocalCodexContainerHome
+} from "../src/lib/trusted-local-codex.ts";
 
 test("parseWorkerRuntimeEnv keeps materializer mode env-free", async () => {
   const runtimeEnv = await parseWorkerRuntimeEnv(
@@ -85,6 +88,64 @@ test("parseWorkerRuntimeEnv requires readable trusted-local auth for trusted_loc
 
   assert.equal(runtimeEnv.trustedLocalCodexHome, codexHome);
   assert.equal(runtimeEnv.trustedLocalAuthJsonPath, path.join(codexHome, "auth.json"));
+});
+
+test("parseWorkerRuntimeEnv rejects containerized trusted_local_user paths outside the devbox mount", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-runtime-container-"));
+  await writeFile(path.join(codexHome, "auth.json"), "{}", "utf8");
+
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "trusted_local_user",
+          commandFamily: "problem9_attempt"
+        },
+        {
+          CODEX_HOME: codexHome,
+          PARETOPROOF_RUNTIME_CONTEXT: "container"
+        }
+      ),
+    new RegExp(
+      `trusted_local_user inside a container is supported only through the trusted-local devbox auth mount\\..*Expected CODEX_HOME=${trustedLocalCodexContainerHome.replace(/\//g, "\\/")}`
+    )
+  );
+});
+
+test("parseWorkerRuntimeEnv rejects containerized trusted_local_user when the expected auth mount is not mounted", async () => {
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "trusted_local_user",
+          commandFamily: "problem9_attempt"
+        },
+        {
+          CODEX_HOME: trustedLocalCodexContainerHome,
+          PARETOPROOF_RUNTIME_CONTEXT: "container"
+        },
+        {
+          readLinuxMountInfo: async () => "",
+          runtimeContext: "container"
+        }
+      ),
+    /trusted_local_user inside a container requires a mounted auth\.json, not a baked or copied file/
+  );
+});
+
+test("parseWorkerRuntimeEnv rejects trusted_local_devbox startup inside a container context", async () => {
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          commandFamily: "trusted_local_devbox"
+        },
+        {
+          PARETOPROOF_RUNTIME_CONTEXT: "container"
+        }
+      ),
+    /trusted_local_devbox must start on the host/
+  );
 });
 
 test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop machine auth", async () => {

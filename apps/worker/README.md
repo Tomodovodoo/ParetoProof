@@ -91,6 +91,7 @@ Local attempt execution:
 - use `bun --cwd apps/worker run:problem9-attempt -- --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family <family>] [--auth-mode <mode>] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]` to execute one local Problem 9 attempt and emit the canonical `problem9-run-bundle/`
 - the command copies the immutable benchmark package into a clean writable workspace, writes the candidate as `FirstProof/Problem9/Candidate.lean`, runs the authoritative Lean compile gate, runs theorem and axiom verification, and finalizes through the existing run-bundle materializer instead of inventing a second output shape
 - `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
+- when `trusted_local_user` runs execute inside a container, the auth file must be mounted at `/run/paretoproof/codex-home/auth.json`; copied or image-baked auth files fail closed before execution
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
 - use `bun --cwd apps/worker test:attempt-smoke` or the root alias `bun run test:worker:attempt-smoke` for the deterministic local-stub worker smoke gate; it proves one exact-canonical pass path and one compile-failure path without any interactive auth or paid provider traffic
@@ -104,6 +105,7 @@ Trusted-local devbox wrapper:
 - the repo-owned launcher defaults to `--image paretoproof-problem9-devbox:local`; pass `--image <docker-image>` only when you intentionally need a different local devbox tag
 - the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
+- the wrapper itself is host-only; starting it from inside a containerized or image-baked worker environment now fails closed instead of trying to re-use unsupported local auth state
 - do not copy `.codex/auth.json` into this repository, worker fixtures, or Docker build contexts; trusted-local auth stays host-local and enters the devbox only through the read-only file mount above
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
 - the supplied Docker image must already include the Codex CLI and the worker runtime; if it cannot run `codex login status`, trusted-local preflight fails before any attempt starts

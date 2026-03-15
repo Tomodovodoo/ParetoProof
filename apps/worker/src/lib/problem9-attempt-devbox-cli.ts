@@ -5,10 +5,12 @@ import {
   parseWorkerRuntimeEnv
 } from "./runtime.js";
 import {
-  preflightProblem9AuthMode,
+  preflightProblem9AuthMode
+} from "./problem9-auth.js";
+import {
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
-} from "./problem9-auth.js";
+} from "./trusted-local-codex.js";
 
 const benchmarkPackageContainerRoot = "/workdir/input/benchmark-package";
 const promptPackageContainerRoot = "/workdir/input/prompt-package";
@@ -194,6 +196,8 @@ export function buildTrustedLocalDevboxDockerArgs(
     "/app",
     "--env",
     `CODEX_HOME=${trustedLocalCodexContainerHome}`,
+    "--env",
+    "PARETOPROOF_RUNTIME_CONTEXT=container",
     "--mount",
     buildBindMountArg(
       options.authJsonPath,

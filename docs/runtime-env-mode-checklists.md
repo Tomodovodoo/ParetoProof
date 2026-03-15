@@ -187,6 +187,7 @@ Use this mode for `run-problem9-attempt --auth-mode trusted_local_user`.
   - on Windows, the default inferred path is `%USERPROFILE%\\.codex\\auth.json`
   - on non-Windows hosts, the default inferred path is `$HOME/.codex/auth.json`
   - this is a trusted-local path only; do not reuse it for hosted worker modes
+  - if you run this mode inside a container, the only supported auth shape is the trusted-local devbox mount at `/run/paretoproof/codex-home/auth.json`; copied or baked auth files are rejected
 
 ### Trusted-local devbox wrapper
 
@@ -207,6 +208,7 @@ Use this mode for:
 - Notes:
   - this wrapper mounts the auth file into the container read-only
   - do not move trusted-local auth into `apps/worker/.env`
+  - do not start this wrapper from inside a container or hosted worker image; the runtime now rejects that unsupported path explicitly
 
 ### Offline ingest CLI
 
