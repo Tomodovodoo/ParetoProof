@@ -48,19 +48,20 @@ function parseArgs(argv) {
 }
 
 function runWorkerCommand(image, hostRoot, args) {
+  const dockerArgs = [
+    "run",
+    "--rm",
+    "--volume",
+    `${hostRoot}:/smoke`,
+  ];
+
+  if (typeof process.getuid === "function" && typeof process.getgid === "function") {
+    dockerArgs.push("--user", `${process.getuid()}:${process.getgid()}`);
+  }
+
   const result = spawnSync(
     "docker",
-    [
-      "run",
-      "--rm",
-      "--volume",
-      `${hostRoot}:/smoke`,
-      "--entrypoint",
-      "node",
-      image,
-      "/app/apps/worker/dist/index.js",
-      ...args,
-    ],
+    [...dockerArgs, "--entrypoint", "node", image, "/app/apps/worker/dist/index.js", ...args],
     {
       encoding: "utf8",
     }
