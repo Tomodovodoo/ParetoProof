@@ -1,8 +1,14 @@
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import type { Problem9AuthMode } from "./problem9-auth.js";
+import {
+  trustedLocalAuthMountMarkerEnvName,
+  trustedLocalAuthMountMarkerValue,
+  trustedLocalCodexContainerAuthJsonPath,
+  trustedLocalCodexContainerHome
+} from "./trusted-local-auth-contract.js";
 
 function normalizeOptionalEnvValue(value: unknown) {
   if (typeof value !== "string") {
@@ -25,6 +31,7 @@ const workerRawRuntimeEnvSchema = z.object({
   CODEX_API_KEY: trimmedOptionalStringSchema,
   CODEX_HOME: trimmedOptionalStringSchema,
   HOME: trimmedOptionalStringSchema,
+  [trustedLocalAuthMountMarkerEnvName]: trimmedOptionalStringSchema,
   R2_ACCESS_KEY_ID: trimmedOptionalStringSchema,
   R2_SECRET_ACCESS_KEY: trimmedOptionalStringSchema,
   USERPROFILE: trimmedOptionalStringSchema,
@@ -127,6 +134,123 @@ function resolveCodexHome(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
   return path.join(rawEnv.HOME ?? os.homedir(), ".codex");
 }
 
+function getTrustedLocalAuthMountMarker(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
+  return rawEnv[trustedLocalAuthMountMarkerEnvName];
+}
+
+function hasTrustedLocalContainerMount(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>
+) {
+  return (
+    getTrustedLocalAuthMountMarker(rawEnv) !== undefined ||
+    rawEnv.CODEX_HOME === trustedLocalCodexContainerHome
+  );
+}
+
+function rejectTrustedLocalContainerMount(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>,
+  commandFamily: WorkerRuntimeMode["commandFamily"]
+) {
+  if (!hasTrustedLocalContainerMount(rawEnv)) {
+    return;
+  }
+
+  throw new Error(
+    [
+      `Invalid worker runtime environment: ${trustedLocalAuthMountMarkerEnvName}: trusted-local auth mounts are not allowed for ${commandFamily}.`,
+      `Use machine auth for ${commandFamily}; only trusted_local_user and trusted_local_devbox may use ${trustedLocalCodexContainerAuthJsonPath}.`
+    ].join(" ")
+  );
+}
+
+async function validateTrustedLocalAuthJson(authJsonPath: string) {
+  const authJsonStats = await stat(authJsonPath).catch(() => null);
+
+  if (!authJsonStats?.isFile()) {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires a readable Codex auth.json.",
+        `Expected file at ${authJsonPath}.`
+      ].join(" ")
+    );
+  }
+
+  let parsedAuthJson: unknown;
+
+  try {
+    parsedAuthJson = JSON.parse(await readFile(authJsonPath, "utf8"));
+  } catch {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires auth.json to contain valid JSON.",
+        `Checked file at ${authJsonPath}.`
+      ].join(" ")
+    );
+  }
+
+  if (
+    typeof parsedAuthJson !== "object" ||
+    parsedAuthJson === null ||
+    Array.isArray(parsedAuthJson)
+  ) {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires auth.json to contain a JSON object.",
+        `Checked file at ${authJsonPath}.`
+      ].join(" ")
+    );
+  }
+}
+
+async function validateTrustedLocalContainerMount(
+  rawEnv: z.output<typeof workerRawRuntimeEnvSchema>,
+  trustedLocalCodexHome: string,
+  trustedLocalAuthJsonPath: string
+) {
+  const mountMarker = getTrustedLocalAuthMountMarker(rawEnv);
+
+  if (mountMarker === undefined && rawEnv.CODEX_HOME !== trustedLocalCodexContainerHome) {
+    return;
+  }
+
+  if (mountMarker !== trustedLocalAuthMountMarkerValue) {
+    throw new Error(
+      [
+        `Invalid worker runtime environment: ${trustedLocalAuthMountMarkerEnvName}: expected ${trustedLocalAuthMountMarkerValue}.`,
+        "Trusted-local devbox runs must use the repo-owned read-only auth.json mount contract."
+      ].join(" ")
+    );
+  }
+
+  if (rawEnv.CODEX_HOME !== trustedLocalCodexContainerHome) {
+    throw new Error(
+      [
+        `Invalid worker runtime environment: CODEX_HOME: expected ${trustedLocalCodexContainerHome}.`,
+        "Trusted-local devbox runs must mount auth.json at the canonical in-container path."
+      ].join(" ")
+    );
+  }
+
+  if (trustedLocalAuthJsonPath !== trustedLocalCodexContainerAuthJsonPath) {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires the canonical in-container auth.json path.",
+        `Expected file at ${trustedLocalCodexContainerAuthJsonPath}.`
+      ].join(" ")
+    );
+  }
+
+  const codexHomeEntries = await readdir(trustedLocalCodexHome);
+  if (codexHomeEntries.length !== 1 || codexHomeEntries[0] !== "auth.json") {
+    throw new Error(
+      [
+        "Invalid worker runtime environment: trusted_local_user requires a single-file auth.json mount.",
+        `Expected ${trustedLocalCodexHome} to contain only auth.json.`
+      ].join(" ")
+    );
+  }
+}
+
 async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
   const trustedLocalCodexHome = resolveCodexHome(rawEnv);
   const trustedLocalAuthJsonPath = path.join(trustedLocalCodexHome, "auth.json");
@@ -141,6 +265,13 @@ async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEn
       ].join(" ")
     );
   }
+
+  await validateTrustedLocalAuthJson(trustedLocalAuthJsonPath);
+  await validateTrustedLocalContainerMount(
+    rawEnv,
+    trustedLocalCodexHome,
+    trustedLocalAuthJsonPath
+  );
 
   return {
     trustedLocalAuthJsonPath,
@@ -162,16 +293,20 @@ export async function parseWorkerRuntimeEnv(
 
   switch (mode.commandFamily) {
     case "materializer":
+      rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
       return {};
     case "problem9_attempt":
       switch (mode.authMode) {
         case "local_stub":
+          rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
           return {};
         case "machine_api_key":
+          rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
           return {
             codexApiKey: resolveRequiredField("CODEX_API_KEY", parsed.data.CODEX_API_KEY)
           };
         case "machine_oauth":
+          rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
           return {};
         case "trusted_local_user":
           return resolveTrustedLocalEnv(parsed.data);
@@ -179,6 +314,7 @@ export async function parseWorkerRuntimeEnv(
     case "trusted_local_devbox":
       return resolveTrustedLocalEnv(parsed.data);
     case "worker_claim_loop":
+      rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
       assertRequiredFields([
         ["API_BASE_URL", parsed.data.API_BASE_URL],
         ["WORKER_BOOTSTRAP_TOKEN", parsed.data.WORKER_BOOTSTRAP_TOKEN],
@@ -199,6 +335,7 @@ export async function parseWorkerRuntimeEnv(
         )
       };
     case "offline_ingest_cli":
+      rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
       return {
         apiBaseUrl: resolveRequiredField("API_BASE_URL", parsed.data.API_BASE_URL)
       };

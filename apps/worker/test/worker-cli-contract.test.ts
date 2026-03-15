@@ -59,6 +59,45 @@ test("worker entrypoint exits 2 for unknown commands and prints usage", () => {
   assert.equal(result.stdout, "");
 });
 
+test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-local mount markers", () => {
+  const result = spawnSync(
+    bunCommand,
+    [
+      workerEntryPoint,
+      "run-worker-claim-loop",
+      "--worker-id",
+      "worker-contract-test",
+      "--worker-pool",
+      "modal-dev",
+      "--worker-version",
+      "worker-smoke-1",
+      "--workspace-root",
+      path.join(os.tmpdir(), "worker-workspace"),
+      "--output-root",
+      path.join(os.tmpdir(), "worker-output"),
+      "--once"
+    ],
+    {
+      cwd: workerRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        API_BASE_URL: "https://api.paretoproof.com",
+        CODEX_API_KEY: "worker-api-key",
+        PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: "readonly_auth_json",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
+      }
+    }
+  );
+
+  assert.equal(result.status, 2);
+  assert.match(
+    result.stderr,
+    /^Validation error: Invalid worker runtime environment: PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: trusted-local auth mounts are not allowed for worker_claim_loop\./u
+  );
+  assert.equal(result.stdout, "");
+});
+
 test(
   "worker entrypoint exits 3 and preserves machine-readable offline-ingest remote rejections",
   { timeout: 120000 },

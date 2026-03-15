@@ -23,7 +23,9 @@ This repo uses a small number of runtime rules.
 
 - Local trusted runs may use host-mounted auth material where explicitly supported.
 - Local trusted auth stays host-local and enters the devbox only as a read-only `auth.json` mount, never as a copied repo file or baked image layer.
+- The trusted-local devbox path uses the single-file mount contract `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json` plus `CODEX_HOME=/run/paretoproof/codex-home`; malformed auth JSON or any other mount shape must fail closed.
 - Hosted runs must use machine auth only.
+- Hosted or packaged worker modes must reject the trusted-local mount contract instead of silently reusing mounted contributor auth material.
 - Offline ingest is a control-plane import path, not a worker-bootstrap-token flow.
 
 ## Lifecycle Vocab

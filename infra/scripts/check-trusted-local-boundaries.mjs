@@ -7,15 +7,20 @@ const requiredGitignoreSnippets = [".codex/"];
 const requiredDockerignoreSnippets = [".codex", ".codex/**"];
 const requiredRuntimeDocSnippets = [
   "Do not copy `.codex/auth.json` or other trusted-local auth artifacts into the repository, Docker build contexts, or checked-in worker fixtures.",
-  "Local trusted auth stays host-local and enters the devbox only as a read-only `auth.json` mount, never as a copied repo file or baked image layer."
+  "Local trusted auth stays host-local and enters the devbox only as a read-only `auth.json` mount, never as a copied repo file or baked image layer.",
+  "PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json",
+  "Hosted or packaged worker modes must reject the trusted-local mount contract instead of silently reusing mounted contributor auth material."
 ];
 const requiredWorkerReadmeSnippets = [
   "mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`",
-  "do not copy `.codex/auth.json` into this repository, worker fixtures, or Docker build contexts; trusted-local auth stays host-local and enters the devbox only through the read-only file mount above"
+  "PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json",
+  "do not copy `.codex/auth.json` into this repository, worker fixtures, or Docker build contexts; trusted-local auth stays host-local and enters the devbox only through the read-only file mount above",
+  "hosted and packaged modes reject the trusted-local mount marker"
 ];
 const requiredChecklistSnippets = [
   "do not move trusted-local auth into `apps/worker/.env`",
-  "this wrapper mounts the auth file into the container read-only"
+  "this wrapper mounts the auth file into the container read-only",
+  "hosted modes must not set `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT`"
 ];
 const forbiddenDockerfileSnippets = [
   "COPY . .",

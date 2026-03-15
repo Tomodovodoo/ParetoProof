@@ -5,10 +5,14 @@ import {
   parseWorkerRuntimeEnv
 } from "./runtime.js";
 import {
-  preflightProblem9AuthMode,
+  preflightProblem9AuthMode
+} from "./problem9-auth.js";
+import {
+  trustedLocalAuthMountMarkerEnvName,
+  trustedLocalAuthMountMarkerValue,
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
-} from "./problem9-auth.js";
+} from "./trusted-local-auth-contract.js";
 
 const benchmarkPackageContainerRoot = "/workdir/input/benchmark-package";
 const promptPackageContainerRoot = "/workdir/input/prompt-package";
@@ -194,6 +198,8 @@ export function buildTrustedLocalDevboxDockerArgs(
     "/app",
     "--env",
     `CODEX_HOME=${trustedLocalCodexContainerHome}`,
+    "--env",
+    `${trustedLocalAuthMountMarkerEnvName}=${trustedLocalAuthMountMarkerValue}`,
     "--mount",
     buildBindMountArg(
       options.authJsonPath,
@@ -286,6 +292,7 @@ function buildContainerShellCommands(options: {
   const commands = [
     "set -eu",
     `test "$CODEX_HOME" = ${shellQuote(trustedLocalCodexContainerHome)}`,
+    `test "$${trustedLocalAuthMountMarkerEnvName}" = ${shellQuote(trustedLocalAuthMountMarkerValue)}`,
     `test -r ${shellQuote(trustedLocalCodexContainerAuthJsonPath)}`,
     "codex login status"
   ];
