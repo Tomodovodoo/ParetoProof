@@ -14,6 +14,7 @@ Use these files:
 - [hosted-worker-credential-and-token-baseline.md](./hosted-worker-credential-and-token-baseline.md) for the hosted worker identity, bootstrap-token, per-job token, and rotation model
 - [hosted-worker-provider-capability-baseline.md](./hosted-worker-provider-capability-baseline.md) for the supported hosted provider-family matrix and operator-owned credential posture
 - [hosted-worker-rollout-and-release-baseline.md](./hosted-worker-rollout-and-release-baseline.md) for digest-pinned hosted worker promotion, rollback, and release evidence
+- [hosted-worker-pool-and-autoscaling-baseline.md](./hosted-worker-pool-and-autoscaling-baseline.md) for the worker-pool registry, queue partition, capacity-target, and autoscaling-signal model
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [hosted-worker-private-operator-api-baseline.md](./hosted-worker-private-operator-api-baseline.md) for the private portal and operator API boundary for hosted worker and run-ops data
