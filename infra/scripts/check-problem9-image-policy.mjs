@@ -21,12 +21,14 @@ const policyDocPath = "infra/problem9-image-policy.md";
 const workerReadmePath = "apps/worker/README.md";
 const infraReadmePath = "infra/README.md";
 const packageJsonPath = "package.json";
+const prCiWorkflowPath = ".github/workflows/pull-request-ci.yml";
 
 const manifest = JSON.parse(readText(manifestPath));
 const policyDoc = readText(policyDocPath);
 const workerReadme = readText(workerReadmePath);
 const infraReadme = readText(infraReadmePath);
 const packageJson = JSON.parse(readText(packageJsonPath));
+const prCiWorkflow = readText(prCiWorkflowPath);
 
 if (manifest.mutableTag !== "main") {
   fail(`expected mutableTag to be "main" but found "${manifest.mutableTag}"`);
@@ -128,6 +130,24 @@ if (!infraReadme.includes("check-problem9-image-policy.mjs")) {
 
 if (!infraReadme.includes("problem9-image-policy.json")) {
   fail(`${infraReadmePath} must mention the image policy manifest`);
+}
+
+const prCiRequiredSnippets = [
+  "Set up Docker Buildx",
+  "node infra/scripts/build-problem9-image.mjs --target problem9-execution --tag paretoproof-problem9-execution:pr-smoke",
+  "node infra/scripts/build-problem9-image.mjs --target problem9-devbox --tag paretoproof-problem9-devbox:pr-smoke",
+  "node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-execution --image paretoproof-problem9-execution:pr-smoke",
+  "node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-devbox --image paretoproof-problem9-devbox:pr-smoke",
+];
+
+for (const snippet of prCiRequiredSnippets) {
+  if (!prCiWorkflow.includes(snippet)) {
+    fail(`${prCiWorkflowPath} is missing required PR smoke snippet "${snippet}"`);
+  }
+}
+
+if (!/pull-request CI/i.test(policyDoc)) {
+  fail(`${policyDocPath} must document the pull-request CI image smoke gate`);
 }
 
 console.log("Problem 9 image policy check passed.");
