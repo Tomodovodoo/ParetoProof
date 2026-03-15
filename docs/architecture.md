@@ -16,4 +16,6 @@ Execution is intentionally split away from the browser.
 - `apps/web` owns the public site, auth entry UI, portal UI, and math UI.
 - `apps/worker` owns package materialization, local attempts, offline ingest, and the hosted claim loop.
 
+Hosted worker execution is control-plane-owned even when it runs on Modal. The accepted platform boundary for that fleet lives in [hosted-worker-platform-baseline.md](./hosted-worker-platform-baseline.md).
+
 The current benchmark kernel is the repository-owned `benchmarks/firstproof/problem9` slice. Public reporting is narrow, and deeper run evidence stays in the portal or worker artifacts instead of the public site.
