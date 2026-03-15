@@ -125,8 +125,11 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   assert.ok(Array.isArray(setCookies));
   assert.equal(setCookies.length, 3);
   assert.match(setCookies[0], /^PortalAccessSession=/);
+  assert.match(setCookies[0], /; SameSite=Lax;/);
   assert.match(setCookies[1], /^PortalAccessProvider=/);
+  assert.match(setCookies[1], /; SameSite=Strict;/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
+  assert.match(setCookies[2], /; SameSite=Strict;/);
 });
 
 test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
@@ -268,8 +271,11 @@ test("POST /portal/session/finalize/submit completes a pending-user handoff from
   assert.ok(Array.isArray(setCookies));
   assert.equal(setCookies.length, 3);
   assert.match(setCookies[0], /^PortalAccessSession=/);
+  assert.match(setCookies[0], /; SameSite=Lax;/);
   assert.match(setCookies[1], /^PortalAccessProvider=/);
+  assert.match(setCookies[1], /; SameSite=Strict;/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
+  assert.match(setCookies[2], /; SameSite=Strict;/);
 });
 
 test("GET /portal/me accepts the signed portal access session cookie when no Access assertion is present", async (t) => {

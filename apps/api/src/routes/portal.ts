@@ -117,7 +117,7 @@ function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
 function clearSignedAccessCookie(
   name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession"
 ) {
-  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Lax; Max-Age=0; Secure; HttpOnly`;
+  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Strict; Max-Age=0; Secure; HttpOnly`;
 }
 
 function buildPortalAuthStartUrl(options: {
@@ -467,7 +467,7 @@ export function registerPortalRoutes(
         ? buildSignedAccessCookie(
             "PortalAccessProvider",
             `${providerHint}|${identity.subject}`,
-            { maxAgeSeconds: 24 * 60 * 60, sameSite: "Lax" }
+            { maxAgeSeconds: 24 * 60 * 60 }
           )
         : clearSignedAccessCookie("PortalAccessProvider"),
       clearSignedAccessCookie("PortalLinkIntent")
@@ -1083,9 +1083,7 @@ export function registerPortalRoutes(
 
       reply.header(
         "set-cookie",
-        buildSignedAccessCookie("PortalLinkIntent", intent.id, {
-          sameSite: "Lax"
-        })
+        buildSignedAccessCookie("PortalLinkIntent", intent.id)
       );
 
       return {
