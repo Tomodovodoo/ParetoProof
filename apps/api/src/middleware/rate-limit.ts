@@ -25,6 +25,8 @@ type RateLimitDecision = {
 };
 
 type ApiRateLimitOptions = {
+  cleanupIntervalMs?: number;
+  maxTrackedKeys?: number;
   now?: () => number;
   policies?: Partial<Record<ApiRateLimitPolicyId, Partial<Omit<ApiRateLimitPolicy, "id">>>>;
 };
@@ -42,27 +44,13 @@ const defaultPolicies: Record<ApiRateLimitPolicyId, ApiRateLimitPolicy> = {
   }
 };
 
-function readClientIp(request: FastifyRequest) {
-  const cfConnectingIp =
-    typeof request.headers["cf-connecting-ip"] === "string"
-      ? request.headers["cf-connecting-ip"].trim()
-      : "";
+const defaultCleanupIntervalMs = 30_000;
+const defaultMaxTrackedKeys = 10_000;
 
-  if (cfConnectingIp) {
-    return cfConnectingIp;
-  }
-
-  const forwardedFor =
-    typeof request.headers["x-forwarded-for"] === "string"
-      ? request.headers["x-forwarded-for"]
-      : "";
-  const forwardedIp = forwardedFor.split(",")[0]?.trim() ?? "";
-
-  if (forwardedIp) {
-    return forwardedIp;
-  }
-
-  return request.ip;
+function readTrustedClientIp(request: FastifyRequest) {
+  return typeof request.ip === "string" && request.ip.trim().length > 0
+    ? request.ip.trim()
+    : "unknown";
 }
 
 function getRateLimitKey(request: FastifyRequest, policyId: ApiRateLimitPolicyId) {
@@ -82,7 +70,7 @@ function getRateLimitKey(request: FastifyRequest, policyId: ApiRateLimitPolicyId
     }
   }
 
-  return `ip:${readClientIp(request)}`;
+  return `ip:${readTrustedClientIp(request)}`;
 }
 
 export function applyRateLimitHeaders(
@@ -101,6 +89,8 @@ export function applyRateLimitHeaders(
 
 export function createInMemoryRateLimiter(options: ApiRateLimitOptions = {}) {
   const now = options.now ?? Date.now;
+  const cleanupIntervalMs = Math.max(1, options.cleanupIntervalMs ?? defaultCleanupIntervalMs);
+  const maxTrackedKeys = Math.max(1, options.maxTrackedKeys ?? defaultMaxTrackedKeys);
   const policies = {
     authenticated: {
       ...defaultPolicies.authenticated,
@@ -112,12 +102,59 @@ export function createInMemoryRateLimiter(options: ApiRateLimitOptions = {}) {
     }
   } satisfies Record<ApiRateLimitPolicyId, ApiRateLimitPolicy>;
   const stateByKey = new Map<string, RateLimitState>();
+  let lastCleanupAt = 0;
+
+  function cleanupExpiredEntries(currentTime: number) {
+    if (currentTime - lastCleanupAt < cleanupIntervalMs && stateByKey.size < maxTrackedKeys) {
+      return;
+    }
+
+    for (const [key, state] of stateByKey.entries()) {
+      if (state.resetAt <= currentTime) {
+        stateByKey.delete(key);
+      }
+    }
+
+    lastCleanupAt = currentTime;
+  }
+
+  function resolveTrackedKey(
+    policyId: ApiRateLimitPolicyId,
+    request: FastifyRequest,
+    currentTime: number
+  ) {
+    cleanupExpiredEntries(currentTime);
+
+    const rawKey = `${policyId}:${getRateLimitKey(request, policyId)}`;
+
+    if (stateByKey.has(rawKey) || stateByKey.size < maxTrackedKeys) {
+      return rawKey;
+    }
+
+    const overflowKey = `${policyId}:overflow`;
+
+    if (stateByKey.has(overflowKey)) {
+      return overflowKey;
+    }
+
+    while (stateByKey.size >= maxTrackedKeys) {
+      const oldestTrackedKey = stateByKey.keys().next().value;
+
+      if (typeof oldestTrackedKey !== "string") {
+        break;
+      }
+
+      stateByKey.delete(oldestTrackedKey);
+    }
+
+    return overflowKey;
+  }
 
   return {
     check(policyId: ApiRateLimitPolicyId, request: FastifyRequest) {
       const policy = policies[policyId];
-      const key = `${policy.id}:${getRateLimitKey(request, policyId)}`;
       const currentTime = now();
+      const key = resolveTrackedKey(policy.id, request, currentTime);
       const previousState = stateByKey.get(key);
       const state =
         previousState && previousState.resetAt > currentTime
@@ -155,6 +192,9 @@ export function createInMemoryRateLimiter(options: ApiRateLimitOptions = {}) {
           retryAfterSeconds: Math.max(1, Math.ceil((state.resetAt - currentTime) / 1000))
         } satisfies RateLimitDecision
       };
+    },
+    getTrackedKeyCount() {
+      return stateByKey.size;
     }
   };
 }
