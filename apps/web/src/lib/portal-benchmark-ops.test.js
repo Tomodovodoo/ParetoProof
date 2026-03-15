@@ -66,6 +66,50 @@ describe("buildRunsCsv", () => {
     expect(csv).toContain("succeeded,Succeeded,terminal_success,Terminal success,pass,Pass");
     expect(csv).not.toContain("succeeded,Completed");
   });
+
+  it("neutralizes direct and whitespace-prefixed spreadsheet formulas", () => {
+    const csv = buildRunsCsv([
+      {
+        authMode: "oidc",
+        benchmarkItemId: "item-1",
+        benchmarkLabel: "problem9 core",
+        benchmarkPackageDigest: "sha256:abc",
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "@problem9@2026.03",
+        completedAt: '  =SUM("a","b")',
+        durationMs: 120000,
+        failure: { code: "+code", family: "\t=family", summary: null },
+        laneId: "lane-1",
+        latestAttemptId: "-attempt-1",
+        latestJobId: "  +job-1",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-1"],
+          jobCount: 1,
+          jobIds: ["job-1"],
+          latestAttemptId: "attempt-1",
+          latestJobId: "job-1"
+        },
+        modelConfigId: "=gpt-oss",
+        modelConfigLabel: "  =GPT OSS",
+        modelSnapshotId: "gpt-oss-2026-03-13",
+        providerFamily: "openai",
+        runId: "\t=PP-318",
+        runKind: "single_run",
+        runLifecycleBucket: "terminal_success",
+        runMode: "eval",
+        runState: "succeeded",
+        startedAt: "2026-03-13T19:58:00.000Z",
+        toolProfile: "lean4-proof",
+        verdictClass: "pass"
+      }
+    ]);
+
+    expect(csv).toContain("'\t=PP-318,'  +job-1,'-attempt-1,'@problem9@2026.03,'=gpt-oss,'  =GPT OSS");
+    expect(csv).toContain("'\t=family,'+code");
+    expect(csv).toContain("\"'  =SUM(\"\"a\"\",\"\"b\"\")\"");
+  });
 });
 
 describe("benchmark dataset exports", () => {

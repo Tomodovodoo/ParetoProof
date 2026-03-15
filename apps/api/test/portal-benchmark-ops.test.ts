@@ -571,6 +571,61 @@ test("GET /portal/benchmarks/:packageId/export streams csv when requested", asyn
   assert.match(response.body, /problem9,2026\.03,PP-318/);
 });
 
+test("GET /portal/benchmarks/:packageId/export neutralizes whitespace-prefixed spreadsheet formulas", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService({
+        getBenchmarkDataset: async () => {
+          const dataset = buildBenchmarkDatasetResponse();
+
+          dataset.benchmark.benchmarkPackageId = "  =problem9";
+          dataset.benchmark.versions = ["\t=2026.03"];
+          dataset.runs[0] = {
+            ...dataset.runs[0],
+            modelConfigId: "@gpt-oss",
+            runId: "=PP-318"
+          };
+          dataset.attempts[0] = {
+            ...dataset.attempts[0],
+            attemptId: "-attempt-1",
+            failure: {
+              ...dataset.attempts[0].failure,
+              summary: '  =SUM("a","b")'
+            },
+            jobId: "  +job-1",
+            runId: "=PP-318",
+            verifierResult: dataset.attempts[0].verifierResult
+          };
+
+          return dataset;
+        }
+      }),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks/problem9/export?format=csv"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /^benchmarkPackageId,benchmarkVersions,runId/m);
+  assert.match(response.body, /'  =problem9,'\t=2026\.03,'=PP-318/);
+  assert.match(response.body, /,openai,'@gpt-oss,/);
+  assert.match(response.body, /,'  \+job-1,'-attempt-1,succeeded,pass,accepted,/);
+  assert.match(response.body, /,"'  =SUM\(""a"",""b""\)"$/m);
+});
+
 test("GET /portal/runs/:runId returns 404 when the run read model is missing", async (t) => {
   const app = Fastify();
 
