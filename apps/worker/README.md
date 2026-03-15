@@ -1,6 +1,8 @@
 # Worker
 
-`apps/worker` holds the CLI and runtime code for benchmark package materialization, local attempts, offline ingest, and the hosted claim loop.
+`apps/worker` holds the CLI and runtime code for the current benchmark execution kernel. In the repo today that means package and prompt materialization for `firstproof/Problem9`, deterministic verifier and run-bundle assembly, offline ingest, trusted-local local attempts, and the hosted worker claim loop.
+
+The broader benchmark target is still a live scope question, but the worker/image/runtime contract for the current Problem 9 kernel is already concrete and enforced by the repository-owned smoke and boundary checks described below.
 
 Docker targets:
 
@@ -35,6 +37,14 @@ Runtime env guidance:
 - use [`.env.example`](./.env.example) only as the local developer-facing example
 - use `bun run bootstrap:modal:worker-secrets -- --worker-environment dev --apply` to sync the base worker bootstrap token into Modal from a local runtime-only source
 - the checked-in `ingest-problem9-run-bundle` CLI is not a `WORKER_BOOTSTRAP_TOKEN` flow; offline ingest uses an explicit admin-authenticated control-plane handoff
+
+Repository-owned verification commands:
+
+- `bun run test:startup-validation` is the cross-surface startup env smoke owner for web, API, worker, and the local Docker execution-image claim-loop entrypoint
+- `bun run verify:problem9-execution-image` and `bun run verify:problem9-devbox-image` are the publish-critical image verification gates
+- `bun run test:worker:verifier-smoke` and `bun run test:worker:attempt-smoke` are the deterministic verifier and local-stub attempt smoke gates used for PR promotion evidence
+- `bun run check:trusted-local-boundary` is the fail-closed gate for trusted-local auth reuse and host-mount policy
+- the authoritative named PR-CI evidence for worker/image/auth/runtime slices is documented in [docs/runtime.md](../../docs/runtime.md)
 
 CLI contract:
 
@@ -111,26 +121,19 @@ Trusted-local devbox wrapper:
 
 Hosted claim loop:
 
-- use `bun run run:worker-claim-loop -- --worker-id <id> --worker-pool <pool> --worker-version <version> --workspace-root <directory> --output-root <directory>` to claim hosted worker jobs from the internal worker API and run them through the existing Problem 9 attempt runner
-- hosted claim-loop runtime env still comes from `API_BASE_URL`, `WORKER_BOOTSTRAP_TOKEN`, and the selected machine-auth provider credentials such as `CODEX_API_KEY`
-- the loop claims one job at a time, materializes the benchmark and prompt package locally from the claimed identity, heartbeats while the attempt is running, appends explicit lifecycle events, submits the artifact manifest, and then submits either terminal success or terminal failure
-- if a heartbeat returns `cancel_requested` or `expired`, the loop stops terminal submission for that job instead of racing a stale result write against a revoked lease
-
-Hosted claim loop:
-
 - use `bun run run:worker-claim-loop -- --auth-mode machine_api_key --once` to run one hosted claim attempt against the internal worker API
-- required flags for hosted mode:
+- hosted mode also requires:
   - `--worker-id <id>`
   - `--worker-pool <pool>`
   - `--worker-version <version>`
   - `--workspace-root <directory>`
   - `--output-root <directory>`
-- required env for hosted mode:
+- hosted runtime env still comes from:
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
   - `CODEX_API_KEY` when `--auth-mode machine_api_key`
 - hosted and packaged modes reject the trusted-local mount marker and the canonical `/run/paretoproof/codex-home/auth.json` path instead of silently attempting to reuse contributor auth material
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
+- if a heartbeat returns `cancel_requested` or `expired`, the loop exits that claim without sending a stale terminal finalize
 - use `--max-jobs <n>` to bound a longer poller run, `--provider-model <model>` to override the provider model derived from `modelConfigId`, and `--worker-runtime` to choose the runtime label sent in claim requests
-- if the API reports `cancel_requested` or `expired` on a heartbeat before terminal submission, the loop exits that claim explicitly without sending a stale terminal finalize
 
