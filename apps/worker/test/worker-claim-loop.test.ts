@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -216,6 +216,8 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
       stopReason: "verification_passed",
       verifierRepairCount: 0
     });
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
   } finally {
     await rm(tempRoot, { force: true, recursive: true });
   }
@@ -302,6 +304,8 @@ test("runWorkerClaimLoop exits explicitly when the first heartbeat requests canc
       calls.map((call) => call.path),
       ["/internal/worker/claims", `/internal/worker/jobs/${workerJob.jobId}/heartbeat`]
     );
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
   } finally {
     await rm(tempRoot, { force: true, recursive: true });
   }
@@ -656,7 +660,7 @@ test("runWorkerClaimLoop constrains claimed job filesystem paths under the confi
     );
 
     assert.equal(benchmarkRoots.length, 1);
-    assert.match(benchmarkRoots[0]!, /C__danger/i);
+    assert.match(benchmarkRoots[0]!, /lease-1__C__danger/i);
     assert.ok(benchmarkRoots[0]!.startsWith(path.join(tempRoot, "workspace")));
     assert.ok(!benchmarkRoots[0]!.includes("C:\\danger"));
     assert.equal(attemptCalls.length, 1);
@@ -694,6 +698,99 @@ test("runWorkerClaimLoop rejects modal control-plane raw IP origins before any h
       ),
     /raw_ip_forbidden/
   );
+});
+
+test("runWorkerClaimLoop fails closed on pre-existing lease residue and skips execution", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-residue-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    const leaseWorkspaceRoot = buildLeaseScopedRoot(path.join(tempRoot, "workspace"), workerJob);
+    const leaseStagingRoot = buildLeaseScopedRoot(path.join(tempRoot, "output"), workerJob);
+    await mkdir(leaseWorkspaceRoot, { recursive: true });
+    await mkdir(leaseStagingRoot, { recursive: true });
+    await writeFile(path.join(leaseWorkspaceRoot, "stale.txt"), "stale workspace", "utf8");
+    await writeFile(path.join(leaseStagingRoot, "stale.txt"), "stale staging", "utf8");
+
+    let attemptRunnerCalled = false;
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/failure`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async () => {
+          attemptRunnerCalled = true;
+          throw new Error("attempt runner should not execute");
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.equal(attemptRunnerCalled, false);
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.equal(failureBody.failure.failureCode, "tool_permission_violation");
+    assert.match(failureBody.failure.summary, /Unsafe hosted residue detected/);
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
 });
 
 test("runWorkerClaimLoop reports invalid hosted modelConfigId prefixes before attempt execution", async () => {
@@ -954,6 +1051,28 @@ function jobEndpointPath(jobId: string, suffix: string): string {
     `/internal/worker/jobs/${jobId}/${suffix}`,
     "https://api.paretoproof.test"
   ).pathname;
+}
+
+function buildLeaseScopedRoot(baseRoot: string, workerJob: ReturnType<typeof buildWorkerJob>): string {
+  return path.join(
+    baseRoot,
+    [sanitizePathSegment(workerJob.leaseId), sanitizePathSegment(workerJob.jobId)].join("__")
+  );
+}
+
+function sanitizePathSegment(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  if (sanitized.length === 0 || /^\.+$/u.test(sanitized)) {
+    return "_";
+  }
+
+  return sanitized;
+}
+
+async function assertDirectoryEmptyOrMissing(rootPath: string): Promise<void> {
+  const entries = await readdir(rootPath).catch(() => null);
+  assert.deepEqual(entries ?? [], []);
 }
 
 function jsonResponse(body: unknown): Response {
