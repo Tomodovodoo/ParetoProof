@@ -9,6 +9,7 @@ Use these files:
 - [benchmark-product-objects-baseline.md](./benchmark-product-objects-baseline.md) for the first-class benchmark, launch, release, and comparison objects above the run kernel
 - [benchmark-intake-review-workflow-baseline.md](./benchmark-intake-review-workflow-baseline.md) for the repository-first benchmark candidate intake and curation-review boundary
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
+- [hosted-worker-platform-baseline.md](./hosted-worker-platform-baseline.md) for the accepted API-owned hosted Modal worker platform boundary
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
