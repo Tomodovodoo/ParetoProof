@@ -5,10 +5,15 @@ import type {
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
-import { fetchApi } from "../lib/api-fetch";
+import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import { AccessRequestScreen } from "./access-request-screen";
+import {
+  buildLocalPendingPortalUrl,
+  reducePortalStateAfterAuthExpiry,
+  type PortalAccessState
+} from "./portal-bootstrap-state";
 import {
   buildPortalUrl,
   buildAuthUrl,
@@ -16,22 +21,6 @@ import {
   isLocalHostname
 } from "../lib/surface";
 import { PortalShell } from "./portal-shell";
-
-type PortalAccessState =
-  | { status: "loading" }
-  | { status: "unauthenticated" }
-  | { status: "approved"; email: string | null; roles: string[] }
-  | { status: "pending"; email: string | null }
-  | {
-      email: string | null;
-      reason:
-        | "access_request_required"
-        | "identity_recovery_required"
-        | "rejected_or_withdrawn"
-        | "unknown_identity";
-      status: "denied";
-    }
-  | { status: "error"; message: string };
 
 type PortalMeResponse = {
   access: {
@@ -108,27 +97,6 @@ function readLocalAccessOverride(): PortalAccessState | null {
   return null;
 }
 
-export function buildLocalPendingPortalUrl(
-  currentSearch = window.location.search
-) {
-  const currentParams = new URLSearchParams(currentSearch);
-  const nextParams = new URLSearchParams(currentParams);
-
-  nextParams.set("surface", "portal");
-  nextParams.set("access", "pending");
-  nextParams.delete("reason");
-  nextParams.delete("roles");
-
-  const email = currentParams.get("email");
-
-  if (email) {
-    nextParams.set("email", email);
-  }
-
-  const nextSearch = nextParams.toString();
-  return `/pending${nextSearch ? `?${nextSearch}` : ""}`;
-}
-
 function formatPortalBootstrapError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "Failed to fetch") {
@@ -140,7 +108,6 @@ function formatPortalBootstrapError(error: unknown) {
 
   return "The portal could not finish loading right now. Try again in a moment.";
 }
-
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
@@ -245,6 +212,18 @@ export function PortalBootstrap() {
       controller.abort();
     };
   }, [apiBaseUrl]);
+
+  useEffect(() => {
+    const handlePortalAuthExpired = () => {
+      setState((currentState) => reducePortalStateAfterAuthExpiry(currentState));
+    };
+
+    window.addEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
+
+    return () => {
+      window.removeEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
+    };
+  }, []);
 
   useEffect(() => {
     if (state.status !== "unauthenticated") {
