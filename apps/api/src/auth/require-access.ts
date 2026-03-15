@@ -3,15 +3,17 @@ import type { HookHandlerDoneFunction } from "fastify/types/hooks";
 import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
 import { resolveAccessRbacContext } from "./resolve-access-rbac-context.js";
 import {
-  buildSignedPortalAccessSessionCookie,
   createCloudflareAccessVerifierSetFromEnv,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
-  verifyPortalAccessSession,
   verifyAccessProviderHint,
   type CloudflareAccessIdentity,
   type CloudflareAccessVerifierSet
 } from "./cloudflare-access.js";
+import {
+  resolvePortalAccessSession,
+  type ResolvedPortalAccessSession
+} from "./portal-access-session.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 type RouteAccessRequirement =
@@ -38,6 +40,7 @@ declare module "fastify" {
   interface FastifyRequest {
     accessIdentity: CloudflareAccessIdentity | null;
     accessRbacContext: AccessRbacContext | null;
+    portalAccessSession: ResolvedPortalAccessSession | null;
   }
 }
 
@@ -85,11 +88,12 @@ async function resolveRequestAccess(
 
   if (!assertion) {
     if (routePath.startsWith("/portal/")) {
-      const cachedSession = verifyPortalAccessSession(cookieHeader);
+      const cachedSession = await resolvePortalAccessSession(db, cookieHeader);
 
       if (cachedSession) {
         request.accessIdentity = cachedSession.identity;
         request.accessRbacContext = cachedSession.context;
+        request.portalAccessSession = cachedSession;
 
         return cachedSession.context;
       }
@@ -119,6 +123,7 @@ async function resolveRequestAccess(
 
   request.accessIdentity = identity;
   request.accessRbacContext = context;
+  request.portalAccessSession = null;
 
   return context;
 }
@@ -157,14 +162,6 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
 
             return;
           }
-
-          if (request.accessIdentity && request.routeOptions?.url?.startsWith("/portal/")) {
-            reply.header(
-              "set-cookie",
-              buildSignedPortalAccessSessionCookie(request.accessIdentity, context)
-            );
-          }
-
           done();
         })
         .catch((error) => {
