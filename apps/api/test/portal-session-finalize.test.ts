@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
-import { buildSignedAccessCookie } from "../src/auth/cloudflare-access.ts";
+import {
+  buildSignedAccessCookie,
+  buildSignedPortalAccessSessionCookie
+} from "../src/auth/cloudflare-access.ts";
+import { createAccessGuard } from "../src/auth/require-access.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
 
 test("GET /portal/session/finalize/submit redirects back to the auth retry handoff when a link intent is present", async (t) => {
@@ -119,9 +123,10 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
 
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
-  assert.equal(setCookies.length, 2);
+  assert.equal(setCookies.length, 3);
   assert.match(setCookies[0], /^PortalAccessProvider=/);
-  assert.match(setCookies[1], /^PortalLinkIntent=;/);
+  assert.match(setCookies[1], /^PortalAccessSession=/);
+  assert.match(setCookies[2], /^PortalLinkIntent=;/);
 });
 
 test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
@@ -261,7 +266,70 @@ test("POST /portal/session/finalize/submit completes a pending-user handoff from
 
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
-  assert.equal(setCookies.length, 2);
+  assert.equal(setCookies.length, 3);
   assert.match(setCookies[0], /^PortalAccessProvider=/);
-  assert.match(setCookies[1], /^PortalLinkIntent=;/);
+  assert.match(setCookies[1], /^PortalAccessSession=/);
+  assert.match(setCookies[2], /^PortalLinkIntent=;/);
+});
+
+test("GET /portal/me accepts the signed portal access session cookie when no Access assertion is present", async (t) => {
+  const app = Fastify();
+  const originalEnv = {
+    ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+    CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
+    DATABASE_URL: process.env.DATABASE_URL,
+    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
+  };
+
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
+  process.env.DATABASE_URL = "postgres://localhost:5432/paretoproof";
+  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+
+  t.after(async () => {
+    Object.assign(process.env, originalEnv);
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createAccessGuard({} as never)
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/me",
+    headers: {
+      cookie: buildSignedPortalAccessSessionCookie(
+        {
+          email: "approved@example.com",
+          issuer: "https://paretoproof.cloudflareaccess.com",
+          provider: "cloudflare_google",
+          subject: "subject-approved"
+        },
+        {
+          email: "approved@example.com",
+          identityId: "identity-approved",
+          roles: ["helper"],
+          status: "approved",
+          subject: "subject-approved",
+          userId: "user-approved"
+        }
+      )
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().access.status, "approved");
+  assert.equal(response.json().access.email, "approved@example.com");
+  assert.deepEqual(response.json().access.roles, ["helper"]);
+
+  const setCookie = response.headers["set-cookie"];
+  assert.ok(Array.isArray(setCookie));
+  assert.match(setCookie[0] ?? "", /^PortalAccessSession=/);
 });
