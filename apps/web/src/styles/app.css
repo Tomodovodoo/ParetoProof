@@ -2562,6 +2562,10 @@ a.button-secondary {
 
   .portal-sidebar {
     order: 1;
+    position: static;
+    top: auto;
+    height: auto;
+    overflow: visible;
     padding: 14px 12px;
     border-radius: 0;
     min-height: auto;

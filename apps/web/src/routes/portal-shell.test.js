@@ -82,3 +82,65 @@ describe("PortalShell overview ordering", () => {
     expect(html.indexOf("Approval state")).toBeLessThan(html.indexOf("Review runs"));
   });
 });
+
+describe("PortalShell benchmark ops routes", () => {
+  it("renders the runs route as the shared portal index with an explicit loading state", async () => {
+    const html = await renderPortalShell({
+      email: "helper@paretoproof.local",
+      roles: ["helper"],
+      url: "http://127.0.0.1/runs?surface=portal&access=approved&roles=helper&email=helper%40paretoproof.local",
+      width: 1280
+    });
+
+    expect(html).toContain(
+      "Portal-owned benchmark run index and evidence trail for approved users, with run detail under /runs/:runId."
+    );
+    expect(html).toContain("Runs keeps search, export, and evidence drill-down on the portal.");
+    expect(html).toContain("Loading run index.");
+  });
+
+  it("renders run detail as portal-owned evidence with next-route actions", async () => {
+    const html = await renderPortalShell({
+      email: "helper@paretoproof.local",
+      roles: ["helper"],
+      url: "http://127.0.0.1/runs/PP-318?surface=portal&access=approved&roles=helper&email=helper%40paretoproof.local",
+      width: 1280
+    });
+
+    expect(html).toContain("Run evidence");
+    expect(html).toContain("Loading run evidence.");
+    expect(html).toContain("Stay inside the benchmark-ops cluster.");
+  });
+
+  it("renders launch as portal preflight instead of a deferred surface placeholder", async () => {
+    const html = await renderPortalShell({
+      email: "collab@paretoproof.local",
+      roles: ["collaborator"],
+      url: "http://127.0.0.1/launch?surface=portal&access=approved&roles=collaborator&email=collab%40paretoproof.local",
+      width: 1280
+    });
+
+    expect(html).toContain(
+      "Launch preflight for collaborators and admins, keeping benchmark selection, run shape, and governance review on the portal."
+    );
+    expect(html).toContain(
+      "Launch keeps benchmark selection, run shape, and guardrails on the portal."
+    );
+    expect(html).toContain("Loading launch preflight.");
+  });
+
+  it("renders workers with a dedicated first-load state and lease-oriented follow-up copy", async () => {
+    const html = await renderPortalShell({
+      email: "collab@paretoproof.local",
+      roles: ["collaborator"],
+      url: "http://127.0.0.1/workers?surface=portal&access=approved&roles=collaborator&email=collab%40paretoproof.local",
+      width: 1280
+    });
+
+    expect(html).toContain(
+      "Worker operations view for queue pressure, lease health, and incident follow-up inside the same portal cluster."
+    );
+    expect(html).toContain("Workers tracks queue pressure, lease health, and incident anchors.");
+    expect(html).toContain("Loading worker operations.");
+  });
+});
