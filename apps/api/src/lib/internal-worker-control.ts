@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import {
   problem9HostedAuthModes,
-  problem9ProviderFamilies
+  problem9HostedProviderFamilies
 } from "@paretoproof/shared";
 import type {
   Problem9HostedAuthMode,
@@ -224,7 +224,7 @@ function queuedJobWhereClause(): SQL {
     eq(attempts.state, "prepared"),
     eq(runs.runKind, "single_run"),
     inArray(runs.authMode, [...problem9HostedAuthModes]),
-    inArray(runs.providerFamily, [...problem9ProviderFamilies]),
+    inArray(runs.providerFamily, [...problem9HostedProviderFamilies]),
     or(eq(runs.state, "queued"), eq(runs.state, "running"))
   )!;
 }

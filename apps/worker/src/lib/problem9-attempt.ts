@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  assertProblem9HostedCapability,
   getProblem9ModelConfigIdPrefix,
   problem9LocalAuthModes,
   problem9ProviderFamilies,
@@ -535,6 +536,14 @@ function validateAttemptInputs(
 
   if (options.authMode && options.authMode !== promptManifest.authMode) {
     throw new Error("Requested auth mode does not match the prompt package.");
+  }
+
+  if (options.networkPolicyMode === "hosted") {
+    assertProblem9HostedCapability({
+      authMode: promptManifest.authMode,
+      modelConfigId: promptManifest.modelConfigId,
+      providerFamily: promptManifest.providerFamily
+    });
   }
 }
 
