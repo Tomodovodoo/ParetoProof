@@ -1,7 +1,11 @@
 import type {
+  AttemptLifecycleState,
   AttemptLifecycleStateCatalogEntry,
+  EvaluationVerdictClass,
+  JobLifecycleState,
   JobLifecycleStateCatalogEntry,
   RunKindCatalogEntry,
+  RunLifecycleState,
   RunLifecycleStateCatalogEntry
 } from "../types/run-control.js";
 
@@ -173,3 +177,49 @@ export const attemptLifecycleCatalog = [
     terminal: true
   }
 ] satisfies AttemptLifecycleStateCatalogEntry[];
+
+export const runLifecycleStateLabels: Record<RunLifecycleState, string> = {
+  cancel_requested: "Cancel requested",
+  cancelled: "Cancelled",
+  created: "Created",
+  failed: "Failed",
+  queued: "Queued",
+  running: "Running",
+  succeeded: "Succeeded"
+};
+
+export const jobLifecycleStateLabels: Record<JobLifecycleState, string> = {
+  cancel_requested: "Cancel requested",
+  cancelled: "Cancelled",
+  claimed: "Claimed",
+  completed: "Completed",
+  failed: "Failed",
+  queued: "Queued",
+  running: "Running"
+};
+
+export const attemptLifecycleStateLabels: Record<AttemptLifecycleState, string> = {
+  active: "Active",
+  cancelled: "Cancelled",
+  failed: "Failed",
+  prepared: "Prepared",
+  succeeded: "Succeeded"
+};
+
+export const evaluationVerdictLabels: Record<EvaluationVerdictClass, string> = {
+  fail: "Fail",
+  invalid_result: "Invalid result",
+  pass: "Pass"
+};
+
+export function getRunLifecycleStateLabel(state: RunLifecycleState) {
+  return runLifecycleStateLabels[state];
+}
+
+export function getJobLifecycleStateLabel(state: JobLifecycleState) {
+  return jobLifecycleStateLabels[state];
+}
+
+export function getAttemptLifecycleStateLabel(state: AttemptLifecycleState) {
+  return attemptLifecycleStateLabels[state];
+}

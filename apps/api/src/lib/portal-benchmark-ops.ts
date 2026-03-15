@@ -1,4 +1,7 @@
 import {
+  getAttemptLifecycleStateLabel,
+  getJobLifecycleStateLabel,
+  getRunLifecycleStateLabel,
   defaultRunControlPolicy,
   portalRunsLifecycleBuckets,
   runKindCatalog,
@@ -262,7 +265,7 @@ function buildTimeline(options: {
       state: options.runRow.state
     },
     {
-      label: "Run completed",
+      label: `Run ${getRunLifecycleStateLabel(options.runRow.state).toLowerCase()}`,
       occurredAt: options.runRow.completedAt.toISOString(),
       scope: "run",
       sourceId: options.runRow.sourceRunId,
@@ -279,7 +282,7 @@ function buildTimeline(options: {
       state: jobRow.state
     });
     timeline.push({
-      label: "Job completed",
+      label: `Job ${getJobLifecycleStateLabel(jobRow.state).toLowerCase()}`,
       occurredAt: jobRow.completedAt.toISOString(),
       scope: "job",
       sourceId: jobRow.sourceJobId,
@@ -296,7 +299,7 @@ function buildTimeline(options: {
       state: attemptRow.state
     });
     timeline.push({
-      label: "Attempt completed",
+      label: `Attempt ${getAttemptLifecycleStateLabel(attemptRow.state).toLowerCase()}`,
       occurredAt: attemptRow.completedAt.toISOString(),
       scope: "attempt",
       sourceId: attemptRow.sourceAttemptId,
@@ -318,6 +321,13 @@ function buildTimeline(options: {
     (left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime()
   );
 }
+
+export const portalBenchmarkOpsReadModelTestUtils = {
+  getRunLifecycleBucket,
+  getRunLifecycleStateLabel,
+  getJobLifecycleStateLabel,
+  getAttemptLifecycleStateLabel
+};
 
 async function loadJobsForRunIds(
   db: ReturnTypeOfCreateDbClient,

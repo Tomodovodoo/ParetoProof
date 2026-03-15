@@ -1,4 +1,7 @@
 import {
+  evaluationVerdictLabels,
+  getPortalRunsLifecycleBucketLabel,
+  getRunLifecycleStateLabel,
   portalLaunchViewResponseSchema,
   portalRunDetailResponseSchema,
   portalRunsLifecycleBuckets,
@@ -21,6 +24,7 @@ import {
   type RunLifecycleState
 } from "@paretoproof/shared";
 import { getApiBaseUrl } from "./api-base-url";
+import { portalResultsExportHeaders } from "./results-state";
 import { isLocalHostname } from "./surface";
 
 const portalRunsSortIds: PortalRunsSortId[] = [
@@ -294,7 +298,7 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
     timeline: [
       ...baseDetail(localRunItems[0]).timeline,
       {
-        label: "Run completed",
+        label: "Run succeeded",
         occurredAt: "2026-03-13T15:38:00.000Z",
         scope: "run",
         sourceId: "PP-318",
@@ -1003,33 +1007,19 @@ export function buildPortalRunsQueryString(query: PortalRunsListQuery) {
 }
 
 export function buildRunsCsv(items: PortalRunListItem[]) {
-  const headers = [
-    "runId",
-    "benchmarkLabel",
-    "modelConfigLabel",
-    "providerFamily",
-    "runKind",
-    "runState",
-    "verdictClass",
-    "latestJobId",
-    "latestAttemptId",
-    "failureFamily",
-    "failureCode",
-    "startedAt",
-    "completedAt",
-    "durationMs"
-  ];
-
   const rows = items.map((item) => [
     item.runId,
-    item.benchmarkLabel,
-    item.modelConfigLabel,
-    item.providerFamily,
-    item.runKind,
-    item.runState,
-    item.verdictClass,
     item.latestJobId ?? "",
     item.latestAttemptId ?? "",
+    item.benchmarkVersionId,
+    item.modelConfigId,
+    item.modelConfigLabel,
+    item.runState,
+    getRunLifecycleStateLabel(item.runState),
+    item.runLifecycleBucket,
+    getPortalRunsLifecycleBucketLabel(item.runLifecycleBucket),
+    item.verdictClass,
+    evaluationVerdictLabels[item.verdictClass],
     item.failure.family ?? "",
     item.failure.code ?? "",
     item.startedAt,
@@ -1037,7 +1027,7 @@ export function buildRunsCsv(items: PortalRunListItem[]) {
     String(item.durationMs)
   ]);
 
-  return [headers, ...rows]
+  return [portalResultsExportHeaders, ...rows]
     .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
     .join("\n");
 }
