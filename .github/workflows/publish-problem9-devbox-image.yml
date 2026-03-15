@@ -42,12 +42,14 @@ jobs:
             type=raw,value=main,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
-      - name: Build devbox rootfs for toolchain verification
+      - name: Build devbox image for toolchain verification
         run: >-
           docker buildx build
+          --progress plain
           --file apps/worker/Dockerfile
           --target problem9-devbox
-          --output type=local,dest=.tmp/problem9-devbox-rootfs
+          --tag paretoproof-problem9-devbox:verify
+          --load
           --cache-from type=gha,scope=problem9-execution
           --cache-from type=gha,scope=problem9-devbox
           .
@@ -56,7 +58,7 @@ jobs:
         run: >-
           node infra/scripts/verify-problem9-image-toolchains.mjs
           --target problem9-devbox
-          --rootfs .tmp/problem9-devbox-rootfs
+          --image paretoproof-problem9-devbox:verify
 
       - name: Build and publish devbox image
         id: build_devbox
