@@ -19,6 +19,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
       - name: Check for hidden Unicode control characters
         run: node infra/scripts/check-bidi-chars.mjs
 
@@ -33,6 +36,37 @@ jobs:
 
       - name: Check Problem 9 image policy
         run: node infra/scripts/check-problem9-image-policy.mjs
+
+      - name: Build execution rootfs for PR image smoke
+        run: >-
+          docker buildx build
+          --file apps/worker/Dockerfile
+          --target problem9-execution
+          --output type=local,dest=.tmp/problem9-execution-rootfs
+          --cache-from type=gha,scope=problem9-execution
+          .
+
+      - name: Verify execution image toolchains in PR smoke
+        run: >-
+          node infra/scripts/verify-problem9-image-toolchains.mjs
+          --target problem9-execution
+          --rootfs .tmp/problem9-execution-rootfs
+
+      - name: Build devbox rootfs for PR image smoke
+        run: >-
+          docker buildx build
+          --file apps/worker/Dockerfile
+          --target problem9-devbox
+          --output type=local,dest=.tmp/problem9-devbox-rootfs
+          --cache-from type=gha,scope=problem9-execution
+          --cache-from type=gha,scope=problem9-devbox
+          .
+
+      - name: Verify devbox image toolchains in PR smoke
+        run: >-
+          node infra/scripts/verify-problem9-image-toolchains.mjs
+          --target problem9-devbox
+          --rootfs .tmp/problem9-devbox-rootfs
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2

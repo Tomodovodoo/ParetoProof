@@ -24,6 +24,7 @@ Docker targets:
 - root-level image verification commands for the publish-critical Problem 9 targets:
   - `bun run verify:problem9-execution-image` verifies the built `paretoproof-problem9-execution:local` image contains the expected Lean toolchains, Node runtime, benchmark package, built worker/shared artifacts, and the workspace-local runtime dependency paths the worker actually resolves at runtime
   - `bun run verify:problem9-devbox-image` verifies the built `paretoproof-problem9-devbox:local` image contains the expected Lean toolchains plus Bun, Codex CLI, Python `3.11`, and `lean-lsp-mcp`
+- `.github/workflows/pull-request-ci.yml` is the authoritative pre-merge image-smoke gate: it builds rootfs exports for both targets and runs `infra/scripts/verify-problem9-image-toolchains.mjs` against each export before the rest of the workspace build passes reviewers a green PR
 - use `node infra/scripts/build-problem9-image.mjs --target <target> --dry-run` to print the exact `docker buildx build` command without executing it
 - if local Docker image loading is unavailable, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and then run `node infra/scripts/verify-problem9-image-toolchains.mjs --target <target> --rootfs <directory>`
 - use `node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-devbox --expected-codex-cli-version 0.0.0` to force a synthetic mismatch and confirm the verifier fails closed when expected tool versions drift

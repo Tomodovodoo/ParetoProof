@@ -48,6 +48,8 @@ The authoritative source of truth for the Problem 9 image graph is [`infra/docke
 
 - Before changing image names, tags, or workflow ownership, update the JSON manifest first and then update any coupled workflows or docs in the same change.
 - Use `node infra/scripts/check-problem9-image-policy.mjs` or `bun run check:problem9-image-policy` to confirm workflows, package scripts, and the worker/infra docs still match the manifest.
+- Pull requests that touch the worker image graph now use `.github/workflows/pull-request-ci.yml` to build local rootfs exports for `problem9-execution` and `problem9-devbox` and then run `infra/scripts/verify-problem9-image-toolchains.mjs` against both exports before merge.
+- Treat those PR-CI rootfs build plus verify steps as the authoritative pre-merge evidence that the image graph still builds and exposes the required Lean, Node, Bun, Codex CLI, and `lean-lsp-mcp` toolchains.
 - Use `bun run verify:problem9-execution-image` after `bun run build:problem9-execution` and `bun run verify:problem9-devbox-image` after `bun run build:problem9-devbox` when local image loading is available.
 - If a local image-store issue blocks `--load`, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and pass `--rootfs <directory>` to `infra/scripts/verify-problem9-image-toolchains.mjs`.
 - The verifier also checks the worker/shared workspace-local runtime dependency paths because Bun may keep packages such as `@paretoproof/shared` and `zod` under those workspace trees instead of hoisting them into repo-root `node_modules`.
