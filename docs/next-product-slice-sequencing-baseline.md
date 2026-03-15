@@ -9,10 +9,10 @@ The repository now has materially more kernel definition than it had when this s
 Accepted upstream scope now includes:
 
 - `docs/problem9-benchmark-target-baseline.md`: `firstproof/Problem9` is no longer a bootstrap-only theorem and now has an accepted canonical target
-- `docs/benchmark-intake-review-workflow-baseline.md`: benchmark intake stays repository-first, with any later portal workflow limited to structured candidate and review state
+- `docs/benchmark-intake-review-workflow-baseline.md`: benchmark intake stays repository-first, with any later math workflow limited to structured candidate and review state
 - `docs/portal-launch-mutation-baseline.md`: launch is a portal-owned browser-to-queue mutation
 - `docs/portal-run-control-actions-baseline.md`: run-detail browser control is intentionally narrow
-- `docs/web-surface-policy.md`: `math.paretoproof.com` remains out of MVP and released reporting stays on the apex site
+- `docs/math-surface-activation-baseline.md`: `math.paretoproof.com` is now the accepted authenticated math workflow surface, while released reporting still stays on the apex site
 
 There is also now an active benchmark-product object scope in flight, which means the project can stop guessing about the layer above raw runs and start sequencing real follow-on work deliberately.
 
@@ -153,7 +153,7 @@ Move approved benchmark releases and released reporting onto the apex site under
 
 Public reporting should consume approved release objects, not query draft review data or private portal state.
 
-The apex site is the right home for released benchmark reporting, and the project should keep it that way instead of reopening the deferred `math.paretoproof.com` decision.
+The apex site is still the right home for released benchmark reporting even after activating `math.paretoproof.com` for authenticated workflow.
 
 ## Slice 6: Richer Comparison And Frontier Reporting
 

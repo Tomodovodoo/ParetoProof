@@ -6,7 +6,7 @@ This document defines how new benchmark candidates should enter ParetoProof afte
 
 - `docs/benchmarks.md` already treats repository-owned benchmark packages as the active execution kernel.
 - `docs/problem9-benchmark-target-baseline.md` now fixes `firstproof/Problem9` as the canonical current benchmark target rather than leaving it as a bootstrap-only theorem.
-- `docs/web-surface-policy.md` explicitly keeps `math.paretoproof.com` out of MVP and limits authenticated operational work to `portal.paretoproof.com`.
+- `docs/math-surface-activation-baseline.md` now accepts `math.paretoproof.com` as the authenticated math workflow surface while keeping package truth repository-owned.
 - `docs/portal-launch-mutation-baseline.md` and `docs/portal-run-control-actions-baseline.md` keep `/runs`, `/launch`, and `/workers` focused on execution and evidence, not benchmark authoring or curation.
 - The current repository state still makes the benchmark package itself the authoritative source of theorem statement, support files, gold proof, and releaseable materialization inputs.
 
@@ -18,7 +18,7 @@ Near-term benchmark intake should remain repository- and pull-request-driven.
 
 The portal should not gain raw benchmark package authoring or freeform theorem-submission forms in the next slice.
 
-A later portal workflow is allowed, but only as a structured review layer on top of repository-owned package candidates, not as a replacement for repository-owned source control.
+A later math workflow is allowed, but only as a structured review layer on top of repository-owned package candidates, not as a replacement for repository-owned source control.
 
 ## Near-term workflow
 
@@ -55,15 +55,15 @@ The near-term workflow should be:
 
 This is intentionally narrower than a general submission portal. The project still needs trusted package authorship and reproducible review more than it needs browser-based theorem intake.
 
-## Portal role in the later slice
+## Math surface role in the later slice
 
-The portal may later gain structured benchmark intake and curation review, but only for metadata, workflow state, and reviewer decisions.
+The math surface may later gain structured benchmark intake and curation review, but only for metadata, workflow state, and reviewer decisions.
 
-The portal should not become a raw package editor.
+The math surface should not become a raw package editor.
 
-### Allowed later portal responsibilities
+### Allowed later math-surface responsibilities
 
-A later portal workflow may own:
+A later math workflow may own:
 
 - benchmark candidate registration metadata
 - triage state
@@ -72,9 +72,9 @@ A later portal workflow may own:
 - approval or rejection decisions
 - publication readiness and release visibility state
 
-### Forbidden later portal responsibilities
+### Forbidden later math-surface responsibilities
 
-Even in the next portal-enabled slice, the browser should stay out of:
+Even in the next math-enabled slice, the browser should stay out of:
 
 - direct editing of Lean theorem files
 - freeform theorem authoring without repository review
@@ -84,7 +84,7 @@ Even in the next portal-enabled slice, the browser should stay out of:
 
 ## Minimum object model for the later workflow
 
-If the portal later gains structured benchmark intake or review capabilities, the minimum object model should be:
+If the math surface later gains structured benchmark intake or review capabilities, the minimum object model should be:
 
 - `benchmark_candidate`
 - `curation_review`
@@ -151,7 +151,7 @@ Publication state must remain separate from review state, because an accepted ca
 
 Near-term submit authority remains repository contributors who can open the package PR.
 
-Later portal candidate registration may be allowed for:
+Later math-surface candidate registration may be allowed for:
 
 - approved collaborator or higher
 
@@ -260,9 +260,9 @@ The repository owns:
 - releaseable package revisions
 - code review on the substantive benchmark content
 
-### Portal-owned later
+### Math-surface-owned later
 
-If implemented later, the portal should own:
+If implemented later, the math surface should own:
 
 - candidate registration and queue state
 - structured curation-review status
@@ -277,20 +277,20 @@ The current benchmark-ops route family should not absorb benchmark intake.
 - `/launch` remains package-selection and run-preflight workflow
 - `/workers` remains operational posture and incident visibility
 
-Benchmark intake and curation review, if they later become portal features, should live in a separate route family rather than mutating the execution cluster into a benchmark CMS.
+Benchmark intake and curation review, if they later become math-surface features, should live in a separate route family rather than mutating the execution cluster into a benchmark CMS.
 
 ## Recommended later route boundary
 
-If the portal later gains this workflow, the route family should be separate from execution routes.
+If the math surface later gains this workflow, the route family should be separate from execution routes.
 
 Recommended shape:
 
-- `/admin/benchmark-candidates`
-- `/admin/benchmark-candidates/:candidateId`
+- `/review/benchmark-candidates`
+- `/review/benchmark-candidates/:candidateId`
 
 That keeps benchmark curation aligned with privileged review work instead of confusing it with ordinary collaborator run operations.
 
-A collaborator-visible submission entry may later exist, but it should still create or point at a structured candidate object reviewed under the admin route family.
+A collaborator-visible submission entry may later exist, but it should still create or point at a structured candidate object reviewed under the privileged review route family.
 
 ## Explicit non-goals for the next slice
 
@@ -299,15 +299,14 @@ The next slice should not attempt:
 - raw browser package editing
 - theorem submission directly from a public form
 - benchmark authoring under `/runs`, `/launch`, or `/workers`
-- a new `math.paretoproof.com` app
-- replacing repository PR review with portal-only workflow state
+- replacing repository PR review with browser-only workflow state
 
 ## Follow-up execution slices
 
 Execution work after this scope should split into:
 
 1. define the canonical `benchmark_candidate`, `curation_review`, `release_decision`, and `publication_status` contracts
-2. add the chosen portal review/read-model routes on a separate admin benchmark-candidates route family if the project wants structured in-product review next
+2. add the chosen math review/read-model routes on a separate benchmark-candidates review route family if the project wants structured in-product review next
 3. add audit coverage for candidate creation, review decisions, hold-out state, and publication changes
 4. align public benchmark release reporting so only approved and publicly reportable candidates appear on the apex site
 5. keep benchmark package authoring, theorem changes, and gold-proof updates repository-owned until a separate scope explicitly changes that rule

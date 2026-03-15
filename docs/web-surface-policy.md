@@ -1,28 +1,31 @@
 # Web Surface Policy
 
-ParetoProof ships three user-facing web surfaces in MVP:
+ParetoProof ships four user-facing web surfaces in the current product split:
 
 - `paretoproof.com` for the public site and released benchmark reporting
 - `auth.paretoproof.com` plus provider-specific auth hosts for approved sign-in and new collaborator identity verification
 - `portal.paretoproof.com` for the authenticated contributor and admin workspace
+- `math.paretoproof.com` for authenticated math workflow, review, and question-centric launch entry
 
-There is no separate `math.paretoproof.com` hostname in MVP. Public benchmark releases stay on the apex site, and deeper operational views stay in the portal.
+Public benchmark releases stay on the apex site. Generic operational views stay in the portal. The dedicated math workflow lives on `math.paretoproof.com`.
 
 ## Surface Ownership
 
 - `paretoproof.com` owns the public home page, the compact project pack, and public benchmark release pages.
 - `auth.paretoproof.com` owns the branded sign-in and request-access entry flow.
 - `portal.paretoproof.com` owns contributor profile, access state, admin review, run views, launch, and worker operations.
+- `math.paretoproof.com` owns question workflow, submission review, release-decision posture, and question-centric launch/bootstrap.
 
 Redirect helpers, route tests, and public copy should preserve this split and reject cross-surface drift.
 
 ## Contributor Path
 
 - Approved contributors start at the sign-in entry on `auth.paretoproof.com`.
+- After auth resolves, continuation should land directly in the intended authenticated app: portal for generic account or ops work, math for question and review workflow.
 - New collaborators verify identity first and then continue to the dedicated access-request path.
-- Approval stays manual before any contributor work opens inside the portal.
+- Approval stays manual before any contributor work opens inside portal or math.
 
-The public site should explain this path without implying self-serve enrollment, hidden sign-in shortcuts, or a separate benchmark hostname.
+The public site should explain this path without implying self-serve enrollment, hidden sign-in shortcuts, or public authoring on the math surface.
 
 ## Auth State Cookies
 
