@@ -254,6 +254,16 @@ These names may appear in examples as commented placeholders, but they are not p
 
 ## Operator workflow summary
 
+- before treating a PR as promotion-ready for `main`, read the successful `Pull Request CI / ci` run on the exact merge head and confirm the named smoke evidence in [runtime.md](runtime.md):
+  - image smoke: `Build Problem 9 execution image smoke target`, `Verify Problem 9 execution image smoke target`, `Build Problem 9 devbox image smoke target`, and `Verify Problem 9 devbox image smoke target`
+  - worker smoke: `Run deterministic Problem 9 verifier smoke` and `Run deterministic Problem 9 local-stub attempt smoke`
+  - coupled auth/runtime gates when those surfaces changed: `Check runtime env examples`, `Check trusted-local auth boundaries`, `Test API auth handoff routes`, and `Test web auth relay functions`
+- do not sign off main-branch promotion from generic success signals alone such as typecheck, build, or unrelated frontend checks when the slice changes worker or runtime kernel paths
+- sample promotion path:
+  - review the PR and wait for `Pull Request CI / ci` on the final head
+  - confirm the named smoke evidence above for the touched surfaces
+  - merge to `main`
+  - if the merge triggers image publication, attach the `problem9-image-digests` or `problem9-devbox-image-digest` artifact from the publish workflow to the release packet as the post-merge digest record
 - use `apps/web/.env.example` only for local browser overrides
 - use `apps/api/.env.example` for local API startup and owner-only API operations
 - use `apps/worker/.env.example` for local worker modes that actually need environment variables

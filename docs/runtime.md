@@ -24,3 +24,32 @@ This repo uses a small number of runtime rules.
 - Local trusted auth stays host-local and enters the devbox only as a read-only `auth.json` mount, never as a copied repo file or baked image layer.
 - Hosted runs must use machine auth only.
 - Offline ingest is a control-plane import path, not a worker-bootstrap-token flow.
+
+## Main-Branch Promotion Gate
+
+Use the PR's `Pull Request CI / ci` run as the pre-merge promotion gate for worker, image, auth, and runtime slices.
+
+Required kernel evidence comes from these named steps:
+
+- image-build smoke:
+  - `Build Problem 9 execution image smoke target`
+  - `Verify Problem 9 execution image smoke target`
+  - `Build Problem 9 devbox image smoke target`
+  - `Verify Problem 9 devbox image smoke target`
+- worker and verifier smoke:
+  - `Run deterministic Problem 9 verifier smoke`
+  - `Run deterministic Problem 9 local-stub attempt smoke`
+- directly coupled auth or runtime gates:
+  - `Check runtime env examples`
+  - `Check trusted-local auth boundaries`
+  - `Test API auth handoff routes`
+  - `Test web auth relay functions`
+
+`Typecheck workspace`, `Build workspace`, and unrelated UI checks still matter, but they do not substitute for the named kernel-proof steps above when deciding whether a slice is ready to promote through `main`.
+
+After merge, treat the main-branch publish workflows as release evidence only:
+
+- `Publish Problem 9 Execution and Worker Images` records the pushed image digests in the `problem9-image-digests` artifact and step summary
+- `Publish Problem 9 Devbox Image` records the pushed image digest in the `problem9-devbox-image-digest` artifact and step summary
+
+Those post-merge artifacts are what a release packet should cite for published-image identity. They do not waive the requirement that the PR already proved the corresponding smoke evidence before merge.
