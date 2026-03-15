@@ -20,7 +20,12 @@ Docker targets:
   - `bun run build:problem9-execution` builds `problem9-execution` and tags it as `paretoproof-problem9-execution:local`
   - `bun run build:problem9-devbox` builds `problem9-devbox` and tags it as `paretoproof-problem9-devbox:local`
   - `bun run build:paretoproof-worker` builds `paretoproof-worker` and tags it as `paretoproof-worker:local`
+- root-level image verification commands for the publish-critical Problem 9 targets:
+  - `bun run verify:problem9-execution-image` verifies the built `paretoproof-problem9-execution:local` image contains the expected Lean toolchains, Node runtime, benchmark package, and built worker/shared artifacts
+  - `bun run verify:problem9-devbox-image` verifies the built `paretoproof-problem9-devbox:local` image contains the expected Lean toolchains plus Bun, Codex CLI, Python `3.11`, and `lean-lsp-mcp`
 - use `node infra/scripts/build-problem9-image.mjs --target <target> --dry-run` to print the exact `docker buildx build` command without executing it
+- if local Docker image loading is unavailable, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and then run `node infra/scripts/verify-problem9-image-toolchains.mjs --target <target> --rootfs <directory>`
+- use `node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-devbox --expected-codex-cli-version 0.0.0` to force a synthetic mismatch and confirm the verifier fails closed when expected tool versions drift
 
 Runtime env guidance:
 
@@ -122,3 +127,4 @@ Hosted claim loop:
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
 - use `--max-jobs <n>` to bound a longer poller run, `--provider-model <model>` to override the provider model derived from `modelConfigId`, and `--worker-runtime` to choose the runtime label sent in claim requests
 - if the API reports `cancel_requested` or `expired` on a heartbeat before terminal submission, the loop exits that claim explicitly without sending a stale terminal finalize
+
