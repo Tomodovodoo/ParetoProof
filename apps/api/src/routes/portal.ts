@@ -34,15 +34,20 @@ import {
   type PortalBenchmarkOpsReadModelService
 } from "../lib/portal-benchmark-ops.js";
 import {
-  buildSignedPortalAccessSessionCookie,
   buildSignedAccessCookie,
   verifyAccessProviderHint,
   verifyAccessLinkIntent
 } from "../auth/cloudflare-access.js";
 import {
+  buildPortalAccessSessionCookie,
+  createPortalAccessSession,
+  revokePortalAccessSession
+} from "../auth/portal-access-session.js";
+import {
   createAccessResolver,
   isAccessAssertionVerificationError
 } from "../auth/require-access.js";
+import { resolveAccessRbacContext } from "../auth/resolve-access-rbac-context.js";
 import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
@@ -390,6 +395,7 @@ export function registerPortalRoutes(
     const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
     const linkIntent = verifyAccessLinkIntent(cookieHeader);
     const providerHint = verifyAccessProviderHint(cookieHeader, identity?.subject);
+    let resolvedAccessContext = accessContext;
 
     if (identity && linkIntent) {
       const linkStatus = await db.transaction(async (tx) => {
@@ -457,11 +463,23 @@ export function registerPortalRoutes(
       });
 
       portalUrl.searchParams.set("link", linkStatus);
+
+      if (linkStatus === "linked") {
+        resolvedAccessContext = await resolveAccessRbacContext(db, identity);
+        request.accessRbacContext = resolvedAccessContext;
+      }
     }
 
     const responseCookies = [
-      identity && accessContext
-        ? buildSignedPortalAccessSessionCookie(identity, accessContext)
+      identity && resolvedAccessContext?.status === "approved"
+        ? buildPortalAccessSessionCookie(
+            await createPortalAccessSession(
+              db,
+              request,
+              identity,
+              resolvedAccessContext
+            )
+          )
         : clearSignedAccessCookie("PortalAccessSession"),
       identity && providerHint
         ? buildSignedAccessCookie(
@@ -628,6 +646,21 @@ export function registerPortalRoutes(
     },
     handlePortalSessionFinalizeSubmit
   );
+
+  app.post("/portal/session/sign-out", {
+    preHandler: rateLimitPreHandlers?.public
+  }, async (request, reply) => {
+    const cookieHeader =
+      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+
+    await revokePortalAccessSession(db, cookieHeader);
+    reply.code(204).header("set-cookie", [
+      clearSignedAccessCookie("PortalAccessSession"),
+      clearSignedAccessCookie("PortalAccessProvider"),
+      clearSignedAccessCookie("PortalLinkIntent")
+    ]);
+    return reply.send();
+  });
 
   app.get(
     "/portal/access-requests/me",

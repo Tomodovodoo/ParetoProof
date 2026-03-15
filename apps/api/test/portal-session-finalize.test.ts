@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
-import {
-  buildSignedAccessCookie,
-  buildSignedPortalAccessSessionCookie
-} from "../src/auth/cloudflare-access.ts";
+import { buildSignedAccessCookie } from "../src/auth/cloudflare-access.ts";
 import { createAccessGuard } from "../src/auth/require-access.ts";
+import { sessions } from "../src/db/schema.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
+
+function readPortalSessionToken(setCookieHeader: string) {
+  const match = /^PortalAccessSession=([^;]+)/.exec(setCookieHeader);
+
+  assert.ok(match);
+
+  return match[1]!;
+}
 
 test("GET /portal/session/finalize/submit redirects back to the auth retry handoff when a link intent is present", async (t) => {
   let mutationAttempted = false;
@@ -60,8 +66,9 @@ test("GET /portal/session/finalize/submit redirects back to the auth retry hando
   assert.equal(mutationAttempted, false);
 });
 
-test("GET /portal/session/finalize/submit completes a normal sign-in handoff once access is attached", async (t) => {
+test("GET /portal/session/finalize/submit creates an opaque DB-backed session for approved users", async (t) => {
   let mutationAttempted = false;
+  const insertedSessions: Array<typeof sessions.$inferInsert> = [];
   const app = Fastify();
   const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
   process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
@@ -74,6 +81,23 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   registerPortalRoutes(
     app,
     {
+      insert() {
+        return {
+          values: async (value: unknown) => {
+            insertedSessions.push(value as typeof sessions.$inferInsert);
+            return value;
+          }
+        };
+      },
+      query: {
+        userIdentities: {
+          findFirst: async () => ({
+            id: "identity-1",
+            providerSubject: "subject-1",
+            userId: "user-1"
+          })
+        }
+      },
       transaction: async () => {
         mutationAttempted = true;
         throw new Error("plain sign-in finalize GET should not hit the identity-link mutation path");
@@ -120,6 +144,9 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   assert.equal(response.statusCode, 302);
   assert.equal(response.headers.location, "https://portal.paretoproof.com/profile");
   assert.equal(mutationAttempted, false);
+  assert.equal(insertedSessions.length, 1);
+  assert.equal(insertedSessions[0]?.identityId, "identity-1");
+  assert.equal(insertedSessions[0]?.userId, "user-1");
 
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
@@ -130,6 +157,11 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   assert.match(setCookies[1], /; SameSite=Strict;/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
   assert.match(setCookies[2], /; SameSite=Strict;/);
+
+  const token = readPortalSessionToken(setCookies[0]);
+  assert.ok(token.length > 30);
+  assert.equal(token.includes("."), false);
+  assert.notEqual(insertedSessions[0]?.tokenHash, token);
 });
 
 test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
@@ -197,7 +229,7 @@ test("POST /portal/session/finalize/submit still returns JSON auth errors for no
   assert.equal(response.json().error, "access_assertion_required");
 });
 
-test("POST /portal/session/finalize/submit completes a pending-user handoff from cookie-backed branded access", async (t) => {
+test("POST /portal/session/finalize/submit clears PortalAccessSession for pending users", async (t) => {
   const app = Fastify();
   const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
   process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
@@ -232,8 +264,7 @@ test("POST /portal/session/finalize/submit completes a pending-user handoff from
         };
         request.accessRbacContext = {
           email: "pending@example.com",
-          identityId: "identity-pending",
-          roles: [],
+          requestId: "request-pending",
           status: "pending",
           subject: "subject-pending",
           userId: "user-pending"
@@ -270,15 +301,72 @@ test("POST /portal/session/finalize/submit completes a pending-user handoff from
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
   assert.equal(setCookies.length, 3);
-  assert.match(setCookies[0], /^PortalAccessSession=/);
-  assert.match(setCookies[0], /; SameSite=Lax;/);
+  assert.match(setCookies[0], /^PortalAccessSession=;/);
+  assert.match(setCookies[0], /; SameSite=Strict;/);
   assert.match(setCookies[1], /^PortalAccessProvider=/);
   assert.match(setCookies[1], /; SameSite=Strict;/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
   assert.match(setCookies[2], /; SameSite=Strict;/);
 });
 
-test("GET /portal/me accepts the signed portal access session cookie when no Access assertion is present", async (t) => {
+test("POST /portal/session/sign-out revokes the active opaque session and clears portal cookies", async (t) => {
+  let revokedSession = false;
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      update(table: unknown) {
+        assert.equal(table, sessions);
+        return {
+          set(value: unknown) {
+            assert.ok((value as { revokedAt?: Date }).revokedAt instanceof Date);
+            return {
+              where() {
+                return {
+                  returning: async () => {
+                    revokedSession = true;
+                    return [{ id: "session-1" }];
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      resolvePortalAccess: async () => null
+    }
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/sign-out",
+    headers: {
+      cookie: "PortalAccessSession=opaque-session-token"
+    }
+  });
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(revokedSession, true);
+
+  const setCookies = response.headers["set-cookie"];
+  assert.ok(Array.isArray(setCookies));
+  assert.equal(setCookies.length, 3);
+  assert.match(setCookies[0], /^PortalAccessSession=;/);
+  assert.match(setCookies[1], /^PortalAccessProvider=;/);
+  assert.match(setCookies[2], /^PortalLinkIntent=;/);
+});
+
+test("GET /portal/me rejects legacy signed portal session cookies without crashing", async (t) => {
   const app = Fastify();
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
@@ -303,39 +391,30 @@ test("GET /portal/me accepts the signed portal access session cookie when no Acc
 
   registerPortalRoutes(
     app,
-    {} as never,
-    createAccessGuard({} as never)
+    {
+      query: {
+        sessions: {
+          findFirst: async () => null
+        }
+      }
+    } as never,
+    createAccessGuard({
+      query: {
+        sessions: {
+          findFirst: async () => null
+        }
+      }
+    } as never)
   );
 
   const response = await app.inject({
     method: "GET",
     url: "/portal/me",
     headers: {
-      cookie: buildSignedPortalAccessSessionCookie(
-        {
-          email: "approved@example.com",
-          issuer: "https://paretoproof.cloudflareaccess.com",
-          provider: "cloudflare_google",
-          subject: "subject-approved"
-        },
-        {
-          email: "approved@example.com",
-          identityId: "identity-approved",
-          roles: ["helper"],
-          status: "approved",
-          subject: "subject-approved",
-          userId: "user-approved"
-        }
-      )
+      cookie: "PortalAccessSession=legacy.payload.signature"
     }
   });
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().access.status, "approved");
-  assert.equal(response.json().access.email, "approved@example.com");
-  assert.deepEqual(response.json().access.roles, ["helper"]);
-
-  const setCookie = response.headers["set-cookie"];
-  const normalizedSetCookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-  assert.match(String(normalizedSetCookies[0] ?? ""), /^PortalAccessSession=/);
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().error, "access_assertion_required");
 });

@@ -2,11 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildSignedAccessCookie,
-  buildSignedPortalAccessSessionCookie,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
   verifyAccessProviderHint,
-  verifyPortalAccessSession,
   type CloudflareAccessVerifierSet
 } from "../src/auth/cloudflare-access.ts";
 import { createAccessResolver } from "../src/auth/require-access.ts";
@@ -42,72 +40,13 @@ test("readAccessJwtAssertion returns null when no usable Access assertion is pre
   assert.equal(assertion, null);
 });
 
-test("verifyPortalAccessSession round-trips a signed portal access session cookie", () => {
-  const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
-  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
-
-  try {
-    const cookie = buildSignedPortalAccessSessionCookie(
-      {
-        email: "person@example.com",
-        issuer: "https://paretoproof.cloudflareaccess.com",
-        provider: "cloudflare_google",
-        subject: "subject-1"
-      },
-      {
-        email: "person@example.com",
-        identityId: "identity-1",
-        roles: ["helper"],
-        status: "approved",
-        subject: "subject-1",
-        userId: "user-1"
-      }
-    );
-
-    assert.deepEqual(verifyPortalAccessSession(cookie), {
-      context: {
-        email: "person@example.com",
-        identityId: "identity-1",
-        roles: ["helper"],
-        status: "approved",
-        subject: "subject-1",
-        userId: "user-1"
-      },
-      identity: {
-        email: "person@example.com",
-        issuer: "https://paretoproof.cloudflareaccess.com",
-        provider: "cloudflare_google",
-        subject: "subject-1"
-      }
-    });
-  } finally {
-    process.env.ACCESS_PROVIDER_STATE_SECRET = originalSecret;
-  }
-});
-
-test("PortalAccessSession uses PORTAL_SESSION_SECRET without changing provider-hint cookie verification", () => {
+test("PortalAccessProvider verification continues to use ACCESS_PROVIDER_STATE_SECRET", () => {
   const originalProviderSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
   const originalSessionSecret = process.env.PORTAL_SESSION_SECRET;
   process.env.ACCESS_PROVIDER_STATE_SECRET = "provider-secret";
   process.env.PORTAL_SESSION_SECRET = "session-secret";
 
   try {
-    const sessionCookie = buildSignedPortalAccessSessionCookie(
-      {
-        email: "person@example.com",
-        issuer: "https://paretoproof.cloudflareaccess.com",
-        provider: "cloudflare_google",
-        subject: "subject-1"
-      },
-      {
-        email: "person@example.com",
-        identityId: "identity-1",
-        roles: ["helper"],
-        status: "approved",
-        subject: "subject-1",
-        userId: "user-1"
-      }
-    );
     const providerCookie = buildSignedAccessCookie(
       "PortalAccessProvider",
       "cloudflare_google|subject-1"
@@ -117,14 +56,6 @@ test("PortalAccessSession uses PORTAL_SESSION_SECRET without changing provider-h
       verifyAccessProviderHint(providerCookie, "subject-1"),
       "cloudflare_google"
     );
-    assert.deepEqual(verifyPortalAccessSession(sessionCookie)?.context, {
-      email: "person@example.com",
-      identityId: "identity-1",
-      roles: ["helper"],
-      status: "approved",
-      subject: "subject-1",
-      userId: "user-1"
-    });
 
     process.env.PORTAL_SESSION_SECRET = "wrong-session-secret";
 
@@ -132,21 +63,19 @@ test("PortalAccessSession uses PORTAL_SESSION_SECRET without changing provider-h
       verifyAccessProviderHint(providerCookie, "subject-1"),
       "cloudflare_google"
     );
-    assert.equal(verifyPortalAccessSession(sessionCookie), null);
   } finally {
     process.env.ACCESS_PROVIDER_STATE_SECRET = originalProviderSecret;
     process.env.PORTAL_SESSION_SECRET = originalSessionSecret;
   }
 });
 
-test("createAccessResolver accepts the signed portal access session on portal routes without touching Access verification", async () => {
+test("createAccessResolver accepts an opaque portal access session when the DB session lookup succeeds", async () => {
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
     CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
     CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
     CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
     DATABASE_URL: process.env.DATABASE_URL,
-    PORTAL_SESSION_SECRET: process.env.PORTAL_SESSION_SECRET,
     WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
   };
 
@@ -158,27 +87,65 @@ test("createAccessResolver accepts the signed portal access session on portal ro
   process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
 
   try {
-    const resolveAccess = createAccessResolver({} as never);
+    let touchedSession = false;
+    const resolveAccess = createAccessResolver({
+      query: {
+        sessions: {
+          findFirst: async () => ({
+            expiresAt: new Date(Date.now() + 60_000),
+            id: "session-1",
+            identity: {
+              id: "identity-1",
+              provider: "cloudflare_google",
+              providerEmail: "person@example.com",
+              providerSubject: "subject-1",
+              user: {
+                email: "person@example.com",
+                id: "user-1"
+              }
+            },
+            revokedAt: null
+          })
+        },
+        userIdentities: {
+          findFirst: async () => ({
+            id: "identity-1",
+            provider: "cloudflare_google",
+            providerEmail: "person@example.com",
+            providerSubject: "subject-1",
+            user: {
+              email: "person@example.com",
+              id: "user-1"
+            }
+          })
+        }
+      },
+      select() {
+        return {
+          from() {
+            return {
+              where: async () => [{ role: "helper" }]
+            };
+          }
+        };
+      },
+      update() {
+        return {
+          set() {
+            return {
+              where: async () => {
+                touchedSession = true;
+              }
+            };
+          }
+        };
+      }
+    } as never);
     const request = {
       accessIdentity: null,
       accessRbacContext: null,
       headers: {
-        cookie: buildSignedPortalAccessSessionCookie(
-          {
-            email: "person@example.com",
-            issuer: "https://paretoproof.cloudflareaccess.com",
-            provider: "cloudflare_google",
-            subject: "subject-1"
-          },
-          {
-            email: "person@example.com",
-            identityId: "identity-1",
-            roles: ["helper"],
-            status: "approved",
-            subject: "subject-1",
-            userId: "user-1"
-          }
-        )
+        cookie: "PortalAccessSession=opaque-session-token"
       },
       raw: {
         url: "/portal/me"
@@ -200,6 +167,129 @@ test("createAccessResolver accepts the signed portal access session on portal ro
     });
     assert.equal(request.accessIdentity?.subject, "subject-1");
     assert.equal(request.accessIdentity?.provider, "cloudflare_google");
+    assert.equal(touchedSession, true);
+  } finally {
+    Object.assign(process.env, originalEnv);
+  }
+});
+
+test("createAccessResolver gracefully rejects legacy signed portal session cookies when no DB session exists", async () => {
+  const originalEnv = {
+    ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+    CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
+    DATABASE_URL: process.env.DATABASE_URL,
+    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
+  };
+
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
+  process.env.DATABASE_URL = "postgres://localhost:5432/paretoproof";
+  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+
+  try {
+    const resolveAccess = createAccessResolver({
+      query: {
+        sessions: {
+          findFirst: async () => null
+        }
+      }
+    } as never);
+    const request = {
+      accessIdentity: null,
+      accessRbacContext: null,
+      headers: {
+        cookie: "PortalAccessSession=legacy.payload.signature"
+      },
+      raw: {
+        url: "/portal/me"
+      },
+      routeOptions: {
+        url: "/portal/me"
+      }
+    } as never;
+
+    const context = await resolveAccess(request);
+
+    assert.equal(context, null);
+    assert.equal(request.accessIdentity, null);
+  } finally {
+    Object.assign(process.env, originalEnv);
+  }
+});
+
+test("createAccessResolver rejects revoked opaque portal sessions", async () => {
+  const originalEnv = {
+    ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+    CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
+    DATABASE_URL: process.env.DATABASE_URL,
+    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
+  };
+
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
+  process.env.DATABASE_URL = "postgres://localhost:5432/paretoproof";
+  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+
+  try {
+    let touchedSession = false;
+    const resolveAccess = createAccessResolver({
+      query: {
+        sessions: {
+          findFirst: async () => ({
+            expiresAt: new Date(Date.now() + 60_000),
+            id: "session-1",
+            identity: {
+              id: "identity-1",
+              provider: "cloudflare_google",
+              providerEmail: "person@example.com",
+              providerSubject: "subject-1",
+              user: {
+                email: "person@example.com",
+                id: "user-1"
+              }
+            },
+            revokedAt: new Date()
+          })
+        }
+      },
+      update() {
+        return {
+          set() {
+            return {
+              where: async () => {
+                touchedSession = true;
+              }
+            };
+          }
+        };
+      }
+    } as never);
+    const request = {
+      accessIdentity: null,
+      accessRbacContext: null,
+      headers: {
+        cookie: "PortalAccessSession=opaque-session-token"
+      },
+      raw: {
+        url: "/portal/me"
+      },
+      routeOptions: {
+        url: "/portal/me"
+      }
+    } as never;
+
+    const context = await resolveAccess(request);
+
+    assert.equal(context, null);
+    assert.equal(touchedSession, false);
   } finally {
     Object.assign(process.env, originalEnv);
   }

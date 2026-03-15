@@ -4,7 +4,6 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { normalizeOptionalEmail } from "../lib/email.js";
 import { parseApiRuntimeEnv } from "../config/runtime.js";
 import type { PortalIdentityProvider } from "@paretoproof/shared";
-import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
   email?: string;
@@ -18,11 +17,6 @@ export type CloudflareAccessIdentity = {
   subject: string;
 };
 
-export type PortalAccessSession = {
-  context: AccessRbacContext;
-  identity: CloudflareAccessIdentity;
-};
-
 export type VerifiedAccessLinkIntent = {
   expiresAt: number;
   intentId: string;
@@ -30,10 +24,6 @@ export type VerifiedAccessLinkIntent = {
 
 function readAccessProviderStateSecret() {
   return process.env.ACCESS_PROVIDER_STATE_SECRET;
-}
-
-function readPortalAccessSessionSecret() {
-  return process.env.PORTAL_SESSION_SECRET ?? readAccessProviderStateSecret();
 }
 
 function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 600) {
@@ -65,164 +55,6 @@ function parseVerifiedProviderHintPayload(payload: string) {
   };
 }
 
-function parsePortalAccessSessionPayload(payload: string) {
-  let parsedPayload: unknown;
-
-  try {
-    parsedPayload = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return null;
-  }
-
-  if (!parsedPayload || typeof parsedPayload !== "object") {
-    return null;
-  }
-
-  const { context, identity } = parsedPayload as {
-    context?: unknown;
-    identity?: unknown;
-  };
-
-  if (
-    !identity ||
-    typeof identity !== "object" ||
-    typeof (identity as { issuer?: unknown }).issuer !== "string" ||
-    typeof (identity as { subject?: unknown }).subject !== "string"
-  ) {
-    return null;
-  }
-
-  const identityEmail = (identity as { email?: unknown }).email;
-  const identityProvider = (identity as { provider?: unknown }).provider;
-
-  if (identityEmail !== null && typeof identityEmail !== "string") {
-    return null;
-  }
-
-  if (
-    identityProvider !== null &&
-    identityProvider !== undefined &&
-    identityProvider !== "cloudflare_google" &&
-    identityProvider !== "cloudflare_github" &&
-    identityProvider !== "cloudflare_one_time_pin"
-  ) {
-    return null;
-  }
-
-  if (!context || typeof context !== "object") {
-    return null;
-  }
-
-  const status = (context as { status?: unknown }).status;
-  const email = (context as { email?: unknown }).email;
-  const subject = (context as { subject?: unknown }).subject;
-
-  if (
-    (email !== null && typeof email !== "string") ||
-    typeof subject !== "string"
-  ) {
-    return null;
-  }
-
-  if (status === "approved") {
-    const roles = (context as { roles?: unknown }).roles;
-    const identityId = (context as { identityId?: unknown }).identityId;
-    const userId = (context as { userId?: unknown }).userId;
-
-    if (
-      !Array.isArray(roles) ||
-      roles.some(
-        (role) => role !== "admin" && role !== "collaborator" && role !== "helper"
-      ) ||
-      typeof identityId !== "string" ||
-      typeof userId !== "string" ||
-      typeof email !== "string"
-    ) {
-      return null;
-    }
-
-    return {
-      context: {
-        email,
-        identityId,
-        roles: [...roles],
-        status,
-        subject,
-        userId
-      },
-      identity: {
-        email: identityEmail ?? null,
-        issuer: (identity as { issuer: string }).issuer,
-        provider: identityProvider ?? null,
-        subject: (identity as { subject: string }).subject
-      }
-    } satisfies PortalAccessSession;
-  }
-
-  if (status === "pending") {
-    const requestId = (context as { requestId?: unknown }).requestId;
-    const userId = (context as { userId?: unknown }).userId;
-
-    if (
-      requestId !== null &&
-      requestId !== undefined &&
-      typeof requestId !== "string"
-    ) {
-      return null;
-    }
-
-    if (userId !== null && userId !== undefined && typeof userId !== "string") {
-      return null;
-    }
-
-    return {
-      context: {
-        email,
-        requestId: requestId ?? null,
-        status,
-        subject,
-        userId: userId ?? null
-      },
-      identity: {
-        email: identityEmail ?? null,
-        issuer: (identity as { issuer: string }).issuer,
-        provider: identityProvider ?? null,
-        subject: (identity as { subject: string }).subject
-      }
-    } satisfies PortalAccessSession;
-  }
-
-  if (status === "denied") {
-    const reason = (context as { reason?: unknown }).reason;
-
-    if (
-      reason !== "access_request_required" &&
-      reason !== "identity_recovery_required" &&
-      reason !== "rejected_or_withdrawn" &&
-      reason !== "unknown_identity"
-    ) {
-      return null;
-    }
-
-    return {
-      context: {
-        email,
-        reason,
-        status,
-        subject
-      },
-      identity: {
-        email: identityEmail ?? null,
-        issuer: (identity as { issuer: string }).issuer,
-        provider: identityProvider ?? null,
-        subject: (identity as { subject: string }).subject
-      }
-    } satisfies PortalAccessSession;
-  }
-
-  return null;
-}
-
 export type CloudflareAccessVerifier = {
   audiences: string[];
   issuer: string;
@@ -246,7 +78,7 @@ function usesBrandedFinalizeRelayAudiences(routePath: string) {
   );
 }
 
-function readCookieValue(cookieHeader: string | undefined, name: string) {
+export function readCookieValue(cookieHeader: string | undefined, name: string) {
   if (!cookieHeader) {
     return null;
   }
@@ -348,7 +180,7 @@ export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
 }
 
 function buildSignedCookie(
-  name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession",
+  name: "PortalAccessProvider" | "PortalLinkIntent",
   value: string,
   secret: string,
   options?: {
@@ -386,53 +218,6 @@ export function buildSignedAccessCookie(
 
   return buildSignedCookie(name, value, secret, options);
 }
-
-export function buildSignedPortalAccessSessionCookie(
-  identity: CloudflareAccessIdentity,
-  context: AccessRbacContext,
-  options?: {
-    maxAgeSeconds?: number;
-  }
-) {
-  const secret = readPortalAccessSessionSecret();
-
-  if (!secret) {
-    throw new Error(
-      "PORTAL_SESSION_SECRET or ACCESS_PROVIDER_STATE_SECRET is required."
-    );
-  }
-
-  return buildSignedCookie(
-    "PortalAccessSession",
-    Buffer.from(
-      JSON.stringify({
-        context,
-        identity
-      }),
-      "utf8"
-    ).toString("base64url"),
-    secret,
-    {
-      maxAgeSeconds: options?.maxAgeSeconds ?? 5 * 60,
-      sameSite: "Lax"
-    }
-  );
-}
-
-export function verifyPortalAccessSession(cookieHeader: string | undefined) {
-  const verifiedCookie = verifySignedAccessCookie(
-    cookieHeader,
-    "PortalAccessSession",
-    readPortalAccessSessionSecret()
-  );
-
-  if (!verifiedCookie?.payload) {
-    return null;
-  }
-
-  return parsePortalAccessSessionPayload(verifiedCookie.payload);
-}
-
 export function readAccessJwtAssertion(
   request: Pick<FastifyRequest, "headers">
 ) {
