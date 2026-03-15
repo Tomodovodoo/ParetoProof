@@ -7,6 +7,8 @@ ParetoProof has three user-facing web surfaces and one worker/control-plane back
 - `portal.paretoproof.com` is the authenticated contributor and admin workspace.
 - `api.paretoproof.com` is the Fastify control plane for state, authz, ingest, and worker coordination.
 
+There is no separate `math.paretoproof.com` hostname in MVP. Public benchmark reporting stays on the apex site, and deeper operational or execution views stay behind the portal and worker surfaces.
+
 Execution is intentionally split away from the browser.
 
 - `apps/api` owns control-plane state and contracts.

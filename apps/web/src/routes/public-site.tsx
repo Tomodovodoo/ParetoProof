@@ -5,9 +5,6 @@ import { Fragment, useEffect, useState } from "react";
 
 const githubDiscussionsUrl = "https://github.com/Tomodovodoo/ParetoProof/discussions";
 const publicDocsBaseUrl = "https://github.com/Tomodovodoo/ParetoProof/blob/main/docs";
-const publicContentPackDocsUrl = `${publicDocsBaseUrl}/public-content-pack-baseline.md`;
-const publicContactPolicyDocsUrl = `${publicDocsBaseUrl}/public-contact-channel-baseline.md`;
-const productSurfaceBoundaryDocsUrl = `${publicDocsBaseUrl}/product-surface-boundary-baseline.md`;
 
 const projectRoute = "/project";
 const benchmarksRoute = "/benchmarks";
@@ -17,6 +14,12 @@ function buildDocsUrl(path: string) {
   const normalizedPath = path.replace(/^\/+/, "");
   return `${publicDocsBaseUrl}/${normalizedPath}`;
 }
+
+const webSurfacePolicyDocsUrl = buildDocsUrl("web-surface-policy.md");
+const publicContentPackDocsUrl = `${webSurfacePolicyDocsUrl}#public-pack`;
+const publicContactPolicyDocsUrl = `${webSurfacePolicyDocsUrl}#contact-boundary`;
+const productSurfaceBoundaryDocsUrl = `${webSurfacePolicyDocsUrl}#surface-ownership`;
+const contributorPathDocsUrl = `${webSurfacePolicyDocsUrl}#contributor-path`;
 
 const publicBenchmarks = [
   {
@@ -1125,7 +1128,7 @@ function PublicProjectPack() {
           </a>
           <a
             className="button button-secondary"
-            href={publicContentPackDocsUrl}
+            href={contributorPathDocsUrl}
             rel="noreferrer"
             target="_blank"
           >
@@ -1161,7 +1164,7 @@ function PublicProjectPack() {
           </a>
           <a
             className="button button-secondary"
-            href={publicContentPackDocsUrl}
+            href={contributorPathDocsUrl}
             rel="noreferrer"
             target="_blank"
           >
