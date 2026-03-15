@@ -10,6 +10,7 @@ Use these files:
 - [benchmark-intake-review-workflow-baseline.md](./benchmark-intake-review-workflow-baseline.md) for the repository-first benchmark candidate intake and curation-review boundary
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
+- [next-product-slice-sequencing-baseline.md](./next-product-slice-sequencing-baseline.md) for the ordered next backlog refill after the current benchmark kernel
 - [portal-launch-mutation-baseline.md](./portal-launch-mutation-baseline.md) for the scoped browser-to-queue launch contract
 - [portal-run-control-actions-baseline.md](./portal-run-control-actions-baseline.md) for the scoped browser run-control mutation boundary on existing runs
 - [problem9-benchmark-target-baseline.md](./problem9-benchmark-target-baseline.md) for the accepted canonical theorem target inside `firstproof/Problem9`
