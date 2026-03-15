@@ -4,6 +4,7 @@
 
 Current helper scripts:
 - `infra/scripts/configure-github-environment-secrets.mjs`: bootstraps and updates staging/production GitHub environment secrets from local shell variables.
+- `infra/scripts/check-cloudflare-api-access.mjs`: owner-only live audit for the hosted Cloudflare Access split on `api.paretoproof.com`; it requires `/portal/*` to bypass Access for browser fetches while `/internal/*` remains protected for owner and service-token callers.
 - `infra/scripts/check-bidi-chars.mjs`: fails CI when tracked files contain hidden or bidirectional Unicode control characters that could hide malicious diffs or review artifacts. It does not scan issue bodies, PR bodies, comments, or other GitHub discussion text, so GitHub can still warn on pasted content even when this repo check passes.
 - `infra/scripts/check-runtime-env-examples.mjs`: fails CI when app `.env.example` files or README env pointers drift from the approved runtime-env contract shape.
 - `infra/scripts/check-problem9-image-policy.mjs`: fails CI when the Problem 9 image manifest, publish workflows, root build scripts, or operator docs drift apart.

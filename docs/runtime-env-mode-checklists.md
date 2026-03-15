@@ -103,6 +103,8 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
 - Platform notes:
   - Railway normally supplies `PORT`
   - keep migration credentials out of the live service runtime
+  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access because the portal SPA talks to it with cross-origin `fetch()` and needs JSON `200`/`401` responses, not Access redirects
+  - keep `api.paretoproof.com/internal/*` on its own Cloudflare Access app for owner and service-token callers
 
 ### API migration mode
 

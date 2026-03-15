@@ -18,6 +18,9 @@ This repo uses a small number of runtime rules.
 - Workers run locally or in hosted runtimes against the API control plane.
 - GHCR holds worker images.
 - Cloudflare R2 holds larger artifacts when the flow requires object storage.
+- Hosted Cloudflare Access split:
+  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access so `portal.paretoproof.com` can make cross-origin JSON `fetch()` calls without an opaque Access redirect.
+  - `api.paretoproof.com/internal/*` stays behind its own Cloudflare Access app for owner and service-token callers.
 
 ## Worker rules
 
