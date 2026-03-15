@@ -94,7 +94,7 @@ Local attempt execution:
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
 - use `bun --cwd apps/worker test:attempt-smoke` or the root alias `bun run test:worker:attempt-smoke` for the deterministic local-stub worker smoke gate; it proves one exact-canonical pass path and one compile-failure path without any interactive auth or paid provider traffic
-- pull-request CI now runs `test:worker:verifier-smoke` and `test:worker:attempt-smoke` after `build:shared`; those two named CI steps are the authoritative pre-merge evidence for deterministic Problem 9 verifier and worker health
+- pull-request CI now runs `test:worker:verifier-smoke` after `build:shared` and `node infra/scripts/run-problem9-attempt-smoke.mjs --image paretoproof-problem9-devbox:pr-smoke` against the already-built devbox image; those two named CI steps are the authoritative pre-merge evidence for deterministic Problem 9 verifier and worker health
 
 Trusted-local devbox wrapper:
 
