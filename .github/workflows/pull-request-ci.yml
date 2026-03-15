@@ -60,6 +60,12 @@ jobs:
       - name: Build shared package
         run: bun run build:shared
 
+      - name: Run deterministic Problem 9 verifier smoke
+        run: bun run test:worker:verifier-smoke
+
+      - name: Run deterministic Problem 9 local-stub attempt smoke
+        run: node infra/scripts/run-problem9-attempt-smoke.mjs --image paretoproof-problem9-devbox:pr-smoke
+
       - name: Test API auth handoff routes
         run: bun run test:api
 
