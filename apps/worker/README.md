@@ -13,6 +13,7 @@ Docker targets:
   - `problem9-devbox`
   - `paretoproof-worker`
 - `problem9-execution` is the canonical non-interactive verdict environment and includes the built worker runtime, prompt templates, and checked-in `benchmarks/firstproof/problem9` source tree at the repo-root paths the CLI materializers resolve at runtime
+- because Bun workspaces can install runtime packages under workspace-local `node_modules`, `problem9-execution` also needs the worker/shared workspace dependency trees instead of assuming every runtime package is hoisted into repo-root `node_modules`
 - `problem9-devbox` extends `problem9-execution` with Bun `1.3.10`, Python `3.11`, Codex CLI, and `lean-lsp-mcp` for trusted-local contributor workflows
 - `paretoproof-worker` remains the narrower hosted wrapper target and is published on `main` alongside the canonical `problem9-execution` image
 - published image names, local tags, and workflow ownership are tracked in [infra/problem9-image-policy.md](../../infra/problem9-image-policy.md) and [infra/docker/problem9-image-policy.json](../../infra/docker/problem9-image-policy.json)
@@ -21,7 +22,7 @@ Docker targets:
   - `bun run build:problem9-devbox` builds `problem9-devbox` and tags it as `paretoproof-problem9-devbox:local`
   - `bun run build:paretoproof-worker` builds `paretoproof-worker` and tags it as `paretoproof-worker:local`
 - root-level image verification commands for the publish-critical Problem 9 targets:
-  - `bun run verify:problem9-execution-image` verifies the built `paretoproof-problem9-execution:local` image contains the expected Lean toolchains, Node runtime, benchmark package, and built worker/shared artifacts
+  - `bun run verify:problem9-execution-image` verifies the built `paretoproof-problem9-execution:local` image contains the expected Lean toolchains, Node runtime, benchmark package, built worker/shared artifacts, and the workspace-local runtime dependency paths the worker actually resolves at runtime
   - `bun run verify:problem9-devbox-image` verifies the built `paretoproof-problem9-devbox:local` image contains the expected Lean toolchains plus Bun, Codex CLI, Python `3.11`, and `lean-lsp-mcp`
 - use `node infra/scripts/build-problem9-image.mjs --target <target> --dry-run` to print the exact `docker buildx build` command without executing it
 - if local Docker image loading is unavailable, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and then run `node infra/scripts/verify-problem9-image-toolchains.mjs --target <target> --rootfs <directory>`

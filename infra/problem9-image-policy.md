@@ -50,6 +50,7 @@ The authoritative source of truth for the Problem 9 image graph is [`infra/docke
 - Use `node infra/scripts/check-problem9-image-policy.mjs` or `bun run check:problem9-image-policy` to confirm workflows, package scripts, and the worker/infra docs still match the manifest.
 - Use `bun run verify:problem9-execution-image` after `bun run build:problem9-execution` and `bun run verify:problem9-devbox-image` after `bun run build:problem9-devbox` when local image loading is available.
 - If a local image-store issue blocks `--load`, export the target filesystem instead with `docker buildx build --file apps/worker/Dockerfile --target <target> --output type=local,dest=<directory> .` and pass `--rootfs <directory>` to `infra/scripts/verify-problem9-image-toolchains.mjs`.
+- The verifier also checks the worker/shared workspace-local runtime dependency paths because Bun may keep packages such as `@paretoproof/shared` and `zod` under those workspace trees instead of hoisting them into repo-root `node_modules`.
 - The publish workflows now build a local rootfs export and run `infra/scripts/verify-problem9-image-toolchains.mjs` before they push mutable or immutable tags, so a toolchain mismatch fails the publish path before new tags move.
 - For rollback, identify the required digest from the workflow artifact, re-publish or deploy by digest, and record the chosen digest in the release evidence instead of relying on `main`.
 

@@ -183,6 +183,26 @@ function verifyRootfsJsonVersion(basePath, label, relativePath, expectedVersion)
   console.log(`Verified ${label}: ${parsed.version}`);
 }
 
+function verifyRootfsPackage(basePath, label, relativePath, expectedVersion = null) {
+  const absolutePath = rootfsPath(basePath, ...relativePath);
+
+  if (!existsSync(absolutePath)) {
+    fail(`${label} expected ${absolutePath} to exist.`);
+  }
+
+  if (expectedVersion === null) {
+    console.log(`Verified ${label}: ${absolutePath}`);
+    return;
+  }
+
+  const parsed = JSON.parse(readFileSync(absolutePath, "utf8"));
+  if (parsed.version !== expectedVersion) {
+    fail(`${label} expected version ${expectedVersion} but found ${parsed.version}.`);
+  }
+
+  console.log(`Verified ${label}: ${parsed.version}`);
+}
+
 function runDocker(image, entrypoint, args) {
   const result = spawnSync("docker", ["run", "--rm", "--entrypoint", entrypoint, image, ...args], {
     cwd: repoRoot,
@@ -279,6 +299,9 @@ if (options.rootfs) {
   verifyRootfsExists(rootfs, "benchmark package manifest", "app", "benchmarks", "firstproof", "problem9", "benchmark-package.json");
   verifyRootfsExists(rootfs, "worker runtime entry", "app", "apps", "worker", "dist", "index.js");
   verifyRootfsExists(rootfs, "shared runtime entry", "app", "packages", "shared", "dist", "index.js");
+  verifyRootfsPackage(rootfs, "worker runtime workspace link", ["app", "apps", "worker", "node_modules", "@paretoproof", "shared", "package.json"]);
+  verifyRootfsPackage(rootfs, "worker runtime zod dependency", ["app", "apps", "worker", "node_modules", "zod", "package.json"], "3.25.76");
+  verifyRootfsPackage(rootfs, "shared runtime zod dependency", ["app", "packages", "shared", "node_modules", "zod", "package.json"], "3.25.76");
 
   if (options.target === "problem9-devbox") {
     verifyRootfsExists(rootfs, "Bun runtime", "usr", "local", "bin", "bun");
@@ -310,6 +333,9 @@ if (options.rootfs) {
   verifyFileExists(image, "benchmark package manifest", "/app/benchmarks/firstproof/problem9/benchmark-package.json");
   verifyFileExists(image, "worker runtime entry", "/app/apps/worker/dist/index.js");
   verifyFileExists(image, "shared runtime entry", "/app/packages/shared/dist/index.js");
+  verifyFileExists(image, "worker runtime workspace link", "/app/apps/worker/node_modules/@paretoproof/shared/package.json");
+  verifyFileExists(image, "worker runtime zod dependency", "/app/apps/worker/node_modules/zod/package.json");
+  verifyFileExists(image, "shared runtime zod dependency", "/app/packages/shared/node_modules/zod/package.json");
 
   if (options.target === "problem9-devbox") {
     verifySemverCommand(image, "Bun runtime", "bun", ["--version"], expectedBunVersion);
