@@ -330,6 +330,6 @@ test("GET /portal/me accepts the signed portal access session cookie when no Acc
   assert.deepEqual(response.json().access.roles, ["helper"]);
 
   const setCookie = response.headers["set-cookie"];
-  assert.ok(Array.isArray(setCookie));
-  assert.match(setCookie[0] ?? "", /^PortalAccessSession=/);
+  const normalizedSetCookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+  assert.match(String(normalizedSetCookies[0] ?? ""), /^PortalAccessSession=/);
 });
