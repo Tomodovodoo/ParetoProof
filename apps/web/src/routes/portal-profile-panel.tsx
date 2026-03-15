@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState, startTransition } from "react";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { fetchApi } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalHostname } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
@@ -248,7 +249,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           return;
         }
 
-        const response = await fetch(`${apiBaseUrl}/portal/profile`, {
+        const response = await fetchApi(`${apiBaseUrl}/portal/profile`, {
           credentials: "include",
           headers: {
             Accept: "application/json"
@@ -328,7 +329,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/portal/profile/link-intents`, {
+      const response = await fetchApi(`${apiBaseUrl}/portal/profile/link-intents`, {
         body: createApiFormBody({
           provider: parsed.data.provider,
           redirectPath: parsed.data.redirectPath ?? ""
@@ -383,7 +384,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/portal/profile`, {
+      const response = await fetchApi(`${apiBaseUrl}/portal/profile`, {
         body: createApiFormBody({
           displayName: parsed.data.displayName ?? ""
         }),

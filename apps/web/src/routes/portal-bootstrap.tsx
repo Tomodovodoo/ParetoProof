@@ -5,6 +5,7 @@ import type {
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { fetchApi } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import { AccessRequestScreen } from "./access-request-screen";
@@ -179,7 +180,7 @@ export function PortalBootstrap() {
 
     async function loadAccessState() {
       try {
-        const response = await fetch(`${apiBaseUrl}/portal/me`, {
+        const response = await fetchApi(`${apiBaseUrl}/portal/me`, {
           credentials: "include",
           headers: {
             Accept: "application/json"
@@ -271,7 +272,7 @@ export function PortalBootstrap() {
       return;
     }
 
-    const response = await fetch(`${apiBaseUrl}/portal/access-requests`, {
+    const response = await fetchApi(`${apiBaseUrl}/portal/access-requests`, {
       body: createApiFormBody({
         rationale: payload.rationale ?? "",
         requestedRole: payload.requestedRole
@@ -304,7 +305,7 @@ export function PortalBootstrap() {
       return;
     }
 
-    const response = await fetch(`${apiBaseUrl}/portal/access-recovery`, {
+    const response = await fetchApi(`${apiBaseUrl}/portal/access-recovery`, {
       body: createApiFormBody({
         rationale: payload.rationale ?? ""
       }),

@@ -24,6 +24,7 @@ import {
   type RunLifecycleState
 } from "@paretoproof/shared";
 import { getApiBaseUrl } from "./api-base-url";
+import { fetchApi } from "./api-fetch";
 import { portalResultsExportHeaders } from "./results-state";
 import { isLocalHostname } from "./surface";
 
@@ -877,7 +878,7 @@ async function fetchPortalBenchmarkOpsJson<T>(
   path: string,
   schema: { parse: (value: unknown) => T }
 ): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+  const response = await fetchApi(`${getApiBaseUrl()}${path}`, {
     credentials: "include",
     headers: {
       Accept: "application/json"

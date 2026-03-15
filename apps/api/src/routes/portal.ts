@@ -10,7 +10,12 @@ import {
   type PortalProfileLinkIntent
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  preHandlerHookHandler
+} from "fastify";
 import {
   accessRequests,
   auditEvents,
@@ -34,6 +39,7 @@ import {
   createAccessResolver,
   isAccessAssertionVerificationError
 } from "../auth/require-access.js";
+import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -246,12 +252,18 @@ export function registerPortalRoutes(
   requireAccess: ReturnTypeOfCreateAccessGuard,
   options?: {
     portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
+    rateLimitPreHandlers?: ReturnType<typeof createRateLimitPreHandlers>;
     resolvePortalAccess?: ReturnType<typeof createAccessResolver>;
   }
 ) {
   const resolvePortalAccess = options?.resolvePortalAccess ?? createAccessResolver(db);
   const portalBenchmarkOpsReadModels =
     options?.portalBenchmarkOpsReadModels ?? createPortalBenchmarkOpsReadModelService(db);
+  const rateLimitPreHandlers = options?.rateLimitPreHandlers;
+  const withAuthenticatedRateLimit = (guard: preHandlerHookHandler) =>
+    rateLimitPreHandlers?.authenticated
+      ? [guard, rateLimitPreHandlers.authenticated]
+      : [guard];
 
   const handlePortalSessionRetryRedirect = (
     request: FastifyRequest,
@@ -472,7 +484,9 @@ export function registerPortalRoutes(
   app.get(
     "/portal/me",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     async (request) => {
       return {
@@ -482,14 +496,22 @@ export function registerPortalRoutes(
     }
   );
 
-  app.get("/portal/session/complete", handlePortalSessionRetryRedirect);
-  app.get("/portal/session/finalize", handlePortalSessionRetryRedirect);
-  app.get("/portal/session/finalize/submit", handlePortalSessionFinalizeGet);
+  app.get("/portal/session/complete", {
+    preHandler: rateLimitPreHandlers?.public
+  }, handlePortalSessionRetryRedirect);
+  app.get("/portal/session/finalize", {
+    preHandler: rateLimitPreHandlers?.public
+  }, handlePortalSessionRetryRedirect);
+  app.get("/portal/session/finalize/submit", {
+    preHandler: rateLimitPreHandlers?.public
+  }, handlePortalSessionFinalizeGet);
 
   app.post(
     "/portal/session/complete",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     handlePortalSessionCompletion
   );
@@ -497,20 +519,27 @@ export function registerPortalRoutes(
   app.post(
     "/portal/session/finalize",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     handlePortalSessionCompletion
   );
 
   app.post(
     "/portal/session/finalize/submit",
+    {
+      preHandler: rateLimitPreHandlers?.public
+    },
     handlePortalSessionFinalizeSubmit
   );
 
   app.get(
     "/portal/access-requests/me",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     async (request) => {
       const identity = request.accessIdentity;
@@ -566,7 +595,9 @@ export function registerPortalRoutes(
   app.get(
     "/portal/profile",
     {
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     async (request) => {
       const identity = request.accessIdentity;
@@ -590,7 +621,9 @@ export function registerPortalRoutes(
       config: {
         contract: portalBenchmarkOpsReadModelsContract.runsListResponse
       },
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     async (request, reply) => {
       const parsedQuery = portalRunsListQuerySchema.safeParse(request.query ?? {});
@@ -613,7 +646,9 @@ export function registerPortalRoutes(
       config: {
         contract: portalBenchmarkOpsReadModelsContract.runDetailResponse
       },
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     async (request, reply) => {
       const parsedParams = portalRunDetailParamsSchema.safeParse(request.params ?? {});
@@ -645,7 +680,9 @@ export function registerPortalRoutes(
       config: {
         contract: portalBenchmarkOpsReadModelsContract.launchViewResponse
       },
-      preHandler: requireAccess("approved_collaborator_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_collaborator_or_higher"))
+      ]
     },
     async () => portalBenchmarkOpsReadModels.getLaunchView()
   );
@@ -656,7 +693,9 @@ export function registerPortalRoutes(
       config: {
         contract: portalBenchmarkOpsReadModelsContract.workersViewResponse
       },
-      preHandler: requireAccess("approved_collaborator_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_collaborator_or_higher"))
+      ]
     },
     async () => portalBenchmarkOpsReadModels.getWorkersView()
   );
@@ -714,7 +753,9 @@ export function registerPortalRoutes(
   app.patch(
     "/portal/profile",
     {
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     handlePortalProfileUpdate
   );
@@ -722,7 +763,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/profile",
     {
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     handlePortalProfileUpdate
   );
@@ -730,7 +773,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/profile/link-intents",
     {
-      preHandler: requireAccess("approved_helper_or_higher")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
     },
     async (request, reply) => {
       const parsedBody = portalProfileLinkIntentInputSchema.safeParse(request.body ?? {});
@@ -853,7 +898,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/access-requests",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     async (request, reply) => {
       const parsedBody = portalAccessRequestInputSchema.safeParse(request.body ?? {});
@@ -1104,7 +1151,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/access-recovery",
     {
-      preHandler: requireAccess("authenticated_access_identity")
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
     },
     async (request, reply) => {
       const parsedBody = portalAccessRecoveryInputSchema.safeParse(request.body ?? {});

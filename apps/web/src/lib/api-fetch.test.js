@@ -1,0 +1,91 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { ApiRateLimitError, fetchApi } from "./api-fetch.ts";
+
+test("fetchApi retries one safe request after Retry-After and eventually succeeds", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const observedWaits = [];
+  let callCount = 0;
+
+  globalThis.window = {
+    location: {
+      origin: "https://portal.paretoproof.com"
+    },
+    setTimeout(callback, delay) {
+      observedWaits.push(delay);
+      callback();
+      return 0;
+    }
+  };
+  globalThis.fetch = async () => {
+    callCount += 1;
+
+    if (callCount === 1) {
+      return new Response(null, {
+        headers: {
+          "Retry-After": "1"
+        },
+        status: 429
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      status: 200
+    });
+  };
+
+  try {
+    const response = await fetchApi("https://api.paretoproof.com/portal/me");
+
+    assert.equal(response.status, 200);
+    assert.equal(callCount, 2);
+    assert.deepEqual(observedWaits, [1000, 1000]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
+  }
+});
+
+test("fetchApi throws ApiRateLimitError for non-idempotent requests after reading retry headers", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+
+  globalThis.window = {
+    location: {
+      origin: "https://portal.paretoproof.com"
+    },
+    setTimeout(callback) {
+      callback();
+      return 0;
+    }
+  };
+  globalThis.fetch = async () =>
+    new Response(null, {
+      headers: {
+        "Retry-After": "2"
+      },
+      status: 429
+    });
+
+  try {
+    await assert.rejects(
+      () =>
+        fetchApi("https://api.paretoproof.com/portal/profile", {
+          body: "displayName=Test",
+          method: "POST"
+        }),
+      (error) => {
+        assert.equal(error instanceof ApiRateLimitError, true);
+        assert.equal(error.retryAfterMs, 2000);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
+  }
+});

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import { fetchApi } from "../lib/api-fetch";
 import {
   buildAccessRequestUrl,
   buildAccessStartUrl,
@@ -78,7 +79,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
 
     async function resolveExistingSession() {
       try {
-        const response = await fetch(
+        const response = await fetchApi(
           `${apiBaseUrl}/portal/me`,
           buildAuthEntrySessionCheckRequestInit(controller.signal)
         );

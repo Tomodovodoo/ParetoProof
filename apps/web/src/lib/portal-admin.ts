@@ -13,6 +13,7 @@ import {
   type PortalAdminUserDetail,
   type PortalAdminUserListItem
 } from "@paretoproof/shared";
+import { fetchApi } from "./api-fetch";
 import { createApiFormBody } from "./api-form";
 import { isLocalHostname } from "./surface";
 
@@ -700,7 +701,7 @@ export async function loadPortalAdminAccessRequests(apiBaseUrl: string) {
     return sortByCreatedDesc(readLocalAdminState().accessRequests.map(toAccessRequestListItem));
   }
 
-  const response = await fetch(`${apiBaseUrl}/portal/admin/access-requests`, {
+  const response = await fetchApi(`${apiBaseUrl}/portal/admin/access-requests`, {
     credentials: "include",
     headers: {
       Accept: "application/json"
@@ -751,7 +752,7 @@ export async function loadPortalAdminAccessRequestDetail(
     return item;
   }
 
-  const response = await fetch(
+  const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}`,
     {
       credentials: "include",
@@ -945,7 +946,7 @@ export async function approvePortalAdminAccessRequest(
     return { ok: true };
   }
 
-  const response = await fetch(
+  const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}/approve`,
     {
       body: createApiFormBody({
@@ -1050,7 +1051,7 @@ export async function rejectPortalAdminAccessRequest(
     return { ok: true };
   }
 
-  const response = await fetch(
+  const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}/reject`,
     {
       body: createApiFormBody({
@@ -1078,7 +1079,7 @@ export async function loadPortalAdminUsers(apiBaseUrl: string) {
       .map(toUserListItem);
   }
 
-  const response = await fetch(`${apiBaseUrl}/portal/admin/users`, {
+  const response = await fetchApi(`${apiBaseUrl}/portal/admin/users`, {
     credentials: "include",
     headers: {
       Accept: "application/json"
@@ -1120,7 +1121,7 @@ export async function loadPortalAdminUserDetail(apiBaseUrl: string, userId: stri
     return item;
   }
 
-  const response = await fetch(`${apiBaseUrl}/portal/admin/users/${encodeURIComponent(userId)}`, {
+  const response = await fetchApi(`${apiBaseUrl}/portal/admin/users/${encodeURIComponent(userId)}`, {
     credentials: "include",
     headers: {
       Accept: "application/json"
@@ -1214,7 +1215,7 @@ export async function revokePortalAdminUserRole(
     return { ok: true };
   }
 
-  const response = await fetch(
+  const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/users/${encodeURIComponent(userId)}/revoke-role`,
     {
       body: createApiFormBody({

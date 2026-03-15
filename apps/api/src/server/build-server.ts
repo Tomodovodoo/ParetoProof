@@ -10,6 +10,10 @@ import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
+  createInMemoryRateLimiter,
+  createRateLimitPreHandlers
+} from "../middleware/rate-limit.js";
+import {
   createTrustedMutationOriginHook,
   isAllowedLocalOrigin,
   normalizeOrigin
@@ -36,6 +40,7 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   });
   const db = createDbClient(runtimeEnv.databaseUrl);
   const requireAccess = createAccessGuard(db);
+  const rateLimitPreHandlers = createRateLimitPreHandlers(createInMemoryRateLimiter());
   const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
 
@@ -69,9 +74,15 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
     })
   );
 
-  registerHealthRoute(app);
-  registerPortalRoutes(app, db, requireAccess);
-  registerAdminRoutes(app, db, requireAccess);
+  registerHealthRoute(app, {
+    rateLimitPreHandlers
+  });
+  registerPortalRoutes(app, db, requireAccess, {
+    rateLimitPreHandlers
+  });
+  registerAdminRoutes(app, db, requireAccess, {
+    rateLimitPreHandlers
+  });
   registerOfflineIngestRoutes(app, db, requireAccess);
   registerInternalWorkerRoutes(app, db, runtimeEnv);
 

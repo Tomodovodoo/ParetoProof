@@ -19,7 +19,11 @@ import {
   portalAdminAccessRequestRejectInputSchema
 } from "@paretoproof/shared";
 import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type {
+  FastifyInstance,
+  FastifyRequest,
+  preHandlerHookHandler
+} from "fastify";
 import {
   accessRequests,
   auditEvents,
@@ -29,6 +33,7 @@ import {
   users
 } from "../db/schema.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
+import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -553,12 +558,21 @@ async function loadAdminUserDetail(
 export function registerAdminRoutes(
   app: FastifyInstance,
   db: ReturnTypeOfCreateDbClient,
-  requireAccess: ReturnTypeOfCreateAccessGuard
+  requireAccess: ReturnTypeOfCreateAccessGuard,
+  options?: {
+    rateLimitPreHandlers?: ReturnType<typeof createRateLimitPreHandlers>;
+  }
 ) {
+  const rateLimitPreHandlers = options?.rateLimitPreHandlers;
+  const withAuthenticatedRateLimit = (guard: preHandlerHookHandler) =>
+    rateLimitPreHandlers?.authenticated
+      ? [guard, rateLimitPreHandlers.authenticated]
+      : [guard];
+
   app.get(
     "/portal/admin/access-requests",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async () => {
       return {
@@ -570,7 +584,7 @@ export function registerAdminRoutes(
   app.get(
     "/portal/admin/access-requests/:accessRequestId",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
       const accessRequestId = (request.params as { accessRequestId?: string }).accessRequestId;
@@ -592,7 +606,7 @@ export function registerAdminRoutes(
   app.get(
     "/portal/admin/users",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async () => {
       return {
@@ -604,7 +618,7 @@ export function registerAdminRoutes(
   app.get(
     "/portal/admin/users/:userId",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
       const userId = (request.params as { userId?: string }).userId;
@@ -624,7 +638,7 @@ export function registerAdminRoutes(
   app.post(
     "/portal/admin/users/:userId/revoke-role",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
       const parsedBody = portalAdminReadModelsContract.userRevokeInput.safeParse(
@@ -770,7 +784,7 @@ export function registerAdminRoutes(
   app.post(
     "/portal/admin/access-requests/:accessRequestId/approve",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
       const parsedBody = portalAdminAccessRequestApproveInputSchema.safeParse(
@@ -1056,7 +1070,7 @@ export function registerAdminRoutes(
   app.post(
     "/portal/admin/access-requests/:accessRequestId/reject",
     {
-      preHandler: requireAccess("admin_only")
+      preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
       const parsedBody = portalAdminAccessRequestRejectInputSchema.safeParse(
