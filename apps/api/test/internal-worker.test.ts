@@ -42,6 +42,7 @@ const supportedArtifactRoles = [
 function buildRuntimeEnv() {
   return parseApiRuntimeEnv({
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
