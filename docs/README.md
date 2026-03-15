@@ -11,6 +11,7 @@ Use these files:
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
 - [portal-launch-mutation-baseline.md](./portal-launch-mutation-baseline.md) for the scoped browser-to-queue launch contract
 - [portal-run-control-actions-baseline.md](./portal-run-control-actions-baseline.md) for the scoped browser run-control mutation boundary on existing runs
+- [problem9-benchmark-target-baseline.md](./problem9-benchmark-target-baseline.md) for the accepted canonical theorem target inside `firstproof/Problem9`
 - [web-surface-policy.md](./web-surface-policy.md) for the approved apex/auth/portal split and contributor path
 - [runtime.md](./runtime.md) for environment, deploy, and worker runtime rules
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) for supported-mode env and operator checklists
