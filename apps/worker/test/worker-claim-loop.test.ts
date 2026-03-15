@@ -172,6 +172,9 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
       stoppedReason: "max_jobs_reached"
     });
     assert.equal(attemptCalls.length, 1);
+    assert.equal(attemptCalls[0]?.authMode, "machine_api_key");
+    assert.equal(attemptCalls[0]?.providerFamily, "openai");
+    assert.equal(attemptCalls[0]?.networkPolicyMode, "hosted");
     assert.equal(attemptCalls[0]?.providerModel, "gpt-5");
     assert.equal(attemptCalls[0]?.stubScenario, "exact_canonical");
 
@@ -691,6 +694,102 @@ test("runWorkerClaimLoop rejects modal control-plane raw IP origins before any h
       ),
     /raw_ip_forbidden/
   );
+});
+
+test("runWorkerClaimLoop reports invalid hosted modelConfigId prefixes before attempt execution", async () => {
+  const tempRoot = await mkdtemp(
+    path.join(os.tmpdir(), "paretoproof-worker-claim-model-config-")
+  );
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = {
+      ...buildWorkerJob(),
+      target: {
+        ...buildWorkerJob().target,
+        modelConfigId: "local_stub/problem9_fixture.v1"
+      }
+    };
+    let attemptRunnerCalled = false;
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse(),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/failure`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async () => {
+          attemptRunnerCalled = true;
+          throw new Error("attempt runner should not execute");
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.equal(attemptRunnerCalled, false);
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.equal(failureBody.failure.failureCode, "provider_unsupported_request");
+    assert.match(failureBody.failure.summary, /Hosted modelConfigId must start with openai\//);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
 });
 
 function buildWorkerJob() {

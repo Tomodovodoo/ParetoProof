@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
+  assertProblem9HostedCapability,
   problem9HostedAuthModes,
   type WorkerArtifactManifestEntry,
   type WorkerArtifactManifestRequest,
@@ -345,6 +346,26 @@ async function processClaimedJob(
         buildStaticFailure({
           summary: "Hosted worker single-run execution does not support pass_k_probe targets yet.",
           failureCode: "run_configuration_invalid",
+          phase: "prepare"
+        })
+      );
+      return "completed";
+    }
+
+    try {
+      assertProblem9HostedCapability({
+        authMode: workerJob.target.authMode,
+        modelConfigId: workerJob.target.modelConfigId,
+        providerFamily: workerJob.target.providerFamily
+      });
+    } catch (error) {
+      await submitHarnessFailure(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        buildStaticFailure({
+          summary: error instanceof Error ? error.message : String(error),
+          failureCode: "provider_unsupported_request",
           phase: "prepare"
         })
       );

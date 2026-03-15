@@ -266,6 +266,26 @@ test(
   }
 );
 
+test("runProblem9Attempt rejects local_stub prompt packages in hosted mode", async () => {
+  const fixture = await createAttemptFixture();
+
+  try {
+    await assert.rejects(
+      () =>
+        runProblem9Attempt({
+          benchmarkPackageRoot: fixture.benchmarkPackageRoot,
+          networkPolicyMode: "hosted",
+          outputRoot: path.join(fixture.tempRoot, "attempt-hosted-output"),
+          promptPackageRoot: fixture.promptPackageRoot,
+          workspaceRoot: path.join(fixture.tempRoot, "attempt-hosted-workspace")
+        }),
+      /Unsupported hosted auth mode local_stub/
+    );
+  } finally {
+    await rm(fixture.tempRoot, { force: true, recursive: true });
+  }
+});
+
 async function createAttemptFixture(): Promise<{
   benchmarkPackageRoot: string;
   promptPackageRoot: string;
