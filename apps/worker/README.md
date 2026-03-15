@@ -71,6 +71,7 @@ Package materialization:
 - use `bun --cwd apps/worker materialize:problem9-run-bundle -- --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]` to emit `problem9-run-bundle/` with the canonical manifests, copied package and prompt references, candidate source, verification artifacts, environment snapshot, and deterministic digests
 - the run-bundle command is a supported standalone materializer for fixture generation and later offline-ingest prep; it derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or any bundle input file
 - use `bun --cwd apps/worker test:run-bundle` to run the fixture-backed standalone verification path, which materializes canonical benchmark and prompt inputs, runs the bundle CLI twice on identical fixture evidence, and checks that the resulting digests and root manifests are identical
+- use `bun --cwd apps/worker test:verifier-smoke` or the root alias `bun run test:worker:verifier-smoke` when you want spec-reporter output for the deterministic verifier smoke gate; it covers the golden-path bundle materialization and the failing overlap-rejection path in the same fixture-backed run
 - use `bun --cwd apps/worker test:cli-smoke` to run the env-free worker CLI smoke matrix locally or in CI; it covers the package, prompt-package, and run-bundle materializers directly, plus the clear-failure command-entry paths for the trusted-local devbox wrapper and hosted claim loop
 - the remaining credential-gated CLI paths stay covered by their targeted suites:
   - `apps/worker/test/problem9-attempt.test.ts` covers the local-attempt CLI boundary for invalid auth-mode input
@@ -92,6 +93,8 @@ Local attempt execution:
 - `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
 - `machine_api_key` runs require `CODEX_API_KEY`
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
+- use `bun --cwd apps/worker test:attempt-smoke` or the root alias `bun run test:worker:attempt-smoke` for the deterministic local-stub worker smoke gate; it proves one exact-canonical pass path and one compile-failure path without any interactive auth or paid provider traffic
+- pull-request CI now runs `test:worker:verifier-smoke` and `test:worker:attempt-smoke` after `build:shared`; those two named CI steps are the authoritative pre-merge evidence for deterministic Problem 9 verifier and worker health
 
 Trusted-local devbox wrapper:
 
