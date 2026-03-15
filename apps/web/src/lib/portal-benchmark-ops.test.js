@@ -40,14 +40,20 @@ describe("sanitizePortalRunsQueryString", () => {
 
 describe("runs filter option builders", () => {
   it("keeps the selected provider visible even when the current result set is empty", () => {
-    expect(buildRunsProviderOptions([], "openai")).toEqual(["openai"]);
+    expect(
+      buildRunsProviderOptions({ modelConfigs: [], providerFamilies: [] }, "openai")
+    ).toEqual(["openai"]);
   });
 
   it("keeps the selected model config visible even when the current result set is empty", () => {
-    expect(buildRunsModelOptions([], "openai-gpt-oss-high")).toEqual([
+    expect(
+      buildRunsModelOptions({ modelConfigs: [], providerFamilies: [] }, "openai-gpt-oss-high")
+    ).toEqual([
       {
+        count: 0,
         label: "openai-gpt-oss-high",
-        modelConfigId: "openai-gpt-oss-high"
+        modelConfigId: "openai-gpt-oss-high",
+        providerFamily: ""
       }
     ]);
   });

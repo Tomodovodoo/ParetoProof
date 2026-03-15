@@ -7,6 +7,9 @@ import {
   portalWorkersViewResponseSchema,
   type EvaluationVerdictClass,
   type PortalLaunchViewResponse,
+  type PortalRunsAvailableFilters,
+  type PortalRunsModelConfigFilterOption,
+  type PortalRunsProviderFilterOption,
   type PortalRunDetailResponse,
   type PortalRunListItem,
   type PortalRunsListQuery,
@@ -724,6 +727,10 @@ function createRunsListResponse(query: PortalRunsListQuery): PortalRunsListRespo
   const limitedItems = filteredItems.slice(0, query.limit);
 
   return {
+    filters: {
+      modelConfigs: buildRunsModelOptionsFromItems(filteredItems),
+      providerFamilies: buildRunsProviderOptionsFromItems(filteredItems)
+    },
     items: limitedItems,
     query,
     summary: {
@@ -1036,15 +1043,17 @@ export function buildRunsCsv(items: PortalRunListItem[]) {
 }
 
 export type PortalRunsModelFilterOption = {
+  count: number;
   label: string;
   modelConfigId: string;
+  providerFamily: string;
 };
 
 export function buildRunsProviderOptions(
-  items: PortalRunListItem[],
+  filters: PortalRunsAvailableFilters,
   selectedProviderFamily: string | null
 ) {
-  const providerOptions = Array.from(new Set(items.map((item) => item.providerFamily)));
+  const providerOptions = filters.providerFamilies.map((entry) => entry.providerFamily);
 
   if (selectedProviderFamily && !providerOptions.includes(selectedProviderFamily)) {
     providerOptions.push(selectedProviderFamily);
@@ -1054,21 +1063,70 @@ export function buildRunsProviderOptions(
 }
 
 export function buildRunsModelOptions(
-  items: PortalRunListItem[],
+  filters: PortalRunsAvailableFilters,
   selectedModelConfigId: string | null
 ): PortalRunsModelFilterOption[] {
   const modelOptions = new Map(
-    items.map((item) => [item.modelConfigId, item.modelConfigLabel] as const)
+    filters.modelConfigs.map((entry) => [
+      entry.modelConfigId,
+      {
+        count: entry.count,
+        label: entry.modelConfigLabel,
+        modelConfigId: entry.modelConfigId,
+        providerFamily: entry.providerFamily
+      }
+    ] as const)
   );
 
   if (selectedModelConfigId && !modelOptions.has(selectedModelConfigId)) {
-    modelOptions.set(selectedModelConfigId, selectedModelConfigId);
+    modelOptions.set(selectedModelConfigId, {
+      count: 0,
+      label: selectedModelConfigId,
+      modelConfigId: selectedModelConfigId,
+      providerFamily: ""
+    });
   }
 
-  return Array.from(modelOptions, ([modelConfigId, label]) => ({
-    label,
-    modelConfigId
+  return Array.from(modelOptions.values());
+}
+
+function buildRunsProviderOptionsFromItems(
+  items: PortalRunListItem[]
+): PortalRunsProviderFilterOption[] {
+  const providerCounts = new Map<string, number>();
+
+  for (const item of items) {
+    providerCounts.set(item.providerFamily, (providerCounts.get(item.providerFamily) ?? 0) + 1);
+  }
+
+  return Array.from(providerCounts, ([providerFamily, count]) => ({
+    count,
+    providerFamily
   }));
+}
+
+function buildRunsModelOptionsFromItems(
+  items: PortalRunListItem[]
+): PortalRunsModelConfigFilterOption[] {
+  const modelOptions = new Map<string, PortalRunsModelConfigFilterOption>();
+
+  for (const item of items) {
+    const existing = modelOptions.get(item.modelConfigId);
+
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    modelOptions.set(item.modelConfigId, {
+      count: 1,
+      modelConfigId: item.modelConfigId,
+      modelConfigLabel: item.modelConfigLabel,
+      providerFamily: item.providerFamily
+    });
+  }
+
+  return Array.from(modelOptions.values());
 }
 
 function escapeCsvValue(value: string) {

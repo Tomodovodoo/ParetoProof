@@ -113,7 +113,25 @@ export const portalRunListItemSchema = z.object({
   verdictClass: evaluationVerdictClassSchema
 });
 
+export const portalRunsProviderFilterOptionSchema = z.object({
+  count: z.number().int().nonnegative(),
+  providerFamily: z.string()
+});
+
+export const portalRunsModelConfigFilterOptionSchema = z.object({
+  count: z.number().int().nonnegative(),
+  modelConfigId: z.string(),
+  modelConfigLabel: z.string(),
+  providerFamily: z.string()
+});
+
+export const portalRunsAvailableFiltersSchema = z.object({
+  modelConfigs: z.array(portalRunsModelConfigFilterOptionSchema),
+  providerFamilies: z.array(portalRunsProviderFilterOptionSchema)
+});
+
 export const portalRunsListResponseSchema = z.object({
+  filters: portalRunsAvailableFiltersSchema,
   items: z.array(portalRunListItemSchema),
   query: portalRunsListQuerySchema,
   summary: z.object({

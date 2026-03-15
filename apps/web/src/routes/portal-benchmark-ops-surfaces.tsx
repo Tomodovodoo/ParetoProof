@@ -425,11 +425,11 @@ function PortalRunsSurface({
   search: string;
 }) {
   const providerOptions = buildRunsProviderOptions(
-    loadState.data?.items ?? [],
+    loadState.data?.filters ?? { modelConfigs: [], providerFamilies: [] },
     query.providerFamily
   );
   const modelOptions = buildRunsModelOptions(
-    loadState.data?.items ?? [],
+    loadState.data?.filters ?? { modelConfigs: [], providerFamilies: [] },
     query.modelConfigId
   );
   const isCompactLayout = useCompactLayout(480);

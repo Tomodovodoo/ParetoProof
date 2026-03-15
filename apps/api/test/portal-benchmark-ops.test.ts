@@ -8,6 +8,7 @@ import type {
   PortalRunsListResponse,
   PortalWorkersViewResponse
 } from "@paretoproof/shared";
+import { portalBenchmarkOpsReadModelsContract } from "@paretoproof/shared";
 import type { PortalBenchmarkOpsReadModelService } from "../src/lib/portal-benchmark-ops.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
 
@@ -51,6 +52,22 @@ function buildRunsListResponse(
   query: PortalRunsListQuery
 ): PortalRunsListResponse {
   return {
+    filters: {
+      modelConfigs: [
+        {
+          count: 1,
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "gpt-oss",
+          providerFamily: "openai"
+        }
+      ],
+      providerFamilies: [
+        {
+          count: 1,
+          providerFamily: "openai"
+        }
+      ]
+    },
     items: [
       {
         authMode: "machine_api_key",
@@ -298,6 +315,8 @@ test("GET /portal/runs parses canonical query state for approved helpers", async
   });
 
   assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.runsListResponse.parse(response.json());
+
   assert.deepEqual(observedQuery, {
     attemptId: null,
     authMode: null,
@@ -320,6 +339,12 @@ test("GET /portal/runs parses canonical query state for approved helpers", async
     toolProfile: null,
     verdict: ["pass"]
   });
+  assert.deepEqual(payload.filters.providerFamilies, [
+    {
+      count: 1,
+      providerFamily: "openai"
+    }
+  ]);
 });
 
 test("GET /portal/runs rejects invalid benchmark-ops query params", async (t) => {
@@ -376,6 +401,33 @@ test("GET /portal/runs/:runId returns 404 when the run read model is missing", a
   assert.equal(response.json().error, "portal_run_not_found");
 });
 
+test("GET /portal/runs/:runId returns a contract-valid detail payload for approved helpers", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService(),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/runs/PP-318"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.runDetailResponse.parse(response.json());
+  assert.equal(payload.item.runId, "PP-318");
+});
+
 test("GET /portal/launch requires collaborator-or-higher access", async (t) => {
   const helperApp = Fastify();
   const collaboratorApp = Fastify();
@@ -415,7 +467,10 @@ test("GET /portal/launch requires collaborator-or-higher access", async (t) => {
 
   assert.equal(deniedResponse.statusCode, 403);
   assert.equal(allowedResponse.statusCode, 200);
-  assert.equal(allowedResponse.json().submissionMode, "preflight_only");
+  const payload = portalBenchmarkOpsReadModelsContract.launchViewResponse.parse(
+    allowedResponse.json()
+  );
+  assert.equal(payload.submissionMode, "preflight_only");
 });
 
 test("GET /portal/workers returns the worker posture view for collaborators", async (t) => {
@@ -441,5 +496,8 @@ test("GET /portal/workers returns the worker posture view for collaborators", as
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json().queueSummary.queuedJobs, 1);
+  const payload = portalBenchmarkOpsReadModelsContract.workersViewResponse.parse(
+    response.json()
+  );
+  assert.equal(payload.queueSummary.queuedJobs, 1);
 });
