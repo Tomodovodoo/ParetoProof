@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Smoke startup validation across runtime surfaces
+        run: bun run test:startup-validation
+
       - name: Build shared package
         run: bun run build:shared
 

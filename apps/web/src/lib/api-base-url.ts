@@ -1,11 +1,12 @@
 import { isLocalDevelopmentLocation } from "./local-development";
+import { readWebRuntimeEnv } from "./runtime-env";
 
 function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
 
 export function getApiBaseUrl() {
-  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL;
+  const configuredBaseUrl = readWebRuntimeEnv().apiBaseUrl;
 
   if (configuredBaseUrl) {
     return trimTrailingSlash(configuredBaseUrl);

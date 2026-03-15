@@ -111,6 +111,11 @@ type WorkerClaimLoopResolvedDependencies = {
   sleep: WorkerSleep;
 };
 
+const startupValidationOnlyEnabled = (() => {
+  const rawValue = process.env.PARETOPROOF_STARTUP_VALIDATION_ONLY?.trim().toLowerCase();
+  return rawValue === "1" || rawValue === "true";
+})();
+
 export type RunWorkerClaimLoopResult = {
   claimedJobs: number;
   completedJobs: number;
@@ -161,6 +166,15 @@ export async function runWorkerClaimLoop(
     authMode: options.authMode,
     commandFamily: "worker_claim_loop"
   }, dependencies.rawEnv);
+
+  if (startupValidationOnlyEnabled) {
+    return {
+      claimedJobs: 0,
+      completedJobs: 0,
+      idlePollCount: 0,
+      stoppedReason: "idle_once"
+    };
+  }
 
   let claimedJobs = 0;
   let completedJobs = 0;
