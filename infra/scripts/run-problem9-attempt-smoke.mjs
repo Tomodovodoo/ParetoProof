@@ -67,13 +67,10 @@ function runWorkerCommand(image, hostRoot, args) {
     `TMPDIR=${containerTmpRoot}`,
   ];
 
-  if (typeof process.getuid === "function" && typeof process.getgid === "function") {
-    dockerArgs.push("--user", `${process.getuid()}:${process.getgid()}`);
-  }
-
+  const command = buildContainerCommand(args);
   const result = spawnSync(
     "docker",
-    [...dockerArgs, "--entrypoint", "node", image, "/app/apps/worker/dist/index.js", ...args],
+    [...dockerArgs, "--entrypoint", "sh", image, "-lc", command],
     {
       encoding: "utf8",
     }
@@ -90,6 +87,23 @@ function runWorkerCommand(image, hostRoot, args) {
   }
 
   return JSON.parse(result.stdout ?? "{}");
+}
+
+function buildContainerCommand(args) {
+  const workerCommand = ["node", "/app/apps/worker/dist/index.js", ...args]
+    .map(shellQuote)
+    .join(" ");
+
+  if (typeof process.getuid === "function" && typeof process.getgid === "function") {
+    const owner = `${process.getuid()}:${process.getgid()}`;
+    return `status=0; ${workerCommand} || status=$?; chown -R ${shellQuote(owner)} /smoke 2>/dev/null || true; exit "$status"`;
+  }
+
+  return workerCommand;
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
 }
 
 function containerPath(...segments) {
