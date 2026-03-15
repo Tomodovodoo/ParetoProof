@@ -287,21 +287,10 @@ export function PortalBootstrap() {
     if (!response.ok) {
       throw new Error(`Access request failed with ${response.status}.`);
     }
-
-    setState({
-      email: state.status === "denied" || state.status === "pending" ? state.email : null,
-      status: "pending"
-    });
-    window.location.replace(buildPortalUrl("/pending"));
   }
 
   async function submitAccessRecovery(payload: PortalAccessRecoveryInput) {
     if (isLocalHostname(window.location.hostname)) {
-      setState({
-        email: state.status === "denied" || state.status === "pending" ? state.email : null,
-        status: "pending"
-      });
-      window.history.replaceState({}, "", buildLocalPendingPortalUrl());
       return;
     }
 
@@ -319,12 +308,6 @@ export function PortalBootstrap() {
     if (!response.ok) {
       throw new Error(`Access recovery failed with ${response.status}.`);
     }
-
-    setState({
-      email: state.status === "denied" || state.status === "pending" ? state.email : null,
-      status: "pending"
-    });
-    window.location.replace(buildPortalUrl("/pending"));
   }
 
   if (state.status === "loading") {

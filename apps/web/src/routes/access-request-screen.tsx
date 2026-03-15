@@ -29,6 +29,7 @@ export function AccessRequestScreen({
   const [rationale, setRationale] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +51,7 @@ export function AccessRequestScreen({
         await (onSubmit as (payload: PortalAccessRecoveryInput) => Promise<void>)(
           parsed.data
         );
+        setIsSubmitted(true);
         return;
       }
 
@@ -66,6 +68,7 @@ export function AccessRequestScreen({
       await (onSubmit as (payload: PortalAccessRequestInput) => Promise<void>)(
         parsed.data
       );
+      setIsSubmitted(true);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -96,11 +99,22 @@ export function AccessRequestScreen({
             ? `Signed in${email ? ` as ${email}` : ""}. Your account has portal access, but this sign-in method is not linked yet. Submit a recovery request so an admin can connect it.`
             : `Signed in${email ? ` as ${email}` : ""}. Tell us what level of access you need and an admin will review your request.`}
         </p>
+        {isSubmitted ? (
+          <div className="form-toast form-toast-success" role="status">
+            <span className="inline-icon" aria-hidden="true">
+              <AppIcon name="check" />
+            </span>
+            {mode === "identity_recovery"
+              ? "Recovery request submitted. An admin will review it shortly."
+              : "Access request submitted. An admin will review it shortly."}
+          </div>
+        ) : null}
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === "access_request" ? (
             <label className="auth-field">
               <span>Requested role</span>
               <select
+                disabled={isSubmitted}
                 name="requestedRole"
                 onChange={(event) => {
                   setRequestedRole(
@@ -121,6 +135,7 @@ export function AccessRequestScreen({
                 : "Why do you need access?"}
             </span>
             <textarea
+              disabled={isSubmitted}
               name="rationale"
               onChange={(event) => {
                 setRationale(event.currentTarget.value);
@@ -135,12 +150,14 @@ export function AccessRequestScreen({
             />
           </label>
           {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
-          <button className="button" disabled={isSubmitting} type="submit">
-            {isSubmitting
-              ? "Submitting..."
-              : mode === "identity_recovery"
-                ? "Request recovery"
-                : "Request access"}
+          <button className="button" disabled={isSubmitting || isSubmitted} type="submit">
+            {isSubmitted
+              ? "Submitted"
+              : isSubmitting
+                ? "Submitting..."
+                : mode === "identity_recovery"
+                  ? "Request recovery"
+                  : "Request access"}
           </button>
         </form>
       </section>
