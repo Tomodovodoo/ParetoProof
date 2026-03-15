@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildSignedAccessCookie,
   buildSignedPortalAccessSessionCookie,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
+  verifyAccessProviderHint,
   verifyPortalAccessSession,
   type CloudflareAccessVerifierSet
 } from "../src/auth/cloudflare-access.ts";
@@ -83,6 +85,60 @@ test("verifyPortalAccessSession round-trips a signed portal access session cooki
   }
 });
 
+test("PortalAccessSession uses PORTAL_SESSION_SECRET without changing provider-hint cookie verification", () => {
+  const originalProviderSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  const originalSessionSecret = process.env.PORTAL_SESSION_SECRET;
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "provider-secret";
+  process.env.PORTAL_SESSION_SECRET = "session-secret";
+
+  try {
+    const sessionCookie = buildSignedPortalAccessSessionCookie(
+      {
+        email: "person@example.com",
+        issuer: "https://paretoproof.cloudflareaccess.com",
+        provider: "cloudflare_google",
+        subject: "subject-1"
+      },
+      {
+        email: "person@example.com",
+        identityId: "identity-1",
+        roles: ["helper"],
+        status: "approved",
+        subject: "subject-1",
+        userId: "user-1"
+      }
+    );
+    const providerCookie = buildSignedAccessCookie(
+      "PortalAccessProvider",
+      "cloudflare_google|subject-1"
+    );
+
+    assert.equal(
+      verifyAccessProviderHint(providerCookie, "subject-1"),
+      "cloudflare_google"
+    );
+    assert.deepEqual(verifyPortalAccessSession(sessionCookie)?.context, {
+      email: "person@example.com",
+      identityId: "identity-1",
+      roles: ["helper"],
+      status: "approved",
+      subject: "subject-1",
+      userId: "user-1"
+    });
+
+    process.env.PORTAL_SESSION_SECRET = "wrong-session-secret";
+
+    assert.equal(
+      verifyAccessProviderHint(providerCookie, "subject-1"),
+      "cloudflare_google"
+    );
+    assert.equal(verifyPortalAccessSession(sessionCookie), null);
+  } finally {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = originalProviderSecret;
+    process.env.PORTAL_SESSION_SECRET = originalSessionSecret;
+  }
+});
+
 test("createAccessResolver accepts the signed portal access session on portal routes without touching Access verification", async () => {
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
@@ -90,6 +146,7 @@ test("createAccessResolver accepts the signed portal access session on portal ro
     CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
     CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
     DATABASE_URL: process.env.DATABASE_URL,
+    PORTAL_SESSION_SECRET: process.env.PORTAL_SESSION_SECRET,
     WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
   };
 
