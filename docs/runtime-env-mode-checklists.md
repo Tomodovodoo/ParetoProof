@@ -254,6 +254,13 @@ These names may appear in examples as commented placeholders, but they are not p
 
 ## Operator workflow summary
 
+- use `bun run test:startup-validation` to run the authoritative startup-validation smoke matrix before or alongside CI changes that touch runtime env behavior
+- the matrix currently covers:
+  - API local startup via `bun --cwd apps/api test:startup-validation`, including a pass case with only the documented required env plus missing and malformed env failures
+  - web auth-entry runtime via `bun --cwd apps/web test:functions`, including the required `ACCESS_PROVIDER_STATE_SECRET` secret path for provider-start handlers
+  - worker CLI startup via `bun --cwd apps/worker test:startup-validation`, including an env-free materializer pass case, a fail-closed hosted claim-loop case, and a trusted-local Docker-oriented launcher validation path
+  - the local Docker-oriented launcher smoke uses `node infra/scripts/run-problem9-trusted-local-attempt.mjs --image paretoproof-problem9-devbox:local --preflight-only --validate-only` so auth and mount validation run without needing to launch a real container
+- if you add a required env var, a supported runtime mode, or a new entrypoint that depends on runtime env, update this checklist and the startup-validation smoke matrix in the same change
 - use `apps/web/.env.example` only for local browser overrides
 - use `apps/api/.env.example` for local API startup and owner-only API operations
 - use `apps/worker/.env.example` for local worker modes that actually need environment variables

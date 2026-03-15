@@ -11,6 +11,7 @@
     "test:cli-contract": "bun --cwd ../../packages/shared build && node --import tsx --test test/worker-cli-contract.test.ts",
     "test:cli-smoke": "node --import tsx --test test/worker-cli-smoke.test.ts",
     "test:run-bundle": "node --import tsx --test src/lib/problem9-run-bundle.test.ts",
+    "test:startup-validation": "node --import tsx --test test/startup-validation-smoke.test.ts",
     "run:problem9-attempt": "tsx src/index.ts run-problem9-attempt",
     "ingest:problem9-run-bundle": "tsx src/index.ts ingest-problem9-run-bundle",
     "run:worker-claim-loop": "tsx src/index.ts run-worker-claim-loop",

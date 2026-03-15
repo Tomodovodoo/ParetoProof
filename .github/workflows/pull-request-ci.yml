@@ -60,6 +60,9 @@ jobs:
       - name: Build shared package
         run: bun run build:shared
 
+      - name: Run startup validation smoke matrix
+        run: bun run test:startup-validation
+
       - name: Test API auth handoff routes
         run: bun run test:api
 

@@ -25,6 +25,7 @@ type DevboxWrapperOptions = {
   promptPackageRoot?: string;
   providerFamily?: "openai";
   providerModel?: string;
+  validateOnly: boolean;
   workspaceRoot?: string;
 };
 
@@ -46,7 +47,7 @@ type TrustedLocalDevboxDockerArgsOptions = {
 export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
     console.error(
-      "Usage: tsx src/index.ts run-problem9-attempt-in-devbox --image <docker-image> [--preflight-only] [--print-docker-command] [--benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model>]"
+      "Usage: tsx src/index.ts run-problem9-attempt-in-devbox --image <docker-image> [--preflight-only] [--validate-only] [--print-docker-command] [--benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model>]"
     );
     return;
   }
@@ -145,6 +146,25 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
 
   if (options.printDockerCommand) {
     console.error(formatDockerCommand(dockerArgs));
+  }
+
+  if (options.validateOnly) {
+    console.log(
+      JSON.stringify(
+        {
+          authJsonPath: authPreflight.authJsonPath,
+          containerAuthJsonPath: trustedLocalCodexContainerAuthJsonPath,
+          containerCodexHome: trustedLocalCodexContainerHome,
+          dockerArgs,
+          image: options.image,
+          preflightOnly: options.preflightOnly,
+          status: "trusted_local_validation_passed"
+        },
+        null,
+        2
+      )
+    );
+    return;
   }
 
   await runDockerCommand(dockerArgs);
@@ -269,6 +289,7 @@ function parseDevboxWrapperOptions(args: string[]): DevboxWrapperOptions {
     promptPackageRoot: getOptionalValue("--prompt-package-root"),
     providerFamily: providerFamily as "openai" | undefined,
     providerModel: getOptionalValue("--provider-model"),
+    validateOnly: hasFlag("--validate-only"),
     workspaceRoot: getOptionalValue("--workspace")
   };
 }
