@@ -362,6 +362,12 @@ export function PortalBootstrap() {
     if (!response.ok) {
       throw new Error(`Access request failed with ${response.status}.`);
     }
+
+    const pendingState: PortalAccessState = {
+      email: state.status === "denied" || state.status === "pending" ? state.email : null,
+      status: "pending"
+    };
+    writeCachedPortalSession(pendingState);
   }
 
   async function submitAccessRecovery(payload: PortalAccessRecoveryInput) {
@@ -383,6 +389,12 @@ export function PortalBootstrap() {
     if (!response.ok) {
       throw new Error(`Access recovery failed with ${response.status}.`);
     }
+
+    const pendingState: PortalAccessState = {
+      email: state.status === "denied" || state.status === "pending" ? state.email : null,
+      status: "pending"
+    };
+    writeCachedPortalSession(pendingState);
   }
 
   if (state.status === "loading") {
