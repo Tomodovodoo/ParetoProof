@@ -124,8 +124,8 @@ test("GET /portal/session/finalize/submit completes a normal sign-in handoff onc
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
   assert.equal(setCookies.length, 3);
-  assert.match(setCookies[0], /^PortalAccessProvider=/);
-  assert.match(setCookies[1], /^PortalAccessSession=/);
+  assert.match(setCookies[0], /^PortalAccessSession=/);
+  assert.match(setCookies[1], /^PortalAccessProvider=/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
 });
 
@@ -267,8 +267,8 @@ test("POST /portal/session/finalize/submit completes a pending-user handoff from
   const setCookies = response.headers["set-cookie"];
   assert.ok(Array.isArray(setCookies));
   assert.equal(setCookies.length, 3);
-  assert.match(setCookies[0], /^PortalAccessProvider=/);
-  assert.match(setCookies[1], /^PortalAccessSession=/);
+  assert.match(setCookies[0], /^PortalAccessSession=/);
+  assert.match(setCookies[1], /^PortalAccessProvider=/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
 });
 

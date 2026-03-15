@@ -459,27 +459,19 @@ export function registerPortalRoutes(
       portalUrl.searchParams.set("link", linkStatus);
     }
 
-    const responseCookies = [clearSignedAccessCookie("PortalLinkIntent")];
-
-    if (identity && accessContext) {
-      responseCookies.unshift(
-        buildSignedPortalAccessSessionCookie(identity, accessContext)
-      );
-    } else {
-      responseCookies.unshift(clearSignedAccessCookie("PortalAccessSession"));
-    }
-
-    if (identity && providerHint) {
-      responseCookies.unshift(
-        buildSignedAccessCookie(
-          "PortalAccessProvider",
-          `${providerHint}|${identity.subject}`,
-          { maxAgeSeconds: 24 * 60 * 60, sameSite: "Lax" }
-        )
-      );
-    } else {
-      responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
-    }
+    const responseCookies = [
+      identity && accessContext
+        ? buildSignedPortalAccessSessionCookie(identity, accessContext)
+        : clearSignedAccessCookie("PortalAccessSession"),
+      identity && providerHint
+        ? buildSignedAccessCookie(
+            "PortalAccessProvider",
+            `${providerHint}|${identity.subject}`,
+            { maxAgeSeconds: 24 * 60 * 60, sameSite: "Lax" }
+          )
+        : clearSignedAccessCookie("PortalAccessProvider"),
+      clearSignedAccessCookie("PortalLinkIntent")
+    ];
 
     reply.header("set-cookie", responseCookies);
 

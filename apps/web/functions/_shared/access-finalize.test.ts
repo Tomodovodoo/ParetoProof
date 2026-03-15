@@ -30,11 +30,11 @@ describe("handleAccessFinalize", () => {
           headers: [
             [
               "set-cookie",
-              "PortalAccessProvider=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
+              "PortalAccessSession=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
             ],
             [
               "set-cookie",
-              "PortalAccessSession=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
+              "PortalAccessProvider=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
             ],
             [
               "set-cookie",
@@ -66,8 +66,8 @@ describe("handleAccessFinalize", () => {
     const setCookies =
       (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
     expect(setCookies).toHaveLength(3);
-    expect(setCookies[0]).toContain("PortalAccessProvider=signed");
-    expect(setCookies[1]).toContain("PortalAccessSession=signed");
+    expect(setCookies[0]).toContain("PortalAccessSession=signed");
+    expect(setCookies[1]).toContain("PortalAccessProvider=signed");
     expect(setCookies[2]).toContain("PortalLinkIntent=");
   });
 
@@ -172,6 +172,60 @@ describe("handleAccessFinalize", () => {
     expect(response.headers.get("location")).toBe(
       "https://portal.paretoproof.com/admin/users?tab=review#pending"
     );
+  });
+
+  it("splits a combined Set-Cookie fallback header into individual cookies", async () => {
+    globalThis.fetch = async () => {
+      const response = new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/profile"
+        }),
+        {
+          headers: {
+            "set-cookie": [
+              "PortalAccessSession=session; Domain=.paretoproof.com; Path=/; Secure; HttpOnly",
+              "PortalAccessProvider=provider; Domain=.paretoproof.com; Path=/; Secure; HttpOnly",
+              "PortalLinkIntent=; Domain=.paretoproof.com; Path=/; Max-Age=0; Secure; HttpOnly"
+            ].join(", ")
+          },
+          status: 200
+        }
+      );
+
+      const responseHeaders = response.headers as Headers & {
+        getAll?: undefined;
+        getSetCookie?: undefined;
+      };
+
+      Object.defineProperty(responseHeaders, "getAll", {
+        value: undefined
+      });
+      Object.defineProperty(responseHeaders, "getSetCookie", {
+        value: undefined
+      });
+
+      return response;
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://google.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-5",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    const setCookies =
+      (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
+    expect(setCookies).toHaveLength(3);
+    expect(setCookies[0]).toContain("PortalAccessSession=session");
+    expect(setCookies[1]).toContain("PortalAccessProvider=provider");
+    expect(setCookies[2]).toContain("PortalLinkIntent=");
   });
 
   it("redirects back to the branded retry surface when the branded handoff lacks both Access header and session cookie", async () => {
