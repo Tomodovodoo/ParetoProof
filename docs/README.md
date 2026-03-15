@@ -10,6 +10,7 @@ Use these files:
 - [benchmark-intake-review-workflow-baseline.md](./benchmark-intake-review-workflow-baseline.md) for the repository-first benchmark candidate intake and curation-review boundary
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
+- [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
 - [next-product-slice-sequencing-baseline.md](./next-product-slice-sequencing-baseline.md) for the ordered next backlog refill after the current benchmark kernel
 - [portal-launch-mutation-baseline.md](./portal-launch-mutation-baseline.md) for the scoped browser-to-queue launch contract
