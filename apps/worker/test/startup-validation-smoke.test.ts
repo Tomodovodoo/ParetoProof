@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -90,17 +90,13 @@ test("trusted-local launcher validation passes without contacting Docker", async
     await mkdir(codexHome, { recursive: true });
     await mkdir(fakeBin, { recursive: true });
     await writeFile(path.join(codexHome, "auth.json"), "{}", "utf8");
-    await writeFile(
-      path.join(fakeBin, "codex.cmd"),
-      "@echo off\r\nif \"%1\"==\"login\" if \"%2\"==\"status\" exit /b 0\r\nexit /b 1\r\n",
-      "utf8"
-    );
+    await writeFakeCodexBinary(fakeBin);
 
     const result = runTrustedLocalLauncher(
       ["--image", "paretoproof-problem9-devbox:local", "--preflight-only", "--validate-only"],
       {
         CODEX_HOME: codexHome,
-        PATH: `${fakeBin};${process.env.PATH ?? ""}`
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`
       }
     );
 
@@ -169,4 +165,21 @@ function buildWorkerTestEnv(envOverrides: Record<string, string>): NodeJS.Proces
     ...env,
     ...envOverrides
   };
+}
+
+async function writeFakeCodexBinary(fakeBin: string): Promise<void> {
+  const windowsShimPath = path.join(fakeBin, "codex.cmd");
+  const posixShimPath = path.join(fakeBin, "codex");
+
+  await writeFile(
+    windowsShimPath,
+    "@echo off\r\nif \"%1\"==\"login\" if \"%2\"==\"status\" exit /b 0\r\nexit /b 1\r\n",
+    "utf8"
+  );
+  await writeFile(
+    posixShimPath,
+    "#!/usr/bin/env sh\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then\n  exit 0\nfi\nexit 1\n",
+    "utf8"
+  );
+  await chmod(posixShimPath, 0o755);
 }
