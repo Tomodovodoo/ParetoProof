@@ -83,4 +83,54 @@ describe("resolvePortalRouteRedirect", () => {
       })
     ).toBeNull();
   });
+
+  it("keeps unauthenticated users on the portal surface for non-public portal routes", () => {
+    setWindowUrl("http://localhost/profile?surface=portal");
+
+    const redirect = new URL(
+      resolvePortalRouteRedirect({
+        pathname: "/profile",
+        roles: [],
+        search: "?surface=portal",
+        status: "unauthenticated"
+      }),
+      "http://localhost"
+    );
+
+    expect(redirect.pathname).toBe("/");
+    expect(redirect.searchParams.get("surface")).toBe("portal");
+  });
+
+  it("sends unauthenticated users to the public apex only for portal routes that explicitly allow it", () => {
+    setWindowUrl("http://localhost/?surface=portal");
+
+    expect(
+      resolvePortalRouteRedirect({
+        pathname: "/",
+        roles: [],
+        search: "?surface=portal",
+        status: "unauthenticated"
+      })
+    ).toBe("http://localhost/");
+  });
+
+  it("sends approved helpers without collaborator access to the denied surface for collaborator routes", () => {
+    setWindowUrl(
+      "http://localhost/launch?surface=portal&access=approved&roles=helper&email=lin@paretoproof.local"
+    );
+
+    const redirect = new URL(
+      resolvePortalRouteRedirect({
+        pathname: "/launch",
+        roles: ["helper"],
+        search: "?surface=portal&access=approved&roles=helper&email=lin@paretoproof.local",
+        status: "approved"
+      }),
+      "http://localhost"
+    );
+
+    expect(redirect.pathname).toBe("/denied");
+    expect(redirect.searchParams.get("surface")).toBe("portal");
+    expect(redirect.searchParams.get("reason")).toBe("insufficient_role");
+  });
 });

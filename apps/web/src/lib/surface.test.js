@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { buildAccessFinalizeUrl, buildPortalUrl } from "./surface.ts";
+import {
+  buildAccessFinalizeUrl,
+  buildAuthUrl,
+  buildPortalUrl,
+  buildPublicUrl,
+  readPortalRedirectTarget,
+  resolveWebSurface
+} from "./surface.ts";
 
 const originalWindow = globalThis.window;
 
@@ -77,5 +84,64 @@ describe("buildPortalUrl", () => {
     expect(buildAccessFinalizeUrl("/profile")).toBe(
       "https://google.auth.paretoproof.com/api/access/finalize?redirect=%2Fprofile"
     );
+  });
+});
+
+describe("surface ownership helpers", () => {
+  it("classifies apex, auth, provider auth, portal, and local surfaces", () => {
+    setWindowUrl("http://localhost/");
+
+    expect(resolveWebSurface("paretoproof.com")).toBe("public");
+    expect(resolveWebSurface("auth.paretoproof.com")).toBe("auth");
+    expect(resolveWebSurface("github.auth.paretoproof.com")).toBe("auth");
+    expect(resolveWebSurface("portal.paretoproof.com")).toBe("portal");
+    expect(resolveWebSurface("localhost")).toBe("public");
+  });
+
+  it("allows only public-site owned routes when building public URLs", () => {
+    setWindowUrl("https://paretoproof.com/");
+
+    expect(buildPublicUrl("/project")).toBe("https://paretoproof.com/project");
+    expect(buildPublicUrl("/reports/problem-9-v1?view=table#scores")).toBe(
+      "https://paretoproof.com/reports/problem-9-v1?view=table#scores"
+    );
+    expect(buildPublicUrl("/profile")).toBe("https://paretoproof.com/");
+  });
+
+  it("preserves only portal-owned redirect targets for auth URLs", () => {
+    setWindowUrl("https://paretoproof.com/");
+
+    expect(buildAuthUrl("/runs/run-123?tab=events#trace")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace"
+    );
+    expect(buildAuthUrl("/benchmarks")).toBe("https://auth.paretoproof.com/");
+  });
+
+  it("preserves only portal-owned redirect targets for finalize URLs", () => {
+    setWindowUrl("https://github.auth.paretoproof.com/");
+
+    expect(buildAccessFinalizeUrl("/admin/users?tab=review")).toBe(
+      "https://github.auth.paretoproof.com/api/access/finalize?redirect=%2Fadmin%2Fusers%3Ftab%3Dreview"
+    );
+    expect(buildAccessFinalizeUrl("/project")).toBe(
+      "https://github.auth.paretoproof.com/api/access/finalize"
+    );
+  });
+
+  it("rejects public-site and external redirect targets when reading auth redirect state", () => {
+    expect(readPortalRedirectTarget("?redirect=%2Fprofile%3Ftab%3Ddetails")).toBe(
+      "/profile?tab=details"
+    );
+    expect(readPortalRedirectTarget("?redirect=%2Fbenchmarks")).toBe("/");
+    expect(readPortalRedirectTarget("?redirect=https%3A%2F%2Fparetoproof.com%2Fprofile")).toBe(
+      "/"
+    );
+  });
+
+  it("rejects public-site targets when building portal URLs", () => {
+    setWindowUrl("https://portal.paretoproof.com/");
+
+    expect(buildPortalUrl("/workers")).toBe("https://portal.paretoproof.com/workers");
+    expect(buildPortalUrl("/project")).toBe("https://portal.paretoproof.com/");
   });
 });

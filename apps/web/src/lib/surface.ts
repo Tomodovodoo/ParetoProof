@@ -1,3 +1,4 @@
+import { findAppRouteBySurface } from "@paretoproof/shared";
 import { getApiBaseUrl } from "./api-base-url";
 import { isLocalDevelopmentLocation } from "./local-development";
 
@@ -62,18 +63,18 @@ function normalizeTargetPath(targetPath: string) {
   return targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 }
 
-function sanitizePortalTargetPath(targetPath: string) {
+function sanitizeSurfaceTargetPath(
+  surface: "public_site" | "portal",
+  targetPath: string
+) {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(targetPath) || targetPath.startsWith("//")) {
     return "/";
   }
 
   try {
-    const candidateUrl = new URL(
-      normalizeTargetPath(targetPath),
-      productionPortalOrigin
-    );
+    const candidateUrl = new URL(normalizeTargetPath(targetPath), productionPortalOrigin);
 
-    if (candidateUrl.origin !== productionPortalOrigin) {
+    if (!findAppRouteBySurface(surface, candidateUrl.pathname)) {
       return "/";
     }
 
@@ -81,6 +82,14 @@ function sanitizePortalTargetPath(targetPath: string) {
   } catch {
     return "/";
   }
+}
+
+function sanitizePortalTargetPath(targetPath: string) {
+  return sanitizeSurfaceTargetPath("portal", targetPath);
+}
+
+function sanitizePublicTargetPath(targetPath: string) {
+  return sanitizeSurfaceTargetPath("public_site", targetPath);
 }
 
 export function readPortalRedirectTarget(search = window.location.search) {
@@ -189,7 +198,7 @@ export function buildAccessRequestUrl(hostname = window.location.hostname) {
 }
 
 export function buildPublicUrl(targetPath = "/", hostname = window.location.hostname) {
-  const normalizedTargetPath = normalizeTargetPath(targetPath);
+  const normalizedTargetPath = sanitizePublicTargetPath(targetPath);
 
   if (isLocalOrigin(hostname)) {
     return new URL(normalizedTargetPath, window.location.origin).toString();

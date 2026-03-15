@@ -1,7 +1,6 @@
 import {
-  appRouteAccessMatrix,
   type AppRouteMatrixEntry,
-  type RouteRedirectTarget
+  findAppRouteBySurface
 } from "@paretoproof/shared";
 import { buildPublicUrl, copyLocalPortalState, isLocalHostname } from "./surface";
 
@@ -20,31 +19,8 @@ type PortalRouteAccessContext = {
   status: PortalAccessStatus;
 };
 
-function matchesRoutePath(routePath: string, pathname: string) {
-  if (routePath === pathname) {
-    return true;
-  }
-
-  const routeSegments = routePath.split("/").filter(Boolean);
-  const pathSegments = pathname.split("/").filter(Boolean);
-
-  if (routeSegments.length !== pathSegments.length) {
-    return false;
-  }
-
-  return routeSegments.every((segment, index) => {
-    if (segment.startsWith(":")) {
-      return pathSegments[index].length > 0;
-    }
-
-    return segment === pathSegments[index];
-  });
-}
-
 function findPortalRoute(pathname: string) {
-  return appRouteAccessMatrix.find(
-    (entry) => entry.surface === "portal" && matchesRoutePath(entry.path, pathname)
-  );
+  return findAppRouteBySurface("portal", pathname);
 }
 
 function hasRole(roles: string[], role: "admin" | "collaborator" | "helper") {
