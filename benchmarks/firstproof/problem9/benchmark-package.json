@@ -1,7 +1,7 @@
 {
   "sourceSchemaVersion": "1",
   "packageId": "firstproof/Problem9",
-  "packageVersion": "2026.03.13",
+  "packageVersion": "2026.03.15",
   "benchmarkFamily": "firstproof",
   "benchmarkItemId": "Problem9",
   "canonicalModules": {

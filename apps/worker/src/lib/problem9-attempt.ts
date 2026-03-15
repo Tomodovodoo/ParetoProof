@@ -128,6 +128,7 @@ type VerificationResult = {
   containsSorry: boolean;
   diagnosticGate: "passed" | "failed";
   failureCode: VerificationFailureCode | null;
+  importPolicy: "passed" | "failed" | "not_evaluated";
   semanticEquality: "matched" | "mismatched" | "not_evaluated";
   surfaceEquality: "matched" | "drifted" | "not_evaluated";
   verifierOutput: Record<string, unknown>;
@@ -161,6 +162,8 @@ type ProviderResponse = {
     totalTokens: number | null;
   };
 };
+
+const forbiddenProblem9CandidateImports = new Set(["FirstProof.Problem9.Gold"]);
 
 export type Problem9AttemptResult = {
   artifactManifestDigest: string;
@@ -718,6 +721,8 @@ async function verifyCandidate(options: {
     ((options.compileResult.diagnostics.diagnostics as Array<Record<string, unknown>> | undefined) ??
       []);
   const diagnosticGate = diagnostics.length > 0 ? "failed" : "passed";
+  const forbiddenImports = findForbiddenProblem9CandidateImports(options.candidateSource);
+  const importPolicy = forbiddenImports.length > 0 ? "failed" : "passed";
 
   const semanticProbePath = path.join(options.compileRoot, "ParetoProofSemanticCheck.lean");
 
@@ -729,8 +734,8 @@ async function verifyCandidate(options: {
       "namespace ParetoProofVerifier",
       "",
       "example (n : Nat) :",
-      "    FirstProof.Problem9.triangular (Nat.succ n) =",
-      "    FirstProof.Problem9.triangular n + Nat.succ n := by",
+      "    2 * FirstProof.Problem9.triangular n =",
+      "    n * Nat.succ n := by",
       "  simpa using FirstProof.Problem9.problem9 n",
       "",
       "end ParetoProofVerifier"
@@ -796,6 +801,7 @@ async function verifyCandidate(options: {
     containsAdmit,
     containsSorry,
     diagnosticGate,
+    importPolicy,
     semanticEquality,
     semanticOutput
   });
@@ -810,6 +816,10 @@ async function verifyCandidate(options: {
     forbiddenTokens: {
       containsAdmit,
       containsSorry
+    },
+    importPolicy: {
+      importedModules: forbiddenImports,
+      result: importPolicy
     },
     result: failureCode === null ? "pass" : "fail",
     semanticCheck: {
@@ -834,6 +844,7 @@ async function verifyCandidate(options: {
     containsSorry,
     diagnosticGate,
     failureCode,
+    importPolicy,
     semanticEquality,
     surfaceEquality,
     verifierOutput,
@@ -860,6 +871,10 @@ async function createCompileFailureVerificationResult(options: {
       containsAdmit: false,
       containsSorry: false
     },
+    importPolicy: {
+      importedModules: [],
+      result: "not_evaluated"
+    },
     result: "fail",
     semanticCheck: {
       output: options.compileResult.outputText,
@@ -883,6 +898,7 @@ async function createCompileFailureVerificationResult(options: {
     containsSorry: false,
     diagnosticGate: "failed",
     failureCode: "proof_policy_failed",
+    importPolicy: "not_evaluated",
     semanticEquality: "not_evaluated",
     surfaceEquality: "not_evaluated",
     verifierOutput,
@@ -895,11 +911,16 @@ function deriveVerificationFailureCode(options: {
   containsAdmit: boolean;
   containsSorry: boolean;
   diagnosticGate: "passed" | "failed";
+  importPolicy: "passed" | "failed" | "not_evaluated";
   semanticEquality: "matched" | "mismatched" | "not_evaluated";
   semanticOutput: string;
 }): VerificationFailureCode | null {
   if (options.containsSorry || options.containsAdmit) {
     return "forbidden_placeholder_token";
+  }
+
+  if (options.importPolicy === "failed") {
+    return "proof_policy_failed";
   }
 
   if (options.semanticEquality === "not_evaluated") {
@@ -1114,7 +1135,7 @@ function buildStubCandidate(stubScenario: "compile_failure" | "exact_canonical")
         "namespace FirstProof.Problem9",
         "",
         "theorem problem9 (n : Nat) :",
-        "    triangular (Nat.succ n) = triangular n + Nat.succ n := by",
+        "    2 * triangular n = n * Nat.succ n := by",
         "  this is not valid Lean",
         "",
         "end FirstProof.Problem9"
@@ -1126,8 +1147,33 @@ function buildStubCandidate(stubScenario: "compile_failure" | "exact_canonical")
         "namespace FirstProof.Problem9",
         "",
         "theorem problem9 (n : Nat) :",
-        "    triangular (Nat.succ n) = triangular n + Nat.succ n := by",
-        "  rfl",
+        "    2 * triangular n = n * Nat.succ n := by",
+        "  induction n with",
+        "  | zero =>",
+        "      rfl",
+        "  | succ n ih =>",
+        "      calc",
+        "        2 * triangular (Nat.succ n)",
+        "            = 2 * (triangular n + Nat.succ n) := by",
+        "                exact congrArg (fun value => 2 * value) (triangular_succ n)",
+        "        _ = 2 * triangular n + 2 * Nat.succ n := by",
+        "              exact Nat.left_distrib 2 (triangular n) (Nat.succ n)",
+        "        _ = n * Nat.succ n + 2 * Nat.succ n := by",
+        "              exact congrArg (fun value => value + 2 * Nat.succ n) ih",
+        "        _ = n * Nat.succ n + (Nat.succ n + Nat.succ n) := by",
+        "              exact congrArg (fun value => n * Nat.succ n + value) (two_mul_nat (Nat.succ n))",
+        "        _ = Nat.succ n * n + (Nat.succ n + Nat.succ n) := by",
+        "              exact congrArg",
+        "                (fun value => value + (Nat.succ n + Nat.succ n))",
+        "                (Nat.mul_comm n (Nat.succ n))",
+        "        _ = (Nat.succ n * n + Nat.succ n) + Nat.succ n := by",
+        "              exact (Nat.add_assoc (Nat.succ n * n) (Nat.succ n) (Nat.succ n)).symm",
+        "        _ = Nat.succ n * Nat.succ n + Nat.succ n := by",
+        "              exact congrArg",
+        "                (fun value => value + Nat.succ n)",
+        "                (Nat.mul_succ (Nat.succ n) n).symm",
+        "        _ = Nat.succ n * Nat.succ (Nat.succ n) := by",
+        "              exact (Nat.mul_succ (Nat.succ n) (Nat.succ n)).symm",
         "",
         "end FirstProof.Problem9"
       ].join("\n");
@@ -1135,8 +1181,40 @@ function buildStubCandidate(stubScenario: "compile_failure" | "exact_canonical")
 }
 
 function extractCanonicalTheoremHeader(sourceText: string): string {
-  const match = sourceText.match(/theorem\s+problem9[\s\S]*?:=\s*by/u);
-  return match ? normalizeWhitespace(match[0]) : "";
+  const theoremMatch = sourceText.match(/theorem\s+problem9[\s\S]*?:=\s*by/u);
+
+  if (theoremMatch) {
+    return normalizeWhitespace(
+      theoremMatch[0]
+        .replace(/^theorem/u, "declaration")
+        .replace(/\s*:=\s*by$/u, "")
+    );
+  }
+
+  const axiomMatch = sourceText.match(/axiom\s+problem9[^\r\n]*/u);
+  return axiomMatch
+    ? normalizeWhitespace(axiomMatch[0].replace(/^axiom/u, "declaration"))
+    : "";
+}
+
+export function findForbiddenProblem9CandidateImports(candidateSource: string): string[] {
+  const imports = new Set<string>();
+
+  for (const line of candidateSource.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+
+    if (!trimmed.startsWith("import ")) {
+      continue;
+    }
+
+    for (const moduleName of trimmed.slice("import ".length).split(/\s+/u)) {
+      if (forbiddenProblem9CandidateImports.has(moduleName)) {
+        imports.add(moduleName);
+      }
+    }
+  }
+
+  return [...imports].sort();
 }
 
 function sanitizeCandidateOutput(candidateSource: string): string {

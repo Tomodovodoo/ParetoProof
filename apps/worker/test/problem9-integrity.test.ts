@@ -13,9 +13,9 @@ import {
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
 
 const expectedIntegrityDigests = {
-  benchmarkPackage: "4267f36c8a4d0af091f647e00ae87974cc0125daa4a2024d9d71f968e33454f2",
-  promptPackage: "aedc0f7bc73c79b6c838fba19c39d7028a12511cb904ff65fb8949d93e1ed7b2",
-  runBundle: "c3fbd4156a16bf615edf351cf865ac846e4d414a5da7893d8efddc0b951c153c"
+  benchmarkPackage: "e1655ac26ee234718c07c719396c7856c55895974092753d48cf7763622df345",
+  promptPackage: "c8b3b51316ab410631804b8e132fcacd009f929ff2bba097cfcc564e92c5f203",
+  runBundle: "2ec1ea32e9cf567bb92f4a781c95be83089f8b73871a075a4c66c8f6d4340580"
 } as const;
 
 // Update these only when the checked-in canonical Problem 9 fixtures intentionally change.
@@ -219,8 +219,33 @@ async function createIntegrityFixture(tempRoot: string): Promise<IntegrityFixtur
       "namespace FirstProof.Problem9",
       "",
       "theorem problem9 (n : Nat) :",
-      "    triangular (Nat.succ n) = triangular n + Nat.succ n := by",
-      "  rfl",
+      "    2 * triangular n = n * Nat.succ n := by",
+      "  induction n with",
+      "  | zero =>",
+      "      rfl",
+      "  | succ n ih =>",
+      "      calc",
+      "        2 * triangular (Nat.succ n)",
+      "            = 2 * (triangular n + Nat.succ n) := by",
+      "                exact congrArg (fun value => 2 * value) (triangular_succ n)",
+      "        _ = 2 * triangular n + 2 * Nat.succ n := by",
+      "              exact Nat.left_distrib 2 (triangular n) (Nat.succ n)",
+      "        _ = n * Nat.succ n + 2 * Nat.succ n := by",
+      "              exact congrArg (fun value => value + 2 * Nat.succ n) ih",
+      "        _ = n * Nat.succ n + (Nat.succ n + Nat.succ n) := by",
+      "              exact congrArg (fun value => n * Nat.succ n + value) (two_mul_nat (Nat.succ n))",
+      "        _ = Nat.succ n * n + (Nat.succ n + Nat.succ n) := by",
+      "              exact congrArg",
+      "                (fun value => value + (Nat.succ n + Nat.succ n))",
+      "                (Nat.mul_comm n (Nat.succ n))",
+      "        _ = (Nat.succ n * n + Nat.succ n) + Nat.succ n := by",
+      "              exact (Nat.add_assoc (Nat.succ n * n) (Nat.succ n) (Nat.succ n)).symm",
+      "        _ = Nat.succ n * Nat.succ n + Nat.succ n := by",
+      "              exact congrArg",
+      "                (fun value => value + Nat.succ n)",
+      "                (Nat.mul_succ (Nat.succ n) n).symm",
+      "        _ = Nat.succ n * Nat.succ (Nat.succ n) := by",
+      "              exact (Nat.mul_succ (Nat.succ n) (Nat.succ n)).symm",
       "",
       "end FirstProof.Problem9"
     ].join("\n")
@@ -252,9 +277,9 @@ async function createIntegrityFixture(tempRoot: string): Promise<IntegrityFixtur
     surface_drift: false,
     theoremHeaders: {
       canonical:
-        "theorem problem9 (n : Nat) : triangular (Nat.succ n) = triangular n + Nat.succ n := by",
+        "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n",
       candidate:
-        "theorem problem9 (n : Nat) : triangular (Nat.succ n) = triangular n + Nat.succ n := by"
+        "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n"
     },
     verifierOutputSchemaVersion: "1"
   });

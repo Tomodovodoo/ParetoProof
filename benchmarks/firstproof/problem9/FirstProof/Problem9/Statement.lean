@@ -2,8 +2,6 @@ import FirstProof.Problem9.Support
 
 namespace FirstProof.Problem9
 
-theorem problem9 (n : Nat) :
-    triangular (Nat.succ n) = triangular n + Nat.succ n := by
-  rfl
+axiom problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n
 
 end FirstProof.Problem9

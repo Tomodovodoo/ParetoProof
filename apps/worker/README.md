@@ -2,7 +2,7 @@
 
 `apps/worker` holds the CLI and runtime code for the current benchmark execution kernel. In the repo today that means package and prompt materialization for `firstproof/Problem9`, deterministic verifier and run-bundle assembly, offline ingest, trusted-local local attempts, and the hosted worker claim loop.
 
-The broader benchmark target is still a live scope question, but the worker/image/runtime contract for the current Problem 9 kernel is already concrete and enforced by the repository-owned smoke and boundary checks described below.
+The current Problem 9 benchmark target is the repository-owned closed-form triangular-number identity, and the worker/image/runtime contract around that package is enforced by the smoke and boundary checks described below.
 
 Docker targets:
 
