@@ -115,6 +115,9 @@ describe("surface ownership helpers", () => {
       "https://auth.paretoproof.com/?redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace"
     );
     expect(buildAuthUrl("/benchmarks")).toBe("https://auth.paretoproof.com/");
+    expect(buildAuthUrl("https://math.paretoproof.com/runs/problem-9")).toBe(
+      "https://auth.paretoproof.com/"
+    );
   });
 
   it("preserves only portal-owned redirect targets for finalize URLs", () => {
@@ -133,6 +136,11 @@ describe("surface ownership helpers", () => {
       "/profile?tab=details"
     );
     expect(readPortalRedirectTarget("?redirect=%2Fbenchmarks")).toBe("/");
+    expect(
+      readPortalRedirectTarget(
+        "?redirect=https%3A%2F%2Fmath.paretoproof.com%2Fruns%2Fproblem-9"
+      )
+    ).toBe("/");
     expect(readPortalRedirectTarget("?redirect=https%3A%2F%2Fparetoproof.com%2Fprofile")).toBe(
       "/"
     );
@@ -143,5 +151,6 @@ describe("surface ownership helpers", () => {
 
     expect(buildPortalUrl("/workers")).toBe("https://portal.paretoproof.com/workers");
     expect(buildPortalUrl("/project")).toBe("https://portal.paretoproof.com/");
+    expect(buildPortalUrl("/math/problem-9")).toBe("https://portal.paretoproof.com/");
   });
 });

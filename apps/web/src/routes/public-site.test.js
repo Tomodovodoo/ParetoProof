@@ -62,7 +62,7 @@ describe("resolvePublicSiteRoute", () => {
   });
 
   it("handles malformed percent-encoding in report routes", async () => {
-    setWindowUrl("http://127.0.0.1/");
+    setWindow("http://127.0.0.1/");
     const { resolvePublicSiteRoute } = await loadPublicSiteModule();
 
     expect(resolvePublicSiteRoute("/reports/%")).toEqual({
@@ -149,9 +149,10 @@ describe("PublicSite", () => {
       "Approved contributors sign in directly. New collaborators use the separate access-request entry"
     );
     expect(html).toContain("Read contributor rules");
-    expect(html).toContain("public-content-pack-baseline.md");
-    expect(html).toContain("public-contact-channel-baseline.md");
-    expect(html).toContain("product-surface-boundary-baseline.md");
+    expect(html).toContain("web-surface-policy.md#contributor-path");
+    expect(html).toContain("web-surface-policy.md#public-pack");
+    expect(html).toContain("web-surface-policy.md#contact-boundary");
+    expect(html).toContain("web-surface-policy.md#surface-ownership");
     expect(html).toContain("Keep unsupported enrollment and support promises off the public site.");
     expect(html).toContain("No open self-serve enrollment or waitlist");
     expect(html).toContain("No public support mailbox or contact form");
