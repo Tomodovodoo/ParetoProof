@@ -37,6 +37,7 @@ const rawApiRuntimeEnvSchema = z
   .object({
     ACCESS_PROVIDER_STATE_SECRET: requiredTrimmedStringSchema,
     CF_ACCESS_AUD: trimmedOptionalStringSchema,
+    CF_ACCESS_BRANDED_AUDS: requiredTrimmedStringSchema,
     CF_ACCESS_INTERNAL_AUD: trimmedOptionalStringSchema,
     CF_ACCESS_PORTAL_AUD: trimmedOptionalStringSchema,
     CF_ACCESS_TEAM_DOMAIN: requiredTrimmedStringSchema,
@@ -60,6 +61,7 @@ const rawApiRuntimeEnvSchema = z
 
 export type ApiRuntimeEnv = {
   accessProviderStateSecret: string;
+  brandedAccessAudiences: string[];
   corsAllowedOrigins: string[];
   corsAllowLocalhost: boolean;
   databaseUrl: string;
@@ -98,6 +100,19 @@ function normalizeCorsAllowedOrigins(value: string | undefined) {
     .filter((origin) => origin.length > 0);
 }
 
+function normalizeAccessAudienceList(value: string | undefined) {
+  if (!value) {
+    return [];
+  }
+
+  return [...new Set(
+    value
+      .split(",")
+      .map((audience) => audience.trim())
+      .filter((audience) => audience.length > 0)
+  )];
+}
+
 export function parseApiRuntimeEnv(
   rawEnv: Partial<Record<string, string | undefined>> = process.env
 ): ApiRuntimeEnv {
@@ -112,6 +127,7 @@ export function parseApiRuntimeEnv(
   const {
     ACCESS_PROVIDER_STATE_SECRET,
     CF_ACCESS_AUD,
+    CF_ACCESS_BRANDED_AUDS,
     CF_ACCESS_INTERNAL_AUD,
     CF_ACCESS_PORTAL_AUD,
     CF_ACCESS_TEAM_DOMAIN,
@@ -128,6 +144,7 @@ export function parseApiRuntimeEnv(
 
   return {
     accessProviderStateSecret: ACCESS_PROVIDER_STATE_SECRET,
+    brandedAccessAudiences: normalizeAccessAudienceList(CF_ACCESS_BRANDED_AUDS),
     corsAllowedOrigins: normalizeCorsAllowedOrigins(CORS_ALLOWED_ORIGINS),
     corsAllowLocalhost: CORS_ALLOW_LOCALHOST === "true",
     databaseUrl: DATABASE_URL,
