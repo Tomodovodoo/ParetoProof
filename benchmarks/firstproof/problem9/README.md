@@ -15,8 +15,16 @@ materialized manifest:
 The benchmark theorem for this initial package is a narrow recurrence identity
 for the benchmark-owned `triangular` helper:
 
-`triangular (Nat.succ n) = triangular n + Nat.succ n`
+`2 * triangular n = n * (n + 1)`
 
-That theorem is intentionally small enough to keep the first immutable package
-easy to review while the broader offline runner and verifier stack is still
-landing.
+The checked-in package now separates the target declaration from the repository
+reference proof:
+
+- `FirstProof/Problem9/Statement.lean` declares the canonical target without
+  leaking the gold proof into prompt materialization
+- `FirstProof/Problem9/Gold.lean` carries the repository-owned proof artifact
+- `FirstProof/Problem9/Support.lean` keeps the benchmark-owned helper and the
+  old recurrence identity only as a support lemma
+
+This keeps the immutable package honest while preserving deterministic local
+materialization and verifier behavior.

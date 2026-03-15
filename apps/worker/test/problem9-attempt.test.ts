@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { problem9AuthModes } from "../src/lib/problem9-auth.ts";
 import {
+  findForbiddenProblem9CandidateImports,
   resolveProblem9ModelSnapshotId,
   runProblem9Attempt
 } from "../src/lib/problem9-attempt.ts";
@@ -64,6 +65,19 @@ test("resolveProblem9ModelSnapshotId preserves explicit overrides and non-stub p
       stubScenario: "exact_canonical"
     }),
     "prompt/default-model"
+  );
+});
+
+test("findForbiddenProblem9CandidateImports flags benchmark-owned gold-proof imports", () => {
+  assert.deepEqual(
+    findForbiddenProblem9CandidateImports(
+      [
+        "import FirstProof.Problem9.Support FirstProof.Problem9.Gold",
+        "import Mathlib",
+        "import FirstProof.Problem9.Gold"
+      ].join("\n")
+    ),
+    ["FirstProof.Problem9.Gold"]
   );
 });
 
