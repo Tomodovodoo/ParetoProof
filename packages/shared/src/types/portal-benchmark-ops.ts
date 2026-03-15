@@ -1,4 +1,5 @@
 import type {
+  AttemptLifecycleState,
   EvaluationVerdictClass,
   JobLifecycleState,
   RunKind,
@@ -156,7 +157,7 @@ export type PortalRunAttemptSummary = {
   jobId: string | null;
   runId: string;
   startedAt: string;
-  state: "prepared" | "active" | "succeeded" | "failed" | "cancelled";
+  state: AttemptLifecycleState;
   stopReason: string;
   verdictClass: EvaluationVerdictClass;
   verifierResult: string;

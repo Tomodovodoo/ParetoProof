@@ -1,3 +1,9 @@
+import type {
+  OfflineIngestAttemptLifecycleState,
+  OfflineIngestJobLifecycleState,
+  OfflineIngestRunLifecycleState
+} from "./run-control.js";
+
 export type Problem9OfflineIngestRequest = {
   ingestRequestSchemaVersion: "1";
   bundle: Problem9OfflineIngestBundle;
@@ -23,18 +29,18 @@ export type Problem9OfflineIngestResponse = {
   attempt: {
     id: string;
     sourceAttemptId: string;
-    state: "succeeded" | "failed";
+    state: OfflineIngestAttemptLifecycleState;
     verdictClass: "pass" | "fail";
   };
   job: {
     id: string;
     sourceJobId: string | null;
-    state: "completed" | "failed";
+    state: OfflineIngestJobLifecycleState;
   };
   run: {
     id: string;
     sourceRunId: string;
-    state: "succeeded" | "failed";
+    state: OfflineIngestRunLifecycleState;
   };
 };
 

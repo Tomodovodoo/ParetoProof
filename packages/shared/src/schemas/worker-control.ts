@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { runKindSchema } from "./run-control.js";
+import {
+  runKindSchema,
+  workerResultAttemptLifecycleStateSchema,
+  workerResultJobLifecycleStateSchema,
+  workerResultRunLifecycleStateSchema,
+  workerTerminalFailureAttemptLifecycleStateSchema,
+  workerTerminalFailureJobLifecycleStateSchema,
+  workerTerminalFailureRunLifecycleStateSchema
+} from "./run-control.js";
 
 const timestampSchema = z.string().min(1);
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
@@ -347,9 +355,9 @@ export const workerResultMessageRequestSchema = z.object({
 
 export const workerResultMessageResponseSchema = z.object({
   acceptedAt: timestampSchema,
-  attemptState: z.literal("succeeded"),
-  jobState: z.literal("completed"),
-  runState: z.literal("succeeded")
+  attemptState: workerResultAttemptLifecycleStateSchema,
+  jobState: workerResultJobLifecycleStateSchema,
+  runState: workerResultRunLifecycleStateSchema
 });
 
 export const workerTerminalFailureRequestSchema = z.object({
@@ -364,16 +372,16 @@ export const workerTerminalFailureRequestSchema = z.object({
   leaseId: z.string().min(1),
   runId: z.string().min(1),
   summary: z.string().min(1),
-  terminalState: z.enum(["failed", "cancelled"]),
+  terminalState: workerTerminalFailureAttemptLifecycleStateSchema,
   verifierVerdict: workerVerifierVerdictSchema.nullable(),
   verdictDigest: sha256Schema.nullable()
 });
 
 export const workerTerminalFailureResponseSchema = z.object({
   acceptedAt: timestampSchema,
-  attemptState: z.enum(["failed", "cancelled"]),
-  jobState: z.enum(["failed", "cancelled"]),
-  runState: z.enum(["failed", "cancelled"])
+  attemptState: workerTerminalFailureAttemptLifecycleStateSchema,
+  jobState: workerTerminalFailureJobLifecycleStateSchema,
+  runState: workerTerminalFailureRunLifecycleStateSchema
 });
 
 export const workerExecutionEventCatalogEntrySchema = z.object({

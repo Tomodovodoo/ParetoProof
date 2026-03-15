@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  attemptLifecycleStateSchema,
   evaluationVerdictClassSchema,
   jobLifecycleStateSchema,
   runKindSchema,
@@ -177,7 +178,7 @@ export const portalRunAttemptSummarySchema = z.object({
   jobId: z.string().nullable(),
   runId: z.string(),
   startedAt: timestampSchema,
-  state: z.enum(["prepared", "active", "succeeded", "failed", "cancelled"]),
+  state: attemptLifecycleStateSchema,
   stopReason: z.string(),
   verdictClass: evaluationVerdictClassSchema,
   verifierResult: z.string()
