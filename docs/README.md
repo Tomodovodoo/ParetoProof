@@ -21,6 +21,7 @@ Use these files:
 - [hosted-worker-operator-runbooks-baseline.md](./hosted-worker-operator-runbooks-baseline.md) for the authoritative hosted operator runbooks for rollout, rollback, drain, rotation, and incident response
 - [hosted-worker-verification-and-dr-baseline.md](./hosted-worker-verification-and-dr-baseline.md) for the required staged smoke, chaos, rollback, and disaster-recovery proof for hosted workers
 - [hosted-worker-budget-governance-baseline.md](./hosted-worker-budget-governance-baseline.md) for hosted worker spend accounting, quota states, emergency cutoffs, and override policy
+- [hosted-worker-network-egress-baseline.md](./hosted-worker-network-egress-baseline.md) for the class-based hosted worker allowlist, forbidden destinations, and secret-exfiltration boundary
 - [portal-worker-operations-live-ia-baseline.md](./portal-worker-operations-live-ia-baseline.md) for the live portal worker-operations information architecture, drill-down routes, and stale-state presentation
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
