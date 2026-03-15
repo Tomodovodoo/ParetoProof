@@ -18,6 +18,7 @@ Use these files:
 - [hosted-worker-lifecycle-baseline.md](./hosted-worker-lifecycle-baseline.md) for the authoritative worker and lease lifecycle, heartbeat, drain, and recovery state machine
 - [hosted-worker-isolation-and-artifact-boundaries-baseline.md](./hosted-worker-isolation-and-artifact-boundaries-baseline.md) for per-lease workspace isolation, writable-path policy, artifact staging, and quarantine boundaries
 - [hosted-worker-observability-baseline.md](./hosted-worker-observability-baseline.md) for the hosted worker log, metric, trace, audit, alert, incident, and redaction contract
+- [hosted-worker-operator-runbooks-baseline.md](./hosted-worker-operator-runbooks-baseline.md) for the authoritative hosted operator runbooks for rollout, rollback, drain, rotation, and incident response
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [hosted-worker-private-operator-api-baseline.md](./hosted-worker-private-operator-api-baseline.md) for the private portal and operator API boundary for hosted worker and run-ops data
