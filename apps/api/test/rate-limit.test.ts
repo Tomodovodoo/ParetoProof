@@ -36,6 +36,16 @@ function createApprovedAccessGuard() {
   };
 }
 
+function createPublicRequest(options: {
+  headers?: Record<string, string>;
+  ip?: string;
+}) {
+  return {
+    headers: options.headers ?? {},
+    ip: options.ip ?? "198.51.100.10"
+  } as never;
+}
+
 test("public routes emit rate-limit headers and block after the configured budget", async (t) => {
   const app = Fastify();
   const rateLimitPreHandlers = createRateLimitPreHandlers(
@@ -157,4 +167,81 @@ test("authenticated portal and admin routes share the authenticated per-user bud
   assert.equal(blockedResponse.statusCode, 429);
   assert.equal(blockedResponse.json().scope, "authenticated");
   assert.equal(blockedResponse.headers["retry-after"], "60");
+});
+
+test("public rate limiting ignores spoofed forwarding headers and keys off the trusted request ip", () => {
+  const rateLimiter = createInMemoryRateLimiter({
+    policies: {
+      public: {
+        limit: 2
+      }
+    }
+  });
+
+  const firstResult = rateLimiter.check(
+    "public",
+    createPublicRequest({
+      headers: {
+        "cf-connecting-ip": "203.0.113.1",
+        "x-forwarded-for": "203.0.113.2"
+      },
+      ip: "198.51.100.25"
+    })
+  );
+  const secondResult = rateLimiter.check(
+    "public",
+    createPublicRequest({
+      headers: {
+        "cf-connecting-ip": "203.0.113.99",
+        "x-forwarded-for": "203.0.113.100"
+      },
+      ip: "198.51.100.25"
+    })
+  );
+  const blockedResult = rateLimiter.check(
+    "public",
+    createPublicRequest({
+      headers: {
+        "cf-connecting-ip": "192.0.2.1",
+        "x-forwarded-for": "192.0.2.2"
+      },
+      ip: "198.51.100.25"
+    })
+  );
+
+  assert.equal(firstResult.allowed, true);
+  assert.equal(secondResult.allowed, true);
+  assert.equal(blockedResult.allowed, false);
+  assert.equal(blockedResult.decision.remaining, 0);
+});
+
+test("public rate limiting stays bounded under high-cardinality client pressure", () => {
+  const rateLimiter = createInMemoryRateLimiter({
+    maxTrackedKeys: 3,
+    policies: {
+      public: {
+        limit: 1,
+        windowMs: 60_000
+      }
+    }
+  });
+
+  const first = rateLimiter.check("public", createPublicRequest({ ip: "198.51.100.1" }));
+  const second = rateLimiter.check("public", createPublicRequest({ ip: "198.51.100.2" }));
+  const thirdDistinct = rateLimiter.check("public", createPublicRequest({ ip: "198.51.100.3" }));
+  const overflowFirst = rateLimiter.check(
+    "public",
+    createPublicRequest({ ip: "198.51.100.4" })
+  );
+  const overflowBlocked = rateLimiter.check(
+    "public",
+    createPublicRequest({ ip: "198.51.100.5" })
+  );
+
+  assert.equal(first.allowed, true);
+  assert.equal(second.allowed, true);
+  assert.equal(thirdDistinct.allowed, true);
+  assert.equal(overflowFirst.allowed, true);
+  assert.equal(overflowBlocked.allowed, false);
+  assert.equal(rateLimiter.getTrackedKeyCount(), 3);
 });
