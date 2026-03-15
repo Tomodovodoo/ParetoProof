@@ -121,6 +121,13 @@ function resolvePortalRedirectTarget(rawRedirectTarget: unknown, fallbackRedirec
   }
 }
 
+function splitCombinedSetCookieHeader(cookieHeader: string) {
+  return cookieHeader
+    .split(/, (?=[^;,=\s]+=[^;,]*)/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function readSetCookieHeaders(headers: Headers) {
   const cookieHeaders = headers as Headers & {
     getAll?: (name: string) => string[];
@@ -136,7 +143,7 @@ function readSetCookieHeaders(headers: Headers) {
   }
 
   const singleCookieHeader = headers.get("set-cookie");
-  return singleCookieHeader ? [singleCookieHeader] : [];
+  return singleCookieHeader ? splitCombinedSetCookieHeader(singleCookieHeader) : [];
 }
 
 async function readRedirectPath(request: Request) {
