@@ -571,6 +571,79 @@ test("GET /portal/benchmarks/:packageId/export streams csv when requested", asyn
   assert.match(response.body, /problem9,2026\.03,PP-318/);
 });
 
+test("GET /portal/benchmarks/:packageId/export neutralizes whitespace-prefixed spreadsheet formulas", async (t) => {
+  const app = Fastify();
+  const dataset = buildBenchmarkDatasetResponse();
+
+  dataset.attempts[0]!.failure = {
+    code: "\t=SUM(1,1)",
+    family: "@family",
+    summary: "  =SUM(\"danger\",1)"
+  };
+  dataset.runs[0]!.failure = {
+    code: "+fallback",
+    family: "-fallback",
+    summary: "=HYPERLINK(\"https://example.com\")"
+  };
+  dataset.runs.push({
+    ...dataset.runs[0]!,
+    completedAt: "2026-03-13T20:05:00.000Z",
+    durationMs: 60000,
+    failure: {
+      code: "+fallback",
+      family: "-fallback",
+      summary: "=HYPERLINK(\"https://example.com\")"
+    },
+    latestAttemptId: null,
+    latestJobId: "job-2",
+    lineage: {
+      attemptCount: 0,
+      attemptIds: [],
+      jobCount: 1,
+      jobIds: ["job-2"],
+      latestAttemptId: null,
+      latestJobId: "job-2"
+    },
+    modelConfigId: "claude-sonnet",
+    modelConfigLabel: "Claude Sonnet",
+    modelSnapshotId: "claude-sonnet-2026-03-13",
+    providerFamily: "anthropic",
+    runId: "PP-319",
+    runState: "failed",
+    startedAt: "2026-03-13T20:04:00.000Z",
+    verdictClass: "fail"
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService({
+        getBenchmarkDataset: async () => dataset
+      }),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks/problem9/export?format=csv"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.body.includes(",'@family,\"'\t=SUM(1,1)\",\"'  =SUM(\"\"danger\"\",1)\""));
+  assert.ok(
+    response.body.includes(
+      ",'-fallback,'+fallback,\"'=HYPERLINK(\"\"https://example.com\"\")\""
+    )
+  );
+});
+
 test("GET /portal/runs/:runId returns 404 when the run read model is missing", async (t) => {
   const app = Fastify();
 

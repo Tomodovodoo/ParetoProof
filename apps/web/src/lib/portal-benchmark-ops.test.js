@@ -66,6 +66,120 @@ describe("buildRunsCsv", () => {
     expect(csv).toContain("succeeded,Succeeded,terminal_success,Terminal success,pass,Pass");
     expect(csv).not.toContain("succeeded,Completed");
   });
+
+  it("neutralizes direct and whitespace-prefixed spreadsheet formulas in run export fields", () => {
+    const csv = buildRunsCsv([
+      {
+        authMode: "oidc",
+        benchmarkItemId: "item-1",
+        benchmarkLabel: "problem9 core",
+        benchmarkPackageDigest: "sha256:abc",
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "problem9@2026.03",
+        completedAt: "2026-03-13T20:00:00.000Z",
+        durationMs: 120000,
+        failure: { code: "  =SUM(11)", family: "=family", summary: null },
+        laneId: "lane-1",
+        latestAttemptId: "attempt-1",
+        latestJobId: "job-1",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-1"],
+          jobCount: 1,
+          jobIds: ["job-1"],
+          latestAttemptId: "attempt-1",
+          latestJobId: "job-1"
+        },
+        modelConfigId: "gpt-oss",
+        modelConfigLabel: "GPT OSS",
+        modelSnapshotId: "gpt-oss-2026-03-13",
+        providerFamily: "openai",
+        runId: "PP-318",
+        runKind: "single_run",
+        runLifecycleBucket: "terminal_success",
+        runMode: "eval",
+        runState: "succeeded",
+        startedAt: "2026-03-13T19:58:00.000Z",
+        toolProfile: "lean4-proof",
+        verdictClass: "pass"
+      },
+      {
+        authMode: "oidc",
+        benchmarkItemId: "item-2",
+        benchmarkLabel: "problem9 core",
+        benchmarkPackageDigest: "sha256:def",
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "problem9@2026.03",
+        completedAt: "2026-03-13T20:05:00.000Z",
+        durationMs: 90000,
+        failure: { code: "\t@cmd", family: "-family", summary: null },
+        laneId: "lane-2",
+        latestAttemptId: "attempt-2",
+        latestJobId: "job-2",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-2"],
+          jobCount: 1,
+          jobIds: ["job-2"],
+          latestAttemptId: "attempt-2",
+          latestJobId: "job-2"
+        },
+        modelConfigId: "claude-sonnet",
+        modelConfigLabel: "Claude Sonnet",
+        modelSnapshotId: "claude-sonnet-2026-03-13",
+        providerFamily: "anthropic",
+        runId: "PP-319",
+        runKind: "single_run",
+        runLifecycleBucket: "terminal_failure",
+        runMode: "eval",
+        runState: "failed",
+        startedAt: "2026-03-13T20:03:30.000Z",
+        toolProfile: "lean4-proof",
+        verdictClass: "fail"
+      },
+      {
+        authMode: "service_token",
+        benchmarkItemId: "item-3",
+        benchmarkLabel: "problem9 core",
+        benchmarkPackageDigest: "sha256:ghi",
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "problem9@2026.03",
+        completedAt: "2026-03-13T20:10:00.000Z",
+        durationMs: 60000,
+        failure: { code: "+code", family: "@family", summary: null },
+        laneId: "lane-3",
+        latestAttemptId: "attempt-3",
+        latestJobId: "job-3",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-3"],
+          jobCount: 1,
+          jobIds: ["job-3"],
+          latestAttemptId: "attempt-3",
+          latestJobId: "job-3"
+        },
+        modelConfigId: "gemini-pro",
+        modelConfigLabel: "Gemini Pro",
+        modelSnapshotId: "gemini-pro-2026-03-13",
+        providerFamily: "google",
+        runId: "PP-320",
+        runKind: "single_run",
+        runLifecycleBucket: "active",
+        runMode: "eval",
+        runState: "running",
+        startedAt: "2026-03-13T20:09:00.000Z",
+        toolProfile: "lean4-proof",
+        verdictClass: "invalid_result"
+      }
+    ]);
+
+    expect(csv).toContain(",'=family,'  =SUM(11),");
+    expect(csv).toContain(",'-family,'\t@cmd,");
+    expect(csv).toContain(",'@family,'+code,");
+  });
 });
 
 describe("benchmark dataset exports", () => {

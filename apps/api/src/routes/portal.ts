@@ -234,8 +234,12 @@ function toPortalProfile(options: {
   };
 }
 
+const unsafeSpreadsheetFormulaPrefixPattern = /^[\t ]*[=+\-@]/;
+
 function escapeCsvValue(value: string) {
-  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  const safeValue = unsafeSpreadsheetFormulaPrefixPattern.test(value)
+    ? `'${value}`
+    : value;
 
   if (/[",\n]/.test(safeValue)) {
     return `"${safeValue.replaceAll('"', '""')}"`;
