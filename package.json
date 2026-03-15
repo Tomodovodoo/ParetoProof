@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "check:bidi": "node infra/scripts/check-bidi-chars.mjs",
+    "check:deployment-workflow-node-runtime": "node infra/scripts/check-deployment-workflow-node-runtime.mjs",
     "check:env-contract": "node infra/scripts/check-runtime-env-examples.mjs",
     "check:main-branch-promotion-gate": "node infra/scripts/check-main-branch-promotion-gate.mjs",
     "check:problem9-image-policy": "node infra/scripts/check-problem9-image-policy.mjs",

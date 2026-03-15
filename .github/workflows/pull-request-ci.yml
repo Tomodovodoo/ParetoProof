@@ -34,6 +34,9 @@ jobs:
       - name: Check Problem 9 image policy
         run: node infra/scripts/check-problem9-image-policy.mjs
 
+      - name: Check deployment workflow Node runtimes
+        run: node infra/scripts/check-deployment-workflow-node-runtime.mjs
+
       - name: Check main-branch promotion gate docs
         run: node infra/scripts/check-main-branch-promotion-gate.mjs
 
