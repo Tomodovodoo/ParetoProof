@@ -96,6 +96,10 @@ function formatRunKind(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatSubmissionMode(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 function toDisplayError(error: unknown) {
   return error instanceof Error ? error.message : "Request failed.";
 }
@@ -130,6 +134,19 @@ export function getCompactRunsSectionOrder() {
 
 export function isCurrentPortalRequest(requestId: number, latestRequestId: number) {
   return requestId === latestRequestId;
+}
+
+function isAwaitingFirstLoad<TData>(loadState: LoadState<TData>) {
+  return !loadState.data && !loadState.error && loadState.lastUpdatedAt === null;
+}
+
+function hasLaunchOptions(data: PortalLaunchViewResponse | null) {
+  return Boolean(
+    data &&
+      data.benchmarks.length > 0 &&
+      data.modelConfigs.length > 0 &&
+      data.runKinds.length > 0
+  );
 }
 
 function updateRunsQuery(
@@ -424,6 +441,7 @@ function PortalRunsSurface({
   query: PortalRunsListQuery;
   search: string;
 }) {
+  const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
   const providerOptions = buildRunsProviderOptions(
     loadState.data?.filters ?? { modelConfigs: [], providerFamilies: [] },
     query.providerFamily
@@ -440,18 +458,23 @@ function PortalRunsSurface({
     >
       <div className="portal-panel-header">
         <div>
-          <p className="section-tag">Run slice</p>
+          <p className="section-tag">Current run slice</p>
           <h2>
             {isCompactLayout
-              ? "Runs route into canonical detail pages."
-              : "Filtered rows route into canonical detail pages."}
+              ? "Open one run's evidence from the current slice."
+              : "Open one run's evidence from the current filtered slice."}
           </h2>
         </div>
         <span className="role-chip role-chip-muted">
           {loadState.data?.summary.returnedCount ?? 0} shown
         </span>
       </div>
-      {loadState.data?.items.length ? (
+      {awaitingFirstLoad ? (
+        <PortalLoadingState
+          description="Fetching the current benchmark-operations run slice."
+          title="Loading run index."
+        />
+      ) : loadState.data?.items.length ? (
         isCompactLayout ? (
           <div className="portal-run-card-list" aria-label="Runs">
             {loadState.data.items.map((item) => (
@@ -510,10 +533,15 @@ function PortalRunsSurface({
             ))}
           </div>
         )
+      ) : loadState.data ? (
+        <PortalEmptyState
+          description="Broaden the current filters or clear them to repopulate the shared run index."
+          title="No runs matched this filter set."
+        />
       ) : (
         <PortalEmptyState
-          description="Broaden the current filters or clear them to return to the canonical slice."
-          title="No runs matched this filter set."
+          description="Refresh the route to reload the current benchmark-operations run index."
+          title="Run index is unavailable."
         />
       )}
     </article>
@@ -524,7 +552,7 @@ function PortalRunsSurface({
       <div className="portal-panel-header">
         <div>
           <p className="section-tag">Quick filters</p>
-          <h2>Refine the slice before dropping into the full list.</h2>
+          <h2>Trim the current slice before opening a detail view.</h2>
         </div>
       </div>
       <div className="portal-form-grid portal-runs-quick-filter-grid">
@@ -567,8 +595,8 @@ function PortalRunsSurface({
     <article className="portal-panel portal-results-panel portal-results-panel-compact">
       <div className="portal-panel-header">
         <div>
-          <p className="section-tag">Canonical private index</p>
-          <h2>Runs is the benchmark-operations entry point for approved contributors.</h2>
+          <p className="section-tag">Benchmark operations</p>
+          <h2>Runs keeps search, export, and evidence drill-down on the portal.</h2>
         </div>
         <div className="portal-toolbar">
           <button
@@ -606,12 +634,12 @@ function PortalRunsSurface({
     <article className="portal-panel portal-runs-support-panel">
       <div className="portal-panel-header">
         <div>
-          <p className="section-tag">Refine the slice</p>
-          <h2>Filter and refresh the full private index.</h2>
+          <p className="section-tag">Current controls</p>
+          <h2>Refresh and refine the shared run index.</h2>
         </div>
       </div>
       <p className="portal-panel-muted">
-        Filter, export, and triage runs here. Route into one run&apos;s evidence at
+        Filter, export, and triage runs here, then open one run&apos;s evidence in
         <code className="portal-inline-code"> /runs/:runId</code>.
       </p>
       <PortalFreshnessCard
@@ -765,8 +793,8 @@ function PortalRunsSurface({
       <article className="portal-panel portal-results-panel">
         <div className="portal-panel-header">
           <div>
-            <p className="section-tag">Canonical private index</p>
-            <h2>Runs is the benchmark-operations entry point for approved contributors.</h2>
+            <p className="section-tag">Benchmark operations</p>
+            <h2>Runs keeps search, export, and evidence drill-down on the portal.</h2>
           </div>
           <div className="portal-toolbar">
             <button
@@ -787,7 +815,7 @@ function PortalRunsSurface({
           </div>
         </div>
         <p className="portal-panel-muted">
-          Filter, export, and triage runs here. Route into one run&apos;s evidence at
+          Filter, export, and triage runs here, then open one run&apos;s evidence in
           <code className="portal-inline-code"> /runs/:runId</code>.
         </p>
         <PortalFreshnessCard
@@ -942,6 +970,7 @@ function PortalRunDetailSurface({
   search: string;
 }) {
   const detail = loadState.data;
+  const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
   const runsIndexHref = buildRunsIndexHref(search);
   const isCompactLayout = useCompactLayout(480);
   const latestTimelineEntry = detail?.timeline.at(-1) ?? null;
@@ -969,8 +998,8 @@ function PortalRunDetailSurface({
       >
         <div className="portal-panel-header">
           <div>
-            {!isCompactLayout ? <p className="section-tag">Canonical run detail</p> : null}
-            <h2>{detail?.item.runId ?? "Run detail"}</h2>
+            {!isCompactLayout ? <p className="section-tag">Run evidence</p> : null}
+            <h2>{detail ? `${detail.item.runId} evidence` : "Run evidence"}</h2>
           </div>
           <a className="button button-secondary" href={runsIndexHref}>
             Back to runs
@@ -978,7 +1007,12 @@ function PortalRunDetailSurface({
         </div>
         {!isCompactLayout ? freshnessCard : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
-        {detail ? (
+        {awaitingFirstLoad ? (
+          <PortalLoadingState
+            description="Fetching the current run timeline, lineage, and worker-linked evidence."
+            title="Loading run evidence."
+          />
+        ) : detail ? (
           <>
             {isCompactLayout && latestTimelineEntry ? (
               <article className="portal-panel-table-flat portal-run-detail-quick-evidence">
@@ -1045,14 +1079,14 @@ function PortalRunDetailSurface({
               <div className="portal-panel-header">
                 <div>
                   <p className="section-tag">Timeline</p>
-                  <h2>Run and worker evidence stay on this route.</h2>
+                  <h2>Run and worker evidence stay together in this detail view.</h2>
                 </div>
               </div>
               <div className="portal-timeline">
                 {detail.timeline.map((entry) => (
                   <article className="portal-timeline-item" key={`${entry.scope}-${entry.occurredAt}-${entry.label}`}>
                     <strong>{entry.label}</strong>
-                    <p>{entry.scope} {entry.sourceId ? `· ${entry.sourceId}` : ""}</p>
+                    <p>{entry.scope}{entry.sourceId ? ` - ${entry.sourceId}` : ""}</p>
                     <small>{formatTimestamp(entry.occurredAt)}</small>
                   </article>
                 ))}
@@ -1061,28 +1095,28 @@ function PortalRunDetailSurface({
           </>
         ) : (
           <PortalEmptyState
-            description="Refresh the view or route back to the runs index."
-            title="No run detail is loaded yet."
+            description="Refresh the route or return to the shared run index to reopen evidence."
+            title="Run evidence is unavailable."
           />
         )}
       </article>
 
       <aside className="portal-surface-rail">
-        <p className="section-tag">Route flows</p>
-        <h2>Continue through the benchmark-ops cluster.</h2>
+        <p className="section-tag">Next routes</p>
+        <h2>Stay inside the benchmark-ops cluster.</h2>
         <div className="portal-action-list">
           <PortalLinkCard
-            copy="Return to the canonical filtered run index."
+            copy="Return to the shared filtered run index."
             href={runsIndexHref}
             title="Runs"
           />
           <PortalLinkCard
-            copy="Check worker lease posture against this run."
+            copy="Check queue, lease, and incident posture against this run."
             href={buildPortalUrl("/workers")}
             title="Workers"
           />
           <PortalLinkCard
-            copy="Use launch for the next execution intent, not this detail console."
+            copy="Stage the next benchmark run without leaving the portal cluster."
             href={buildPortalUrl("/launch")}
             title="Launch"
           />
@@ -1103,6 +1137,7 @@ function PortalLaunchSurface({
   setSelection: Dispatch<SetStateAction<LaunchSelectionState>>;
 }) {
   const isCompactLayout = useCompactLayout(480);
+  const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
   const benchmark = loadState.data?.benchmarks.find(
     (item) => item.benchmarkVersionId === selection.benchmarkVersionId
   );
@@ -1122,11 +1157,11 @@ function PortalLaunchSurface({
       >
         <div className="portal-panel-header">
           <div>
-            {!isCompactLayout ? <p className="section-tag">Create run intent</p> : null}
-            <h2>Launch stays focused on preflight, not history.</h2>
+            {!isCompactLayout ? <p className="section-tag">Launch preflight</p> : null}
+            <h2>Launch keeps benchmark selection, run shape, and guardrails on the portal.</h2>
           </div>
           <span className="role-chip role-chip-tonal">
-            {loadState.data?.submissionMode ?? "preflight_only"}
+            {formatSubmissionMode(loadState.data?.submissionMode ?? "preflight_only")}
           </span>
         </div>
         {!isCompactLayout ? (
@@ -1140,120 +1175,144 @@ function PortalLaunchSurface({
           />
         ) : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
-        <div className="portal-form-grid">
-          <label className="portal-field">
-            <span>Benchmark package</span>
-            <select
-              className="input"
-              onChange={(event) => {
-                setSelection((current) => ({ ...current, benchmarkVersionId: event.target.value }));
-              }}
-              value={selection.benchmarkVersionId}
-            >
-              {(loadState.data?.benchmarks ?? []).map((item) => (
-                <option key={item.benchmarkVersionId} value={item.benchmarkVersionId}>
-                  {item.benchmarkLabel}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="portal-field">
-            <span>Model config</span>
-            <select
-              className="input"
-              onChange={(event) => {
-                setSelection((current) => ({ ...current, modelConfigId: event.target.value }));
-              }}
-              value={selection.modelConfigId}
-            >
-              {(loadState.data?.modelConfigs ?? []).map((item) => (
-                <option key={item.modelConfigId} value={item.modelConfigId}>
-                  {item.modelConfigLabel}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="portal-field">
-            <span>Run kind</span>
-            <select
-              className="input"
-              onChange={(event) => {
-                setSelection((current) => ({ ...current, runKind: event.target.value as RunKind }));
-              }}
-              value={selection.runKind}
-            >
-              {(loadState.data?.runKinds ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {formatRunKind(item.id)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {isCompactLayout ? (
-          <PortalFreshnessCard
-            isRefreshing={loadState.isLoading}
-            lastUpdatedAt={loadState.lastUpdatedAt}
-            onRefresh={() => {
-              void onRefresh();
-            }}
-            routeId={activeRouteId}
+        {awaitingFirstLoad ? (
+          <PortalLoadingState
+            description="Fetching launch metadata, benchmark packages, and current governance guidance."
+            title="Loading launch preflight."
           />
-        ) : null}
-        {isCompactLayout ? (
-          <div className="portal-launch-quick-actions" aria-label="Launch next steps">
-            <a className="button button-secondary" href={launchEvidenceHref}>
-              Open evidence
-            </a>
-            <a className="button button-secondary" href={buildPortalUrl("/runs")}>
-              Review runs
-            </a>
-          </div>
-        ) : null}
-        {benchmark && modelConfig ? (
-          <div className="portal-results-contract-grid">
-            <article className="portal-results-contract-card">
-              <p className="section-tag">Benchmark</p>
-              <h3>{benchmark.benchmarkLabel}</h3>
-              <p>{benchmark.benchmarkItemCount} items across {benchmark.laneIds.join(", ")}.</p>
-              <a className="portal-inline-link" href={buildRunDetailHref(benchmark.lastSeenRunId)}>
-                Open last seen run
-              </a>
-            </article>
-            <article className="portal-results-contract-card">
-              <p className="section-tag">Model config</p>
-              <h3>{modelConfig.modelConfigLabel}</h3>
-              <p>{modelConfig.providerFamily} · {modelConfig.toolProfiles.join(", ")}</p>
-              <p>Auth: {modelConfig.authModes.join(", ")}</p>
-            </article>
-            <article className="portal-results-contract-card">
-              <p className="section-tag">Governance</p>
-              <h3>{formatRunKind(selection.runKind)}</h3>
-              <p>
-                Max per run: {loadState.data?.governance.defaultPolicy.concurrency.maxConcurrentJobsPerRun}
-                {" "}jobs
-              </p>
-              <p>
-                Budget cap: ${loadState.data?.governance.defaultPolicy.budget.maxEstimatedUsdPerRun}
-              </p>
-            </article>
-          </div>
-        ) : null}
+        ) : hasLaunchOptions(loadState.data) ? (
+          <>
+            <div className="portal-form-grid">
+              <label className="portal-field">
+                <span>Benchmark package</span>
+                <select
+                  className="input"
+                  onChange={(event) => {
+                    setSelection((current) => ({ ...current, benchmarkVersionId: event.target.value }));
+                  }}
+                  value={selection.benchmarkVersionId}
+                >
+                  {(loadState.data?.benchmarks ?? []).map((item) => (
+                    <option key={item.benchmarkVersionId} value={item.benchmarkVersionId}>
+                      {item.benchmarkLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="portal-field">
+                <span>Model config</span>
+                <select
+                  className="input"
+                  onChange={(event) => {
+                    setSelection((current) => ({ ...current, modelConfigId: event.target.value }));
+                  }}
+                  value={selection.modelConfigId}
+                >
+                  {(loadState.data?.modelConfigs ?? []).map((item) => (
+                    <option key={item.modelConfigId} value={item.modelConfigId}>
+                      {item.modelConfigLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="portal-field">
+                <span>Run kind</span>
+                <select
+                  className="input"
+                  onChange={(event) => {
+                    setSelection((current) => ({ ...current, runKind: event.target.value as RunKind }));
+                  }}
+                  value={selection.runKind}
+                >
+                  {(loadState.data?.runKinds ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {formatRunKind(item.id)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {isCompactLayout ? (
+              <PortalFreshnessCard
+                isRefreshing={loadState.isLoading}
+                lastUpdatedAt={loadState.lastUpdatedAt}
+                onRefresh={() => {
+                  void onRefresh();
+                }}
+                routeId={activeRouteId}
+              />
+            ) : null}
+            {isCompactLayout ? (
+              <div className="portal-launch-quick-actions" aria-label="Launch next steps">
+                <a className="button button-secondary" href={launchEvidenceHref}>
+                  Open evidence
+                </a>
+                <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+                  Review runs
+                </a>
+              </div>
+            ) : null}
+            {benchmark && modelConfig ? (
+              <div className="portal-results-contract-grid">
+                <article className="portal-results-contract-card">
+                  <p className="section-tag">Benchmark</p>
+                  <h3>{benchmark.benchmarkLabel}</h3>
+                  <p>{benchmark.benchmarkItemCount} items across {benchmark.laneIds.join(", ")}.</p>
+                  <a className="portal-inline-link" href={buildRunDetailHref(benchmark.lastSeenRunId)}>
+                    Open last seen run
+                  </a>
+                </article>
+                <article className="portal-results-contract-card">
+                  <p className="section-tag">Model config</p>
+                  <h3>{modelConfig.modelConfigLabel}</h3>
+                  <p>{modelConfig.providerFamily} / {modelConfig.toolProfiles.join(", ")}</p>
+                  <p>Auth: {modelConfig.authModes.join(", ")}</p>
+                </article>
+                <article className="portal-results-contract-card">
+                  <p className="section-tag">Governance</p>
+                  <h3>{formatRunKind(selection.runKind)}</h3>
+                  <p>
+                    Max per run: {loadState.data?.governance.defaultPolicy.concurrency.maxConcurrentJobsPerRun}
+                    {" "}jobs
+                  </p>
+                  <p>
+                    Budget cap: ${loadState.data?.governance.defaultPolicy.budget.maxEstimatedUsdPerRun}
+                  </p>
+                </article>
+              </div>
+            ) : (
+              <PortalEmptyState
+                description="Refresh launch preflight to restore the selected benchmark package and model config."
+                title="Launch selection is incomplete."
+              />
+            )}
+          </>
+        ) : (
+          <PortalEmptyState
+            description="Refresh the route once benchmark packages, model configs, and run kinds are available again."
+            title="Launch options are not ready yet."
+          />
+        )}
       </article>
 
       <aside className="portal-surface-rail">
-        <p className="section-tag">Current handoff</p>
-        <h2>Submit will redirect into run detail once create-run exists.</h2>
+        <p className="section-tag">Current evidence trail</p>
+        <h2>Use launch to stage the next run, then continue into evidence and operations.</h2>
         <div className="portal-action-list">
           <PortalLinkCard
-            copy="Inspect the current benchmark slice or benchmark-wide activity."
+            copy="Compare the selected benchmark package against current run evidence."
             href={buildPortalUrl("/runs")}
             title="Review runs"
           />
           <PortalLinkCard
-            copy="Preflight is currently read-only; use the last seen run as the concrete evidence target."
+            copy="Open the most recent evidence linked to the selected benchmark package."
             href={launchEvidenceHref}
             title="Open current evidence"
+          />
+          <PortalLinkCard
+            copy="Check queue pressure and worker posture before the next run leaves preflight."
+            href={buildPortalUrl("/workers")}
+            title="Workers"
           />
         </div>
       </aside>
@@ -1267,6 +1326,7 @@ function PortalWorkersSurface({
   onRefresh
 }: SurfaceProps<PortalWorkersViewResponse>) {
   const data = loadState.data;
+  const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
   const isCompactLayout = useCompactLayout(480);
   const compactEvidenceCards = buildWorkersCompactEvidenceCards(data);
   const freshnessCard = (
@@ -1293,8 +1353,8 @@ function PortalWorkersSurface({
       >
         <div className="portal-panel-header">
           <div>
-            {!isCompactLayout ? <p className="section-tag">Execution posture</p> : null}
-            <h2>Workers owns queue and lease health.</h2>
+            {!isCompactLayout ? <p className="section-tag">Worker operations</p> : null}
+            <h2>Workers tracks queue pressure, lease health, and incident anchors.</h2>
           </div>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
             Jump to runs
@@ -1302,7 +1362,12 @@ function PortalWorkersSurface({
         </div>
         {!isCompactLayout ? freshnessCard : null}
         {loadState.error ? <PortalErrorState error={loadState.error} /> : null}
-        {data ? (
+        {awaitingFirstLoad ? (
+          <PortalLoadingState
+            description="Fetching queue posture, worker pools, active leases, and current incidents."
+            title="Loading worker operations."
+          />
+        ) : data ? (
           <>
             {isCompactLayout && compactEvidenceCards.length ? (
               <article className="portal-panel-table-flat portal-workers-quick-evidence">
@@ -1338,84 +1403,105 @@ function PortalWorkersSurface({
               <article className="portal-summary-card">
                 <span>Generated</span>
                 <strong>{formatTimestamp(data.generatedAt)}</strong>
-                <small>Route refresh evidence</small>
+                <small>Current read model snapshot</small>
               </article>
             </div>
             {isCompactLayout ? freshnessCard : null}
-            <div className="portal-results-contract-grid">
-              {data.workerPools.map((pool) => (
-                <article className="portal-results-contract-card" key={pool.workerPool}>
-                  <p className="section-tag">Worker pool</p>
-                  <h3>{pool.workerPool}</h3>
-                  <p>{pool.workerRuntime} · {pool.workerVersion}</p>
-                  <p>
-                    Active leases: {pool.activeLeaseCount} · stale leases: {pool.staleLeaseCount}
-                  </p>
-                  {pool.activeRunIds.length ? (
-                    <a className="portal-inline-link" href={buildRunDetailHref(pool.activeRunIds[0])}>
-                      Open {pool.activeRunIds[0]}
-                    </a>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+            {data.workerPools.length ? (
+              <div className="portal-results-contract-grid">
+                {data.workerPools.map((pool) => (
+                  <article className="portal-results-contract-card" key={pool.workerPool}>
+                    <p className="section-tag">Worker pool</p>
+                    <h3>{pool.workerPool}</h3>
+                    <p>{pool.workerRuntime} / {pool.workerVersion}</p>
+                    <p>
+                      Active leases: {pool.activeLeaseCount} / stale leases: {pool.staleLeaseCount}
+                    </p>
+                    {pool.activeRunIds.length ? (
+                      <a className="portal-inline-link" href={buildRunDetailHref(pool.activeRunIds[0])}>
+                        Open {pool.activeRunIds[0]}
+                      </a>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <PortalEmptyState
+                description="Refresh the worker operations view to reload current pool and lease posture."
+                title="No worker pools are reporting yet."
+              />
+            )}
             <article className="portal-panel-table-flat">
               <div className="portal-panel-header">
                 <div>
                   <p className="section-tag">Incidents</p>
-                  <h2>Operational incidents route back into concrete runs.</h2>
+                  <h2>Operational incidents stay tied to concrete runs.</h2>
                 </div>
               </div>
-              <div className="portal-action-list">
-                {data.incidents.map((incident) => (
-                  <article className="portal-action-card" key={`${incident.kind}-${incident.observedAt}`}>
-                    <div>
-                      <p className="portal-action-title">
-                        <span className={`role-chip ${getWorkerIncidentTone(incident.severity)}`}>
-                          {incident.severity}
-                        </span>
-                        {incident.summary}
-                      </p>
-                      <p className="portal-action-copy">
-                        {incident.workerPool ?? "all pools"} · {formatTimestamp(incident.observedAt)}
-                      </p>
-                    </div>
-                    {incident.affectedRunIds[0] ? (
-                      <a
-                        className="button button-secondary"
-                        href={buildRunDetailHref(incident.affectedRunIds[0])}
-                      >
-                        Open run
-                      </a>
-                    ) : (
-                      <span className="portal-action-badge">No run linked</span>
-                    )}
-                  </article>
-                ))}
-              </div>
+              {data.incidents.length ? (
+                <div className="portal-action-list">
+                  {data.incidents.map((incident) => (
+                    <article className="portal-action-card" key={`${incident.kind}-${incident.observedAt}`}>
+                      <div>
+                        <p className="portal-action-title">
+                          <span className={`role-chip ${getWorkerIncidentTone(incident.severity)}`}>
+                            {incident.severity}
+                          </span>
+                          {incident.summary}
+                        </p>
+                        <p className="portal-action-copy">
+                          {incident.workerPool ?? "all pools"} / {formatTimestamp(incident.observedAt)}
+                        </p>
+                      </div>
+                      {incident.affectedRunIds[0] ? (
+                        <a
+                          className="button button-secondary"
+                          href={buildRunDetailHref(incident.affectedRunIds[0])}
+                        >
+                          Open run
+                        </a>
+                      ) : (
+                        <span className="portal-action-badge">No run linked</span>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <PortalEmptyState
+                  description="No worker incidents are currently linked to this read model snapshot."
+                  title="No worker incidents are active."
+                />
+              )}
             </article>
           </>
         ) : (
           <PortalEmptyState
-            description="Refresh the workers view to reload queue and lease posture."
-            title="No worker posture is loaded yet."
+            description="Refresh the route to reload queue posture, worker pools, and active leases."
+            title="Worker operations are unavailable."
           />
         )}
       </article>
 
       <aside className="portal-surface-rail">
-        <p className="section-tag">Current leases</p>
-        <h2>Lease posture stays tied to run detail.</h2>
-        <div className="portal-action-list">
-          {(data?.activeLeases ?? []).map((lease) => (
-            <PortalLinkCard
-              copy={`${lease.workerPool} · ${lease.health} · heartbeat ${lease.heartbeatIntervalSeconds}s`}
-              href={buildRunDetailHref(lease.runId)}
-              key={`${lease.runId}-${lease.workerId}`}
-              title={`${lease.runId} on ${lease.workerId}`}
-            />
-          ))}
-        </div>
+        <p className="section-tag">Active leases</p>
+        <h2>Lease posture stays tied to run evidence.</h2>
+        {(data?.activeLeases ?? []).length ? (
+          <div className="portal-action-list">
+            {(data?.activeLeases ?? []).map((lease) => (
+              <PortalLinkCard
+                copy={`${lease.workerPool} / ${lease.health} / heartbeat ${lease.heartbeatIntervalSeconds}s`}
+                href={buildRunDetailHref(lease.runId)}
+                key={`${lease.runId}-${lease.workerId}`}
+                title={`${lease.runId} on ${lease.workerId}`}
+              />
+            ))}
+          </div>
+        ) : (
+          <PortalEmptyState
+            description="Active leases will appear here once workers claim jobs from the shared queue."
+            title="No active leases are visible."
+          />
+        )}
       </aside>
     </section>
   );
@@ -1469,7 +1555,7 @@ function buildWorkersCompactEvidenceCards(data: PortalWorkersViewResponse | null
   pushCard(
     primaryLease ? `${primaryLease.runId} lease` : "Active lease",
     primaryLease
-      ? `${primaryLease.workerPool} on ${primaryLease.workerId} · ${primaryLease.health}`
+      ? `${primaryLease.workerPool} on ${primaryLease.workerId} / ${primaryLease.health}`
       : "Open the first active lease run detail.",
     primaryLease?.runId ?? data.workerPools.find((pool) => pool.activeRunIds[0])?.activeRunIds[0]
   );
@@ -1478,7 +1564,7 @@ function buildWorkersCompactEvidenceCards(data: PortalWorkersViewResponse | null
   pushCard(
     primaryIncident ? `${primaryIncident.affectedRunIds[0]} incident` : "Incident run",
     primaryIncident
-      ? `${primaryIncident.severity} · ${primaryIncident.workerPool ?? "all pools"}`
+      ? `${primaryIncident.severity} / ${primaryIncident.workerPool ?? "all pools"}`
       : "Open the first incident-linked run detail.",
     primaryIncident?.affectedRunIds[0]
   );
@@ -1491,6 +1577,21 @@ function PortalErrorState({ error }: { error: string }) {
     <article className="portal-feedback-card portal-feedback-error">
       <strong>Request failed</strong>
       <p>{error}</p>
+    </article>
+  );
+}
+
+function PortalLoadingState({
+  description,
+  title
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <article className="portal-feedback-card">
+      <strong>{title}</strong>
+      <p>{description}</p>
     </article>
   );
 }

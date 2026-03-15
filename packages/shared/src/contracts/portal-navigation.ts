@@ -37,29 +37,29 @@ export const portalSectionDefinitions = [
   },
   {
     description:
-      "Canonical private run index for approved users, with run detail living under /runs/:runId.",
+      "Portal-owned benchmark run index and evidence trail for approved users, with run detail under /runs/:runId.",
     id: "runs",
     navLabel: "Runs",
     routeId: "portal.runs",
-    summary: "Primary benchmark-operations workspace for all approved users.",
+    summary: "Shared benchmark run index and evidence trail for approved users.",
     visibility: "approved_helper_or_higher"
   },
   {
     description:
-      "Create-new-run workspace for collaborators and admins once benchmark execution is allowed.",
+      "Launch preflight for collaborators and admins, keeping benchmark selection, run shape, and governance review on the portal.",
     id: "launch",
     navLabel: "Launch",
     routeId: "portal.launch-run",
-    summary: "Benchmark execution intent and launch preflight.",
+    summary: "Benchmark selection, run-shape review, and launch preflight.",
     visibility: "approved_collaborator_or_higher"
   },
   {
     description:
-      "Execution operations view for worker, queue, and lease posture after runs have been launched.",
+      "Worker operations view for queue pressure, lease health, and incident follow-up inside the same portal cluster.",
     id: "workers",
     navLabel: "Workers",
     routeId: "portal.workers",
-    summary: "Execution capacity and worker-health workspace.",
+    summary: "Queue posture, leases, and incident follow-up for benchmark ops.",
     visibility: "approved_collaborator_or_higher"
   },
   {
