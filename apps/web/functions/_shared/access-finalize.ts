@@ -28,6 +28,11 @@ const brandedHosts = new Set([
   "google.auth.paretoproof.com",
   "portal.paretoproof.com"
 ]);
+const brandedFinalizeRelayHosts = new Set([
+  "auth.paretoproof.com",
+  "github.auth.paretoproof.com",
+  "google.auth.paretoproof.com"
+]);
 
 function isLocalHostname(hostname: string) {
   return (
@@ -36,6 +41,39 @@ function isLocalHostname(hostname: string) {
     hostname === "::1" ||
     hostname.endsWith(".localhost")
   );
+}
+
+function readTrustedFinalizeRelayOrigin(request: Request) {
+  const originHeader = request.headers.get("origin");
+
+  if (!originHeader) {
+    return null;
+  }
+
+  try {
+    const originUrl = new URL(originHeader);
+
+    if (
+      originUrl.protocol === "https:" &&
+      brandedFinalizeRelayHosts.has(originUrl.hostname)
+    ) {
+      return originUrl.origin;
+    }
+
+    if (
+      originUrl.protocol === "http:" &&
+      (
+        brandedFinalizeRelayHosts.has(originUrl.hostname) ||
+        isLocalHostname(originUrl.hostname)
+      )
+    ) {
+      return originUrl.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function sanitizeRedirectPath(rawRedirectPath: string | null) {
@@ -196,10 +234,16 @@ export async function handleAccessFinalize(request: Request) {
   const retryUrl = buildAuthRetryUrl(redirectPath);
   const requestUrl = new URL(request.url);
   const apiUrl = new URL("/portal/session/finalize/submit", resolveApiBaseUrl(requestUrl));
+  const trustedOrigin = readTrustedFinalizeRelayOrigin(request);
+
+  if (!trustedOrigin) {
+    return buildRedirectResponse(retryUrl);
+  }
+
   const forwardedHeaders = new Headers({
     accept: "application/json",
     "content-type": "application/json",
-    origin: requestUrl.origin
+    origin: trustedOrigin
   });
   const accessAssertion = request.headers.get("cf-access-jwt-assertion");
   const cookieHeader = request.headers.get("cookie");

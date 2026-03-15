@@ -54,7 +54,8 @@ describe("handleAccessFinalize", () => {
         headers: {
           "cf-access-jwt-assertion": "assertion-1",
           cookie: "PortalAccessProvider=signed; PortalLinkIntent=intent-1",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://google.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -100,7 +101,8 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           cookie: "CF_Authorization=session-cookie; PortalAccessProvider=signed",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -133,7 +135,8 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-3",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -162,7 +165,8 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-4",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -214,7 +218,8 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-5",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://google.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -263,7 +268,8 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-6",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://google.auth.paretoproof.com"
         },
         method: "POST"
       })
@@ -334,6 +340,33 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-2",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+    );
+  });
+
+  it("redirects back to retry without relaying when the browser Origin header is absent", async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 200 });
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-missing-origin",
           "content-type": "application/x-www-form-urlencoded"
         },
         method: "POST"
@@ -344,5 +377,34 @@ describe("handleAccessFinalize", () => {
     expect(response.headers.get("location")).toBe(
       "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
     );
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("redirects back to retry without relaying when the browser Origin header is untrusted", async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 200 });
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-untrusted-origin",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://evil.example"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+    );
+    expect(fetchCalled).toBe(false);
   });
 });
