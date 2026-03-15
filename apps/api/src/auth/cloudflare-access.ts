@@ -67,10 +67,11 @@ function normalizeTeamDomain(teamDomain: string) {
   return teamDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
-function usesBrandedFinalizeRelayAudiences(routePath: string) {
+function usesBrandedRelayAudiences(routePath: string) {
   return (
     routePath === "/portal/session/finalize" ||
-    routePath === "/portal/session/finalize/submit"
+    routePath === "/portal/session/finalize/submit" ||
+    routePath === "/portal/session/status"
   );
 }
 
@@ -256,7 +257,7 @@ export function selectCloudflareAccessVerifier(
     return verifiers.internal;
   }
 
-  if (usesBrandedFinalizeRelayAudiences(routePath)) {
+  if (usesBrandedRelayAudiences(routePath)) {
     return verifiers.brandedRelay;
   }
 

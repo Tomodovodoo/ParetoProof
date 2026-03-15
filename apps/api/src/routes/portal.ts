@@ -586,6 +586,21 @@ export function registerPortalRoutes(
     }
   );
 
+  app.get(
+    "/portal/session/status",
+    {
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
+      ]
+    },
+    async (request) => {
+      return {
+        identity: request.accessIdentity,
+        access: request.accessRbacContext
+      };
+    }
+  );
+
   app.get("/portal/session/complete", {
     preHandler: rateLimitPreHandlers?.public
   }, handlePortalSessionRetryRedirect);

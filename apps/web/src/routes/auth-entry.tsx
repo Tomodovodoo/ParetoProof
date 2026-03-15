@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
-import { getApiBaseUrl } from "../lib/api-base-url";
-import { fetchApi } from "../lib/api-fetch";
 import {
   buildAccessRequestUrl,
   buildAccessStartUrl,
@@ -33,25 +31,24 @@ export function resolveAuthEntryMode(redirectPath: string) {
 
 export function buildAuthEntrySessionCheckRequestInit(signal: AbortSignal): RequestInit {
   return {
-    credentials: "include",
+    credentials: "same-origin",
     headers: {
       Accept: "application/json"
     },
-    redirect: "manual",
     signal
   };
 }
 
-export function resolveAuthEntrySessionCheckAction(response: Pick<Response, "ok" | "status" | "type">) {
-  if (response.ok) {
-    return "redirect_portal";
-  }
-
-  if (response.type === "opaqueredirect" || response.status === 401) {
+export function resolveAuthEntrySessionCheckAction(response: Pick<Response, "ok" | "status">, body: unknown) {
+  if (!response.ok) {
     return "stay_on_auth_entry";
   }
 
-  return "stay_on_auth_entry";
+  if (typeof body === "object" && body !== null && "active" in body && (body as { active: unknown }).active === false) {
+    return "stay_on_auth_entry";
+  }
+
+  return "redirect_portal";
 }
 
 export function AuthEntry({ redirectPath }: AuthEntryProps) {
@@ -61,7 +58,6 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const approvedSignInUrl = buildAuthUrl("/");
   const accessRequestUrl = buildAccessRequestUrl();
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
-  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const portalUrl = useMemo(() => buildPortalUrl(redirectPath), [redirectPath]);
   const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
   const handoffMode = new URLSearchParams(window.location.search).get("handoff");
@@ -79,11 +75,12 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
 
     async function resolveExistingSession() {
       try {
-        const response = await fetchApi(
-          `${apiBaseUrl}/portal/me`,
+        const response = await fetch(
+          "/api/access/session",
           buildAuthEntrySessionCheckRequestInit(controller.signal)
         );
-        const action = resolveAuthEntrySessionCheckAction(response);
+        const body = response.ok ? await response.json() : null;
+        const action = resolveAuthEntrySessionCheckAction(response, body);
 
         if (action === "redirect_portal") {
           window.location.replace(portalUrl);
@@ -105,7 +102,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
     return () => {
       controller.abort();
     };
-  }, [apiBaseUrl, isLocal, portalUrl]);
+  }, [isLocal, portalUrl]);
 
   return (
     <main className="auth-shell">

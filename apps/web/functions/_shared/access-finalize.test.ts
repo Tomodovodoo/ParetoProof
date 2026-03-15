@@ -14,7 +14,7 @@ describe("handleAccessFinalize", () => {
 
   it("relays a successful finalize response to the portal and forwards cookies", async () => {
     globalThis.fetch = async (input, init) => {
-      expect(input).toBe("https://api.paretoproof.com/portal/session/finalize/submit");
+      expect(input).toBe("https://api.paretoproof.com/portal/session/finalize");
       expect(init?.method).toBe("POST");
       expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBe("assertion-1");
       expect((init?.headers as Headers).get("cookie")).toContain("PortalAccessProvider=");
@@ -139,7 +139,7 @@ describe("handleAccessFinalize", () => {
     );
 
     expect(relayTargets).toEqual([
-      "https://api.paretoproof.com/portal/session/finalize/submit"
+      "https://api.paretoproof.com/portal/session/finalize"
     ]);
   });
 
