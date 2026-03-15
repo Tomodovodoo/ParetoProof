@@ -19,6 +19,7 @@ permissions:
   packages: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   EXECUTION_IMAGE: ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-execution
   WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/paretoproof-worker
 
@@ -32,13 +33,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -46,7 +47,7 @@ jobs:
 
       - name: Generate execution image metadata
         id: execution_metadata
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.EXECUTION_IMAGE }}
           tags: |
@@ -55,7 +56,7 @@ jobs:
 
       - name: Generate worker image metadata
         id: worker_metadata
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.WORKER_IMAGE }}
           tags: |
@@ -79,7 +80,7 @@ jobs:
 
       - name: Build and publish Problem 9 execution image
         id: build_execution
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: .
           file: apps/worker/Dockerfile
@@ -92,7 +93,7 @@ jobs:
 
       - name: Build and publish worker image
         id: build_worker
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: .
           file: apps/worker/Dockerfile
@@ -127,7 +128,7 @@ jobs:
           } | tee problem9-image-digests.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload image digest artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: problem9-image-digests
           path: problem9-image-digests.md
