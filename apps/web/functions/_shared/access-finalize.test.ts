@@ -12,7 +12,7 @@ describe("handleAccessFinalize", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("relays a successful finalize response through the API bootstrap boundary and forwards cookies", async () => {
+  it("relays a successful finalize response to the portal and forwards cookies", async () => {
     globalThis.fetch = async (input, init) => {
       expect(input).toBe("https://api.paretoproof.com/portal/session/finalize/submit");
       expect(init?.method).toBe("POST");
@@ -58,7 +58,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fprofile"
+      "https://portal.paretoproof.com/profile"
     );
     expect(response.headers.get("cache-control")).toBe("no-store");
     const setCookies =
@@ -68,7 +68,7 @@ describe("handleAccessFinalize", () => {
     expect(setCookies[1]).toContain("PortalLinkIntent=");
   });
 
-  it("relays a cookie-only branded Access session back to the API finalize boundary", async () => {
+  it("relays a cookie-only branded Access session to the portal", async () => {
     globalThis.fetch = async (_input, init) => {
       expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBeNull();
       expect((init?.headers as Headers).get("cookie")).toContain("CF_Authorization=session-cookie");
@@ -105,7 +105,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Faccess-request"
+      "https://portal.paretoproof.com/access-request"
     );
   });
 
@@ -143,7 +143,7 @@ describe("handleAccessFinalize", () => {
     ]);
   });
 
-  it("preserves the finalized portal path when converting the response into an API bootstrap redirect", async () => {
+  it("preserves the finalized portal path in the redirect", async () => {
     globalThis.fetch = async () =>
       new Response(
         JSON.stringify({
@@ -169,7 +169,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fadmin%2Fusers%3Ftab%3Dreview%23pending"
+      "https://portal.paretoproof.com/admin/users?tab=review#pending"
     );
   });
 
