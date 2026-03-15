@@ -9,6 +9,13 @@ import {
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
+import {
+  getProblem9ModelConfigIdPrefix,
+  problem9LocalAuthModes,
+  problem9ProviderFamilies,
+  problem9RunModes,
+  problem9ToolProfiles
+} from "@paretoproof/shared";
 import { z } from "zod";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
@@ -45,13 +52,8 @@ const benchmarkPackageManifestSchema = z.object({
   sourceManifestDigest: sha256Schema
 });
 
-const promptPackageManifestSchema = z.object({
-  authMode: z.enum([
-    "trusted_local_user",
-    "machine_api_key",
-    "machine_oauth",
-    "local_stub"
-  ]),
+const promptPackageManifestBaseSchema = z.object({
+  authMode: z.enum(problem9LocalAuthModes),
   benchmarkItemId: z.literal("Problem9"),
   benchmarkPackageDigest: sha256Schema,
   benchmarkPackageId: z.literal("firstproof/Problem9"),
@@ -81,15 +83,25 @@ const promptPackageManifestSchema = z.object({
   promptPackageDigestMode: z.literal("metadata_plus_layer_inventory_v1"),
   promptPackageSchemaVersion: z.literal("1"),
   promptProtocolVersion: z.string().min(1),
-  providerFamily: z.enum(["openai", "anthropic", "google", "aristotle", "axle", "custom"]),
-  runMode: z.enum(["single_pass_probe", "pass_k_probe", "bounded_agentic_attempt"]),
-  toolProfile: z.enum(["no_tools", "lean_mcp_readonly", "workspace_edit_limited"])
+  providerFamily: z.enum(problem9ProviderFamilies),
+  runMode: z.enum(problem9RunModes),
+  toolProfile: z.enum(problem9ToolProfiles)
+});
+
+const promptPackageManifestSchema = promptPackageManifestBaseSchema.superRefine((value, context) => {
+  const expectedModelConfigPrefix = getProblem9ModelConfigIdPrefix(value.authMode);
+  if (!value.modelConfigId.startsWith(expectedModelConfigPrefix)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `modelConfigId must start with ${expectedModelConfigPrefix} for authMode ${value.authMode}.`
+    });
+  }
 });
 
 const runEnvelopeSchema = z
   .object({
     attemptId: z.string().min(1),
-    authMode: promptPackageManifestSchema.shape.authMode,
+    authMode: promptPackageManifestBaseSchema.shape.authMode,
     benchmarkItemId: z.literal("Problem9"),
     benchmarkPackageDigest: sha256Schema,
     benchmarkPackageId: z.literal("firstproof/Problem9"),
@@ -99,11 +111,11 @@ const runEnvelopeSchema = z
     laneId: z.string().min(1),
     modelConfigId: z.string().min(1),
     promptProtocolVersion: z.string().min(1),
-    providerFamily: promptPackageManifestSchema.shape.providerFamily,
+    providerFamily: promptPackageManifestBaseSchema.shape.providerFamily,
     runEnvelopeSchemaVersion: z.literal("1"),
     runId: z.string().min(1),
-    runMode: promptPackageManifestSchema.shape.runMode,
-    toolProfile: promptPackageManifestSchema.shape.toolProfile
+    runMode: promptPackageManifestBaseSchema.shape.runMode,
+    toolProfile: promptPackageManifestBaseSchema.shape.toolProfile
   })
   .passthrough();
 

@@ -7,6 +7,12 @@ import type {
   WorkerTerminalFailureJobLifecycleState,
   WorkerTerminalFailureRunLifecycleState
 } from "./run-control.js";
+import type {
+  Problem9HostedAuthMode,
+  Problem9ProviderFamily,
+  Problem9RunMode,
+  Problem9ToolProfile
+} from "../contracts/problem9-execution.js";
 
 export type WorkerControlEndpointId =
   | "internal.worker.claim"
@@ -150,7 +156,7 @@ export type WorkerRunTarget =
       sliceDefinition: string;
     }
   | {
-      authMode: "trusted_local_user" | "machine_api_key" | "machine_oauth" | "local_stub";
+      authMode: Problem9HostedAuthMode;
       benchmarkItemId: string;
       benchmarkPackageDigest: string;
       benchmarkPackageId: string;
@@ -161,10 +167,10 @@ export type WorkerRunTarget =
       modelSnapshotId: string;
       promptPackageDigest: string;
       promptProtocolVersion: string;
-      providerFamily: "openai" | "anthropic" | "google" | "aristotle" | "axle" | "custom";
+      providerFamily: Problem9ProviderFamily;
       runKind: "single_run";
-      runMode: "single_pass_probe" | "pass_k_probe" | "bounded_agentic_attempt";
-      toolProfile: "no_tools" | "lean_mcp_readonly" | "workspace_edit_limited";
+      runMode: Problem9RunMode;
+      toolProfile: Problem9ToolProfile;
     }
   | {
       benchmarkTargetId: string;

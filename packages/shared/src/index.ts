@@ -8,6 +8,7 @@ export * from "./contracts/portal-actions.js";
 export * from "./contracts/portal-admin.js";
 export * from "./contracts/portal-benchmark-ops.js";
 export * from "./contracts/portal-live-freshness.js";
+export * from "./contracts/problem9-execution.js";
 export * from "./contracts/route-access.js";
 export * from "./contracts/run-control.js";
 export * from "./contracts/worker-control.js";

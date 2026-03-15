@@ -1,4 +1,5 @@
 import path from "node:path";
+import { type Problem9HostedAuthMode } from "@paretoproof/shared";
 import { runWorkerClaimLoop } from "./worker-claim-loop.js";
 
 export async function runWorkerClaimLoopCli(args: string[]): Promise<void> {
@@ -6,7 +7,7 @@ export async function runWorkerClaimLoopCli(args: string[]): Promise<void> {
     console.error(
       [
         "Usage: tsx src/index.ts run-worker-claim-loop --worker-id <id> --worker-pool <pool> --worker-version <version> --workspace-root <directory> --output-root <directory>",
-        "       [--auth-mode machine_api_key|machine_oauth] [--worker-runtime modal|local_docker] [--provider-model <model>] [--max-jobs <count>] [--once]"
+        "       [--auth-mode machine_api_key] [--worker-runtime modal|local_docker] [--provider-model <model>] [--max-jobs <count>] [--once]"
       ].join("\n")
     );
     return;
@@ -29,9 +30,7 @@ export async function runWorkerClaimLoopCli(args: string[]): Promise<void> {
 
   const maxJobs = getOptionalValue("--max-jobs");
   const result = await runWorkerClaimLoop({
-    authMode: (getOptionalValue("--auth-mode") ?? "machine_api_key") as
-      | "machine_api_key"
-      | "machine_oauth",
+    authMode: (getOptionalValue("--auth-mode") ?? "machine_api_key") as Problem9HostedAuthMode,
     maxJobs: maxJobs ? Number.parseInt(maxJobs, 10) : null,
     once: args.includes("--once"),
     outputRoot: path.resolve(getRequiredValue("--output-root")),

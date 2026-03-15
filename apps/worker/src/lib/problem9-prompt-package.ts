@@ -10,6 +10,13 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getProblem9ModelConfigIdPrefix,
+  problem9LocalAuthModes,
+  problem9ProviderFamilies,
+  problem9RunModes,
+  problem9ToolProfiles
+} from "@paretoproof/shared";
 import { z } from "zod";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
@@ -36,33 +43,13 @@ const benchmarkPackageManifestSchema = z.object({
   sourceManifestDigest: sha256Schema
 });
 
-const promptRunModeSchema = z.enum([
-  "single_pass_probe",
-  "pass_k_probe",
-  "bounded_agentic_attempt"
-]);
+const promptRunModeSchema = z.enum(problem9RunModes);
 
-const promptToolProfileSchema = z.enum([
-  "no_tools",
-  "lean_mcp_readonly",
-  "workspace_edit_limited"
-]);
+const promptToolProfileSchema = z.enum(problem9ToolProfiles);
 
-const promptAuthModeSchema = z.enum([
-  "trusted_local_user",
-  "machine_api_key",
-  "machine_oauth",
-  "local_stub"
-]);
+const promptAuthModeSchema = z.enum(problem9LocalAuthModes);
 
-const promptProviderFamilySchema = z.enum([
-  "openai",
-  "anthropic",
-  "google",
-  "aristotle",
-  "axle",
-  "custom"
-]);
+const promptProviderFamilySchema = z.enum(problem9ProviderFamilies);
 
 const promptLayerVersionSchema = z.object({
   benchmark: z.string().min(1),
@@ -91,6 +78,14 @@ const problem9PromptPackageOptionsSchema = z
     toolProfile: promptToolProfileSchema
   })
   .superRefine((value, context) => {
+    const expectedModelConfigPrefix = getProblem9ModelConfigIdPrefix(value.authMode);
+    if (!value.modelConfigId.startsWith(expectedModelConfigPrefix)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `modelConfigId must start with ${expectedModelConfigPrefix} for authMode ${value.authMode}.`
+      });
+    }
+
     if (value.runMode === "pass_k_probe") {
       if (value.passKCount === null || value.passKIndex === null) {
         context.addIssue({

@@ -67,6 +67,42 @@ test("resolveProblem9ModelSnapshotId preserves explicit overrides and non-stub p
   );
 });
 
+test("materializeProblem9PromptPackage rejects modelConfigId values outside the supported auth matrix", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-prompt-contract-"));
+
+  try {
+    const benchmarkPackage = await materializeProblem9Package({
+      outputRoot: path.join(tempRoot, "benchmark-package")
+    });
+    const promptDefaults = getDefaultProblem9PromptPackageOptions();
+
+    await assert.rejects(
+      () =>
+        materializeProblem9PromptPackage({
+          attemptId: "attempt-fixture-invalid-001",
+          authMode: "machine_api_key",
+          benchmarkPackageRoot: benchmarkPackage.outputRoot,
+          harnessRevision: "fixture-harness-rev",
+          jobId: null,
+          laneId: "lean422_exact",
+          modelConfigId: "local_stub/problem9_fixture.v1",
+          outputRoot: path.join(tempRoot, "prompt-package"),
+          passKCount: null,
+          passKIndex: null,
+          promptLayerVersions: promptDefaults.promptLayerVersions,
+          promptProtocolVersion: promptDefaults.promptProtocolVersion,
+          providerFamily: "openai",
+          runId: "run-fixture-invalid-001",
+          runMode: "single_pass_probe",
+          toolProfile: "workspace_edit_limited"
+        }),
+      /modelConfigId must start with openai\/ for authMode machine_api_key\./
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
 test("run-problem9-attempt rejects unsupported auth-mode values at the CLI boundary", () => {
   const workerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const workerEntryPoint = path.resolve(

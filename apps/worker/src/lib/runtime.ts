@@ -1,8 +1,11 @@
 import { access, constants, readFile, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  type Problem9HostedAuthMode,
+  type Problem9LocalAuthMode
+} from "@paretoproof/shared";
 import { z } from "zod";
-import type { Problem9AuthMode } from "./problem9-auth.js";
 import {
   trustedLocalAuthMountMarkerEnvName,
   trustedLocalAuthMountMarkerValue,
@@ -40,7 +43,7 @@ const workerRawRuntimeEnvSchema = z.object({
 
 export type WorkerRuntimeMode =
   | {
-      authMode: Problem9AuthMode;
+      authMode: Problem9LocalAuthMode;
       commandFamily: "problem9_attempt";
     }
   | {
@@ -53,7 +56,7 @@ export type WorkerRuntimeMode =
       commandFamily: "trusted_local_devbox";
     }
   | {
-      authMode: "machine_api_key" | "machine_oauth";
+      authMode: Problem9HostedAuthMode;
       commandFamily: "worker_claim_loop";
     };
 
@@ -305,9 +308,6 @@ export async function parseWorkerRuntimeEnv(
           return {
             codexApiKey: resolveRequiredField("CODEX_API_KEY", parsed.data.CODEX_API_KEY)
           };
-        case "machine_oauth":
-          rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
-          return {};
         case "trusted_local_user":
           return resolveTrustedLocalEnv(parsed.data);
       }

@@ -1,5 +1,12 @@
 import { z } from "zod";
 import {
+  getProblem9ModelConfigIdPrefix,
+  problem9LocalAuthModes,
+  problem9ProviderFamilies,
+  problem9RunModes,
+  problem9ToolProfiles
+} from "../contracts/problem9-execution.js";
+import {
   offlineIngestAttemptLifecycleStateSchema,
   offlineIngestJobLifecycleStateSchema,
   offlineIngestRunLifecycleStateSchema
@@ -60,13 +67,8 @@ export const problem9PackageRefSchema = z.object({
   packageRoot: z.literal("firstproof/Problem9")
 });
 
-export const problem9PromptPackageManifestSchema = z.object({
-  authMode: z.enum([
-    "trusted_local_user",
-    "machine_api_key",
-    "machine_oauth",
-    "local_stub"
-  ]),
+const problem9PromptPackageManifestBaseSchema = z.object({
+  authMode: z.enum(problem9LocalAuthModes),
   benchmarkItemId: z.literal("Problem9"),
   benchmarkPackageDigest: sha256Schema,
   benchmarkPackageId: z.literal("firstproof/Problem9"),
@@ -96,13 +98,23 @@ export const problem9PromptPackageManifestSchema = z.object({
   promptPackageDigestMode: z.literal("metadata_plus_layer_inventory_v1"),
   promptPackageSchemaVersion: z.literal("1"),
   promptProtocolVersion: z.string().min(1),
-  providerFamily: z.enum(["openai", "anthropic", "google", "aristotle", "axle", "custom"]),
-  runMode: z.enum(["single_pass_probe", "pass_k_probe", "bounded_agentic_attempt"]),
-  toolProfile: z.enum(["no_tools", "lean_mcp_readonly", "workspace_edit_limited"])
+  providerFamily: z.enum(problem9ProviderFamilies),
+  runMode: z.enum(problem9RunModes),
+  toolProfile: z.enum(problem9ToolProfiles)
+});
+
+export const problem9PromptPackageManifestSchema = problem9PromptPackageManifestBaseSchema.superRefine((value, context) => {
+  const expectedModelConfigPrefix = getProblem9ModelConfigIdPrefix(value.authMode);
+  if (!value.modelConfigId.startsWith(expectedModelConfigPrefix)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `modelConfigId must start with ${expectedModelConfigPrefix} for authMode ${value.authMode}.`
+    });
+  }
 });
 
 export const problem9EnvironmentManifestSchema = z.object({
-  authMode: problem9PromptPackageManifestSchema.shape.authMode,
+  authMode: problem9PromptPackageManifestBaseSchema.shape.authMode,
   environmentSchemaVersion: z.string().min(1),
   executionImageDigest: sha256Schema.nullable(),
   executionTargetKind: z.enum(["problem9-devbox", "problem9-execution"]),
@@ -120,21 +132,21 @@ export const problem9EnvironmentManifestSchema = z.object({
     release: z.string().min(1)
   }),
   promptProtocolVersion: z.string().min(1),
-  providerFamily: problem9PromptPackageManifestSchema.shape.providerFamily,
-  runMode: problem9PromptPackageManifestSchema.shape.runMode,
+  providerFamily: problem9PromptPackageManifestBaseSchema.shape.providerFamily,
+  runMode: problem9PromptPackageManifestBaseSchema.shape.runMode,
   runtime: z.object({
     bunVersion: z.string().min(1).nullable(),
     nodeVersion: z.string().min(1),
     tsxVersion: z.string().min(1).nullable()
   }),
-  toolProfile: problem9PromptPackageManifestSchema.shape.toolProfile,
+  toolProfile: problem9PromptPackageManifestBaseSchema.shape.toolProfile,
   verifierVersion: z.string().min(1)
 });
 
 export const problem9RunBundleManifestSchema = z.object({
   artifactManifestDigest: sha256Schema,
   attemptId: z.string().min(1),
-  authMode: problem9PromptPackageManifestSchema.shape.authMode,
+  authMode: problem9PromptPackageManifestBaseSchema.shape.authMode,
   benchmarkItemId: z.literal("Problem9"),
   benchmarkPackageDigest: sha256Schema,
   benchmarkPackageId: z.literal("firstproof/Problem9"),
@@ -150,13 +162,13 @@ export const problem9RunBundleManifestSchema = z.object({
   modelSnapshotId: z.string().min(1),
   promptPackageDigest: sha256Schema,
   promptProtocolVersion: z.string().min(1),
-  providerFamily: problem9PromptPackageManifestSchema.shape.providerFamily,
+  providerFamily: problem9PromptPackageManifestBaseSchema.shape.providerFamily,
   runConfigDigest: sha256Schema,
   runId: z.string().min(1),
-  runMode: problem9PromptPackageManifestSchema.shape.runMode,
+  runMode: problem9PromptPackageManifestBaseSchema.shape.runMode,
   status: z.enum(["success", "failure"]),
   stopReason: z.string().min(1),
-  toolProfile: problem9PromptPackageManifestSchema.shape.toolProfile,
+  toolProfile: problem9PromptPackageManifestBaseSchema.shape.toolProfile,
   verifierVersion: z.string().min(1),
   verdictDigest: sha256Schema
 });

@@ -8,6 +8,12 @@ import {
   workerTerminalFailureJobLifecycleStateSchema,
   workerTerminalFailureRunLifecycleStateSchema
 } from "./run-control.js";
+import {
+  problem9HostedAuthModes,
+  problem9ProviderFamilies,
+  problem9RunModes,
+  problem9ToolProfiles
+} from "../contracts/problem9-execution.js";
 
 const timestampSchema = z.string().min(1);
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
@@ -176,7 +182,7 @@ export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
     sliceDefinition: z.string().min(1)
   }),
   z.object({
-    authMode: z.enum(["trusted_local_user", "machine_api_key", "machine_oauth", "local_stub"]),
+    authMode: z.enum(problem9HostedAuthModes),
     benchmarkItemId: z.string().min(1),
     benchmarkPackageDigest: sha256Schema,
     benchmarkPackageId: z.string().min(1),
@@ -187,10 +193,10 @@ export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
     modelSnapshotId: z.string().min(1),
     promptPackageDigest: sha256Schema,
     promptProtocolVersion: z.string().min(1),
-    providerFamily: z.enum(["openai", "anthropic", "google", "aristotle", "axle", "custom"]),
+    providerFamily: z.enum(problem9ProviderFamilies),
     runKind: z.literal("single_run"),
-    runMode: z.enum(["single_pass_probe", "pass_k_probe", "bounded_agentic_attempt"]),
-    toolProfile: z.enum(["no_tools", "lean_mcp_readonly", "workspace_edit_limited"])
+    runMode: z.enum(problem9RunModes),
+    toolProfile: z.enum(problem9ToolProfiles)
   }),
   z.object({
     benchmarkTargetId: z.string().min(1),
