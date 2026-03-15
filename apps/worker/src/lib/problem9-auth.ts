@@ -1,3 +1,4 @@
+import { problem9LocalAuthModes, type Problem9LocalAuthMode } from "@paretoproof/shared";
 import { spawn } from "node:child_process";
 import {
   parseWorkerRuntimeEnv
@@ -7,14 +8,9 @@ import {
   trustedLocalCodexContainerHome
 } from "./trusted-local-auth-contract.js";
 
-export const problem9AuthModes = [
-  "trusted_local_user",
-  "machine_api_key",
-  "machine_oauth",
-  "local_stub"
-] as const;
+export const problem9AuthModes = [...problem9LocalAuthModes] as const;
 
-export type Problem9AuthMode = (typeof problem9AuthModes)[number];
+export type Problem9AuthMode = Problem9LocalAuthMode;
 
 export function parseProblem9AuthMode(
   rawAuthMode: string,
@@ -53,8 +49,6 @@ export async function preflightProblem9AuthMode(
       return preflightMachineApiKey();
     case "local_stub":
       return { authMode };
-    case "machine_oauth":
-      throw new Error("Auth mode machine_oauth is not implemented for run-problem9-attempt.");
   }
 }
 

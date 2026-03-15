@@ -245,7 +245,7 @@ Use this mode for `bun run run:worker-claim-loop -- --auth-mode machine_api_key 
 - Notes:
   - this is the fully documented hosted worker path in the repository today
   - hosted modes must not set `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT` or point `CODEX_HOME` at `/run/paretoproof/codex-home`
-  - the command also accepts `--auth-mode machine_oauth`, but this checklist does not treat that as a complete hosted-provider workflow until a follow-up issue documents and exercises it end to end
+  - hosted Problem 9 execution currently supports only provider family `openai`
 
 ## Reserved later-scope variables
 

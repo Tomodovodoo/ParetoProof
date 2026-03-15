@@ -1,11 +1,12 @@
 import path from "node:path";
+import { type Problem9ProviderFamily } from "@paretoproof/shared";
 import { runProblem9Attempt } from "./problem9-attempt.js";
 import { parseProblem9AuthMode } from "./problem9-auth.js";
 
 export async function runProblem9AttemptCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
     console.error(
-      "Usage: tsx src/index.ts run-problem9-attempt --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family <family>] [--auth-mode <mode>] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]"
+      "Usage: tsx src/index.ts run-problem9-attempt --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> [--provider-family openai] [--auth-mode trusted_local_user|machine_api_key|local_stub] [--provider-model <model>] [--model-snapshot-id <id>] [--stub-scenario exact_canonical|compile_failure]"
     );
     return;
   }
@@ -31,14 +32,7 @@ export async function runProblem9AttemptCli(args: string[]): Promise<void> {
     modelSnapshotId: getOptionalValue("--model-snapshot-id"),
     outputRoot: path.resolve(getRequiredValue("--output")),
     promptPackageRoot: path.resolve(getRequiredValue("--prompt-package-root")),
-    providerFamily: getOptionalValue("--provider-family") as
-      | "openai"
-      | "anthropic"
-      | "google"
-      | "aristotle"
-      | "axle"
-      | "custom"
-      | undefined,
+    providerFamily: getOptionalValue("--provider-family") as Problem9ProviderFamily | undefined,
     providerModel: getOptionalValue("--provider-model"),
     stubScenario: (getOptionalValue("--stub-scenario") ?? "exact_canonical") as
       | "compile_failure"

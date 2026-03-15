@@ -2,6 +2,14 @@ import { spawn } from "node:child_process";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  getProblem9ModelConfigIdPrefix,
+  problem9LocalAuthModes,
+  problem9ProviderFamilies,
+  problem9RunModes,
+  problem9ToolProfiles,
+  type Problem9ProviderFamily
+} from "@paretoproof/shared";
 import { z } from "zod";
 import {
   type Problem9AuthMode,
@@ -13,33 +21,13 @@ import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
 
-const providerFamilySchema = z.enum([
-  "openai",
-  "anthropic",
-  "google",
-  "aristotle",
-  "axle",
-  "custom"
-]);
+const providerFamilySchema = z.enum(problem9ProviderFamilies);
 
-const runModeSchema = z.enum([
-  "single_pass_probe",
-  "pass_k_probe",
-  "bounded_agentic_attempt"
-]);
+const runModeSchema = z.enum(problem9RunModes);
 
-const toolProfileSchema = z.enum([
-  "no_tools",
-  "lean_mcp_readonly",
-  "workspace_edit_limited"
-]);
+const toolProfileSchema = z.enum(problem9ToolProfiles);
 
-const authModeSchema = z.enum([
-  "trusted_local_user",
-  "machine_api_key",
-  "machine_oauth",
-  "local_stub"
-]);
+const authModeSchema = z.enum(problem9LocalAuthModes);
 
 const budgetSchema = z.object({
   compileRepairCycles: z.number().int().nonnegative(),
@@ -182,7 +170,7 @@ export type Problem9AttemptResult = {
   compileRepairCount: number;
   outputRoot: string;
   promptPackageDigest: string;
-  providerFamily: z.infer<typeof providerFamilySchema>;
+  providerFamily: Problem9ProviderFamily;
   providerTurnsUsed: number;
   result: "pass" | "fail";
   runConfigDigest: string;
@@ -496,6 +484,13 @@ function validateAttemptInputs(
     throw new Error("run-problem9-attempt only supports single-item run modes, not pass_k_probe.");
   }
 
+  const expectedModelConfigPrefix = getProblem9ModelConfigIdPrefix(promptManifest.authMode);
+  if (!promptManifest.modelConfigId.startsWith(expectedModelConfigPrefix)) {
+    throw new Error(
+      `Prompt package modelConfigId must start with ${expectedModelConfigPrefix} for authMode ${promptManifest.authMode}.`
+    );
+  }
+
   if (options.providerFamily && options.providerFamily !== promptManifest.providerFamily) {
     throw new Error("Requested provider family does not match the prompt package.");
   }
@@ -510,7 +505,7 @@ async function generateCandidate(options: {
   authPreflight: Problem9AuthPreflight;
   compileResult: CompileResult | null;
   promptPackageRoot: string;
-  providerFamily: z.infer<typeof providerFamilySchema>;
+  providerFamily: Problem9ProviderFamily;
   providerModel: string | null;
   providerTurnsUsed: number;
   runEnvelope: RunEnvelope;

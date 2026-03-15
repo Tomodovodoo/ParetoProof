@@ -1,4 +1,10 @@
 import type {
+  Problem9LocalAuthMode,
+  Problem9ProviderFamily,
+  Problem9RunMode,
+  Problem9ToolProfile
+} from "../contracts/problem9-execution.js";
+import type {
   OfflineIngestAttemptLifecycleState,
   OfflineIngestJobLifecycleState,
   OfflineIngestRunLifecycleState
@@ -110,11 +116,7 @@ export type Problem9PackageRef = {
 };
 
 export type Problem9PromptPackageManifest = {
-  authMode:
-    | "trusted_local_user"
-    | "machine_api_key"
-    | "machine_oauth"
-    | "local_stub";
+  authMode: Problem9LocalAuthMode;
   benchmarkItemId: "Problem9";
   benchmarkPackageDigest: string;
   benchmarkPackageId: "firstproof/Problem9";
@@ -144,9 +146,9 @@ export type Problem9PromptPackageManifest = {
   promptPackageDigestMode: "metadata_plus_layer_inventory_v1";
   promptPackageSchemaVersion: "1";
   promptProtocolVersion: string;
-  providerFamily: "openai" | "anthropic" | "google" | "aristotle" | "axle" | "custom";
-  runMode: "single_pass_probe" | "pass_k_probe" | "bounded_agentic_attempt";
-  toolProfile: "no_tools" | "lean_mcp_readonly" | "workspace_edit_limited";
+  providerFamily: Problem9ProviderFamily;
+  runMode: Problem9RunMode;
+  toolProfile: Problem9ToolProfile;
 };
 
 export type Problem9EnvironmentManifest = {

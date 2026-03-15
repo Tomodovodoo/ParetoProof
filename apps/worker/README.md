@@ -71,13 +71,13 @@ Package materialization:
 - supported prompt-package auth modes follow the MVP provider contract:
   - `trusted_local_user`
   - `machine_api_key`
-  - `machine_oauth`
   - `local_stub`
 - the checked-in `run-problem9-attempt` execution path currently documents and exercises:
+  - provider family `openai`
   - `trusted_local_user`
   - `machine_api_key`
   - `local_stub`
-- treat `machine_oauth` as a prompt-package contract value until a follow-up issue documents and exercises the local execution path end to end
+- `machine_oauth` and non-OpenAI provider families are not part of the supported Problem 9 execution contract today; the worker surfaces reject those combinations at prompt-package or CLI validation time
 - use `bun --cwd apps/worker materialize:problem9-run-bundle -- --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]` to emit `problem9-run-bundle/` with the canonical manifests, copied package and prompt references, candidate source, verification artifacts, environment snapshot, and deterministic digests
 - the run-bundle command is a supported standalone materializer for fixture generation and later offline-ingest prep; it derives run identity from the prompt package `run-envelope.json`, writes `package/package-ref.json`, `verification/verdict.json`, `artifact-manifest.json`, and `run-bundle.json`, and rejects output roots that overlap the benchmark package, prompt package, or any bundle input file
 - use `bun --cwd apps/worker test:run-bundle` to run the fixture-backed standalone verification path, which materializes canonical benchmark and prompt inputs, runs the bundle CLI twice on identical fixture evidence, and checks that the resulting digests and root manifests are identical
@@ -131,7 +131,7 @@ Hosted claim loop:
 - hosted runtime env still comes from:
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
-  - `CODEX_API_KEY` when `--auth-mode machine_api_key`
+  - `CODEX_API_KEY`
 - hosted and packaged modes reject the trusted-local mount marker and the canonical `/run/paretoproof/codex-home/auth.json` path instead of silently attempting to reuse contributor auth material
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
 - if a heartbeat returns `cancel_requested` or `expired`, the loop exits that claim without sending a stale terminal finalize

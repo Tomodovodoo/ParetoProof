@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
+  problem9HostedAuthModes,
   type WorkerArtifactManifestEntry,
   type WorkerArtifactManifestRequest,
   type WorkerArtifactManifestResponse,
@@ -37,7 +38,7 @@ import { materializeProblem9Package } from "./problem9-package.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 const workerClaimLoopOptionsSchema = z.object({
-  authMode: z.enum(["machine_api_key", "machine_oauth"]),
+  authMode: z.enum(problem9HostedAuthModes),
   maxConcurrentJobs: z.number().int().positive().default(1),
   maxJobs: z.number().int().positive().nullable().default(null),
   once: z.boolean().default(false),
