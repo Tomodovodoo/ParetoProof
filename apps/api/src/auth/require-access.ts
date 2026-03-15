@@ -10,6 +10,7 @@ import {
   type CloudflareAccessIdentity,
   type CloudflareAccessVerifierSet
 } from "./cloudflare-access.js";
+import { resolvePortalSession } from "./portal-session.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 type RouteAccessRequirement =
@@ -78,25 +79,46 @@ async function resolveRequestAccess(
 
   const assertion = readAccessJwtAssertion(request);
 
-  if (!assertion) {
+  if (assertion) {
+    let identity: CloudflareAccessIdentity;
+
+    try {
+      const verifier = selectCloudflareAccessVerifier(request, verifiers);
+      identity = await verifier.verifyAssertion(assertion);
+    } catch (error) {
+      throw new AccessAssertionVerificationError(error);
+    }
+
+    identity = {
+      ...identity,
+      provider: verifyAccessProviderHint(
+        typeof request.headers.cookie === "string" ? request.headers.cookie : undefined,
+        identity.subject
+      ) ?? identity.provider
+    };
+
+    const context = await resolveAccessRbacContext(db, identity);
+
+    request.accessIdentity = identity;
+    request.accessRbacContext = context;
+
+    return context;
+  }
+
+  const cookieHeader = typeof request.headers.cookie === "string"
+    ? request.headers.cookie
+    : undefined;
+  const sessionResult = await resolvePortalSession(db, cookieHeader);
+
+  if (!sessionResult) {
     return null;
   }
 
-  let identity: CloudflareAccessIdentity;
-
-  try {
-    const verifier = selectCloudflareAccessVerifier(request, verifiers);
-    identity = await verifier.verifyAssertion(assertion);
-  } catch (error) {
-    throw new AccessAssertionVerificationError(error);
-  }
-
-  identity = {
-    ...identity,
-    provider: verifyAccessProviderHint(
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined,
-      identity.subject
-    ) ?? identity.provider
+  const identity: CloudflareAccessIdentity = {
+    email: sessionResult.identity.email,
+    issuer: "portal-session",
+    provider: sessionResult.identity.provider ?? null,
+    subject: sessionResult.identity.subject
   };
 
   const context = await resolveAccessRbacContext(db, identity);

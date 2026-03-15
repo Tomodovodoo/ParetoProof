@@ -42,6 +42,10 @@ import {
   createAccessResolver,
   isAccessAssertionVerificationError
 } from "../auth/require-access.js";
+import {
+  buildPortalSessionCookie,
+  createPortalSession
+} from "../auth/portal-session.js";
 import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
@@ -466,6 +470,24 @@ export function registerPortalRoutes(
       );
     } else {
       responseCookies.unshift(clearSignedAccessCookie("PortalAccessProvider"));
+    }
+
+    const rbacContext = request.accessRbacContext;
+
+    if (rbacContext?.status === "approved") {
+      try {
+        const session = await createPortalSession(db, {
+          userId: rbacContext.userId,
+          identityId: rbacContext.identityId,
+          ipAddress: request.ip,
+          userAgent: typeof request.headers["user-agent"] === "string"
+            ? request.headers["user-agent"]
+            : null
+        });
+        responseCookies.push(buildPortalSessionCookie(session.token));
+      } catch {
+        // Session creation is best-effort; finalize must still complete
+      }
     }
 
     reply.header("set-cookie", responseCookies);
