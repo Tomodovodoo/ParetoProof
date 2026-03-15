@@ -349,7 +349,7 @@ if (options.rootfs) {
     verifySemverCommand(
       image,
       "lean-lsp-mcp package",
-      "python3.11",
+      "/opt/lean-lsp-mcp/bin/python",
       ["-c", "import importlib.metadata; print(importlib.metadata.version('lean-lsp-mcp'))"],
       expectedLeanLspMcpVersion,
     );
