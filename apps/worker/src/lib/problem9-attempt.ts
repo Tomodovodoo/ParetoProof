@@ -164,6 +164,37 @@ type ProviderResponse = {
 };
 
 const forbiddenProblem9CandidateImports = new Set(["FirstProof.Problem9.Gold"]);
+const problem9ImportBoundaryKeywords = new Set([
+  "#check",
+  "#eval",
+  "#print",
+  "abbrev",
+  "attribute",
+  "axiom",
+  "class",
+  "def",
+  "end",
+  "example",
+  "inductive",
+  "infix",
+  "instance",
+  "macro",
+  "mutual",
+  "namespace",
+  "noncomputable",
+  "notation",
+  "opaque",
+  "open",
+  "private",
+  "protected",
+  "section",
+  "set_option",
+  "structure",
+  "theorem",
+  "universe",
+  "variable",
+  "variables"
+]);
 
 export type Problem9AttemptResult = {
   artifactManifestDigest: string;
@@ -1199,15 +1230,57 @@ function extractCanonicalTheoremHeader(sourceText: string): string {
 
 export function findForbiddenProblem9CandidateImports(candidateSource: string): string[] {
   const imports = new Set<string>();
+  const sanitizedSource = candidateSource
+    .replace(/\/-[\s\S]*?-\//gu, "\n")
+    .replace(/--.*$/gmu, "");
+  const lines = sanitizedSource.split(/\r?\n/u);
 
-  for (const line of candidateSource.split(/\r?\n/u)) {
-    const trimmed = line.trim();
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]?.trim() ?? "";
 
-    if (!trimmed.startsWith("import ")) {
+    if (!/^import(?:\s|$)/u.test(trimmed)) {
       continue;
     }
 
-    for (const moduleName of trimmed.slice("import ".length).split(/\s+/u)) {
+    const moduleTokens = new Set<string>();
+    const remainder = trimmed.slice("import".length).trim();
+
+    if (remainder.length > 0) {
+      for (const moduleName of remainder.split(/\s+/u)) {
+        if (moduleName.length > 0) {
+          moduleTokens.add(moduleName);
+        }
+      }
+    }
+
+    while (index + 1 < lines.length) {
+      const nextTrimmed = lines[index + 1]?.trim() ?? "";
+
+      if (!nextTrimmed) {
+        index += 1;
+        break;
+      }
+
+      const nextFirstToken = nextTrimmed.split(/\s+/u)[0] ?? "";
+
+      if (
+        nextFirstToken.length === 0 ||
+        problem9ImportBoundaryKeywords.has(nextFirstToken) ||
+        /^import(?:\s|$)/u.test(nextTrimmed)
+      ) {
+        break;
+      }
+
+      for (const moduleName of nextTrimmed.split(/\s+/u)) {
+        if (moduleName.length > 0) {
+          moduleTokens.add(moduleName);
+        }
+      }
+
+      index += 1;
+    }
+
+    for (const moduleName of moduleTokens) {
       if (forbiddenProblem9CandidateImports.has(moduleName)) {
         imports.add(moduleName);
       }

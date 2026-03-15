@@ -81,6 +81,27 @@ test("findForbiddenProblem9CandidateImports flags benchmark-owned gold-proof imp
   );
 });
 
+test("findForbiddenProblem9CandidateImports catches tab-separated and multiline imports", () => {
+  assert.deepEqual(
+    findForbiddenProblem9CandidateImports(
+      [
+        "import\tFirstProof.Problem9.Support",
+        "  FirstProof.Problem9.Gold",
+        "",
+        "namespace FirstProof.Problem9",
+        "",
+        "import",
+        "  Mathlib",
+        "\tFirstProof.Problem9.Gold",
+        "",
+        "theorem problem9 : True := by",
+        "  trivial"
+      ].join("\n")
+    ),
+    ["FirstProof.Problem9.Gold"]
+  );
+});
+
 test("materializeProblem9PromptPackage rejects modelConfigId values outside the supported auth matrix", async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-prompt-contract-"));
 
