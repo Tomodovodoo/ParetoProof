@@ -3,9 +3,11 @@ import type { HookHandlerDoneFunction } from "fastify/types/hooks";
 import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
 import { resolveAccessRbacContext } from "./resolve-access-rbac-context.js";
 import {
+  buildSignedPortalAccessSessionCookie,
   createCloudflareAccessVerifierSetFromEnv,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
+  verifyPortalAccessSession,
   verifyAccessProviderHint,
   type CloudflareAccessIdentity,
   type CloudflareAccessVerifierSet
@@ -77,8 +79,22 @@ async function resolveRequestAccess(
   }
 
   const assertion = readAccessJwtAssertion(request);
+  const routePath = request.routeOptions?.url ?? request.raw.url ?? "";
+  const cookieHeader =
+    typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
 
   if (!assertion) {
+    if (routePath.startsWith("/portal/")) {
+      const cachedSession = verifyPortalAccessSession(cookieHeader);
+
+      if (cachedSession) {
+        request.accessIdentity = cachedSession.identity;
+        request.accessRbacContext = cachedSession.context;
+
+        return cachedSession.context;
+      }
+    }
+
     return null;
   }
 
@@ -94,7 +110,7 @@ async function resolveRequestAccess(
   identity = {
     ...identity,
     provider: verifyAccessProviderHint(
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined,
+      cookieHeader,
       identity.subject
     ) ?? identity.provider
   };
@@ -140,6 +156,13 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
             });
 
             return;
+          }
+
+          if (request.accessIdentity && request.routeOptions?.url?.startsWith("/portal/")) {
+            reply.header(
+              "set-cookie",
+              buildSignedPortalAccessSessionCookie(request.accessIdentity, context)
+            );
           }
 
           done();

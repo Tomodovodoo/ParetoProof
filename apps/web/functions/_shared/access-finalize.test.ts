@@ -12,7 +12,7 @@ describe("handleAccessFinalize", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("relays a successful finalize response through the API bootstrap boundary and forwards cookies", async () => {
+  it("relays a successful finalize response back to the portal and forwards cookies", async () => {
     globalThis.fetch = async (input, init) => {
       expect(input).toBe("https://api.paretoproof.com/portal/session/finalize/submit");
       expect(init?.method).toBe("POST");
@@ -31,6 +31,10 @@ describe("handleAccessFinalize", () => {
             [
               "set-cookie",
               "PortalAccessProvider=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
+            ],
+            [
+              "set-cookie",
+              "PortalAccessSession=signed; Domain=.paretoproof.com; Path=/; Secure; HttpOnly"
             ],
             [
               "set-cookie",
@@ -57,15 +61,14 @@ describe("handleAccessFinalize", () => {
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fprofile"
-    );
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/profile");
     expect(response.headers.get("cache-control")).toBe("no-store");
     const setCookies =
       (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
-    expect(setCookies).toHaveLength(2);
+    expect(setCookies).toHaveLength(3);
     expect(setCookies[0]).toContain("PortalAccessProvider=signed");
-    expect(setCookies[1]).toContain("PortalLinkIntent=");
+    expect(setCookies[1]).toContain("PortalAccessSession=signed");
+    expect(setCookies[2]).toContain("PortalLinkIntent=");
   });
 
   it("relays a cookie-only branded Access session back to the API finalize boundary", async () => {
@@ -104,9 +107,7 @@ describe("handleAccessFinalize", () => {
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Faccess-request"
-    );
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/access-request");
   });
 
   it("targets the API finalize-submit boundary for branded relay handoffs", async () => {
@@ -143,7 +144,7 @@ describe("handleAccessFinalize", () => {
     ]);
   });
 
-  it("preserves the finalized portal path when converting the response into an API bootstrap redirect", async () => {
+  it("preserves the finalized portal path when converting the response into a browser redirect", async () => {
     globalThis.fetch = async () =>
       new Response(
         JSON.stringify({
@@ -169,7 +170,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://api.paretoproof.com/portal/session/finalize/submit?redirect=%2Fadmin%2Fusers%3Ftab%3Dreview%23pending"
+      "https://portal.paretoproof.com/admin/users?tab=review#pending"
     );
   });
 

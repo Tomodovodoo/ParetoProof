@@ -34,6 +34,7 @@ import {
   type PortalBenchmarkOpsReadModelService
 } from "../lib/portal-benchmark-ops.js";
 import {
+  buildSignedPortalAccessSessionCookie,
   buildSignedAccessCookie,
   verifyAccessProviderHint,
   verifyAccessLinkIntent
@@ -113,7 +114,9 @@ function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
   }
 }
 
-function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
+function clearSignedAccessCookie(
+  name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession"
+) {
   return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Lax; Max-Age=0; Secure; HttpOnly`;
 }
 
@@ -363,6 +366,7 @@ export function registerPortalRoutes(
       (request.query as { redirect?: string } | undefined)?.redirect ?? null
     );
 
+    reply.header("set-cookie", clearSignedAccessCookie("PortalAccessSession"));
     reply.redirect(buildPortalAuthRetryUrl(redirectPath));
   };
 
@@ -373,6 +377,7 @@ export function registerPortalRoutes(
     const cookieHeader =
       typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
     const identity = request.accessIdentity;
+    const accessContext = request.accessRbacContext;
     const parsedBody =
       typeof request.body === "object" && request.body !== null
         ? (request.body as { redirect?: string })
@@ -455,6 +460,14 @@ export function registerPortalRoutes(
     }
 
     const responseCookies = [clearSignedAccessCookie("PortalLinkIntent")];
+
+    if (identity && accessContext) {
+      responseCookies.unshift(
+        buildSignedPortalAccessSessionCookie(identity, accessContext)
+      );
+    } else {
+      responseCookies.unshift(clearSignedAccessCookie("PortalAccessSession"));
+    }
 
     if (identity && providerHint) {
       responseCookies.unshift(
