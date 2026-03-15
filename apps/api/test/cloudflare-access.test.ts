@@ -37,13 +37,27 @@ test("readAccessJwtAssertion returns null when no usable Access assertion is pre
   assert.equal(assertion, null);
 });
 
-test("selectCloudflareAccessVerifier keeps the finalize submit boundary on the branded relay audiences", () => {
+test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on the relay audiences", () => {
   const verifiers = {
     brandedRelay: { audiences: ["portal-aud", "github-aud", "google-aud"] },
     internal: { audiences: ["internal-aud"] },
     portal: { audiences: ["portal-aud"] }
   } satisfies Record<keyof CloudflareAccessVerifierSet, { audiences: string[] }>;
 
+  assert.equal(
+    selectCloudflareAccessVerifier(
+      {
+        raw: {
+          url: "/portal/session/finalize"
+        },
+        routeOptions: {
+          url: "/portal/session/finalize"
+        }
+      } as never,
+      verifiers as never
+    ),
+    verifiers.brandedRelay
+  );
   assert.equal(
     selectCloudflareAccessVerifier(
       {
