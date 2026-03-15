@@ -1,4 +1,8 @@
 import {
+  portalBenchmarkDatasetParamsSchema,
+  portalBenchmarkDatasetResponseSchema,
+  portalBenchmarkExportQuerySchema,
+  portalBenchmarksListResponseSchema,
   portalLaunchViewResponseSchema,
   portalRunDetailResponseSchema,
   portalRunsListQuerySchema,
@@ -85,6 +89,10 @@ export const portalRunsSortOptions = [
 // routes and the portal UI. Runs filter facets belong here so the UI does not
 // infer option catalogs from a paginated row slice.
 export const portalBenchmarkOpsReadModelsContract = {
+  benchmarkDatasetParams: portalBenchmarkDatasetParamsSchema,
+  benchmarkDatasetResponse: portalBenchmarkDatasetResponseSchema,
+  benchmarkExportQuery: portalBenchmarkExportQuerySchema,
+  benchmarksListResponse: portalBenchmarksListResponseSchema,
   launchViewResponse: portalLaunchViewResponseSchema,
   runDetailResponse: portalRunDetailResponseSchema,
   runsListQuery: portalRunsListQuerySchema,

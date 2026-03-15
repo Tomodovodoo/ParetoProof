@@ -223,6 +223,67 @@ export const portalRunDetailResponseSchema = z.object({
   workerLeases: z.array(portalWorkerLeaseSummarySchema)
 });
 
+export const portalBenchmarkDatasetParamsSchema = z.object({
+  packageId: z.string().trim().min(1)
+});
+
+export const portalBenchmarkExportFormatSchema = z.enum(["csv", "json"]);
+
+export const portalBenchmarkExportQuerySchema = z.object({
+  format: portalBenchmarkExportFormatSchema.default("json")
+});
+
+export const portalBenchmarkListItemSchema = z.object({
+  attemptCount: z.number().int().nonnegative(),
+  benchmarkLabel: z.string(),
+  benchmarkPackageId: z.string(),
+  latestCompletedAt: timestampSchema.nullable(),
+  latestRunId: z.string().nullable(),
+  modelConfigIds: z.array(z.string()),
+  providerFamilies: z.array(z.string()),
+  runCount: z.number().int().nonnegative(),
+  versions: z.array(z.string()),
+  verdictCounts: z.object({
+    fail: z.number().int().nonnegative(),
+    invalid_result: z.number().int().nonnegative(),
+    pass: z.number().int().nonnegative()
+  })
+});
+
+export const portalBenchmarksListResponseSchema = z.object({
+  items: z.array(portalBenchmarkListItemSchema)
+});
+
+export const portalBenchmarkDatasetSummarySchema = z.object({
+  attemptCount: z.number().int().nonnegative(),
+  jobCount: z.number().int().nonnegative(),
+  latestCompletedAt: timestampSchema.nullable(),
+  runCount: z.number().int().nonnegative(),
+  verdictCounts: z.object({
+    fail: z.number().int().nonnegative(),
+    invalid_result: z.number().int().nonnegative(),
+    pass: z.number().int().nonnegative()
+  })
+});
+
+export const portalBenchmarkDatasetMetadataSchema = z.object({
+  benchmarkLabel: z.string(),
+  benchmarkPackageId: z.string(),
+  laneIds: z.array(z.string()),
+  latestRunId: z.string().nullable(),
+  modelConfigIds: z.array(z.string()),
+  providerFamilies: z.array(z.string()),
+  versions: z.array(z.string())
+});
+
+export const portalBenchmarkDatasetResponseSchema = z.object({
+  attempts: z.array(portalRunAttemptSummarySchema),
+  benchmark: portalBenchmarkDatasetMetadataSchema,
+  jobs: z.array(portalRunJobSummarySchema),
+  runs: z.array(portalRunListItemSchema),
+  summary: portalBenchmarkDatasetSummarySchema
+});
+
 export const portalLaunchBenchmarkOptionSchema = z.object({
   benchmarkItemCount: z.number().int().nonnegative(),
   benchmarkLabel: z.string(),

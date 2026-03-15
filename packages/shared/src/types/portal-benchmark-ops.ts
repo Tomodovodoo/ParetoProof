@@ -202,6 +202,59 @@ export type PortalRunDetailResponse = {
   workerLeases: PortalWorkerLeaseSummary[];
 };
 
+export type PortalBenchmarkDatasetParams = {
+  packageId: string;
+};
+
+export type PortalBenchmarkExportFormat = "csv" | "json";
+
+export type PortalBenchmarkExportQuery = {
+  format: PortalBenchmarkExportFormat;
+};
+
+export type PortalBenchmarkListItem = {
+  attemptCount: number;
+  benchmarkLabel: string;
+  benchmarkPackageId: string;
+  latestCompletedAt: string | null;
+  latestRunId: string | null;
+  modelConfigIds: string[];
+  providerFamilies: string[];
+  runCount: number;
+  versions: string[];
+  verdictCounts: Record<EvaluationVerdictClass, number>;
+};
+
+export type PortalBenchmarksListResponse = {
+  items: PortalBenchmarkListItem[];
+};
+
+export type PortalBenchmarkDatasetSummary = {
+  attemptCount: number;
+  jobCount: number;
+  latestCompletedAt: string | null;
+  runCount: number;
+  verdictCounts: Record<EvaluationVerdictClass, number>;
+};
+
+export type PortalBenchmarkDatasetMetadata = {
+  benchmarkLabel: string;
+  benchmarkPackageId: string;
+  laneIds: string[];
+  latestRunId: string | null;
+  modelConfigIds: string[];
+  providerFamilies: string[];
+  versions: string[];
+};
+
+export type PortalBenchmarkDatasetResponse = {
+  attempts: PortalRunAttemptSummary[];
+  benchmark: PortalBenchmarkDatasetMetadata;
+  jobs: PortalRunJobSummary[];
+  runs: PortalRunListItem[];
+  summary: PortalBenchmarkDatasetSummary;
+};
+
 export type PortalLaunchBenchmarkOption = {
   benchmarkItemCount: number;
   benchmarkLabel: string;
