@@ -1,18 +1,17 @@
-import type { EvaluationVerdictClass, RunLifecycleState } from "@paretoproof/shared";
+import {
+  evaluationVerdictLabels,
+  portalRunsLifecycleBuckets,
+  portalRunsSortOptions,
+  runLifecycleStateLabels,
+  type EvaluationVerdictClass,
+  type PortalRunsLifecycleBucket,
+  type PortalRunsSortId,
+  type RunLifecycleState
+} from "@paretoproof/shared";
 
-export type PortalResultsLifecycleBucket =
-  | "pending"
-  | "active"
-  | "terminal_success"
-  | "terminal_failure"
-  | "terminal_cancelled";
+export type PortalResultsLifecycleBucket = PortalRunsLifecycleBucket;
 
-export type PortalResultsSortId =
-  | "started_at_desc"
-  | "finished_at_desc"
-  | "duration_desc"
-  | "run_state_asc"
-  | "verdict_asc";
+export type PortalResultsSortId = PortalRunsSortId;
 
 export type PortalResultsQueryState = {
   lifecycleBucket: PortalResultsLifecycleBucket | null;
@@ -21,91 +20,7 @@ export type PortalResultsQueryState = {
   verdict: EvaluationVerdictClass[];
 };
 
-export const runLifecycleStateLabels: Record<RunLifecycleState, string> = {
-  cancel_requested: "Cancelling",
-  cancelled: "Cancelled",
-  created: "Created",
-  failed: "Failed",
-  queued: "Queued",
-  running: "Running",
-  succeeded: "Completed"
-};
-
-export const evaluationVerdictLabels: Record<EvaluationVerdictClass, string> = {
-  fail: "Fail",
-  invalid_result: "Invalid result",
-  pass: "Pass"
-};
-
-export const portalResultsLifecycleBuckets: Array<{
-  description: string;
-  id: PortalResultsLifecycleBucket;
-  label: string;
-  runStates: RunLifecycleState[];
-}> = [
-  {
-    description: "Created and queued runs that have not reached worker execution yet.",
-    id: "pending",
-    label: "Pending",
-    runStates: ["created", "queued"]
-  },
-  {
-    description: "Currently executing runs plus ones waiting for cancellation to finish.",
-    id: "active",
-    label: "Active",
-    runStates: ["running", "cancel_requested"]
-  },
-  {
-    description: "Runs that completed their control-plane lifecycle normally.",
-    id: "terminal_success",
-    label: "Terminal success",
-    runStates: ["succeeded"]
-  },
-  {
-    description: "Runs that ended with a terminal control-plane failure.",
-    id: "terminal_failure",
-    label: "Terminal failure",
-    runStates: ["failed"]
-  },
-  {
-    description: "Runs that ended intentionally by cancellation.",
-    id: "terminal_cancelled",
-    label: "Terminal cancelled",
-    runStates: ["cancelled"]
-  }
-];
-
-export const portalResultsSortOptions: Array<{
-  description: string;
-  id: PortalResultsSortId;
-  label: string;
-}> = [
-  {
-    description: "Newest started-at timestamp first for operational triage.",
-    id: "started_at_desc",
-    label: "Newest start"
-  },
-  {
-    description: "Newest finished-at timestamp first for recent terminal outcomes.",
-    id: "finished_at_desc",
-    label: "Newest finish"
-  },
-  {
-    description: "Longest duration first when isolating slow or stuck runs.",
-    id: "duration_desc",
-    label: "Longest duration"
-  },
-  {
-    description: "Canonical run lifecycle id ascending for grouped state review.",
-    id: "run_state_asc",
-    label: "Run state"
-  },
-  {
-    description: "Canonical verdict id ascending for released result comparisons.",
-    id: "verdict_asc",
-    label: "Verdict"
-  }
-];
+export { evaluationVerdictLabels, portalRunsLifecycleBuckets as portalResultsLifecycleBuckets, portalRunsSortOptions as portalResultsSortOptions, runLifecycleStateLabels };
 
 export const portalResultsExportHeaders = [
   "runId",
@@ -117,6 +32,7 @@ export const portalResultsExportHeaders = [
   "runState",
   "runStateLabel",
   "runLifecycleBucket",
+  "runLifecycleBucketLabel",
   "verdictClass",
   "verdictLabel",
   "failureFamily",

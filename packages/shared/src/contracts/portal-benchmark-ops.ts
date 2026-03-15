@@ -6,6 +6,7 @@ import {
   portalWorkersViewResponseSchema
 } from "../schemas/portal-benchmark-ops.js";
 import type {
+  PortalRunsLifecycleBucket,
   PortalRunsLifecycleBucketDefinition,
   PortalRunsSortOption
 } from "../types/portal-benchmark-ops.js";
@@ -42,6 +43,15 @@ export const portalRunsLifecycleBuckets = [
     runStates: ["cancelled"]
   }
 ] satisfies PortalRunsLifecycleBucketDefinition[];
+
+export const portalRunsLifecycleBucketLabels: Record<PortalRunsLifecycleBucket, string> =
+  Object.fromEntries(
+    portalRunsLifecycleBuckets.map((bucket) => [bucket.id, bucket.label])
+  ) as Record<PortalRunsLifecycleBucket, string>;
+
+export function getPortalRunsLifecycleBucketLabel(bucket: PortalRunsLifecycleBucket) {
+  return portalRunsLifecycleBucketLabels[bucket];
+}
 
 export const portalRunsSortOptions = [
   {

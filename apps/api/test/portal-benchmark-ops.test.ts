@@ -10,6 +10,7 @@ import type {
 } from "@paretoproof/shared";
 import { portalBenchmarkOpsReadModelsContract } from "@paretoproof/shared";
 import type { PortalBenchmarkOpsReadModelService } from "../src/lib/portal-benchmark-ops.ts";
+import { portalBenchmarkOpsReadModelTestUtils } from "../src/lib/portal-benchmark-ops.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
 
 function createRequireAccessStub(roles: Array<"admin" | "collaborator" | "helper">) {
@@ -500,4 +501,23 @@ test("GET /portal/workers returns the worker posture view for collaborators", as
     response.json()
   );
   assert.equal(payload.queueSummary.queuedJobs, 1);
+});
+
+test("portal benchmark ops normalization helpers keep canonical lifecycle wording aligned", () => {
+  assert.equal(
+    portalBenchmarkOpsReadModelTestUtils.getRunLifecycleStateLabel("succeeded"),
+    "Succeeded"
+  );
+  assert.equal(
+    portalBenchmarkOpsReadModelTestUtils.getJobLifecycleStateLabel("completed"),
+    "Completed"
+  );
+  assert.equal(
+    portalBenchmarkOpsReadModelTestUtils.getAttemptLifecycleStateLabel("succeeded"),
+    "Succeeded"
+  );
+  assert.equal(
+    portalBenchmarkOpsReadModelTestUtils.getRunLifecycleBucket("succeeded"),
+    "terminal_success"
+  );
 });
