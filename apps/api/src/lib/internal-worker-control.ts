@@ -10,7 +10,13 @@ import {
   or,
   type SQL
 } from "drizzle-orm";
+import {
+  problem9HostedAuthModes,
+  problem9ProviderFamilies
+} from "@paretoproof/shared";
 import type {
+  Problem9HostedAuthMode,
+  Problem9ProviderFamily,
   WorkerArtifactManifestRequest,
   WorkerArtifactManifestResponse,
   WorkerBundleArtifactRole,
@@ -66,7 +72,7 @@ type ReadExecutor = Pick<DbClient, "select">;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
 
 type CandidateClaimRow = {
-  authMode: string;
+  authMode: Problem9HostedAuthMode;
   attemptId: string;
   attemptRowId: string;
   benchmarkItemId: string;
@@ -81,7 +87,7 @@ type CandidateClaimRow = {
   modelSnapshotId: string;
   promptPackageDigest: string;
   promptProtocolVersion: string;
-  providerFamily: string;
+  providerFamily: Problem9ProviderFamily;
   runId: string;
   runKind: typeof runs.$inferSelect.runKind;
   runMode: string;
@@ -217,6 +223,8 @@ function queuedJobWhereClause(): SQL {
     eq(jobs.state, "queued"),
     eq(attempts.state, "prepared"),
     eq(runs.runKind, "single_run"),
+    inArray(runs.authMode, [...problem9HostedAuthModes]),
+    inArray(runs.providerFamily, [...problem9ProviderFamilies]),
     or(eq(runs.state, "queued"), eq(runs.state, "running"))
   )!;
 }
@@ -268,7 +276,7 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
   }
 
   return {
-    authMode: candidate.authMode,
+    authMode: candidate.authMode as Problem9HostedAuthMode,
     attemptId: candidate.attemptId,
     attemptRowId: candidate.attemptRowId,
     benchmarkItemId: candidate.benchmarkItemId,
@@ -283,7 +291,7 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
     modelSnapshotId: candidate.modelSnapshotId,
     promptPackageDigest: candidate.promptPackageDigest,
     promptProtocolVersion: candidate.promptProtocolVersion,
-    providerFamily: candidate.providerFamily,
+    providerFamily: candidate.providerFamily as Problem9ProviderFamily,
     runId: candidate.runId,
     runKind: candidate.runKind,
     runMode: candidate.runMode,
@@ -1090,11 +1098,7 @@ export function createInternalWorkerControlService(db: DbClient) {
             runBundleSchemaVersion,
             runId: candidate.runId,
             target: {
-              authMode: candidate.authMode as
-                | "trusted_local_user"
-                | "machine_api_key"
-                | "machine_oauth"
-                | "local_stub",
+              authMode: candidate.authMode,
               benchmarkItemId: candidate.benchmarkItemId,
               benchmarkPackageDigest: candidate.benchmarkPackageDigest,
               benchmarkPackageId: candidate.benchmarkPackageId,
@@ -1105,13 +1109,7 @@ export function createInternalWorkerControlService(db: DbClient) {
               modelSnapshotId: candidate.modelSnapshotId,
               promptPackageDigest: candidate.promptPackageDigest,
               promptProtocolVersion: candidate.promptProtocolVersion,
-              providerFamily: candidate.providerFamily as
-                | "openai"
-                | "anthropic"
-                | "google"
-                | "aristotle"
-                | "axle"
-                | "custom",
+              providerFamily: candidate.providerFamily,
               runKind: "single_run",
               runMode: candidate.runMode as
                 | "single_pass_probe"
