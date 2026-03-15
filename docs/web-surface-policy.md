@@ -24,6 +24,13 @@ Redirect helpers, route tests, and public copy should preserve this split and re
 
 The public site should explain this path without implying self-serve enrollment, hidden sign-in shortcuts, or a separate benchmark hostname.
 
+## Auth State Cookies
+
+- `PortalAccessProvider` and `PortalLinkIntent` are same-site coordination cookies for the branded auth and profile-link flows. They should be `SameSite=Strict`.
+- Google sign-in, GitHub sign-in, branded retry, and profile-link entry only need these cookies on same-site `*.paretoproof.com` redirects. They must not rely on truly cross-site top-level cookie delivery.
+- `PortalAccessProvider` may survive the internal branded handoff long enough to bind the finalized provider to the resolved subject, then it should be refreshed or cleared by the finalize response.
+- `PortalLinkIntent` exists only to authorize a deliberate profile-link flow that started from the authenticated portal. It should be issued on that path and cleared on normal sign-in or after finalize so abandoned link state does not ride later navigations.
+
 ## Public Pack
 
 The public project route stays compact:
