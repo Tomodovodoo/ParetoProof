@@ -13,7 +13,14 @@ A scoping issue is only complete when it produces a clear implementation path. I
 
 - `Scoping - ParetoProof` is for scoping issues only
 - `Roadmap - ParetoProof` is for execution work
-- team boards hold the execution backlog by ownership
+- execution issues should also sit on exactly one team board by ownership:
+  - `Frontend - ParetoProof`
+  - `Backend - ParetoProof`
+  - `AI Workers - ParetoProof`
+  - `Infrastructure / Deployment - ParetoProof`
+  - `Admin - ParetoProof`
+- scoping work stays off the roadmap board until it has been decomposed into execution issues
+- backlog issues should stay undated until they are actually scheduled
 
 ## PR rule
 
