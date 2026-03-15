@@ -35,6 +35,10 @@ import {
   materializeProblem9PromptPackage
 } from "./problem9-prompt-package.js";
 import { materializeProblem9Package } from "./problem9-package.js";
+import {
+  createHostedControlPlaneFetch,
+  resolveHostedControlPlaneOrigin
+} from "./hosted-network-policy.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 const workerClaimLoopOptionsSchema = z.object({
@@ -154,7 +158,7 @@ export async function runWorkerClaimLoop(
   dependencies: WorkerClaimLoopDependencies = {}
 ): Promise<RunWorkerClaimLoopResult> {
   const options = workerClaimLoopOptionsSchema.parse(rawOptions);
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const baseFetchImpl = dependencies.fetchImpl ?? fetch;
   const sleep = dependencies.sleep ?? defaultSleep;
   const now = dependencies.now ?? (() => new Date());
   const attemptRunner = dependencies.attemptRunner ?? runProblem9Attempt;
@@ -167,6 +171,20 @@ export async function runWorkerClaimLoop(
     authMode: options.authMode,
     commandFamily: "worker_claim_loop"
   }, dependencies.rawEnv);
+  const fetchImpl =
+    options.workerRuntime === "modal"
+      ? createHostedControlPlaneFetch(
+          baseFetchImpl,
+          resolveHostedControlPlaneOrigin(runtimeEnv.apiBaseUrl!, {
+            allowLoopback: false
+          })
+        )
+      : createHostedControlPlaneFetch(
+          baseFetchImpl,
+          resolveHostedControlPlaneOrigin(runtimeEnv.apiBaseUrl!, {
+            allowLoopback: true
+          })
+        );
 
   if (startupValidationOnlyEnabled) {
     return {
@@ -402,6 +420,7 @@ async function processClaimedJob(
         authMode: workerJob.target.authMode,
         benchmarkPackageRoot: benchmarkResult.outputRoot,
         modelSnapshotId: workerJob.target.modelSnapshotId,
+        networkPolicyMode: "hosted",
         outputRoot: attemptOutputRoot,
         promptPackageRoot: promptResult.outputRoot,
         providerFamily: workerJob.target.providerFamily,
@@ -961,6 +980,14 @@ function classifyHostedAttemptError(error: unknown): WorkerFailureClassification
     return buildStaticFailure({
       summary: message,
       failureCode: "provider_auth_error",
+      phase: "generate"
+    });
+  }
+
+  if (/network policy|host_not_allowlisted|raw_ip_forbidden|path_outside_policy/i.test(message)) {
+    return buildStaticFailure({
+      summary: message,
+      failureCode: "tool_permission_violation",
       phase: "generate"
     });
   }

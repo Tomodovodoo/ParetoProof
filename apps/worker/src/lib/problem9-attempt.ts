@@ -16,6 +16,7 @@ import {
   type Problem9AuthPreflight,
   preflightProblem9AuthMode
 } from "./problem9-auth.js";
+import { buildHostedProviderCommandEnv } from "./hosted-network-policy.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
@@ -94,6 +95,7 @@ const problem9AttemptOptionsSchema = z.object({
   authMode: authModeSchema.optional(),
   benchmarkPackageRoot: z.string().min(1),
   modelSnapshotId: z.string().min(1).optional(),
+  networkPolicyMode: z.enum(["default", "hosted"]).default("default"),
   outputRoot: z.string().min(1),
   promptPackageRoot: z.string().min(1),
   providerFamily: providerFamilySchema.optional(),
@@ -102,7 +104,7 @@ const problem9AttemptOptionsSchema = z.object({
   workspaceRoot: z.string().min(1)
 });
 
-type Problem9AttemptOptions = z.infer<typeof problem9AttemptOptionsSchema>;
+type Problem9AttemptOptions = z.input<typeof problem9AttemptOptionsSchema>;
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
 type PromptPackageManifest = z.infer<typeof promptPackageManifestSchema>;
 type RunEnvelope = z.infer<typeof runEnvelopeSchema>;
@@ -147,6 +149,7 @@ type AttemptTerminalFailure = {
     | "provider_timeout"
     | "theorem_reference_missing"
     | "theorem_semantic_mismatch"
+    | "tool_permission_violation"
     | "turn_budget_exhausted"
     | "wall_clock_budget_exhausted";
   phase: "compile" | "generate" | "verify";
@@ -312,12 +315,13 @@ export async function runProblem9Attempt(
         compileResult,
         promptPackageRoot,
         providerFamily: effectiveProviderFamily,
-        providerModel: options.providerModel ?? null,
-        providerTurnsUsed,
-        runEnvelope,
-        stubScenario: options.stubScenario,
-        verificationResult,
-        workspaceRoot
+      providerModel: options.providerModel ?? null,
+      providerTurnsUsed,
+      runEnvelope,
+      networkPolicyMode: options.networkPolicyMode,
+      stubScenario: options.stubScenario,
+      verificationResult,
+      workspaceRoot
       });
     } catch (error) {
       terminalFailure = classifyProviderFailure(error);
@@ -538,6 +542,7 @@ async function generateCandidate(options: {
   authMode: Problem9AuthMode;
   authPreflight: Problem9AuthPreflight;
   compileResult: CompileResult | null;
+  networkPolicyMode: "default" | "hosted";
   promptPackageRoot: string;
   providerFamily: Problem9ProviderFamily;
   providerModel: string | null;
@@ -602,6 +607,8 @@ async function generateCandidate(options: {
       env: await buildCodexExecutionEnv(
         options.authMode,
         options.authPreflight,
+        options.networkPolicyMode,
+        options.providerFamily,
         options.workspaceRoot
       ),
       stdin: promptText,
@@ -626,11 +633,18 @@ async function generateCandidate(options: {
 async function buildCodexExecutionEnv(
   authMode: Problem9AuthMode,
   authPreflight: Problem9AuthPreflight,
+  networkPolicyMode: "default" | "hosted",
+  providerFamily: Problem9ProviderFamily,
   workspaceRoot: string
 ): Promise<NodeJS.ProcessEnv> {
+  const baseEnv =
+    networkPolicyMode === "hosted"
+      ? buildHostedProviderCommandEnv(process.env, providerFamily)
+      : { ...process.env };
+
   if (authMode === "trusted_local_user" && authPreflight.authMode === "trusted_local_user") {
     return {
-      ...process.env,
+      ...baseEnv,
       CODEX_HOME: authPreflight.codexHome
     };
   }
@@ -640,12 +654,12 @@ async function buildCodexExecutionEnv(
     await mkdir(machineAuthHome, { recursive: true });
 
     return {
-      ...process.env,
+      ...baseEnv,
       CODEX_HOME: machineAuthHome
     };
   }
 
-  return { ...process.env };
+  return baseEnv;
 }
 
 async function buildProviderPrompt(options: {
@@ -1079,6 +1093,7 @@ function classifyFailureFamily(
   | "budget"
   | "compile"
   | "provider"
+  | "tooling"
   | "verification" {
   switch (failureCode) {
     case "turn_budget_exhausted":
@@ -1091,6 +1106,8 @@ function classifyFailureFamily(
     case "provider_malformed_response":
     case "provider_timeout":
       return "provider";
+    case "tool_permission_violation":
+      return "tooling";
     case "forbidden_axiom_dependency":
     case "forbidden_placeholder_token":
     case "proof_policy_failed":
@@ -1102,6 +1119,15 @@ function classifyFailureFamily(
 
 function classifyProviderFailure(error: unknown): AttemptTerminalFailure {
   const message = error instanceof Error ? error.message : String(error);
+
+  if (/network policy|forbidden env override|host_not_allowlisted|raw_ip_forbidden/i.test(message)) {
+    return {
+      failureCode: "tool_permission_violation",
+      phase: "generate",
+      stopReason: "provider_failed",
+      summary: message
+    };
+  }
 
   if (/auth/i.test(message)) {
     return {

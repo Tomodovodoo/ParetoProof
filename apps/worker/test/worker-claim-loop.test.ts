@@ -666,6 +666,33 @@ test("runWorkerClaimLoop constrains claimed job filesystem paths under the confi
   }
 });
 
+test("runWorkerClaimLoop rejects modal control-plane raw IP origins before any hosted fetch", async () => {
+  await assert.rejects(
+    () =>
+      runWorkerClaimLoop(
+        {
+          authMode: "machine_api_key",
+          maxJobs: 1,
+          once: true,
+          outputRoot: path.join(os.tmpdir(), "paretoproof-worker-output"),
+          workerId: "worker-1",
+          workerPool: "modal-dev",
+          workerRuntime: "modal",
+          workerVersion: "worker.v1",
+          workspaceRoot: path.join(os.tmpdir(), "paretoproof-worker-workspace")
+        },
+        {
+          rawEnv: {
+            API_BASE_URL: "http://127.0.0.1:3000",
+            CODEX_API_KEY: "worker-api-key",
+            WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+          }
+        }
+      ),
+    /raw_ip_forbidden/
+  );
+});
+
 function buildWorkerJob() {
   return {
     attemptId: "attempt-1",
