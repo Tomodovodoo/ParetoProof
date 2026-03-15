@@ -21,6 +21,8 @@ Docker targets:
   - `bun run build:problem9-devbox` builds `problem9-devbox` and tags it as `paretoproof-problem9-devbox:local`
   - `bun run build:paretoproof-worker` builds `paretoproof-worker` and tags it as `paretoproof-worker:local`
 - use `node infra/scripts/build-problem9-image.mjs --target <target> --dry-run` to print the exact `docker buildx build` command without executing it
+- use `node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-execution --build` to verify the declared Lean toolchains, benchmark package source, and built worker CLI inside the canonical execution image before publish
+- use `node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-devbox --build` to verify the same execution surface plus the declared Bun, Codex CLI, and `lean-lsp-mcp` tooling inside the trusted-local devbox image
 
 Runtime env guidance:
 

@@ -7,6 +7,7 @@ Current helper scripts:
 - `infra/scripts/check-bidi-chars.mjs`: fails CI when tracked files contain hidden or bidirectional Unicode control characters that could hide malicious diffs or review artifacts. It does not scan issue bodies, PR bodies, comments, or other GitHub discussion text, so GitHub can still warn on pasted content even when this repo check passes.
 - `infra/scripts/check-runtime-env-examples.mjs`: fails CI when app `.env.example` files or README env pointers drift from the approved runtime-env contract shape.
 - `infra/scripts/check-problem9-image-policy.mjs`: fails CI when the Problem 9 image manifest, publish workflows, root build scripts, or operator docs drift apart.
+- `infra/scripts/check-problem9-image-toolchains.mjs`: builds or inspects the Problem 9 execution/devbox targets, then fails if the actual image contents drift from the declared Lean toolchains, Bun/Codex versions, or benchmark-runtime files.
 - `infra/scripts/check-trusted-local-boundaries.mjs`: fails CI when repo ignore rules, worker Docker packaging, or trusted-local docs drift toward persisting Codex auth material in the repository or image build context.
 
 Problem 9 image policy:

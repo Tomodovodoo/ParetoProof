@@ -25,6 +25,18 @@ jobs:
       - name: Test hidden Unicode guard fixtures
         run: node --test infra/scripts/check-bidi-chars.test.mjs
 
+      - name: Test Problem 9 image verification guard fixtures
+        run: node --test infra/scripts/check-problem9-image-toolchains.test.mjs
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Verify Problem 9 execution image toolchains
+        run: node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-execution --build
+
+      - name: Verify Problem 9 devbox image toolchains
+        run: node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-devbox --build
+
       - name: Check runtime env examples
         run: node infra/scripts/check-runtime-env-examples.mjs
 

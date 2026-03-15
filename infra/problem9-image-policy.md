@@ -48,4 +48,6 @@ The authoritative source of truth for the Problem 9 image graph is [`infra/docke
 
 - Before changing image names, tags, or workflow ownership, update the JSON manifest first and then update any coupled workflows or docs in the same change.
 - Use `node infra/scripts/check-problem9-image-policy.mjs` or `bun run check:problem9-image-policy` to confirm workflows, package scripts, and the worker/infra docs still match the manifest.
+- Use `node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-execution --build` before publishing the execution graph locally, and `node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-devbox --build` before a manual devbox publish. The publish workflows now run the same checks before they push any mutable or immutable GHCR tags.
+- For a deliberate synthetic mismatch, rerun the local check against an already-built image with an override such as `node infra/scripts/check-problem9-image-toolchains.mjs --target problem9-devbox --image paretoproof-problem9-devbox:local --set codexCliVersion=0.0.0`; the check must fail before publish if the inspected image does not match the declared toolchain contract.
 - For rollback, identify the required digest from the workflow artifact, re-publish or deploy by digest, and record the chosen digest in the release evidence instead of relying on `main`.
