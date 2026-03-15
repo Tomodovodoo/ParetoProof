@@ -129,6 +129,63 @@ export function buildLocalPendingPortalUrl(
   return `/pending${nextSearch ? `?${nextSearch}` : ""}`;
 }
 
+const PORTAL_SESSION_CACHE_KEY = "portal_session_cache";
+const PORTAL_SESSION_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+
+function readCachedPortalSession(): PortalAccessState | null {
+  try {
+    const raw = sessionStorage.getItem(PORTAL_SESSION_CACHE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const cached = JSON.parse(raw) as { state: PortalAccessState; cachedAt: number };
+
+    if (Date.now() - cached.cachedAt > PORTAL_SESSION_CACHE_MAX_AGE_MS) {
+      sessionStorage.removeItem(PORTAL_SESSION_CACHE_KEY);
+      return null;
+    }
+
+    if (
+      cached.state.status === "approved" ||
+      cached.state.status === "pending" ||
+      cached.state.status === "denied"
+    ) {
+      return cached.state;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPortalSession(state: PortalAccessState) {
+  try {
+    if (
+      state.status === "approved" ||
+      state.status === "pending" ||
+      state.status === "denied"
+    ) {
+      sessionStorage.setItem(
+        PORTAL_SESSION_CACHE_KEY,
+        JSON.stringify({ state, cachedAt: Date.now() })
+      );
+    }
+  } catch {
+    // sessionStorage may be unavailable
+  }
+}
+
+function clearCachedPortalSession() {
+  try {
+    sessionStorage.removeItem(PORTAL_SESSION_CACHE_KEY);
+  } catch {
+    // sessionStorage may be unavailable
+  }
+}
+
 function formatPortalBootstrapError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "Failed to fetch") {
@@ -142,7 +199,10 @@ function formatPortalBootstrapError(error: unknown) {
 }
 
 export function PortalBootstrap() {
-  const [state, setState] = useState<PortalAccessState>({ status: "loading" });
+  const cachedSession = useMemo(() => readCachedPortalSession(), []);
+  const [state, setState] = useState<PortalAccessState>(
+    cachedSession ?? { status: "loading" }
+  );
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
   const routeDeniedReason = readRouteDeniedReason();
@@ -178,6 +238,19 @@ export function PortalBootstrap() {
       };
     }
 
+    function applyAccessState(nextState: PortalAccessState) {
+      if (
+        nextState.status === "unauthenticated" ||
+        nextState.status === "error"
+      ) {
+        clearCachedPortalSession();
+      } else {
+        writeCachedPortalSession(nextState);
+      }
+
+      setState(nextState);
+    }
+
     async function loadAccessState() {
       try {
         const response = await fetchApi(`${apiBaseUrl}/portal/me`, {
@@ -190,12 +263,12 @@ export function PortalBootstrap() {
         });
 
         if (response.type === "opaqueredirect") {
-          setState({ status: "unauthenticated" });
+          applyAccessState({ status: "unauthenticated" });
           return;
         }
 
         if (response.status === 401) {
-          setState({ status: "unauthenticated" });
+          applyAccessState({ status: "unauthenticated" });
           return;
         }
 
@@ -206,7 +279,7 @@ export function PortalBootstrap() {
         const payload = (await response.json()) as PortalMeResponse;
 
         if (payload.access.status === "approved") {
-          setState({
+          applyAccessState({
             email: payload.access.email,
             roles: payload.access.roles ?? [],
             status: "approved"
@@ -215,14 +288,14 @@ export function PortalBootstrap() {
         }
 
         if (payload.access.status === "pending") {
-          setState({
+          applyAccessState({
             email: payload.access.email,
             status: "pending"
           });
           return;
         }
 
-        setState({
+        applyAccessState({
           email: payload.access.email,
           reason: payload.access.reason ?? "unknown_identity",
           status: "denied"
@@ -232,10 +305,12 @@ export function PortalBootstrap() {
           return;
         }
 
-        setState({
-          message: formatPortalBootstrapError(error),
-          status: "error"
-        });
+        if (!cachedSession) {
+          applyAccessState({
+            message: formatPortalBootstrapError(error),
+            status: "error"
+          });
+        }
       }
     }
 
