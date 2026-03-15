@@ -70,7 +70,7 @@ function runWorkerCommand(image, hostRoot, args) {
   const command = buildContainerCommand(args);
   const result = spawnSync(
     "docker",
-    [...dockerArgs, "--entrypoint", "sh", image, "-lc", command],
+    [...dockerArgs, "--entrypoint", "sh", image, "-c", command],
     {
       encoding: "utf8",
     }
