@@ -72,9 +72,11 @@ ENV NODE_ENV=production
 COPY --from=problem9-app-build /app/node_modules ./node_modules
 COPY --from=problem9-app-build /app/package.json ./package.json
 COPY --from=problem9-app-build /app/apps/worker/package.json ./apps/worker/package.json
+COPY --from=problem9-app-build /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=problem9-app-build /app/apps/worker/dist ./apps/worker/dist
 COPY --from=problem9-app-build /app/apps/worker/prompts ./apps/worker/prompts
 COPY --from=problem9-app-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=problem9-app-build /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=problem9-app-build /app/packages/shared/dist ./packages/shared/dist
 
 CMD ["node", "apps/worker/dist/index.js"]

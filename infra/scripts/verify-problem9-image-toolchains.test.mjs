@@ -34,7 +34,10 @@ function makeFixtureRootfs() {
   fs.mkdirSync(path.join(rootfs, "usr", "bin"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "app", "benchmarks", "firstproof", "problem9"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "app", "apps", "worker", "dist"), { recursive: true });
+  fs.mkdirSync(path.join(rootfs, "app", "apps", "worker", "node_modules", "@paretoproof", "shared"), { recursive: true });
+  fs.mkdirSync(path.join(rootfs, "app", "apps", "worker", "node_modules", "zod"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "app", "packages", "shared", "dist"), { recursive: true });
+  fs.mkdirSync(path.join(rootfs, "app", "packages", "shared", "node_modules", "zod"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "usr", "lib", "node_modules", "@openai", "codex"), { recursive: true });
   fs.mkdirSync(
     path.join(
@@ -54,7 +57,10 @@ function makeFixtureRootfs() {
   fs.writeFileSync(path.join(rootfs, "usr", "bin", "python3.11"), "");
   fs.writeFileSync(path.join(rootfs, "app", "benchmarks", "firstproof", "problem9", "benchmark-package.json"), "{}");
   fs.writeFileSync(path.join(rootfs, "app", "apps", "worker", "dist", "index.js"), "");
+  fs.writeFileSync(path.join(rootfs, "app", "apps", "worker", "node_modules", "@paretoproof", "shared", "package.json"), JSON.stringify({ name: "@paretoproof/shared" }));
+  fs.writeFileSync(path.join(rootfs, "app", "apps", "worker", "node_modules", "zod", "package.json"), JSON.stringify({ version: "3.25.76" }));
   fs.writeFileSync(path.join(rootfs, "app", "packages", "shared", "dist", "index.js"), "");
+  fs.writeFileSync(path.join(rootfs, "app", "packages", "shared", "node_modules", "zod", "package.json"), JSON.stringify({ version: "3.25.76" }));
   fs.writeFileSync(
     path.join(rootfs, "usr", "lib", "node_modules", "@openai", "codex", "package.json"),
     JSON.stringify({ version: args.get("CODEX_CLI_VERSION") }),
@@ -97,4 +103,13 @@ test("verifier fails closed on a synthetic Codex version mismatch", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /expected version 0\.0\.0 but found/);
+});
+
+test("verifier fails closed when worker runtime dependencies are missing from the rootfs", () => {
+  const { rootfs } = makeFixtureRootfs();
+  fs.rmSync(path.join(rootfs, "app", "apps", "worker", "node_modules", "zod"), { recursive: true, force: true });
+  const result = runVerifier("problem9-execution", rootfs);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /worker runtime zod dependency expected .* to exist/);
 });
