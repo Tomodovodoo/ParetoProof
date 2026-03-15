@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const TARGET_IMAGE_TAGS = new Map([
-  ["problem9-execution", "paretoproof-problem9-execution:local"],
-  ["problem9-devbox", "paretoproof-problem9-devbox:local"],
-  ["paretoproof-worker", "paretoproof-worker:local"],
-]);
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const manifestPath = path.resolve(scriptDirectory, "..", "docker", "problem9-image-policy.json");
+const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const TARGET_IMAGE_POLICIES = new Map(manifest.images.map((image) => [image.target, image]));
 
 const usage = `Usage: node infra/scripts/build-problem9-image.mjs --target <problem9-execution|problem9-devbox|paretoproof-worker> [options]
 
@@ -65,11 +67,11 @@ if (!target) {
   fail(`Missing required --target argument.\n\n${usage}`);
 }
 
-if (!TARGET_IMAGE_TAGS.has(target)) {
-  fail(`Unsupported target "${target}". Expected one of: ${Array.from(TARGET_IMAGE_TAGS.keys()).join(", ")}.`);
+if (!TARGET_IMAGE_POLICIES.has(target)) {
+  fail(`Unsupported target "${target}". Expected one of: ${Array.from(TARGET_IMAGE_POLICIES.keys()).join(", ")}.`);
 }
 
-const resolvedTag = tag ?? TARGET_IMAGE_TAGS.get(target);
+const resolvedTag = tag ?? TARGET_IMAGE_POLICIES.get(target).localTag;
 const loadOrPushFlag = push ? "--push" : "--load";
 const command = [
   "docker",

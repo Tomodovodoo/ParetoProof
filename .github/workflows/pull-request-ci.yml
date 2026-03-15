@@ -31,6 +31,9 @@ jobs:
       - name: Check trusted-local auth boundaries
         run: node infra/scripts/check-trusted-local-boundaries.mjs
 
+      - name: Check Problem 9 image policy
+        run: node infra/scripts/check-problem9-image-policy.mjs
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:

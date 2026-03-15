@@ -15,6 +15,7 @@ Docker targets:
 - `problem9-execution` is the canonical non-interactive verdict environment and includes the built worker runtime, prompt templates, and checked-in `benchmarks/firstproof/problem9` source tree at the repo-root paths the CLI materializers resolve at runtime
 - `problem9-devbox` extends `problem9-execution` with Bun `1.3.10`, Python `3.11`, Codex CLI, and `lean-lsp-mcp` for trusted-local contributor workflows
 - `paretoproof-worker` remains the narrower hosted wrapper target and is published on `main` alongside the canonical `problem9-execution` image
+- published image names, local tags, and workflow ownership are tracked in [infra/problem9-image-policy.md](../../infra/problem9-image-policy.md) and [infra/docker/problem9-image-policy.json](../../infra/docker/problem9-image-policy.json)
 - root-level image build commands for the named runtime targets:
   - `bun run build:problem9-execution` builds `problem9-execution` and tags it as `paretoproof-problem9-execution:local`
   - `bun run build:problem9-devbox` builds `problem9-devbox` and tags it as `paretoproof-problem9-devbox:local`
