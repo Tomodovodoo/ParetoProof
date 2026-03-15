@@ -10,6 +10,7 @@ Use these files:
 - [benchmark-intake-review-workflow-baseline.md](./benchmark-intake-review-workflow-baseline.md) for the repository-first benchmark candidate intake and curation-review boundary
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
 - [hosted-worker-platform-baseline.md](./hosted-worker-platform-baseline.md) for the accepted API-owned hosted Modal worker platform boundary
+- [hosted-worker-modal-topology-baseline.md](./hosted-worker-modal-topology-baseline.md) for the accepted Modal workspace, environment, app, and pool topology for hosted workers
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [hosted-worker-private-operator-api-baseline.md](./hosted-worker-private-operator-api-baseline.md) for the private portal and operator API boundary for hosted worker and run-ops data
