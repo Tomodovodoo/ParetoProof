@@ -13,6 +13,7 @@ Use these files:
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [hosted-worker-private-operator-api-baseline.md](./hosted-worker-private-operator-api-baseline.md) for the private portal and operator API boundary for hosted worker and run-ops data
+- [hosted-worker-public-reporting-api-baseline.md](./hosted-worker-public-reporting-api-baseline.md) for the public release-centric API and redaction boundary for hosted execution reporting
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
 - [next-product-slice-sequencing-baseline.md](./next-product-slice-sequencing-baseline.md) for the ordered next backlog refill after the current benchmark kernel
 - [portal-launch-mutation-baseline.md](./portal-launch-mutation-baseline.md) for the scoped browser-to-queue launch contract
