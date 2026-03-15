@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "registryHost": "ghcr.io",
+  "repositoryOwnerPlaceholder": "${{ github.repository_owner }}",
+  "mutableTag": "main",
+  "immutableTagPrefix": "sha-",
+  "images": [
+    {
+      "target": "problem9-execution",
+      "localTag": "paretoproof-problem9-execution:local",
+      "repository": "paretoproof-problem9-execution",
+      "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-execution",
+      "localBuildScript": "build:problem9-execution",
+      "publishedByWorkflow": ".github/workflows/publish-worker-image.yml",
+      "ownership": "Infrastructure / Deployment",
+      "publishTrigger": "push to main for worker/build-graph changes or workflow_dispatch",
+      "notes": "Canonical non-interactive Problem 9 verdict environment."
+    },
+    {
+      "target": "problem9-devbox",
+      "localTag": "paretoproof-problem9-devbox:local",
+      "repository": "paretoproof-problem9-devbox",
+      "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-devbox",
+      "localBuildScript": "build:problem9-devbox",
+      "publishedByWorkflow": ".github/workflows/publish-problem9-devbox-image.yml",
+      "ownership": "Infrastructure / Deployment",
+      "publishTrigger": "workflow_dispatch only",
+      "notes": "Trusted-local contributor/devbox image. Main may move only on an explicit operator publish."
+    },
+    {
+      "target": "paretoproof-worker",
+      "localTag": "paretoproof-worker:local",
+      "repository": "paretoproof-worker",
+      "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-worker",
+      "localBuildScript": "build:paretoproof-worker",
+      "publishedByWorkflow": ".github/workflows/publish-worker-image.yml",
+      "ownership": "Infrastructure / Deployment",
+      "publishTrigger": "push to main for worker/build-graph changes or workflow_dispatch",
+      "notes": "Hosted worker wrapper image built from the same Dockerfile graph as problem9-execution."
+    }
+  ]
+}
