@@ -228,6 +228,55 @@ describe("handleAccessFinalize", () => {
     expect(setCookies[2]).toContain("PortalLinkIntent=");
   });
 
+  it("splits a combined Set-Cookie entry returned by getSetCookie into individual cookies", async () => {
+    globalThis.fetch = async () => {
+      const combinedCookieHeader = [
+        "PortalAccessSession=session; Domain=.paretoproof.com; Path=/; Secure; HttpOnly",
+        "PortalAccessProvider=provider; Domain=.paretoproof.com; Path=/; Secure; HttpOnly",
+        "PortalLinkIntent=; Domain=.paretoproof.com; Path=/; Max-Age=0; Secure; HttpOnly"
+      ].join(", ");
+
+      const response = new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/profile"
+        }),
+        {
+          status: 200
+        }
+      );
+
+      const responseHeaders = response.headers as Headers & {
+        getSetCookie?: () => string[];
+      };
+
+      Object.defineProperty(responseHeaders, "getSetCookie", {
+        value: () => [combinedCookieHeader]
+      });
+
+      return response;
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://google.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-6",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    const setCookies =
+      (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
+    expect(setCookies).toHaveLength(3);
+    expect(setCookies[0]).toContain("PortalAccessSession=session");
+    expect(setCookies[1]).toContain("PortalAccessProvider=provider");
+    expect(setCookies[2]).toContain("PortalLinkIntent=");
+  });
+
   it("redirects back to the branded retry surface when the branded handoff lacks both Access header and session cookie", async () => {
     const response = await handleAccessFinalize(
       new Request("https://github.auth.paretoproof.com/api/access/finalize", {

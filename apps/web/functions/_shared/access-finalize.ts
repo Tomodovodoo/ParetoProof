@@ -128,6 +128,10 @@ function splitCombinedSetCookieHeader(cookieHeader: string) {
     .filter(Boolean);
 }
 
+function normalizeSetCookieHeaderValues(cookieHeaders: string[]) {
+  return cookieHeaders.flatMap((cookieHeader) => splitCombinedSetCookieHeader(cookieHeader));
+}
+
 function readSetCookieHeaders(headers: Headers) {
   const cookieHeaders = headers as Headers & {
     getAll?: (name: string) => string[];
@@ -135,11 +139,11 @@ function readSetCookieHeaders(headers: Headers) {
   };
 
   if (typeof cookieHeaders.getSetCookie === "function") {
-    return cookieHeaders.getSetCookie();
+    return normalizeSetCookieHeaderValues(cookieHeaders.getSetCookie());
   }
 
   if (typeof cookieHeaders.getAll === "function") {
-    return cookieHeaders.getAll("set-cookie");
+    return normalizeSetCookieHeaderValues(cookieHeaders.getAll("set-cookie"));
   }
 
   const singleCookieHeader = headers.get("set-cookie");
