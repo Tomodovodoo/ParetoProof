@@ -41,6 +41,22 @@ jobs:
             type=raw,value=main,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
+      - name: Build devbox rootfs for toolchain verification
+        run: >-
+          docker buildx build
+          --file apps/worker/Dockerfile
+          --target problem9-devbox
+          --output type=local,dest=.tmp/problem9-devbox-rootfs
+          --cache-from type=gha,scope=problem9-execution
+          --cache-from type=gha,scope=problem9-devbox
+          .
+
+      - name: Verify devbox image toolchains
+        run: >-
+          node infra/scripts/verify-problem9-image-toolchains.mjs
+          --target problem9-devbox
+          --rootfs .tmp/problem9-devbox-rootfs
+
       - name: Build and publish devbox image
         id: build_devbox
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
