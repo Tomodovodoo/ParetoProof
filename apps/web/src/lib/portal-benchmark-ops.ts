@@ -1353,7 +1353,7 @@ function buildRunsModelOptionsFromItems(
 }
 
 function escapeCsvValue(value: string) {
-  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  const safeValue = /^\s*[=+\-@]/.test(value) ? `'${value}` : value;
 
   if (/[",\n]/.test(safeValue)) {
     return `"${safeValue.replaceAll('"', '""')}"`;
