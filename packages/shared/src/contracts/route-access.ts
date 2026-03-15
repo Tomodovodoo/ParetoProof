@@ -1,4 +1,5 @@
 import type { AppRouteMatrixEntry } from "../types/route-access.js";
+import type { AppSurface } from "../types/route-access.js";
 
 export const appRouteAccessMatrix = [
   {
@@ -9,6 +10,15 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "public_site",
     summary: "Marketing home and public project overview."
+  },
+  {
+    access: "public",
+    host: "paretoproof.com",
+    id: "public.project",
+    path: "/project",
+    redirectIfDenied: "public_home",
+    surface: "public_site",
+    summary: "Compact project pack for mission, contributor path, and contact rules."
   },
   {
     access: "public",
@@ -128,3 +138,32 @@ export const appRouteAccessMatrix = [
     summary: "Role management and contributor state inspection for admins."
   }
 ] satisfies AppRouteMatrixEntry[];
+
+export function matchesAppRoutePath(routePath: string, pathname: string) {
+  if (routePath === pathname) {
+    return true;
+  }
+
+  const routeSegments = routePath.split("/").filter(Boolean);
+  const pathSegments = pathname.split("/").filter(Boolean);
+
+  if (routeSegments.length !== pathSegments.length) {
+    return false;
+  }
+
+  return routeSegments.every((segment, index) => {
+    if (segment.startsWith(":")) {
+      return pathSegments[index].length > 0;
+    }
+
+    return segment === pathSegments[index];
+  });
+}
+
+export function findAppRouteBySurface(surface: AppSurface, pathname: string) {
+  return (
+    appRouteAccessMatrix.find(
+      (entry) => entry.surface === surface && matchesAppRoutePath(entry.path, pathname)
+    ) ?? null
+  );
+}
