@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   assertProblem9HostedCapability,
@@ -154,6 +154,15 @@ type PreparedBundleSubmission = {
   verdictDigest: string;
 };
 
+type LeaseFilesystemRoots = {
+  attemptOutputRoot: string;
+  attemptWorkspaceRoot: string;
+  benchmarkPackageRoot: string;
+  leaseStagingRoot: string;
+  leaseWorkspaceRoot: string;
+  promptPackageRoot: string;
+};
+
 export async function runWorkerClaimLoop(
   rawOptions: WorkerClaimLoopOptions,
   dependencies: WorkerClaimLoopDependencies = {}
@@ -284,21 +293,30 @@ async function processClaimedJob(
     stopHeartbeat: null,
     stopped: false
   };
-  const jobWorkspaceRoot = path.join(
-    path.resolve(options.workspaceRoot),
-    sanitizePathSegment(workerJob.jobId)
-  );
-  const jobOutputRoot = path.join(
-    path.resolve(options.outputRoot),
-    sanitizePathSegment(workerJob.jobId)
-  );
+  const leaseRoots = buildLeaseFilesystemRoots({
+    jobId: workerJob.jobId,
+    leaseId: workerJob.leaseId,
+    outputRoot: options.outputRoot,
+    workspaceRoot: options.workspaceRoot
+  });
   let heartbeatLoop = Promise.resolve();
 
   try {
-    await rm(jobWorkspaceRoot, { force: true, recursive: true });
-    await rm(jobOutputRoot, { force: true, recursive: true });
-    await mkdir(jobWorkspaceRoot, { recursive: true });
-    await mkdir(jobOutputRoot, { recursive: true });
+    try {
+      await prepareLeaseFilesystemRoots(leaseRoots);
+    } catch (error) {
+      await submitHarnessFailure(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        buildStaticFailure({
+          summary: error instanceof Error ? error.message : String(error),
+          failureCode: "tool_permission_violation",
+          phase: "prepare"
+        })
+      );
+      return "completed";
+    }
 
     await refreshLease(leaseState, apiBaseUrl, dependencies);
 
@@ -372,12 +390,8 @@ async function processClaimedJob(
       return "completed";
     }
 
-    const benchmarkPackageRoot = path.join(jobWorkspaceRoot, "benchmark");
-    const promptPackageRoot = path.join(jobWorkspaceRoot, "prompt");
-    const attemptWorkspaceRoot = path.join(jobWorkspaceRoot, "workspace");
-    const attemptOutputRoot = path.join(jobOutputRoot, "attempt-output");
     const benchmarkResult = await dependencies.materializeBenchmarkPackage({
-      outputRoot: benchmarkPackageRoot
+      outputRoot: leaseRoots.benchmarkPackageRoot
     });
 
     assertExpectedBenchmarkIdentity(workerJob.target, benchmarkResult);
@@ -391,7 +405,7 @@ async function processClaimedJob(
       jobId: workerJob.jobId,
       laneId: workerJob.target.laneId,
       modelConfigId: workerJob.target.modelConfigId,
-      outputRoot: promptPackageRoot,
+      outputRoot: leaseRoots.promptPackageRoot,
       passKCount: null,
       passKIndex: null,
       promptLayerVersions: promptDefaults.promptLayerVersions,
@@ -442,7 +456,7 @@ async function processClaimedJob(
         benchmarkPackageRoot: benchmarkResult.outputRoot,
         modelSnapshotId: workerJob.target.modelSnapshotId,
         networkPolicyMode: "hosted",
-        outputRoot: attemptOutputRoot,
+        outputRoot: leaseRoots.attemptOutputRoot,
         promptPackageRoot: promptResult.outputRoot,
         providerFamily: workerJob.target.providerFamily,
         providerModel: resolveProviderModel({
@@ -451,7 +465,7 @@ async function processClaimedJob(
           modelConfigId: workerJob.target.modelConfigId
         }),
         stubScenario: inferStubScenario(workerJob.target.modelSnapshotId),
-        workspaceRoot: attemptWorkspaceRoot
+        workspaceRoot: leaseRoots.attemptWorkspaceRoot
       });
     } catch (error) {
       if (leaseState.cancelRequested) {
@@ -606,7 +620,7 @@ async function processClaimedJob(
     leaseState.stopped = true;
     leaseState.stopHeartbeat?.();
     await heartbeatLoop;
-    await rm(jobWorkspaceRoot, { force: true, recursive: true });
+    await cleanupLeaseFilesystemRoots(leaseRoots);
   }
 }
 
@@ -952,6 +966,60 @@ function sanitizePathSegment(value: string): string {
   }
 
   return sanitized;
+}
+
+function buildLeaseFilesystemRoots(options: {
+  jobId: string;
+  leaseId: string;
+  outputRoot: string;
+  workspaceRoot: string;
+}): LeaseFilesystemRoots {
+  const leasePathSegment = [
+    sanitizePathSegment(options.leaseId),
+    sanitizePathSegment(options.jobId)
+  ].join("__");
+  const leaseWorkspaceRoot = path.join(path.resolve(options.workspaceRoot), leasePathSegment);
+  const leaseStagingRoot = path.join(path.resolve(options.outputRoot), leasePathSegment);
+
+  return {
+    attemptOutputRoot: path.join(leaseStagingRoot, "attempt-output"),
+    attemptWorkspaceRoot: path.join(leaseWorkspaceRoot, "workspace"),
+    benchmarkPackageRoot: path.join(leaseWorkspaceRoot, "benchmark"),
+    leaseStagingRoot,
+    leaseWorkspaceRoot,
+    promptPackageRoot: path.join(leaseWorkspaceRoot, "prompt")
+  };
+}
+
+async function prepareLeaseFilesystemRoots(roots: LeaseFilesystemRoots): Promise<void> {
+  await ensureLeaseWritableRootPrepared(roots.leaseWorkspaceRoot, "lease workspace root");
+  await ensureLeaseWritableRootPrepared(roots.leaseStagingRoot, "lease staging root");
+}
+
+async function ensureLeaseWritableRootPrepared(rootPath: string, description: string): Promise<void> {
+  const rootStats = await stat(rootPath).catch(() => null);
+
+  if (rootStats === null) {
+    await mkdir(rootPath, { recursive: true });
+    return;
+  }
+
+  if (!rootStats.isDirectory()) {
+    throw new Error(`Hosted ${description} is not a directory: ${rootPath}.`);
+  }
+
+  const entries = await readdir(rootPath);
+
+  if (entries.length > 0) {
+    throw new Error(
+      `Unsafe hosted residue detected in ${description} ${rootPath}; expected an empty per-lease root before execution.`
+    );
+  }
+}
+
+async function cleanupLeaseFilesystemRoots(roots: LeaseFilesystemRoots): Promise<void> {
+  await rm(roots.leaseWorkspaceRoot, { force: true, recursive: true });
+  await rm(roots.leaseStagingRoot, { force: true, recursive: true });
 }
 
 function classifyHostedAttemptError(error: unknown): WorkerFailureClassification {
