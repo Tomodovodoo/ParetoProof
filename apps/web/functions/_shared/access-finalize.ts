@@ -184,7 +184,7 @@ export async function handleAccessFinalize(request: Request) {
   const redirectPath = await readRedirectPath(request);
   const retryUrl = buildAuthRetryUrl(redirectPath);
   const requestUrl = new URL(request.url);
-  const apiUrl = new URL("/portal/session/finalize", resolveApiBaseUrl(requestUrl));
+  const apiUrl = new URL("/portal/session/finalize/submit", resolveApiBaseUrl(requestUrl));
   const forwardedHeaders = new Headers({
     accept: "application/json",
     "content-type": "application/json",
