@@ -1,4 +1,5 @@
 const rateLimitBackoffByOrigin = new Map<string, number>();
+export const portalAuthExpiredEventName = "paretoproof:portal-auth-expired";
 
 export class ApiRateLimitError extends Error {
   response: Response;
@@ -48,7 +49,7 @@ function readRetryAfterMs(response: Response) {
   return Math.max(resetSeconds * 1000 - Date.now(), 1000);
 }
 
-function getBackoffOrigin(input: RequestInfo | URL) {
+function resolveRequestUrl(input: RequestInfo | URL) {
   const requestUrl =
     typeof input === "string"
       ? input
@@ -56,7 +57,11 @@ function getBackoffOrigin(input: RequestInfo | URL) {
         ? input.toString()
         : input.url;
 
-  return new URL(requestUrl, window.location.origin).origin;
+  return new URL(requestUrl, window.location.origin);
+}
+
+function getBackoffOrigin(input: RequestInfo | URL) {
+  return resolveRequestUrl(input).origin;
 }
 
 function shouldAutoRetry(init: RequestInit | undefined) {
@@ -64,8 +69,21 @@ function shouldAutoRetry(init: RequestInit | undefined) {
   return method === "GET" || method === "HEAD";
 }
 
+function signalPortalAuthExpired(requestUrl: URL, response: Response) {
+  if (response.status !== 401 || !requestUrl.pathname.startsWith("/portal/")) {
+    return;
+  }
+
+  if (typeof window.dispatchEvent !== "function" || typeof Event !== "function") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(portalAuthExpiredEventName));
+}
+
 export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const backoffOrigin = getBackoffOrigin(input);
+  const requestUrl = resolveRequestUrl(input);
   const autoRetry = shouldAutoRetry(init);
   let attemptCount = 0;
 
@@ -80,6 +98,7 @@ export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Pr
     const response = await fetch(input, init);
 
     if (response.status !== 429) {
+      signalPortalAuthExpired(requestUrl, response);
       return response;
     }
 
