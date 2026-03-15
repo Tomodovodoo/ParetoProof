@@ -4,6 +4,9 @@ import {
   getRunLifecycleStateLabel,
   defaultRunControlPolicy,
   portalRunsLifecycleBuckets,
+  type PortalBenchmarkDatasetResponse,
+  type PortalBenchmarkListItem,
+  type PortalBenchmarksListResponse,
   runKindCatalog,
   runKindConcurrencyOverrides,
   type PortalLaunchBenchmarkOption,
@@ -43,6 +46,8 @@ type WorkerJobLeaseRow = typeof workerJobLeases.$inferSelect;
 type WorkerAttemptEventRow = typeof workerAttemptEvents.$inferSelect;
 
 export type PortalBenchmarkOpsReadModelService = {
+  getBenchmarkDataset(packageId: string): Promise<PortalBenchmarkDatasetResponse | null>;
+  getBenchmarksList(): Promise<PortalBenchmarksListResponse>;
   getLaunchView(): Promise<PortalLaunchViewResponse>;
   getRunDetail(runId: string): Promise<PortalRunDetailResponse | null>;
   getRunsList(query: PortalRunsListQuery): Promise<PortalRunsListResponse>;
@@ -64,6 +69,14 @@ function getBenchmarkVersionId(runRow: RunRow) {
 
 function getBenchmarkLabel(runRow: RunRow) {
   return `${runRow.benchmarkPackageId} @ ${runRow.benchmarkPackageVersion}`;
+}
+
+function getBenchmarkPackageLabel(packageId: string, versions: string[]) {
+  if (versions.length === 1) {
+    return `${packageId} @ ${versions[0]}`;
+  }
+
+  return `${packageId} (${versions.length} versions)`;
 }
 
 function getRunLifecycleBucket(runState: RunRow["state"]): PortalRunsLifecycleBucket {
@@ -408,6 +421,25 @@ function buildEmptyRunsFilters(): PortalRunsAvailableFilters {
   };
 }
 
+function createEmptyVerdictCounts() {
+  return {
+    fail: 0,
+    invalid_result: 0,
+    pass: 0
+  } satisfies Record<RunRow["verdictClass"], number>;
+}
+
+function incrementVerdictCounts(
+  verdictCounts: Record<RunRow["verdictClass"], number>,
+  verdictClass: RunRow["verdictClass"]
+) {
+  verdictCounts[verdictClass] += 1;
+}
+
+function listSortedUnique(values: string[]) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
 function buildEmptyRunsListResponse(query: PortalRunsListQuery): PortalRunsListResponse {
   return {
     filters: buildEmptyRunsFilters(),
@@ -467,10 +499,181 @@ async function loadRunsFilters(
   };
 }
 
+async function loadAttemptCountsByRunId(db: ReturnTypeOfCreateDbClient) {
+  const rows = await db
+    .select({
+      runId: attempts.runId,
+      total: count()
+    })
+    .from(attempts)
+    .groupBy(attempts.runId);
+
+  return new Map(rows.map((row) => [row.runId, row.total]));
+}
+
 export function createPortalBenchmarkOpsReadModelService(
   db: ReturnTypeOfCreateDbClient
 ): PortalBenchmarkOpsReadModelService {
   return {
+    async getBenchmarksList() {
+      const [runRows, attemptCountsByRunId] = await Promise.all([
+        db
+          .select()
+          .from(runs)
+          .orderBy(desc(runs.completedAt), desc(runs.createdAt)),
+        loadAttemptCountsByRunId(db)
+      ]);
+
+      const benchmarks = new Map<string, PortalBenchmarkListItem>();
+
+      for (const runRow of runRows) {
+        const existing = benchmarks.get(runRow.benchmarkPackageId);
+        const attemptCount = attemptCountsByRunId.get(runRow.id) ?? 0;
+
+        if (!existing) {
+          const verdictCounts = createEmptyVerdictCounts();
+          incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+          benchmarks.set(runRow.benchmarkPackageId, {
+            attemptCount,
+            benchmarkLabel: getBenchmarkPackageLabel(runRow.benchmarkPackageId, [
+              runRow.benchmarkPackageVersion
+            ]),
+            benchmarkPackageId: runRow.benchmarkPackageId,
+            latestCompletedAt: runRow.completedAt.toISOString(),
+            latestRunId: runRow.sourceRunId,
+            modelConfigIds: [runRow.modelConfigId],
+            providerFamilies: [runRow.providerFamily],
+            runCount: 1,
+            versions: [runRow.benchmarkPackageVersion],
+            verdictCounts
+          });
+          continue;
+        }
+
+        existing.attemptCount += attemptCount;
+        existing.runCount += 1;
+        incrementVerdictCounts(existing.verdictCounts, runRow.verdictClass);
+
+        if (!existing.latestCompletedAt) {
+          existing.latestCompletedAt = runRow.completedAt.toISOString();
+          existing.latestRunId = runRow.sourceRunId;
+        }
+
+        if (!existing.modelConfigIds.includes(runRow.modelConfigId)) {
+          existing.modelConfigIds.push(runRow.modelConfigId);
+        }
+
+        if (!existing.providerFamilies.includes(runRow.providerFamily)) {
+          existing.providerFamilies.push(runRow.providerFamily);
+        }
+
+        if (!existing.versions.includes(runRow.benchmarkPackageVersion)) {
+          existing.versions.push(runRow.benchmarkPackageVersion);
+        }
+      }
+
+      const items = [...benchmarks.values()]
+        .map((item) => {
+          const versions = listSortedUnique(item.versions);
+          return {
+            ...item,
+            benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
+            modelConfigIds: listSortedUnique(item.modelConfigIds),
+            providerFamilies: listSortedUnique(item.providerFamilies),
+            versions
+          };
+        })
+        .sort((left, right) => {
+          if (!left.latestCompletedAt || !right.latestCompletedAt) {
+            return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
+          }
+
+          return Date.parse(right.latestCompletedAt) - Date.parse(left.latestCompletedAt);
+        });
+
+      return { items };
+    },
+
+    async getBenchmarkDataset(packageId) {
+      const runRows = await db
+        .select()
+        .from(runs)
+        .where(eq(runs.benchmarkPackageId, packageId))
+        .orderBy(desc(runs.completedAt), desc(runs.createdAt));
+
+      if (runRows.length === 0) {
+        return null;
+      }
+
+      const runIds = runRows.map((runRow) => runRow.id);
+      const [jobRows, attemptRows] = await Promise.all([
+        loadJobsForRunIds(db, runIds),
+        loadAttemptsForRunIds(db, runIds)
+      ]);
+      const runById = new Map(runRows.map((runRow) => [runRow.id, runRow]));
+      const jobsByRunId = groupByRunId(jobRows);
+      const attemptsByRunId = groupByRunId(attemptRows);
+      const jobById = new Map(jobRows.map((jobRow) => [jobRow.id, jobRow]));
+      const verdictCounts = createEmptyVerdictCounts();
+      const versions = listSortedUnique(runRows.map((runRow) => runRow.benchmarkPackageVersion));
+      const providerFamilies = listSortedUnique(runRows.map((runRow) => runRow.providerFamily));
+      const modelConfigIds = listSortedUnique(runRows.map((runRow) => runRow.modelConfigId));
+      const laneIds = listSortedUnique(runRows.map((runRow) => runRow.laneId));
+      const latestRun = runRows[0] ?? null;
+
+      for (const runRow of runRows) {
+        incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+      }
+
+      return {
+        attempts: [...attemptRows]
+          .sort(compareByCreatedAtDesc)
+          .map((attemptRow) => {
+            const runRow = runById.get(attemptRow.runId);
+
+            if (!runRow) {
+              throw new Error("Attempt references a run outside the benchmark dataset.");
+            }
+
+            return buildAttemptSummary(runRow, attemptRow, jobById);
+          }),
+        benchmark: {
+          benchmarkLabel: getBenchmarkPackageLabel(packageId, versions),
+          benchmarkPackageId: packageId,
+          laneIds,
+          latestRunId: latestRun?.sourceRunId ?? null,
+          modelConfigIds,
+          providerFamilies,
+          versions
+        },
+        jobs: [...jobRows]
+          .sort(compareByCreatedAtDesc)
+          .map((jobRow) => {
+            const runRow = runById.get(jobRow.runId);
+
+            if (!runRow) {
+              throw new Error("Job references a run outside the benchmark dataset.");
+            }
+
+            return buildJobSummary(runRow, jobRow);
+          }),
+        runs: runRows.map((runRow) =>
+          buildRunListItem({
+            attemptRows: attemptsByRunId.get(runRow.id) ?? [],
+            jobRows: jobsByRunId.get(runRow.id) ?? [],
+            runRow
+          })
+        ),
+        summary: {
+          attemptCount: attemptRows.length,
+          jobCount: jobRows.length,
+          latestCompletedAt: latestRun?.completedAt.toISOString() ?? null,
+          runCount: runRows.length,
+          verdictCounts
+        }
+      };
+    },
+
     async getRunsList(query) {
       const runConditions = [];
 

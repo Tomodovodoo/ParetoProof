@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
 import type {
+  PortalBenchmarkDatasetResponse,
+  PortalBenchmarksListResponse,
   PortalLaunchViewResponse,
   PortalRunDetailResponse,
   PortalRunsListQuery,
@@ -158,6 +160,110 @@ function buildRunDetailResponse(): PortalRunDetailResponse {
   };
 }
 
+function buildBenchmarksListResponse(): PortalBenchmarksListResponse {
+  return {
+    items: [
+      {
+        attemptCount: 1,
+        benchmarkLabel: "problem9 @ 2026.03",
+        benchmarkPackageId: "problem9",
+        latestCompletedAt: "2026-03-13T20:00:00.000Z",
+        latestRunId: "PP-318",
+        modelConfigIds: ["gpt-oss"],
+        providerFamilies: ["openai"],
+        runCount: 1,
+        versions: ["2026.03"],
+        verdictCounts: {
+          fail: 0,
+          invalid_result: 0,
+          pass: 1
+        }
+      }
+    ]
+  };
+}
+
+function buildBenchmarkDatasetResponse(): PortalBenchmarkDatasetResponse {
+  return {
+    attempts: [
+      {
+        attemptId: "attempt-1",
+        completedAt: "2026-03-13T20:00:00.000Z",
+        failure: {
+          code: null,
+          family: null,
+          summary: null
+        },
+        jobId: "job-1",
+        runId: "PP-318",
+        startedAt: "2026-03-13T19:58:30.000Z",
+        state: "succeeded",
+        stopReason: "completed",
+        verdictClass: "pass",
+        verifierResult: "accepted"
+      }
+    ],
+    benchmark: {
+      benchmarkLabel: "problem9 @ 2026.03",
+      benchmarkPackageId: "problem9",
+      laneIds: ["problem9-default"],
+      latestRunId: "PP-318",
+      modelConfigIds: ["gpt-oss"],
+      providerFamilies: ["openai"],
+      versions: ["2026.03"]
+    },
+    jobs: [
+      {
+        completedAt: "2026-03-13T20:00:00.000Z",
+        failure: {
+          code: null,
+          family: null,
+          summary: null
+        },
+        jobId: "job-1",
+        runId: "PP-318",
+        startedAt: "2026-03-13T19:58:10.000Z",
+        state: "completed",
+        stopReason: "completed",
+        verdictClass: "pass"
+      }
+    ],
+    runs: buildRunsListResponse({
+      attemptId: null,
+      authMode: null,
+      benchmarkPackageDigest: null,
+      benchmarkPackageId: null,
+      benchmarkPackageVersion: null,
+      failureCode: null,
+      failureFamily: null,
+      jobId: null,
+      lifecycleBucket: null,
+      limit: 25,
+      modelConfigId: null,
+      providerFamily: null,
+      q: null,
+      runId: null,
+      runLifecycle: [],
+      runMode: null,
+      runKind: null,
+      sort: "started_at_desc",
+      toolProfile: null,
+      verdict: []
+    }).items,
+    summary: {
+      attemptCount: 1,
+      jobCount: 1,
+      latestCompletedAt: "2026-03-13T20:00:00.000Z",
+      runCount: 1,
+      verdictCounts: {
+        fail: 0,
+        invalid_result: 0,
+        pass: 1
+      }
+    }
+  };
+}
+
 function buildLaunchViewResponse(): PortalLaunchViewResponse {
   return {
     benchmarks: [
@@ -251,12 +357,18 @@ function buildWorkersViewResponse(): PortalWorkersViewResponse {
 }
 
 function createReadModelService(overrides?: {
+  getBenchmarkDataset?: (packageId: string) => Promise<PortalBenchmarkDatasetResponse | null>;
+  getBenchmarksList?: () => Promise<PortalBenchmarksListResponse>;
   getLaunchView?: () => Promise<PortalLaunchViewResponse>;
   getRunDetail?: (runId: string) => Promise<PortalRunDetailResponse | null>;
   getRunsList?: (query: PortalRunsListQuery) => Promise<PortalRunsListResponse>;
   getWorkersView?: () => Promise<PortalWorkersViewResponse>;
 }): PortalBenchmarkOpsReadModelService {
   return {
+    getBenchmarkDataset:
+      overrides?.getBenchmarkDataset ?? (async () => buildBenchmarkDatasetResponse()),
+    getBenchmarksList:
+      overrides?.getBenchmarksList ?? (async () => buildBenchmarksListResponse()),
     getLaunchView: overrides?.getLaunchView ?? (async () => buildLaunchViewResponse()),
     getRunDetail: overrides?.getRunDetail ?? (async () => buildRunDetailResponse()),
     getRunsList: overrides?.getRunsList ?? (async (query) => buildRunsListResponse(query)),
@@ -372,6 +484,91 @@ test("GET /portal/runs rejects invalid benchmark-ops query params", async (t) =>
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error, "invalid_portal_runs_query");
+});
+
+test("GET /portal/benchmarks returns a contract-valid package summary list", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService(),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.benchmarksListResponse.parse(
+    response.json()
+  );
+  assert.equal(payload.items[0]?.benchmarkPackageId, "problem9");
+});
+
+test("GET /portal/benchmarks/:packageId/dataset returns 404 when the package is missing", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService({
+        getBenchmarkDataset: async () => null
+      }),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks/problem9/dataset"
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json().error, "portal_benchmark_dataset_not_found");
+});
+
+test("GET /portal/benchmarks/:packageId/export streams csv when requested", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService(),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks/problem9/export?format=csv"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers["content-type"] ?? "", /^text\/csv/);
+  assert.match(response.body, /benchmarkPackageId,benchmarkVersions,runId/);
+  assert.match(response.body, /problem9,2026\.03,PP-318/);
 });
 
 test("GET /portal/runs/:runId returns 404 when the run read model is missing", async (t) => {

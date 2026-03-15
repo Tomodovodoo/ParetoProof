@@ -1,5 +1,7 @@
 import {
   evaluationVerdictLabels,
+  portalBenchmarkDatasetResponseSchema,
+  portalBenchmarksListResponseSchema,
   getPortalRunsLifecycleBucketLabel,
   getRunLifecycleStateLabel,
   portalLaunchViewResponseSchema,
@@ -8,6 +10,9 @@ import {
   portalRunsListQuerySchema,
   portalRunsListResponseSchema,
   portalWorkersViewResponseSchema,
+  type PortalBenchmarkDatasetResponse,
+  type PortalBenchmarkExportFormat,
+  type PortalBenchmarksListResponse,
   type EvaluationVerdictClass,
   type PortalLaunchViewResponse,
   type PortalRunsAvailableFilters,
@@ -710,6 +715,137 @@ const localWorkersView: PortalWorkersViewResponse = {
   ]
 };
 
+function createEmptyVerdictCounts() {
+  return {
+    fail: 0,
+    invalid_result: 0,
+    pass: 0
+  } satisfies Record<EvaluationVerdictClass, number>;
+}
+
+function incrementVerdictCounts(
+  verdictCounts: Record<EvaluationVerdictClass, number>,
+  verdictClass: EvaluationVerdictClass
+) {
+  verdictCounts[verdictClass] += 1;
+}
+
+function listSortedUnique(values: string[]) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function getBenchmarkPackageLabel(packageId: string, versions: string[]) {
+  if (versions.length === 1) {
+    return `${packageId} @ ${versions[0]}`;
+  }
+
+  return `${packageId} (${versions.length} versions)`;
+}
+
+function buildLocalBenchmarkDataset(packageId: string): PortalBenchmarkDatasetResponse {
+  const runs = localRunItems
+    .filter((item) => item.benchmarkPackageId === packageId)
+    .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt));
+
+  if (runs.length === 0) {
+    throw new Error(`Benchmark package ${packageId} was not found.`);
+  }
+
+  const jobs = runs.flatMap((run) => localRunDetailById[run.runId]?.jobs ?? []);
+  const attempts = runs.flatMap((run) => localRunDetailById[run.runId]?.attempts ?? []);
+  const versions = listSortedUnique(runs.map((run) => run.benchmarkPackageVersion));
+  const providerFamilies = listSortedUnique(runs.map((run) => run.providerFamily));
+  const modelConfigIds = listSortedUnique(runs.map((run) => run.modelConfigId));
+  const laneIds = listSortedUnique(runs.map((run) => run.laneId));
+  const verdictCounts = createEmptyVerdictCounts();
+
+  for (const run of runs) {
+    incrementVerdictCounts(verdictCounts, run.verdictClass);
+  }
+
+  return {
+    attempts,
+    benchmark: {
+      benchmarkLabel: getBenchmarkPackageLabel(packageId, versions),
+      benchmarkPackageId: packageId,
+      laneIds,
+      latestRunId: runs[0]?.runId ?? null,
+      modelConfigIds,
+      providerFamilies,
+      versions
+    },
+    jobs,
+    runs,
+    summary: {
+      attemptCount: attempts.length,
+      jobCount: jobs.length,
+      latestCompletedAt: runs[0]?.completedAt ?? null,
+      runCount: runs.length,
+      verdictCounts
+    }
+  };
+}
+
+function buildLocalBenchmarksListResponse(): PortalBenchmarksListResponse {
+  const benchmarks = new Map<string, PortalBenchmarksListResponse["items"][number]>();
+
+  for (const run of localRunItems) {
+    const existing = benchmarks.get(run.benchmarkPackageId);
+    const attemptCount = localRunDetailById[run.runId]?.attempts.length ?? 0;
+
+    if (!existing) {
+      const verdictCounts = createEmptyVerdictCounts();
+      incrementVerdictCounts(verdictCounts, run.verdictClass);
+      benchmarks.set(run.benchmarkPackageId, {
+        attemptCount,
+        benchmarkLabel: getBenchmarkPackageLabel(run.benchmarkPackageId, [
+          run.benchmarkPackageVersion
+        ]),
+        benchmarkPackageId: run.benchmarkPackageId,
+        latestCompletedAt: run.completedAt,
+        latestRunId: run.runId,
+        modelConfigIds: [run.modelConfigId],
+        providerFamilies: [run.providerFamily],
+        runCount: 1,
+        versions: [run.benchmarkPackageVersion],
+        verdictCounts
+      });
+      continue;
+    }
+
+    existing.attemptCount += attemptCount;
+    existing.runCount += 1;
+    incrementVerdictCounts(existing.verdictCounts, run.verdictClass);
+
+    if (!existing.modelConfigIds.includes(run.modelConfigId)) {
+      existing.modelConfigIds.push(run.modelConfigId);
+    }
+
+    if (!existing.providerFamilies.includes(run.providerFamily)) {
+      existing.providerFamilies.push(run.providerFamily);
+    }
+
+    if (!existing.versions.includes(run.benchmarkPackageVersion)) {
+      existing.versions.push(run.benchmarkPackageVersion);
+    }
+  }
+
+  return {
+    items: [...benchmarks.values()]
+      .map((item) => {
+        const versions = listSortedUnique(item.versions);
+        return {
+          ...item,
+          benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
+          modelConfigIds: listSortedUnique(item.modelConfigIds),
+          providerFamilies: listSortedUnique(item.providerFamilies),
+          versions
+        };
+      })
+      .sort((left, right) => Date.parse(right.latestCompletedAt ?? "") - Date.parse(left.latestCompletedAt ?? ""))
+  };
+}
+
 function parseNullableParam(value: string | null) {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
@@ -1033,6 +1169,102 @@ export function buildRunsCsv(items: PortalRunListItem[]) {
     .join("\n");
 }
 
+export function buildPortalBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
+  const attemptsByRunId = new Map<string, PortalBenchmarkDatasetResponse["attempts"]>();
+
+  for (const attempt of dataset.attempts) {
+    const existing = attemptsByRunId.get(attempt.runId);
+
+    if (existing) {
+      existing.push(attempt);
+      continue;
+    }
+
+    attemptsByRunId.set(attempt.runId, [attempt]);
+  }
+
+  const headers = [
+    "benchmarkPackageId",
+    "benchmarkVersions",
+    "runId",
+    "runState",
+    "runVerdictClass",
+    "providerFamily",
+    "modelConfigId",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "jobId",
+    "attemptId",
+    "attemptState",
+    "attemptVerdictClass",
+    "verifierResult",
+    "failureFamily",
+    "failureCode",
+    "failureSummary"
+  ];
+  const rows = dataset.runs.flatMap((run) => {
+    const attempts = attemptsByRunId.get(run.runId) ?? [null];
+
+    return attempts.map((attempt) => [
+      dataset.benchmark.benchmarkPackageId,
+      dataset.benchmark.versions.join("|"),
+      run.runId,
+      run.runState,
+      run.verdictClass,
+      run.providerFamily,
+      run.modelConfigId,
+      run.startedAt,
+      run.completedAt,
+      String(run.durationMs),
+      attempt?.jobId ?? run.latestJobId ?? "",
+      attempt?.attemptId ?? "",
+      attempt?.state ?? "",
+      attempt?.verdictClass ?? "",
+      attempt?.verifierResult ?? "",
+      attempt?.failure.family ?? run.failure.family ?? "",
+      attempt?.failure.code ?? run.failure.code ?? "",
+      attempt?.failure.summary ?? run.failure.summary ?? ""
+    ]);
+  });
+
+  return [headers, ...rows]
+    .map((row) => row.map((value) => escapeCsvValue(String(value))).join(","))
+    .join("\n");
+}
+
+function sanitizeExportFilenameSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "benchmark";
+}
+
+export function buildPortalBenchmarkDatasetExportFileName(
+  packageId: string,
+  format: PortalBenchmarkExportFormat,
+  now = new Date()
+) {
+  const timestamp = now.toISOString().slice(0, 19).replaceAll(":", "-");
+  return `paretoproof-${sanitizeExportFilenameSegment(packageId)}-dataset-${timestamp}.${format}`;
+}
+
+function readContentDispositionFilename(headerValue: string | null) {
+  if (!headerValue) {
+    return null;
+  }
+
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(headerValue);
+
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const plainMatch = /filename="([^"]+)"/i.exec(headerValue) ?? /filename=([^;]+)/i.exec(headerValue);
+  return plainMatch?.[1]?.trim() ?? null;
+}
+
 export type PortalRunsModelFilterOption = {
   count: number;
   label: string;
@@ -1164,6 +1396,74 @@ export async function fetchPortalRunsView(query: PortalRunsListQuery) {
     `/portal/runs${queryString ? `?${queryString}` : ""}`,
     portalRunsListResponseSchema
   );
+}
+
+export async function fetchPortalBenchmarksList() {
+  if (isLocalHostname(window.location.hostname)) {
+    return portalBenchmarksListResponseSchema.parse(buildLocalBenchmarksListResponse());
+  }
+
+  return fetchPortalBenchmarkOpsJson(
+    "/portal/benchmarks",
+    portalBenchmarksListResponseSchema
+  );
+}
+
+export async function fetchPortalBenchmarkDataset(packageId: string) {
+  if (isLocalHostname(window.location.hostname)) {
+    return portalBenchmarkDatasetResponseSchema.parse(buildLocalBenchmarkDataset(packageId));
+  }
+
+  return fetchPortalBenchmarkOpsJson(
+    `/portal/benchmarks/${encodeURIComponent(packageId)}/dataset`,
+    portalBenchmarkDatasetResponseSchema
+  );
+}
+
+export async function fetchPortalBenchmarkDatasetExport(
+  packageId: string,
+  format: PortalBenchmarkExportFormat
+) {
+  const fallbackFileName = buildPortalBenchmarkDatasetExportFileName(packageId, format);
+
+  if (isLocalHostname(window.location.hostname)) {
+    const dataset = buildLocalBenchmarkDataset(packageId);
+    const body =
+      format === "json"
+        ? JSON.stringify(dataset, null, 2)
+        : buildPortalBenchmarkDatasetCsv(dataset);
+
+    return {
+      blob: new Blob([body], {
+        type:
+          format === "json"
+            ? "application/json;charset=utf-8"
+            : "text/csv;charset=utf-8"
+      }),
+      fileName: fallbackFileName
+    };
+  }
+
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/portal/benchmarks/${encodeURIComponent(packageId)}/export?format=${format}`,
+    {
+      credentials: "include",
+      headers: {
+        Accept: format === "json" ? "application/json" : "text/csv"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Request failed with ${response.status}.`);
+  }
+
+  return {
+    blob: await response.blob(),
+    fileName:
+      readContentDispositionFilename(response.headers.get("content-disposition")) ??
+      fallbackFileName
+  };
 }
 
 export async function fetchPortalRunDetail(runId: string) {

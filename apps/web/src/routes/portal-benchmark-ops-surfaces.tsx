@@ -1,6 +1,7 @@
 import {
   portalRunsLifecycleBuckets,
   portalRunsSortOptions,
+  type PortalBenchmarkExportFormat,
   type EvaluationVerdictClass,
   type PortalRunsLifecycleBucket,
   type PortalLaunchViewResponse,
@@ -28,6 +29,7 @@ import {
   buildRunsCsv,
   defaultPortalRunsQuery,
   extractPortalRunsQueryString,
+  fetchPortalBenchmarkDatasetExport,
   fetchPortalLaunchView,
   fetchPortalRunDetail,
   fetchPortalRunsView,
@@ -167,11 +169,15 @@ function downloadRunsCsv(items: PortalRunsListResponse["items"]) {
   const blob = new Blob([buildRunsCsv(items)], {
     type: "text/csv;charset=utf-8"
   });
+  downloadBlob(blob, `paretoproof-runs-${new Date().toISOString().slice(0, 19)}.csv`);
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
   link.href = objectUrl;
-  link.download = `paretoproof-runs-${new Date().toISOString().slice(0, 19)}.csv`;
+  link.download = fileName;
   document.body.append(link);
   link.click();
   link.remove();
@@ -442,6 +448,13 @@ function PortalRunsSurface({
   search: string;
 }) {
   const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
+  const [datasetExportState, setDatasetExportState] = useState<{
+    error: string | null;
+    format: PortalBenchmarkExportFormat | null;
+  }>({
+    error: null,
+    format: null
+  });
   const providerOptions = buildRunsProviderOptions(
     loadState.data?.filters ?? { modelConfigs: [], providerFamilies: [] },
     query.providerFamily
@@ -450,7 +463,49 @@ function PortalRunsSurface({
     loadState.data?.filters ?? { modelConfigs: [], providerFamilies: [] },
     query.modelConfigId
   );
+  const benchmarkPackageOptions = useMemo(() => {
+    const values = new Set(
+      (loadState.data?.items ?? []).map((item) => item.benchmarkPackageId)
+    );
+
+    if (query.benchmarkPackageId) {
+      values.add(query.benchmarkPackageId);
+    }
+
+    return [...values].sort((left, right) => left.localeCompare(right));
+  }, [loadState.data?.items, query.benchmarkPackageId]);
+  const selectedBenchmarkPackageId =
+    query.benchmarkPackageId ??
+    (benchmarkPackageOptions.length === 1 ? benchmarkPackageOptions[0] : null);
   const isCompactLayout = useCompactLayout(480);
+
+  async function handleDatasetExport(format: PortalBenchmarkExportFormat) {
+    if (!selectedBenchmarkPackageId) {
+      return;
+    }
+
+    setDatasetExportState({
+      error: null,
+      format
+    });
+
+    try {
+      const download = await fetchPortalBenchmarkDatasetExport(
+        selectedBenchmarkPackageId,
+        format
+      );
+      downloadBlob(download.blob, download.fileName);
+      setDatasetExportState({
+        error: null,
+        format: null
+      });
+    } catch (error) {
+      setDatasetExportState({
+        error: toDisplayError(error),
+        format: null
+      });
+    }
+  }
 
   const runsSlice = (
     <article
@@ -587,6 +642,25 @@ function PortalRunsSurface({
             ))}
           </select>
         </label>
+        <label className="portal-field">
+          <span>Benchmark package</span>
+          <select
+            className="input"
+            onChange={(event) => {
+              updateRunsQuery(pathname, query, onReplaceLocation, {
+                benchmarkPackageId: event.target.value || null
+              });
+            }}
+            value={query.benchmarkPackageId ?? ""}
+          >
+            <option value="">All packages</option>
+            {benchmarkPackageOptions.map((packageId) => (
+              <option key={packageId} value={packageId}>
+                {packageId}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </article>
   );
@@ -611,6 +685,26 @@ function PortalRunsSurface({
           >
             Export CSV
           </button>
+          <button
+            className="button button-secondary"
+            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
+            onClick={() => {
+              void handleDatasetExport("json");
+            }}
+            type="button"
+          >
+            {datasetExportState.format === "json" ? "Exporting JSON" : "Export package JSON"}
+          </button>
+          <button
+            className="button button-secondary"
+            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
+            onClick={() => {
+              void handleDatasetExport("csv");
+            }}
+            type="button"
+          >
+            {datasetExportState.format === "csv" ? "Exporting CSV" : "Export package CSV"}
+          </button>
           <a className="button button-secondary" href={buildPortalUrl("/")}>
             Overview
           </a>
@@ -626,7 +720,13 @@ function PortalRunsSurface({
         <span className="role-chip role-chip-muted">
           {loadState.data?.summary.failedRuns ?? 0} failed
         </span>
+        {selectedBenchmarkPackageId ? (
+          <span className="role-chip role-chip-muted">
+            package {selectedBenchmarkPackageId}
+          </span>
+        ) : null}
       </div>
+      {datasetExportState.error ? <PortalErrorState error={datasetExportState.error} /> : null}
     </article>
   );
 
@@ -641,6 +741,9 @@ function PortalRunsSurface({
       <p className="portal-panel-muted">
         Filter, export, and triage runs here, then open one run&apos;s evidence in
         <code className="portal-inline-code"> /runs/:runId</code>.
+      </p>
+      <p className="portal-panel-muted">
+        Package dataset export unlocks once one benchmark package is selected in the current slice.
       </p>
       <PortalFreshnessCard
         isRefreshing={loadState.isLoading}

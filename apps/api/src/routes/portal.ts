@@ -1,11 +1,14 @@
 import {
   portalBenchmarkOpsReadModelsContract,
+  portalBenchmarkDatasetParamsSchema,
+  portalBenchmarkExportQuerySchema,
   portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
   portalRunDetailParamsSchema,
   portalProfileLinkIntentInputSchema,
   portalProfileUpdateInputSchema,
   portalRunsListQuerySchema,
+  type PortalBenchmarkDatasetResponse,
   type PortalProfile,
   type PortalProfileLinkIntent
 } from "@paretoproof/shared";
@@ -221,6 +224,93 @@ function toPortalProfile(options: {
     linkedUserId: options.userRow?.id ?? null,
     updatedAt: options.userRow?.updatedAt.toISOString() ?? null
   };
+}
+
+function escapeCsvValue(value: string) {
+  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
+
+  if (/[",\n]/.test(safeValue)) {
+    return `"${safeValue.replaceAll('"', '""')}"`;
+  }
+
+  return safeValue;
+}
+
+function sanitizeExportFilenameSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "benchmark";
+}
+
+function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
+  const runById = new Map(dataset.runs.map((run) => [run.runId, run]));
+  const attemptsByRunId = new Map<string, typeof dataset.attempts>();
+
+  for (const attempt of dataset.attempts) {
+    const existing = attemptsByRunId.get(attempt.runId);
+
+    if (existing) {
+      existing.push(attempt);
+      continue;
+    }
+
+    attemptsByRunId.set(attempt.runId, [attempt]);
+  }
+
+  const headers = [
+    "benchmarkPackageId",
+    "benchmarkVersions",
+    "runId",
+    "runState",
+    "runVerdictClass",
+    "providerFamily",
+    "modelConfigId",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "jobId",
+    "attemptId",
+    "attemptState",
+    "attemptVerdictClass",
+    "verifierResult",
+    "failureFamily",
+    "failureCode",
+    "failureSummary"
+  ];
+  const rows = dataset.runs.flatMap((run) => {
+    const attempts = attemptsByRunId.get(run.runId) ?? [null];
+
+    return attempts.map((attempt) => [
+      dataset.benchmark.benchmarkPackageId,
+      dataset.benchmark.versions.join("|"),
+      run.runId,
+      run.runState,
+      run.verdictClass,
+      run.providerFamily,
+      run.modelConfigId,
+      run.startedAt,
+      run.completedAt,
+      String(run.durationMs),
+      attempt?.jobId ?? run.latestJobId ?? "",
+      attempt?.attemptId ?? "",
+      attempt?.state ?? "",
+      attempt?.verdictClass ?? "",
+      attempt?.verifierResult ?? "",
+      attempt?.failure.family ?? run.failure.family ?? "",
+      attempt?.failure.code ?? run.failure.code ?? "",
+      attempt?.failure.summary ?? run.failure.summary ?? ""
+    ]);
+  });
+
+  for (const runId of attemptsByRunId.keys()) {
+    if (runById.has(runId)) {
+      continue;
+    }
+
+    throw new Error(`Benchmark dataset export could not resolve run ${runId}.`);
+  }
+
+  return [headers, ...rows]
+    .map((row) => row.map((value) => escapeCsvValue(String(value))).join(","))
+    .join("\n");
 }
 
 async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
@@ -612,6 +702,110 @@ export function registerPortalRoutes(
           identitySubject: identity.subject
         })
       };
+    }
+  );
+
+  app.get(
+    "/portal/benchmarks",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.benchmarksListResponse
+      },
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
+    },
+    async () => portalBenchmarkOpsReadModels.getBenchmarksList()
+  );
+
+  app.get(
+    "/portal/benchmarks/:packageId/dataset",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.benchmarkDatasetResponse
+      },
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
+    },
+    async (request, reply) => {
+      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(request.params ?? {});
+
+      if (!parsedParams.success) {
+        reply.code(400).send({
+          error: "invalid_portal_benchmark_dataset_params",
+          issues: parsedParams.error.issues
+        });
+        return;
+      }
+
+      const dataset = await portalBenchmarkOpsReadModels.getBenchmarkDataset(
+        parsedParams.data.packageId
+      );
+
+      if (!dataset) {
+        reply.code(404).send({
+          error: "portal_benchmark_dataset_not_found"
+        });
+        return;
+      }
+
+      return dataset;
+    }
+  );
+
+  app.get(
+    "/portal/benchmarks/:packageId/export",
+    {
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
+    },
+    async (request, reply) => {
+      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(request.params ?? {});
+
+      if (!parsedParams.success) {
+        reply.code(400).send({
+          error: "invalid_portal_benchmark_export_params",
+          issues: parsedParams.error.issues
+        });
+        return;
+      }
+
+      const parsedQuery = portalBenchmarkExportQuerySchema.safeParse(request.query ?? {});
+
+      if (!parsedQuery.success) {
+        reply.code(400).send({
+          error: "invalid_portal_benchmark_export_query",
+          issues: parsedQuery.error.issues
+        });
+        return;
+      }
+
+      const dataset = await portalBenchmarkOpsReadModels.getBenchmarkDataset(
+        parsedParams.data.packageId
+      );
+
+      if (!dataset) {
+        reply.code(404).send({
+          error: "portal_benchmark_dataset_not_found"
+        });
+        return;
+      }
+
+      const filenameRoot = sanitizeExportFilenameSegment(parsedParams.data.packageId);
+
+      if (parsedQuery.data.format === "csv") {
+        reply
+          .header("content-disposition", `attachment; filename="${filenameRoot}-dataset.csv"`)
+          .type("text/csv; charset=utf-8");
+        return reply.send(buildBenchmarkDatasetCsv(dataset));
+      }
+
+      reply
+        .header("content-disposition", `attachment; filename="${filenameRoot}-dataset.json"`)
+        .type("application/json; charset=utf-8");
+      return reply.send(dataset);
     }
   );
 
