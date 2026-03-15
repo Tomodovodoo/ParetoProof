@@ -6,6 +6,7 @@ Use these files:
 
 - [architecture.md](./architecture.md) for the product and system shape
 - [artifact-transfer-and-evidence-lifecycle-baseline.md](./artifact-transfer-and-evidence-lifecycle-baseline.md) for the canonical artifact transfer, evidence, and retention lifecycle
+- [benchmark-product-objects-baseline.md](./benchmark-product-objects-baseline.md) for the first-class benchmark, launch, release, and comparison objects above the run kernel
 - [benchmarks.md](./benchmarks.md) for the current benchmark scope
 - [offline-ingest-operator-auth-baseline.md](./offline-ingest-operator-auth-baseline.md) for the later-scope unattended offline-ingest auth lane
 - [portal-launch-mutation-baseline.md](./portal-launch-mutation-baseline.md) for the scoped browser-to-queue launch contract
