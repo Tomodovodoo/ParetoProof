@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { parseWorkerRuntimeEnv } from "../src/lib/runtime.ts";
+import {
+  trustedLocalAuthMountMarkerEnvName,
+  trustedLocalAuthMountMarkerValue
+} from "../src/lib/trusted-local-auth-contract.ts";
 
 test("parseWorkerRuntimeEnv keeps materializer mode env-free", async () => {
   const runtimeEnv = await parseWorkerRuntimeEnv(
@@ -87,6 +91,27 @@ test("parseWorkerRuntimeEnv requires readable trusted-local auth for trusted_loc
   assert.equal(runtimeEnv.trustedLocalAuthJsonPath, path.join(codexHome, "auth.json"));
 });
 
+test("parseWorkerRuntimeEnv rejects malformed trusted-local auth json", async () => {
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-runtime-malformed-"));
+
+  await mkdir(codexHome, { recursive: true });
+  await writeFile(path.join(codexHome, "auth.json"), "{not-json", "utf8");
+
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "trusted_local_user",
+          commandFamily: "problem9_attempt"
+        },
+        {
+          CODEX_HOME: codexHome
+        }
+      ),
+    /trusted_local_user requires auth\.json to contain valid JSON/
+  );
+});
+
 test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop machine auth", async () => {
   await assert.rejects(
     () =>
@@ -119,6 +144,25 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
     codexApiKey: "worker-api-key",
     workerBootstrapToken: "bootstrap-token"
   });
+});
+
+test("parseWorkerRuntimeEnv rejects trusted-local mount markers for hosted claim loops", async () => {
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "machine_api_key",
+          commandFamily: "worker_claim_loop"
+        },
+        {
+          API_BASE_URL: "https://api.paretoproof.com",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token",
+          [trustedLocalAuthMountMarkerEnvName]: trustedLocalAuthMountMarkerValue
+        }
+      ),
+    /trusted-local auth mounts are not allowed for worker_claim_loop/
+  );
 });
 
 test("parseWorkerRuntimeEnv requires API base URL for offline ingest", async () => {

@@ -103,6 +103,7 @@ Trusted-local devbox wrapper:
 - use `node infra/scripts/run-problem9-trusted-local-attempt.mjs --benchmark-package-root <directory> --prompt-package-root <directory> --workspace <directory> --output <directory> --provider-model <model> [--model-snapshot-id <id>] [--print-docker-command]` to launch the worker attempt through the canonical local Docker/devbox wrapper
 - the repo-owned launcher defaults to `--image paretoproof-problem9-devbox:local`; pass `--image <docker-image>` only when you intentionally need a different local devbox tag
 - the wrapper resolves host `CODEX_HOME`, verifies the host `auth.json`, runs host `codex login status`, mounts only that file read-only at `/run/paretoproof/codex-home/auth.json`, sets in-container `CODEX_HOME=/run/paretoproof/codex-home`, runs in-container `codex login status`, and only then starts `run-problem9-attempt`
+- the wrapper also sets `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json`; inside the devbox, trusted-local runs now reject malformed `auth.json`, a non-canonical `CODEX_HOME`, or any mount shape other than the single-file read-only `auth.json` contract
 - the wrapper does not mount the full host Codex home and does not silently fall back from `trusted_local_user` to `machine_api_key`
 - do not copy `.codex/auth.json` into this repository, worker fixtures, or Docker build contexts; trusted-local auth stays host-local and enters the devbox only through the read-only file mount above
 - benchmark-package and prompt-package inputs are mounted read-only; workspace and output parents are mounted writable so the inner runner can safely clear and recreate the selected subdirectories
@@ -128,6 +129,7 @@ Hosted claim loop:
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
   - `CODEX_API_KEY` when `--auth-mode machine_api_key`
+- hosted and packaged modes reject the trusted-local mount marker and the canonical `/run/paretoproof/codex-home/auth.json` path instead of silently attempting to reuse contributor auth material
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
 - use `--max-jobs <n>` to bound a longer poller run, `--provider-model <model>` to override the provider model derived from `modelConfigId`, and `--worker-runtime` to choose the runtime label sent in claim requests
 - if the API reports `cancel_requested` or `expired` on a heartbeat before terminal submission, the loop exits that claim explicitly without sending a stale terminal finalize

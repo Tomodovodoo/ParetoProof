@@ -4,9 +4,11 @@ import {
   buildTrustedLocalDevboxDockerArgs
 } from "../src/lib/problem9-attempt-devbox-cli.ts";
 import {
+  trustedLocalAuthMountMarkerEnvName,
+  trustedLocalAuthMountMarkerValue,
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
-} from "../src/lib/problem9-auth.ts";
+} from "../src/lib/trusted-local-auth-contract.ts";
 
 test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Codex home", () => {
   const authJsonPath = "/host/.codex/auth.json";
@@ -28,6 +30,11 @@ test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Code
   );
 
   assert.ok(dockerArgs.includes(`CODEX_HOME=${trustedLocalCodexContainerHome}`));
+  assert.ok(
+    dockerArgs.includes(
+      `${trustedLocalAuthMountMarkerEnvName}=${trustedLocalAuthMountMarkerValue}`
+    )
+  );
   assert.ok(
     mountArgs.includes(
       `type=bind,src=${authJsonPath},dst=${trustedLocalCodexContainerAuthJsonPath},readonly`
@@ -59,5 +66,14 @@ test("buildTrustedLocalDevboxDockerArgs keeps preflight-only runs free of writab
   );
 
   assert.equal(mountArgs.length, 1);
+  assert.ok(
+    dockerArgs.includes(
+      `${trustedLocalAuthMountMarkerEnvName}=${trustedLocalAuthMountMarkerValue}`
+    )
+  );
+  assert.match(
+    dockerArgs[dockerArgs.length - 1] ?? "",
+    new RegExp(`\\$${trustedLocalAuthMountMarkerEnvName}`)
+  );
   assert.match(dockerArgs[dockerArgs.length - 1] ?? "", /codex login status/);
 });

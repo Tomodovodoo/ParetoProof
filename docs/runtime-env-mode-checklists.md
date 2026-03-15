@@ -186,6 +186,7 @@ Use this mode for `run-problem9-attempt --auth-mode trusted_local_user`.
 - Notes:
   - on Windows, the default inferred path is `%USERPROFILE%\\.codex\\auth.json`
   - on non-Windows hosts, the default inferred path is `$HOME/.codex/auth.json`
+  - malformed `auth.json` content is treated as a setup failure, not a runtime fallback
   - this is a trusted-local path only; do not reuse it for hosted worker modes
 
 ### Trusted-local devbox wrapper
@@ -206,6 +207,7 @@ Use this mode for:
 - Secret env: none
 - Notes:
   - this wrapper mounts the auth file into the container read-only
+  - the wrapper also sets `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json` and expects `CODEX_HOME=/run/paretoproof/codex-home` inside the devbox
   - do not move trusted-local auth into `apps/worker/.env`
 
 ### Offline ingest CLI
@@ -242,6 +244,7 @@ Use this mode for `bun run run:worker-claim-loop -- --auth-mode machine_api_key 
   - `CODEX_API_KEY`
 - Notes:
   - this is the fully documented hosted worker path in the repository today
+  - hosted modes must not set `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT` or point `CODEX_HOME` at `/run/paretoproof/codex-home`
   - the command also accepts `--auth-mode machine_oauth`, but this checklist does not treat that as a complete hosted-provider workflow until a follow-up issue documents and exercises it end to end
 
 ## Reserved later-scope variables
