@@ -1,0 +1,208 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { parseApiRuntimeEnv } from "../../apps/api/src/config/runtime.ts";
+import { parseWebRuntimeEnv } from "../../apps/web/src/lib/runtime-env.ts";
+import { parseWorkerRuntimeEnv } from "../../apps/worker/src/lib/runtime.ts";
+
+const startupSmokeExecutionImage =
+  process.env.PARETOPROOF_STARTUP_SMOKE_EXECUTION_IMAGE ??
+  "paretoproof-problem9-execution:pr-smoke";
+const skipDockerStartupSmoke = (() => {
+  const rawValue = process.env.PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER?.trim().toLowerCase();
+  return rawValue === "1" || rawValue === "true";
+})();
+
+await expectPass("web startup accepts an omitted VITE_API_BASE_URL", () => {
+  assert.deepEqual(parseWebRuntimeEnv({}), {});
+});
+
+await expectFailure(
+  "web startup rejects malformed VITE_API_BASE_URL values",
+  () => parseWebRuntimeEnv({ VITE_API_BASE_URL: "not-a-url" }),
+  /VITE_API_BASE_URL: must be a valid URL/
+);
+
+await expectPass("API startup accepts the documented local runtime contract", () => {
+  assert.equal(
+    parseApiRuntimeEnv({
+      ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+      CF_ACCESS_PORTAL_AUD: "portal-audience",
+      CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+      DATABASE_URL: "postgres://localhost:5432/paretoproof",
+      WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
+    }).portalAccessAudience,
+    "portal-audience"
+  );
+});
+
+await expectFailure(
+  "API startup rejects missing required worker bootstrap auth",
+  () =>
+    parseApiRuntimeEnv({
+      ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+      CF_ACCESS_PORTAL_AUD: "portal-audience",
+      CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+      DATABASE_URL: "postgres://localhost:5432/paretoproof"
+    }),
+  /WORKER_BOOTSTRAP_TOKEN: is required/
+);
+
+await expectPass("worker local_stub startup keeps hosted env vars optional", async () => {
+  assert.deepEqual(
+    await parseWorkerRuntimeEnv(
+      {
+        authMode: "local_stub",
+        commandFamily: "problem9_attempt"
+      },
+      {}
+    ),
+    {}
+  );
+});
+
+await expectFailure(
+  "worker machine_api_key startup rejects a missing CODEX_API_KEY",
+  () =>
+    parseWorkerRuntimeEnv(
+      {
+        authMode: "machine_api_key",
+        commandFamily: "problem9_attempt"
+      },
+      {}
+    ),
+  /CODEX_API_KEY: is required/
+);
+
+if (skipDockerStartupSmoke) {
+  console.log("SKIP local Docker worker startup smoke because PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER is set.");
+} else {
+  expectCommandPass(
+    "local Docker worker startup accepts the hosted claim-loop runtime contract",
+    [
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--env",
+      "API_BASE_URL=https://api.paretoproof.com",
+      "--env",
+      "WORKER_BOOTSTRAP_TOKEN=worker-bootstrap-token",
+      "--env",
+      "CODEX_API_KEY=worker-api-key",
+      "--env",
+      "PARETOPROOF_STARTUP_VALIDATION_ONLY=1",
+      startupSmokeExecutionImage,
+      "node",
+      "apps/worker/dist/index.js",
+      "run-worker-claim-loop",
+      "--worker-id",
+      "startup-smoke-worker",
+      "--worker-pool",
+      "startup-smoke",
+      "--worker-version",
+      "startup-smoke-v1",
+      "--workspace-root",
+      "/tmp/worker-workspace",
+      "--output-root",
+      "/tmp/worker-output",
+      "--once"
+    ],
+    /"stoppedReason": "idle_once"/
+  );
+
+  expectCommandFailure(
+    "local Docker worker startup rejects a missing WORKER_BOOTSTRAP_TOKEN",
+    [
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--env",
+      "API_BASE_URL=https://api.paretoproof.com",
+      "--env",
+      "CODEX_API_KEY=worker-api-key",
+      "--env",
+      "PARETOPROOF_STARTUP_VALIDATION_ONLY=1",
+      startupSmokeExecutionImage,
+      "node",
+      "apps/worker/dist/index.js",
+      "run-worker-claim-loop",
+      "--worker-id",
+      "startup-smoke-worker",
+      "--worker-pool",
+      "startup-smoke",
+      "--worker-version",
+      "startup-smoke-v1",
+      "--workspace-root",
+      "/tmp/worker-workspace",
+      "--output-root",
+      "/tmp/worker-output",
+      "--once"
+    ],
+    /Validation error: Invalid worker runtime environment: WORKER_BOOTSTRAP_TOKEN: is required/
+  );
+}
+
+console.log(
+  skipDockerStartupSmoke
+    ? "Startup validation smoke coverage passed for web, API, and worker; local Docker was skipped."
+    : "Startup validation smoke coverage passed for web, API, worker, and local Docker."
+);
+
+async function expectPass(name: string, assertion: () => Promise<void> | void) {
+  await assertion();
+  console.log(`PASS ${name}`);
+}
+
+async function expectFailure(
+  name: string,
+  assertion: () => Promise<unknown> | unknown,
+  expectedMessage: RegExp
+) {
+  await assert.rejects(async () => await assertion(), expectedMessage);
+  console.log(`PASS ${name}`);
+}
+
+function expectCommandPass(name: string, commandArgs: string[], stdoutPattern: RegExp) {
+  const result = spawnSync(resolveDockerCommand(), commandArgs, {
+    encoding: "utf8",
+    timeout: 120000,
+    windowsHide: true
+  });
+
+  if (result.error) {
+    throw new Error(`Startup smoke "${name}" failed before completion: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Startup smoke "${name}" failed unexpectedly.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
+    );
+  }
+
+  assert.match(result.stdout, stdoutPattern);
+  console.log(`PASS ${name}`);
+}
+
+function expectCommandFailure(name: string, commandArgs: string[], stderrPattern: RegExp) {
+  const result = spawnSync(resolveDockerCommand(), commandArgs, {
+    encoding: "utf8",
+    timeout: 120000,
+    windowsHide: true
+  });
+
+  if (result.error) {
+    throw new Error(`Startup smoke "${name}" failed before completion: ${result.error.message}`);
+  }
+
+  if (result.status === 0) {
+    throw new Error(`Startup smoke "${name}" unexpectedly passed.\nstdout:\n${result.stdout}`);
+  }
+
+  assert.match(result.stderr, stderrPattern);
+  console.log(`PASS ${name}`);
+}
+
+function resolveDockerCommand() {
+  return process.platform === "win32" ? "docker.exe" : "docker";
+}

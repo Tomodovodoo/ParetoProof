@@ -6,6 +6,7 @@ This repo uses a small number of runtime rules.
 
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
+- `bun run test:startup-validation` is the executable smoke owner for startup env validation across the currently supported runtime surfaces.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
 - Do not copy `.codex/auth.json` or other trusted-local auth artifacts into the repository, Docker build contexts, or checked-in worker fixtures.
