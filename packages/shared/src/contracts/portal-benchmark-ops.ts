@@ -71,6 +71,9 @@ export const portalRunsSortOptions = [
   }
 ] satisfies PortalRunsSortOption[];
 
+// Shared contract for the portal benchmark-ops read models consumed by the API
+// routes and the portal UI. Runs filter facets belong here so the UI does not
+// infer option catalogs from a paginated row slice.
 export const portalBenchmarkOpsReadModelsContract = {
   launchViewResponse: portalLaunchViewResponseSchema,
   runDetailResponse: portalRunDetailResponseSchema,

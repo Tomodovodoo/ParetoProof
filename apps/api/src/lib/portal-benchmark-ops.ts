@@ -11,6 +11,7 @@ import {
   type PortalRunDetailResponse,
   type PortalRunFailureSummary,
   type PortalRunJobSummary,
+  type PortalRunsAvailableFilters,
   type PortalRunListItem,
   type PortalRunTimelineEntry,
   type PortalRunsLifecycleBucket,
@@ -44,6 +45,11 @@ export type PortalBenchmarkOpsReadModelService = {
   getRunsList(query: PortalRunsListQuery): Promise<PortalRunsListResponse>;
   getWorkersView(): Promise<PortalWorkersViewResponse>;
 };
+
+// This service is the authoritative read-model boundary for `/portal/runs`,
+// `/portal/runs/:runId`, `/portal/launch`, and `/portal/workers`. The portal UI
+// should consume explicit filter facets and detail fields from here rather than
+// inferring them from paginated rows.
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -385,6 +391,72 @@ function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
   }
 }
 
+function buildEmptyRunsFilters(): PortalRunsAvailableFilters {
+  return {
+    modelConfigs: [],
+    providerFamilies: []
+  };
+}
+
+function buildEmptyRunsListResponse(query: PortalRunsListQuery): PortalRunsListResponse {
+  return {
+    filters: buildEmptyRunsFilters(),
+    items: [],
+    query,
+    summary: {
+      activeRuns: 0,
+      failedRuns: 0,
+      returnedCount: 0,
+      totalMatches: 0,
+      verdictCounts: {
+        fail: 0,
+        invalid_result: 0,
+        pass: 0
+      }
+    }
+  };
+}
+
+async function loadRunsFilters(
+  db: ReturnTypeOfCreateDbClient,
+  whereClause: ReturnType<typeof and> | undefined
+): Promise<PortalRunsAvailableFilters> {
+  const [providerRows, modelConfigRows] = await Promise.all([
+    db
+      .select({
+        count: count(),
+        providerFamily: runs.providerFamily
+      })
+      .from(runs)
+      .where(whereClause)
+      .groupBy(runs.providerFamily)
+      .orderBy(runs.providerFamily),
+    db
+      .select({
+        count: count(),
+        modelConfigId: runs.modelConfigId,
+        providerFamily: runs.providerFamily
+      })
+      .from(runs)
+      .where(whereClause)
+      .groupBy(runs.modelConfigId, runs.providerFamily)
+      .orderBy(runs.modelConfigId, runs.providerFamily)
+  ]);
+
+  return {
+    modelConfigs: modelConfigRows.map((row) => ({
+      count: row.count,
+      modelConfigId: row.modelConfigId,
+      modelConfigLabel: row.modelConfigId,
+      providerFamily: row.providerFamily
+    })),
+    providerFamilies: providerRows.map((row) => ({
+      count: row.count,
+      providerFamily: row.providerFamily
+    }))
+  };
+}
+
 export function createPortalBenchmarkOpsReadModelService(
   db: ReturnTypeOfCreateDbClient
 ): PortalBenchmarkOpsReadModelService {
@@ -462,21 +534,7 @@ export function createPortalBenchmarkOpsReadModelService(
         const jobRunIds = await loadRunIdsForSourceJobId(db, query.jobId);
 
         if (jobRunIds.length === 0) {
-          return {
-            items: [],
-            query,
-            summary: {
-              activeRuns: 0,
-              failedRuns: 0,
-              returnedCount: 0,
-              totalMatches: 0,
-              verdictCounts: {
-                fail: 0,
-                invalid_result: 0,
-                pass: 0
-              }
-            }
-          };
+          return buildEmptyRunsListResponse(query);
         }
 
         runConditions.push(inArray(runs.id, jobRunIds));
@@ -486,21 +544,7 @@ export function createPortalBenchmarkOpsReadModelService(
         const attemptRunIds = await loadRunIdsForSourceAttemptId(db, query.attemptId);
 
         if (attemptRunIds.length === 0) {
-          return {
-            items: [],
-            query,
-            summary: {
-              activeRuns: 0,
-              failedRuns: 0,
-              returnedCount: 0,
-              totalMatches: 0,
-              verdictCounts: {
-                fail: 0,
-                invalid_result: 0,
-                pass: 0
-              }
-            }
-          };
+          return buildEmptyRunsListResponse(query);
         }
 
         runConditions.push(inArray(runs.id, attemptRunIds));
@@ -525,18 +569,21 @@ export function createPortalBenchmarkOpsReadModelService(
       }
 
       const whereClause = runConditions.length > 0 ? and(...runConditions) : undefined;
-      const [{ total: totalMatches }] = await db
-        .select({
-          total: count()
-        })
-        .from(runs)
-        .where(whereClause);
-      const runRows = await db
-        .select()
-        .from(runs)
-        .where(whereClause)
-        .orderBy(...buildRunOrderBy(query.sort))
-        .limit(query.limit);
+      const [[{ total: totalMatches }], filters, runRows] = await Promise.all([
+        db
+          .select({
+            total: count()
+          })
+          .from(runs)
+          .where(whereClause),
+        loadRunsFilters(db, whereClause),
+        db
+          .select()
+          .from(runs)
+          .where(whereClause)
+          .orderBy(...buildRunOrderBy(query.sort))
+          .limit(query.limit)
+      ]);
       const runIds = runRows.map((runRow) => runRow.id);
       const jobRows = await loadJobsForRunIds(db, runIds);
       const attemptRows = await loadAttemptsForRunIds(db, runIds);
@@ -551,6 +598,7 @@ export function createPortalBenchmarkOpsReadModelService(
       );
 
       return {
+        filters,
         items,
         query,
         summary: {

@@ -33,6 +33,23 @@ export type PortalRunsSortOption = {
   label: string;
 };
 
+export type PortalRunsProviderFilterOption = {
+  count: number;
+  providerFamily: string;
+};
+
+export type PortalRunsModelConfigFilterOption = {
+  count: number;
+  modelConfigId: string;
+  modelConfigLabel: string;
+  providerFamily: string;
+};
+
+export type PortalRunsAvailableFilters = {
+  modelConfigs: PortalRunsModelConfigFilterOption[];
+  providerFamilies: PortalRunsProviderFilterOption[];
+};
+
 export type PortalRunsListQuery = {
   attemptId: string | null;
   authMode: string | null;
@@ -101,6 +118,7 @@ export type PortalRunListItem = {
 };
 
 export type PortalRunsListResponse = {
+  filters: PortalRunsAvailableFilters;
   items: PortalRunListItem[];
   query: PortalRunsListQuery;
   summary: {
