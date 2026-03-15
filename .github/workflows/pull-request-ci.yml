@@ -34,6 +34,21 @@ jobs:
       - name: Check Problem 9 image policy
         run: node infra/scripts/check-problem9-image-policy.mjs
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build Problem 9 execution image smoke target
+        run: node infra/scripts/build-problem9-image.mjs --target problem9-execution --tag paretoproof-problem9-execution:pr-smoke
+
+      - name: Verify Problem 9 execution image smoke target
+        run: node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-execution --image paretoproof-problem9-execution:pr-smoke
+
+      - name: Build Problem 9 devbox image smoke target
+        run: node infra/scripts/build-problem9-image.mjs --target problem9-devbox --tag paretoproof-problem9-devbox:pr-smoke
+
+      - name: Verify Problem 9 devbox image smoke target
+        run: node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-devbox --image paretoproof-problem9-devbox:pr-smoke
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:

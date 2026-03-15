@@ -30,6 +30,7 @@ function makeFixtureRootfs() {
 
   fs.mkdirSync(path.join(rootfs, "opt", "elan", "toolchains", normalizeToolchainDirectory(args.get("LEAN422_TOOLCHAIN"))), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "opt", "elan", "toolchains", normalizeToolchainDirectory(args.get("LEAN424_TOOLCHAIN"))), { recursive: true });
+  fs.mkdirSync(path.join(rootfs, "opt", "elan", "bin"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "usr", "local", "bin"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "usr", "bin"), { recursive: true });
   fs.mkdirSync(path.join(rootfs, "app", "benchmarks", "firstproof", "problem9"), { recursive: true });
@@ -52,8 +53,11 @@ function makeFixtureRootfs() {
     { recursive: true },
   );
 
+  fs.writeFileSync(path.join(rootfs, "opt", "elan", "bin", "lean"), "");
   fs.writeFileSync(path.join(rootfs, "usr", "local", "bin", "node"), "");
   fs.writeFileSync(path.join(rootfs, "usr", "local", "bin", "bun"), "");
+  fs.writeFileSync(path.join(rootfs, "usr", "local", "bin", "codex"), "");
+  fs.writeFileSync(path.join(rootfs, "usr", "local", "bin", "lean-lsp-mcp"), "");
   fs.writeFileSync(path.join(rootfs, "usr", "bin", "python3.11"), "");
   fs.writeFileSync(path.join(rootfs, "app", "benchmarks", "firstproof", "problem9", "benchmark-package.json"), "{}");
   fs.writeFileSync(path.join(rootfs, "app", "apps", "worker", "dist", "index.js"), "");

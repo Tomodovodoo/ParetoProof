@@ -295,6 +295,7 @@ if (options.rootfs) {
 
   verifyRootfsExists(rootfs, "Lean 4.22 toolchain", "opt", "elan", "toolchains", normalizeToolchainDirectory(expectedLean422Toolchain));
   verifyRootfsExists(rootfs, "Lean 4.24 toolchain", "opt", "elan", "toolchains", normalizeToolchainDirectory(expectedLean424Toolchain));
+  verifyRootfsExists(rootfs, "Lean command", "opt", "elan", "bin", "lean");
   verifyRootfsExists(rootfs, "Node.js runtime", "usr", "local", "bin", "node");
   verifyRootfsExists(rootfs, "benchmark package manifest", "app", "benchmarks", "firstproof", "problem9", "benchmark-package.json");
   verifyRootfsExists(rootfs, "worker runtime entry", "app", "apps", "worker", "dist", "index.js");
@@ -305,6 +306,8 @@ if (options.rootfs) {
 
   if (options.target === "problem9-devbox") {
     verifyRootfsExists(rootfs, "Bun runtime", "usr", "local", "bin", "bun");
+    verifyRootfsExists(rootfs, "Codex CLI command", "usr", "local", "bin", "codex");
+    verifyRootfsExists(rootfs, "lean-lsp-mcp command", "usr", "local", "bin", "lean-lsp-mcp");
     verifyRootfsExists(rootfs, "Python runtime", "usr", "bin", "python3.11");
     verifyRootfsJsonVersion(
       rootfs,
@@ -329,6 +332,7 @@ if (options.rootfs) {
 
   verifyShellContains(image, "Lean 4.22 toolchain", "elan toolchain list", expectedLean422Toolchain);
   verifyShellContains(image, "Lean 4.24 toolchain", "elan toolchain list", expectedLean424Toolchain);
+  verifyShellContains(image, "Lean command", "command -v lean", "/opt/elan/bin/lean");
   verifyPrefixCommand(image, "Node.js runtime", "node", ["--version"], expectedNodeMajorPrefix);
   verifyFileExists(image, "benchmark package manifest", "/app/benchmarks/firstproof/problem9/benchmark-package.json");
   verifyFileExists(image, "worker runtime entry", "/app/apps/worker/dist/index.js");
@@ -339,7 +343,9 @@ if (options.rootfs) {
 
   if (options.target === "problem9-devbox") {
     verifySemverCommand(image, "Bun runtime", "bun", ["--version"], expectedBunVersion);
+    verifyShellContains(image, "Codex CLI command", "command -v codex", "/usr/local/bin/codex");
     verifySemverCommand(image, "Codex CLI", "codex", ["--version"], expectedCodexCliVersion);
+    verifyShellContains(image, "lean-lsp-mcp command", "command -v lean-lsp-mcp", "/usr/local/bin/lean-lsp-mcp");
     verifySemverCommand(
       image,
       "lean-lsp-mcp package",
