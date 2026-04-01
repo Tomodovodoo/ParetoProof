@@ -3,6 +3,7 @@ import {
   apiEndpointCatalog,
   apiEndpointSchemaCatalog,
   portalAccessRequestInputSchema,
+  portalAccessRequestReadResponseSchema,
   portalRunDetailParamsSchema,
   portalAccessRequestSummaryResponseSchema,
   portalProfileResponseSchema,
@@ -31,6 +32,13 @@ describe("shared api schema catalog", () => {
       requestParams: null,
       requestQuery: null,
       responseBody: portalProfileResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["portal.access-request.read"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: portalAccessRequestReadResponseSchema
     });
 
     expect(apiEndpointSchemaCatalog["portal.run-detail.read"].requestParams).toBe(

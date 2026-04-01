@@ -1,6 +1,7 @@
 import {
   portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
+  portalAccessRequestReadResponseSchema,
   portalAccessRequestSummaryResponseSchema,
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema
@@ -88,7 +89,7 @@ export const apiEndpointSchemaCatalog = {
     requestBody: null,
     requestParams: null,
     requestQuery: null,
-    responseBody: portalAccessRequestSummaryResponseSchema
+    responseBody: portalAccessRequestReadResponseSchema
   },
   "portal.access-recovery.create": {
     requestBody: portalAccessRecoveryInputSchema,
