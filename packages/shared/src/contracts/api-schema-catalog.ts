@@ -8,8 +8,10 @@ import {
 } from "../schemas/access-request.js";
 import { healthResponseSchema } from "../schemas/health.js";
 import {
+  portalAdminAccessRequestParamsSchema,
   portalAdminAccessRequestDetailResponseSchema,
   portalAdminAccessRequestListResponseSchema,
+  portalAdminUserParamsSchema,
   portalAdminUserDetailResponseSchema,
   portalAdminUserListResponseSchema,
   portalAdminUserRevokeInputSchema
@@ -41,6 +43,7 @@ import {
   workerExecutionEventSchema,
   workerHeartbeatRequestSchema,
   workerHeartbeatResponseSchema,
+  workerJobParamsSchema,
   workerResultMessageRequestSchema,
   workerResultMessageResponseSchema,
   workerTerminalFailureRequestSchema,
@@ -153,19 +156,19 @@ export const apiEndpointSchemaCatalog = {
   },
   "admin.access-request.detail": {
     requestBody: null,
-    requestParams: null,
+    requestParams: portalAdminAccessRequestParamsSchema,
     requestQuery: null,
     responseBody: portalAdminAccessRequestDetailResponseSchema
   },
   "admin.access-request.approve": {
     requestBody: portalAdminAccessRequestApproveInputSchema,
-    requestParams: null,
+    requestParams: portalAdminAccessRequestParamsSchema,
     requestQuery: null,
     responseBody: portalAccessRequestSummaryResponseSchema
   },
   "admin.access-request.reject": {
     requestBody: portalAdminAccessRequestRejectInputSchema,
-    requestParams: null,
+    requestParams: portalAdminAccessRequestParamsSchema,
     requestQuery: null,
     responseBody: portalAccessRequestSummaryResponseSchema
   },
@@ -177,13 +180,13 @@ export const apiEndpointSchemaCatalog = {
   },
   "admin.user.detail": {
     requestBody: null,
-    requestParams: null,
+    requestParams: portalAdminUserParamsSchema,
     requestQuery: null,
     responseBody: portalAdminUserDetailResponseSchema
   },
   "admin.user.revoke": {
     requestBody: portalAdminUserRevokeInputSchema,
-    requestParams: null,
+    requestParams: portalAdminUserParamsSchema,
     requestQuery: null,
     responseBody: portalAdminUserDetailResponseSchema
   },
@@ -195,31 +198,31 @@ export const apiEndpointSchemaCatalog = {
   },
   "internal.worker.heartbeat": {
     requestBody: workerHeartbeatRequestSchema,
-    requestParams: null,
+    requestParams: workerJobParamsSchema,
     requestQuery: null,
     responseBody: workerHeartbeatResponseSchema
   },
   "internal.worker.event.report": {
     requestBody: workerExecutionEventSchema,
-    requestParams: null,
+    requestParams: workerJobParamsSchema,
     requestQuery: null,
     responseBody: workerExecutionEventResponseSchema
   },
   "internal.worker.artifact-manifest.submit": {
     requestBody: workerArtifactManifestRequestSchema,
-    requestParams: null,
+    requestParams: workerJobParamsSchema,
     requestQuery: null,
     responseBody: workerArtifactManifestResponseSchema
   },
   "internal.worker.result.submit": {
     requestBody: workerResultMessageRequestSchema,
-    requestParams: null,
+    requestParams: workerJobParamsSchema,
     requestQuery: null,
     responseBody: workerResultMessageResponseSchema
   },
   "internal.worker.failure.submit": {
     requestBody: workerTerminalFailureRequestSchema,
-    requestParams: null,
+    requestParams: workerJobParamsSchema,
     requestQuery: null,
     responseBody: workerTerminalFailureResponseSchema
   }
