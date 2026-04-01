@@ -1,4 +1,4 @@
-import { getPortalLiveViewFreshness } from "@paretoproof/shared";
+import { getPortalLiveViewFreshness, type PortalRouteId } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
   describePortalFreshness,
@@ -10,7 +10,7 @@ type PortalFreshnessCardProps = {
   isRefreshing?: boolean;
   lastUpdatedAt: string | null;
   onRefresh?: () => void;
-  routeId: string;
+  routeId: PortalRouteId;
 };
 
 export function PortalFreshnessCard({

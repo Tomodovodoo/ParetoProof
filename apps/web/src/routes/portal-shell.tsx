@@ -4,10 +4,11 @@ import {
   getPortalLiveViewFreshness,
   getPortalSectionsForRoles,
   type EvaluationVerdictClass,
-  type RunLifecycleState,
   type PortalActionDefinition,
   type PortalRole,
-  type PortalSectionDefinition
+  type PortalRouteId,
+  type PortalSectionDefinition,
+  type RunLifecycleState
 } from "@paretoproof/shared";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
@@ -40,8 +41,10 @@ type PortalNavGroup = {
   sections: PortalSectionDefinition[];
 };
 
-const portalRoutePathById = new Map(
-  appRouteAccessMatrix.map((entry) => [entry.id, entry.path])
+const portalRoutePathById = new Map<PortalRouteId, string>(
+  appRouteAccessMatrix
+    .filter((entry) => entry.surface === "portal")
+    .map((entry) => [entry.id, entry.path] as [PortalRouteId, string])
 );
 const localPortalStateParamKeys = ["surface", "access", "email", "roles", "reason"] as const;
 
@@ -199,7 +202,7 @@ function getPortalNavGroups(sections: PortalSectionDefinition[]): PortalNavGroup
 
 function resolveActiveSection(
   pathname: string,
-  matchedRouteId: string | null,
+  matchedRouteId: PortalRouteId | null,
   sections: PortalSectionDefinition[]
 ) {
   if (pathname.startsWith("/runs/")) {
@@ -262,7 +265,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     activeSection?.id === "workers";
   const overviewRouteActive = activeSection?.id === "overview";
   const activeSectionHref = activeSection ? getSectionHref(activeSection) : "/";
-  const activeRouteId = matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
+  const activeRouteId: PortalRouteId =
+    matchedPortalRoute?.id ?? activeSection?.routeId ?? "portal.home";
   const activeFreshnessPolicy = useMemo(
     () => getPortalLiveViewFreshness(activeRouteId),
     [activeRouteId]

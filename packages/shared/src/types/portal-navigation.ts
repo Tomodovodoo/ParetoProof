@@ -1,3 +1,5 @@
+import type { PortalRouteId } from "./route-access.js";
+
 export type PortalRole = "admin" | "collaborator" | "helper";
 
 export type PortalSectionId =
@@ -18,7 +20,7 @@ export type PortalSectionDefinition = {
   description: string;
   id: PortalSectionId;
   navLabel: string;
-  routeId: string;
+  routeId: PortalRouteId;
   summary: string;
   visibility: PortalSectionVisibility;
 };
