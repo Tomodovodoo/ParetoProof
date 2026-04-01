@@ -48,6 +48,14 @@ export const portalAccessRequestSummarySchema = z.object({
   status: portalAccessRequestStatusSchema
 });
 
+export const portalAccessRequestReadResponseSchema = z.object({
+  item: portalAccessRequestSummarySchema.nullable()
+});
+
+export const portalAccessRequestMutationResponseSchema = z.object({
+  item: portalAccessRequestSummarySchema
+});
+
 export const portalAdminApprovedRoleSchema = z.enum(["helper", "collaborator"]);
 
 export const portalAdminAccessRequestApproveInputSchema = z.object({

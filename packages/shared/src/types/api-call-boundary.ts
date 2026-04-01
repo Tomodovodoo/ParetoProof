@@ -1,3 +1,5 @@
+import type { ApiEndpointId } from "../contracts/api-catalog.js";
+
 export type ApiCallBoundaryMode =
   | "browser_direct"
   | "browser_navigation"
@@ -19,7 +21,7 @@ export type ApiCallOrigin =
   | "admin_service";
 
 export type ApiCallBoundaryEntry = {
-  endpointId: string;
+  endpointId: ApiEndpointId;
   credential: ApiCallCredential;
   mode: ApiCallBoundaryMode;
   origin: ApiCallOrigin;

@@ -29,6 +29,10 @@ export const portalProfileSchema = z.object({
   updatedAt: z.string().nullable()
 });
 
+export const portalProfileResponseSchema = z.object({
+  profile: portalProfileSchema
+});
+
 export const portalProfileUpdateInputSchema = z.object({
   displayName: z.union([z.string().trim().max(80), z.null()]).transform((value: string | null) => {
     if (!value) {
@@ -54,5 +58,9 @@ export const portalProfileLinkIntentSchema = z.object({
   expiresAt: z.string(),
   provider: portalLinkableIdentityProviderSchema,
   startUrl: z.string().url()
+});
+
+export const portalProfileLinkIntentResponseSchema = z.object({
+  intent: portalProfileLinkIntentSchema
 });
 

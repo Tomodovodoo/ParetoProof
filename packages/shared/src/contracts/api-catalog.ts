@@ -254,4 +254,11 @@ export const apiEndpointCatalog = [
     purpose:
       "Submit a terminal failure payload for one worker assignment when execution cannot produce a valid success result."
   }
-] satisfies ApiEndpointCatalogEntry[];
+] as const satisfies readonly ApiEndpointCatalogEntry[];
+
+export type ApiEndpointId = (typeof apiEndpointCatalog)[number]["id"];
+
+export const apiEndpointIds = apiEndpointCatalog.map((entry) => entry.id) as [
+  ApiEndpointId,
+  ...ApiEndpointId[]
+];

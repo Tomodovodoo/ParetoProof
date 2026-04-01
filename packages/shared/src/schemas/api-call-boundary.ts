@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { apiEndpointIds } from "../contracts/api-catalog.js";
 
 export const apiCallBoundaryModeSchema = z.enum([
   "browser_direct",
@@ -23,8 +24,10 @@ export const apiCallOriginSchema = z.enum([
   "admin_service"
 ]);
 
+export const apiEndpointIdSchema = z.enum(apiEndpointIds);
+
 export const apiCallBoundaryEntrySchema = z.object({
-  endpointId: z.string(),
+  endpointId: apiEndpointIdSchema,
   credential: apiCallCredentialSchema,
   mode: apiCallBoundaryModeSchema,
   origin: apiCallOriginSchema,
