@@ -4,9 +4,12 @@ import {
   apiEndpointSchemaCatalog,
   portalAccessRequestInputSchema,
   portalAccessRequestReadResponseSchema,
+  portalAdminAccessRequestParamsSchema,
+  portalAdminUserParamsSchema,
   portalRunDetailParamsSchema,
   portalAccessRequestSummaryResponseSchema,
   portalProfileResponseSchema,
+  workerJobParamsSchema,
   workerClaimRequestSchema,
   workerClaimResponseSchema
 } from "../dist/index.js";
@@ -45,12 +48,24 @@ describe("shared api schema catalog", () => {
       portalRunDetailParamsSchema
     );
 
+    expect(apiEndpointSchemaCatalog["admin.access-request.detail"].requestParams).toBe(
+      portalAdminAccessRequestParamsSchema
+    );
+
+    expect(apiEndpointSchemaCatalog["admin.user.detail"].requestParams).toBe(
+      portalAdminUserParamsSchema
+    );
+
     expect(apiEndpointSchemaCatalog["internal.worker.claim"]).toEqual({
       requestBody: workerClaimRequestSchema,
       requestParams: null,
       requestQuery: null,
       responseBody: workerClaimResponseSchema
     });
+
+    expect(apiEndpointSchemaCatalog["internal.worker.result.submit"].requestParams).toBe(
+      workerJobParamsSchema
+    );
   });
 
   it("makes intentionally unmodeled endpoint responses explicit", () => {
