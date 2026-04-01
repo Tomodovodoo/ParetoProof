@@ -12,6 +12,26 @@ export function isAllowedLocalOrigin(origin: string) {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/u.test(origin);
 }
 
+const localBrandedAuthHosts = new Set([
+  "auth.paretoproof.com",
+  "github.auth.paretoproof.com",
+  "google.auth.paretoproof.com"
+]);
+
+export function isAllowedLocalBrandedAuthOrigin(origin: string) {
+  try {
+    const parsedOrigin = new URL(origin);
+
+    return (
+      parsedOrigin.protocol === "http:" &&
+      parsedOrigin.port.length > 0 &&
+      localBrandedAuthHosts.has(parsedOrigin.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function shouldEnforceTrustedMutationOrigin(method: string, routePath: string) {
   return (
     method !== "GET" &&
@@ -21,9 +41,14 @@ export function shouldEnforceTrustedMutationOrigin(method: string, routePath: st
   );
 }
 
+function allowsBrandedFinalizeSubmitOrigin(method: string, routePath: string) {
+  return method === "POST" && routePath === "/portal/session/finalize/submit";
+}
+
 export function createTrustedMutationOriginHook(options: {
   allowLocalhostOrigins: boolean;
   allowedOrigins: string[];
+  brandedAuthOrigins?: string[];
 }) {
   return (
     request: FastifyRequest,
@@ -49,8 +74,22 @@ export function createTrustedMutationOriginHook(options: {
       return;
     }
 
+    const brandedAuthOrigins = options.brandedAuthOrigins ?? [];
+    const brandedAuthOrigin = brandedAuthOrigins.includes(requestOrigin);
     const originAllowed =
-      options.allowedOrigins.includes(requestOrigin) ||
+      (
+        options.allowedOrigins.includes(requestOrigin) &&
+        !brandedAuthOrigin
+      ) ||
+      (
+        brandedAuthOrigin &&
+        allowsBrandedFinalizeSubmitOrigin(request.method, routePath)
+      ) ||
+      (
+        options.allowLocalhostOrigins &&
+        isAllowedLocalBrandedAuthOrigin(requestOrigin) &&
+        allowsBrandedFinalizeSubmitOrigin(request.method, routePath)
+      ) ||
       (options.allowLocalhostOrigins && isAllowedLocalOrigin(requestOrigin));
 
     if (!originAllowed) {
