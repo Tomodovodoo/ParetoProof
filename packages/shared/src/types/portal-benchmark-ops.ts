@@ -97,8 +97,8 @@ export type PortalRunListItem = {
   benchmarkPackageId: string;
   benchmarkPackageVersion: string;
   benchmarkVersionId: string;
-  completedAt: string;
-  durationMs: number;
+  completedAt: string | null;
+  durationMs: number | null;
   failure: PortalRunFailureSummary;
   laneId: string;
   latestAttemptId: string | null;
@@ -115,7 +115,7 @@ export type PortalRunListItem = {
   runState: RunLifecycleState;
   startedAt: string;
   toolProfile: string;
-  verdictClass: EvaluationVerdictClass;
+  verdictClass: EvaluationVerdictClass | null;
 };
 
 export type PortalRunsListResponse = {
@@ -140,27 +140,27 @@ export type PortalRunTimelineEntry = {
 };
 
 export type PortalRunJobSummary = {
-  completedAt: string;
+  completedAt: string | null;
   failure: PortalRunFailureSummary;
   jobId: string | null;
   runId: string;
   startedAt: string;
   state: JobLifecycleState;
-  stopReason: string;
-  verdictClass: EvaluationVerdictClass;
+  stopReason: string | null;
+  verdictClass: EvaluationVerdictClass | null;
 };
 
 export type PortalRunAttemptSummary = {
   attemptId: string;
-  completedAt: string;
+  completedAt: string | null;
   failure: PortalRunFailureSummary;
   jobId: string | null;
   runId: string;
   startedAt: string;
   state: AttemptLifecycleState;
-  stopReason: string;
-  verdictClass: EvaluationVerdictClass;
-  verifierResult: string;
+  stopReason: string | null;
+  verdictClass: EvaluationVerdictClass | null;
+  verifierResult: string | null;
 };
 
 export type PortalRunArtifactSummary = {

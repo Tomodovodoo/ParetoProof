@@ -127,6 +127,92 @@ function buildRunsListResponse(
   };
 }
 
+test("shared benchmark-ops contracts allow null terminal fields for non-terminal rows", () => {
+  const parsed = portalBenchmarkOpsReadModelsContract.runsListResponse.parse({
+    filters: {
+      modelConfigs: [],
+      providerFamilies: []
+    },
+    items: [
+      {
+        authMode: "machine_api_key",
+        benchmarkItemId: "item-2",
+        benchmarkLabel: "problem9 @ 2026.03",
+        benchmarkPackageDigest: "b".repeat(64),
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "problem9@2026.03",
+        completedAt: null,
+        durationMs: null,
+        failure: {
+          code: null,
+          family: null,
+          summary: null
+        },
+        laneId: "problem9-default",
+        latestAttemptId: "attempt-2",
+        latestJobId: "job-2",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-2"],
+          jobCount: 1,
+          jobIds: ["job-2"],
+          latestAttemptId: "attempt-2",
+          latestJobId: "job-2"
+        },
+        modelConfigId: "gpt-oss",
+        modelConfigLabel: "gpt-oss",
+        modelSnapshotId: "gpt-oss-2026-03-13",
+        providerFamily: "openai",
+        runId: "PP-319",
+        runKind: "single_run",
+        runLifecycleBucket: "active",
+        runMode: "bounded_agentic_attempt",
+        runState: "running",
+        startedAt: "2026-03-13T19:58:00.000Z",
+        toolProfile: "workspace_edit_limited",
+        verdictClass: null
+      }
+    ],
+    query: {
+      attemptId: null,
+      authMode: null,
+      benchmarkPackageDigest: null,
+      benchmarkPackageId: null,
+      benchmarkPackageVersion: null,
+      failureCode: null,
+      failureFamily: null,
+      jobId: null,
+      lifecycleBucket: null,
+      limit: 25,
+      modelConfigId: null,
+      providerFamily: null,
+      q: null,
+      runId: null,
+      runLifecycle: [],
+      runMode: null,
+      runKind: null,
+      sort: "started_at_desc",
+      toolProfile: null,
+      verdict: []
+    },
+    summary: {
+      activeRuns: 1,
+      failedRuns: 0,
+      returnedCount: 1,
+      totalMatches: 1,
+      verdictCounts: {
+        fail: 0,
+        invalid_result: 0,
+        pass: 0
+      }
+    }
+  });
+
+  assert.equal(parsed.items[0]?.completedAt, null);
+  assert.equal(parsed.items[0]?.verdictClass, null);
+});
+
 function buildRunDetailResponse(): PortalRunDetailResponse {
   return {
     artifacts: [],

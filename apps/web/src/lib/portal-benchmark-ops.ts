@@ -57,6 +57,18 @@ const portalVerdictOrder: Record<EvaluationVerdictClass, number> = {
   pass: 0
 };
 
+function compareNullableTimestampDesc(left: string | null, right: string | null) {
+  return Date.parse(right ?? "") - Date.parse(left ?? "");
+}
+
+function getDurationSortValue(durationMs: number | null) {
+  return durationMs ?? Number.NEGATIVE_INFINITY;
+}
+
+function getVerdictSortValue(verdictClass: EvaluationVerdictClass | null) {
+  return verdictClass === null ? Number.POSITIVE_INFINITY : portalVerdictOrder[verdictClass];
+}
+
 export const defaultPortalRunsQuery: PortalRunsListQuery = {
   attemptId: null,
   authMode: null,
@@ -128,8 +140,8 @@ const localRunItems: PortalRunListItem[] = [
     benchmarkPackageId: "problem9-core",
     benchmarkPackageVersion: "2026.03.11",
     benchmarkVersionId: "problem9-core@2026.03.11",
-    completedAt: "2026-03-13T16:06:00.000Z",
-    durationMs: 921000,
+    completedAt: null,
+    durationMs: null,
     failure: { code: null, family: null, summary: null },
     laneId: "induction-search",
     latestAttemptId: "ATT-319-2",
@@ -153,7 +165,7 @@ const localRunItems: PortalRunListItem[] = [
     runState: "running",
     startedAt: "2026-03-13T15:50:39.000Z",
     toolProfile: "lean4-proof",
-    verdictClass: "pass"
+    verdictClass: null
   },
   {
     authMode: "service_token",
@@ -202,8 +214,8 @@ const localRunItems: PortalRunListItem[] = [
     benchmarkPackageId: "problem9-core",
     benchmarkPackageVersion: "2026.03.11",
     benchmarkVersionId: "problem9-core@2026.03.11",
-    completedAt: "2026-03-13T16:18:00.000Z",
-    durationMs: 0,
+    completedAt: null,
+    durationMs: null,
     failure: { code: null, family: null, summary: null },
     laneId: "axiom-slice",
     latestAttemptId: null,
@@ -227,7 +239,7 @@ const localRunItems: PortalRunListItem[] = [
     runState: "queued",
     startedAt: "2026-03-13T16:18:00.000Z",
     toolProfile: "lean4-proof",
-    verdictClass: "pass"
+    verdictClass: null
   }
 ];
 
@@ -350,27 +362,27 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
       },
       {
         attemptId: "ATT-319-2",
-        completedAt: "2026-03-13T16:06:00.000Z",
+        completedAt: null,
         failure: { code: null, family: null, summary: null },
         jobId: "JOB-319-2",
         runId: "PP-319",
         startedAt: "2026-03-13T15:50:39.000Z",
         state: "active",
-        stopReason: "still_running",
-        verdictClass: "pass",
-        verifierResult: "pending"
+        stopReason: null,
+        verdictClass: null,
+        verifierResult: null
       }
     ],
     jobs: [
       {
-        completedAt: "2026-03-13T16:06:00.000Z",
+        completedAt: null,
         failure: { code: null, family: null, summary: null },
         jobId: "JOB-319-2",
         runId: "PP-319",
         startedAt: "2026-03-13T15:50:39.000Z",
         state: "running",
-        stopReason: "still_running",
-        verdictClass: "pass"
+        stopReason: null,
+        verdictClass: null
       }
     ],
     recentWorkerEvents: [
@@ -725,8 +737,12 @@ function createEmptyVerdictCounts() {
 
 function incrementVerdictCounts(
   verdictCounts: Record<EvaluationVerdictClass, number>,
-  verdictClass: EvaluationVerdictClass
+  verdictClass: EvaluationVerdictClass | null
 ) {
+  if (verdictClass === null) {
+    return;
+  }
+
   verdictCounts[verdictClass] += 1;
 }
 
@@ -745,7 +761,7 @@ function getBenchmarkPackageLabel(packageId: string, versions: string[]) {
 function buildLocalBenchmarkDataset(packageId: string): PortalBenchmarkDatasetResponse {
   const runs = localRunItems
     .filter((item) => item.benchmarkPackageId === packageId)
-    .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt));
+    .sort((left, right) => compareNullableTimestampDesc(left.completedAt, right.completedAt));
 
   if (runs.length === 0) {
     throw new Error(`Benchmark package ${packageId} was not found.`);
@@ -776,13 +792,13 @@ function buildLocalBenchmarkDataset(packageId: string): PortalBenchmarkDatasetRe
     },
     jobs,
     runs,
-    summary: {
-      attemptCount: attempts.length,
-      jobCount: jobs.length,
-      latestCompletedAt: runs[0]?.completedAt ?? null,
-      runCount: runs.length,
-      verdictCounts
-    }
+      summary: {
+        attemptCount: attempts.length,
+        jobCount: jobs.length,
+        latestCompletedAt: runs.find((run) => run.completedAt !== null)?.completedAt ?? null,
+        runCount: runs.length,
+        verdictCounts
+      }
   };
 }
 
@@ -817,6 +833,15 @@ function buildLocalBenchmarksListResponse(): PortalBenchmarksListResponse {
     existing.runCount += 1;
     incrementVerdictCounts(existing.verdictCounts, run.verdictClass);
 
+    if (
+      run.completedAt !== null &&
+      (existing.latestCompletedAt === null ||
+        Date.parse(run.completedAt) > Date.parse(existing.latestCompletedAt))
+    ) {
+      existing.latestCompletedAt = run.completedAt;
+      existing.latestRunId = run.runId;
+    }
+
     if (!existing.modelConfigIds.includes(run.modelConfigId)) {
       existing.modelConfigIds.push(run.modelConfigId);
     }
@@ -842,7 +867,7 @@ function buildLocalBenchmarksListResponse(): PortalBenchmarksListResponse {
           versions
         };
       })
-      .sort((left, right) => Date.parse(right.latestCompletedAt ?? "") - Date.parse(left.latestCompletedAt ?? ""))
+      .sort((left, right) => compareNullableTimestampDesc(left.latestCompletedAt, right.latestCompletedAt))
   };
 }
 
@@ -915,7 +940,10 @@ function matchesPortalRunsQuery(item: PortalRunListItem, query: PortalRunsListQu
     return false;
   }
 
-  if (query.verdict.length > 0 && !query.verdict.includes(item.verdictClass)) {
+  if (
+    query.verdict.length > 0 &&
+    (item.verdictClass === null || !query.verdict.includes(item.verdictClass))
+  ) {
     return false;
   }
 
@@ -996,13 +1024,13 @@ function sortPortalRuns(items: PortalRunListItem[], sortId: PortalRunsSortId) {
   return [...items].sort((left, right) => {
     switch (sortId) {
       case "finished_at_desc":
-        return Date.parse(right.completedAt) - Date.parse(left.completedAt);
+        return compareNullableTimestampDesc(left.completedAt, right.completedAt);
       case "duration_desc":
-        return right.durationMs - left.durationMs;
+        return getDurationSortValue(right.durationMs) - getDurationSortValue(left.durationMs);
       case "run_state_asc":
         return portalRunLifecycleStateOrder[left.runState] - portalRunLifecycleStateOrder[right.runState];
       case "verdict_asc":
-        return portalVerdictOrder[left.verdictClass] - portalVerdictOrder[right.verdictClass];
+        return getVerdictSortValue(left.verdictClass) - getVerdictSortValue(right.verdictClass);
       case "started_at_desc":
       default:
         return Date.parse(right.startedAt) - Date.parse(left.startedAt);
@@ -1155,13 +1183,13 @@ export function buildRunsCsv(items: PortalRunListItem[]) {
     getRunLifecycleStateLabel(item.runState),
     item.runLifecycleBucket,
     getPortalRunsLifecycleBucketLabel(item.runLifecycleBucket),
-    item.verdictClass,
-    evaluationVerdictLabels[item.verdictClass],
+    item.verdictClass ?? "",
+    item.verdictClass ? evaluationVerdictLabels[item.verdictClass] : "",
     item.failure.family ?? "",
     item.failure.code ?? "",
     item.startedAt,
-    item.completedAt,
-    String(item.durationMs)
+    item.completedAt ?? "",
+    item.durationMs === null ? "" : String(item.durationMs)
   ]);
 
   return [portalResultsExportHeaders, ...rows]
@@ -1211,12 +1239,12 @@ export function buildPortalBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetRe
       dataset.benchmark.versions.join("|"),
       run.runId,
       run.runState,
-      run.verdictClass,
+      run.verdictClass ?? "",
       run.providerFamily,
       run.modelConfigId,
       run.startedAt,
-      run.completedAt,
-      String(run.durationMs),
+      run.completedAt ?? "",
+      run.durationMs === null ? "" : String(run.durationMs),
       attempt?.jobId ?? run.latestJobId ?? "",
       attempt?.attemptId ?? "",
       attempt?.state ?? "",

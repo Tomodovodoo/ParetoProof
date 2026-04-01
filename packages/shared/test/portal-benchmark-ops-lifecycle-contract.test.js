@@ -1,0 +1,188 @@
+import { describe, expect, it } from "bun:test";
+import {
+  portalBenchmarkDatasetResponseSchema,
+  portalRunsListResponseSchema
+} from "../dist/index.js";
+
+const baseRunItem = {
+  authMode: "machine_api_key",
+  benchmarkItemId: "item-1",
+  benchmarkLabel: "problem9 @ 2026.03",
+  benchmarkPackageDigest: "a".repeat(64),
+  benchmarkPackageId: "problem9",
+  benchmarkPackageVersion: "2026.03",
+  benchmarkVersionId: "problem9@2026.03",
+  failure: {
+    code: null,
+    family: null,
+    summary: null
+  },
+  laneId: "problem9-default",
+  latestAttemptId: "attempt-1",
+  latestJobId: "job-1",
+  lineage: {
+    attemptCount: 1,
+    attemptIds: ["attempt-1"],
+    jobCount: 1,
+    jobIds: ["job-1"],
+    latestAttemptId: "attempt-1",
+    latestJobId: "job-1"
+  },
+  modelConfigId: "gpt-oss",
+  modelConfigLabel: "gpt-oss",
+  modelSnapshotId: "gpt-oss-2026-03-13",
+  providerFamily: "openai",
+  runId: "PP-318",
+  runKind: "single_run",
+  runMode: "bounded_agentic_attempt",
+  startedAt: "2026-03-13T19:58:00.000Z",
+  toolProfile: "workspace_edit_limited"
+};
+
+describe("portal benchmark-ops lifecycle contracts", () => {
+  it("allows active and pending runs to omit terminal-only fields", () => {
+    const parsed = portalRunsListResponseSchema.parse({
+      filters: {
+        modelConfigs: [],
+        providerFamilies: []
+      },
+      items: [
+        {
+          ...baseRunItem,
+          completedAt: null,
+          durationMs: null,
+          runLifecycleBucket: "active",
+          runState: "running",
+          verdictClass: null
+        },
+        {
+          ...baseRunItem,
+          completedAt: null,
+          durationMs: null,
+          latestAttemptId: null,
+          latestJobId: null,
+          lineage: {
+            attemptCount: 0,
+            attemptIds: [],
+            jobCount: 0,
+            jobIds: [],
+            latestAttemptId: null,
+            latestJobId: null
+          },
+          runId: "PP-319",
+          runLifecycleBucket: "pending",
+          runState: "queued",
+          verdictClass: null
+        }
+      ],
+      query: {
+        attemptId: null,
+        authMode: null,
+        benchmarkPackageDigest: null,
+        benchmarkPackageId: null,
+        benchmarkPackageVersion: null,
+        failureCode: null,
+        failureFamily: null,
+        jobId: null,
+        lifecycleBucket: null,
+        limit: 25,
+        modelConfigId: null,
+        providerFamily: null,
+        q: null,
+        runId: null,
+        runLifecycle: [],
+        runMode: null,
+        runKind: null,
+        sort: "started_at_desc",
+        toolProfile: null,
+        verdict: []
+      },
+      summary: {
+        activeRuns: 1,
+        failedRuns: 0,
+        returnedCount: 2,
+        totalMatches: 2,
+        verdictCounts: {
+          fail: 0,
+          invalid_result: 0,
+          pass: 0
+        }
+      }
+    });
+
+    expect(parsed.items[0].completedAt).toBeNull();
+    expect(parsed.items[1].verdictClass).toBeNull();
+  });
+
+  it("allows non-terminal attempt and job summaries to omit terminal-only fields", () => {
+    const parsed = portalBenchmarkDatasetResponseSchema.parse({
+      attempts: [
+        {
+          attemptId: "attempt-1",
+          completedAt: null,
+          failure: {
+            code: null,
+            family: null,
+            summary: null
+          },
+          jobId: "job-1",
+          runId: "PP-318",
+          startedAt: "2026-03-13T19:58:30.000Z",
+          state: "active",
+          stopReason: null,
+          verdictClass: null,
+          verifierResult: null
+        }
+      ],
+      benchmark: {
+        benchmarkLabel: "problem9 @ 2026.03",
+        benchmarkPackageId: "problem9",
+        laneIds: ["problem9-default"],
+        latestRunId: "PP-318",
+        modelConfigIds: ["gpt-oss"],
+        providerFamilies: ["openai"],
+        versions: ["2026.03"]
+      },
+      jobs: [
+        {
+          completedAt: null,
+          failure: {
+            code: null,
+            family: null,
+            summary: null
+          },
+          jobId: "job-1",
+          runId: "PP-318",
+          startedAt: "2026-03-13T19:58:10.000Z",
+          state: "running",
+          stopReason: null,
+          verdictClass: null
+        }
+      ],
+      runs: [
+        {
+          ...baseRunItem,
+          completedAt: null,
+          durationMs: null,
+          runLifecycleBucket: "active",
+          runState: "running",
+          verdictClass: null
+        }
+      ],
+      summary: {
+        attemptCount: 1,
+        jobCount: 1,
+        latestCompletedAt: null,
+        runCount: 1,
+        verdictCounts: {
+          fail: 0,
+          invalid_result: 0,
+          pass: 0
+        }
+      }
+    });
+
+    expect(parsed.attempts[0].stopReason).toBeNull();
+    expect(parsed.jobs[0].verdictClass).toBeNull();
+  });
+});
