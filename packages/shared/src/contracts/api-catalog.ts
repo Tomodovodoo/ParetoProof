@@ -80,6 +80,33 @@ export const apiEndpointCatalog = [
   {
     access: "approved_helper_or_higher",
     audience: "portal",
+    id: "portal.benchmarks.list",
+    method: "GET",
+    path: "/portal/benchmarks",
+    purpose:
+      "Return the benchmark dataset index read model for approved portal users browsing benchmark performance slices."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.benchmark-dataset.read",
+    method: "GET",
+    path: "/portal/benchmarks/:packageId/dataset",
+    purpose:
+      "Return one benchmark package dataset with run, job, attempt, and verdict summaries for portal analysis."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.benchmark-export.read",
+    method: "GET",
+    path: "/portal/benchmarks/:packageId/export",
+    purpose:
+      "Export one benchmark package dataset in the requested operator-facing format without bypassing the portal read-model boundary."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
     id: "portal.runs.list",
     method: "GET",
     path: "/portal/runs",
