@@ -69,6 +69,9 @@ jobs:
       - name: Build shared package
         run: bun run build:shared
 
+      - name: Test shared package contracts
+        run: bun run test:shared
+
       - name: Run deterministic Problem 9 verifier smoke
         run: bun run test:worker:verifier-smoke
 
