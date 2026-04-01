@@ -92,15 +92,21 @@ const terminalRunStates = ["succeeded", "failed", "cancelled"] as const;
 const terminalJobStates = ["completed", "failed", "cancelled"] as const;
 const terminalAttemptStates = ["succeeded", "failed", "cancelled"] as const;
 
-function isTerminalRunState(state: RunRow["state"]) {
+function isTerminalRunState(
+  state: RunRow["state"]
+): state is (typeof terminalRunStates)[number] {
   return (terminalRunStates as ReadonlyArray<RunRow["state"]>).includes(state);
 }
 
-function isTerminalJobState(state: JobRow["state"]) {
+function isTerminalJobState(
+  state: JobRow["state"]
+): state is (typeof terminalJobStates)[number] {
   return (terminalJobStates as ReadonlyArray<JobRow["state"]>).includes(state);
 }
 
-function isTerminalAttemptState(state: AttemptRow["state"]) {
+function isTerminalAttemptState(
+  state: AttemptRow["state"]
+): state is (typeof terminalAttemptStates)[number] {
   return (terminalAttemptStates as ReadonlyArray<AttemptRow["state"]>).includes(state);
 }
 
