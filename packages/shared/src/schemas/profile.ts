@@ -56,3 +56,11 @@ export const portalProfileLinkIntentSchema = z.object({
   startUrl: z.string().url()
 });
 
+export const portalProfileResponseSchema = z.object({
+  profile: portalProfileSchema
+});
+
+export const portalProfileLinkIntentResponseSchema = z.object({
+  intent: portalProfileLinkIntentSchema
+});
+

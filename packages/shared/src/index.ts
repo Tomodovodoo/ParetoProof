@@ -1,6 +1,7 @@
 export * from "./contracts/audit-event-catalog.js";
 export * from "./constants/app.js";
 export * from "./contracts/api-catalog.js";
+export * from "./contracts/api-schema-catalog.js";
 export * from "./contracts/api-call-boundary.js";
 export * from "./contracts/access-request.js";
 export * from "./contracts/profile.js";
@@ -29,6 +30,7 @@ export * from "./schemas/run-governance.js";
 export * from "./types/audit-event.js";
 export * from "./types/api-call-boundary.js";
 export * from "./types/api-catalog.js";
+export * from "./types/api-schema-catalog.js";
 export * from "./types/access-request.js";
 export * from "./types/portal-actions.js";
 export * from "./types/portal-live-freshness.js";
