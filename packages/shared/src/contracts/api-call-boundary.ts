@@ -75,6 +75,30 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.benchmarks.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Approved users browse benchmark package summaries directly from the protected portal surface without an intermediate backend hop."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.benchmark-dataset.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Benchmark dataset inspection is a portal-owned read model, so the browser reads one package dataset directly on the authenticated portal audience."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.benchmark-export.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Benchmark dataset export stays on the same protected portal audience while the backend controls the allowed export formats."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.runs.list",
     mode: "browser_direct",
     origin: "portal_browser",

@@ -35,6 +35,8 @@ describe("shared api catalog parity", () => {
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.read"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.benchmarks.list"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.benchmark-dataset.read"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.link-intent.create"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["admin.problem9-offline-ingest.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["internal.worker.claim"].responseBodySchema).not.toBeNull();
@@ -56,5 +58,10 @@ describe("shared api catalog parity", () => {
       requestBodySchema: null,
       responseBodySchema: null
     });
+
+    expect(apiEndpointSchemaContract["portal.benchmark-export.read"].paramsSchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.benchmark-export.read"].querySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.benchmark-export.read"].requestBodySchema).toBeNull();
+    expect(apiEndpointSchemaContract["portal.benchmark-export.read"].responseBodySchema).toBeNull();
   });
 });

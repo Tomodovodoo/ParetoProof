@@ -15,6 +15,10 @@ import {
   portalAdminUserRevokeInputSchema
 } from "../schemas/portal-admin.js";
 import {
+  portalBenchmarkDatasetParamsSchema,
+  portalBenchmarkDatasetResponseSchema,
+  portalBenchmarkExportQuerySchema,
+  portalBenchmarksListResponseSchema,
   portalLaunchViewResponseSchema,
   portalRunDetailParamsSchema,
   portalRunDetailResponseSchema,
@@ -104,6 +108,24 @@ export const apiEndpointSchemaContract = {
     querySchema: null,
     requestBodySchema: null,
     responseBodySchema: portalProfileResponseSchema
+  },
+  "portal.benchmarks.list": {
+    paramsSchema: null,
+    querySchema: null,
+    requestBodySchema: null,
+    responseBodySchema: portalBenchmarksListResponseSchema
+  },
+  "portal.benchmark-dataset.read": {
+    paramsSchema: portalBenchmarkDatasetParamsSchema,
+    querySchema: null,
+    requestBodySchema: null,
+    responseBodySchema: portalBenchmarkDatasetResponseSchema
+  },
+  "portal.benchmark-export.read": {
+    paramsSchema: portalBenchmarkDatasetParamsSchema,
+    querySchema: portalBenchmarkExportQuerySchema,
+    requestBodySchema: null,
+    responseBodySchema: null
   },
   "portal.runs.list": {
     paramsSchema: null,
