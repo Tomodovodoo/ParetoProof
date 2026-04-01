@@ -432,6 +432,7 @@ function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
   switch (sortId) {
     case "finished_at_desc":
       return [
+        sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`,
         desc(
           sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then ${runs.completedAt} end`
         ),
@@ -439,6 +440,7 @@ function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
       ] as const;
     case "duration_desc":
       return [
+        sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`,
         desc(
           sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled')
             then extract(epoch from ${runs.completedAt} - ${runs.createdAt})

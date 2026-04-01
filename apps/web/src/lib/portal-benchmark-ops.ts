@@ -58,7 +58,19 @@ const portalVerdictOrder: Record<EvaluationVerdictClass, number> = {
 };
 
 function compareNullableTimestampDesc(left: string | null, right: string | null) {
-  return Date.parse(right ?? "") - Date.parse(left ?? "");
+  if (left === null && right === null) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return Date.parse(right) - Date.parse(left);
 }
 
 function getDurationSortValue(durationMs: number | null) {
