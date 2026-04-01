@@ -6,6 +6,10 @@ import {
   portalAccessRequestReadResponseSchema,
   portalAdminAccessRequestParamsSchema,
   portalAdminUserParamsSchema,
+  portalBenchmarkDatasetParamsSchema,
+  portalBenchmarkDatasetResponseSchema,
+  portalBenchmarkExportQuerySchema,
+  portalBenchmarksListResponseSchema,
   portalRunDetailParamsSchema,
   portalAccessRequestSummaryResponseSchema,
   portalProfileResponseSchema,
@@ -36,6 +40,21 @@ describe("shared api schema catalog", () => {
       requestQuery: null,
       responseBody: portalProfileResponseSchema
     });
+
+    expect(apiEndpointSchemaCatalog["portal.benchmarks.list"].responseBody).toBe(
+      portalBenchmarksListResponseSchema
+    );
+
+    expect(apiEndpointSchemaCatalog["portal.benchmark-dataset.read"]).toEqual({
+      requestBody: null,
+      requestParams: portalBenchmarkDatasetParamsSchema,
+      requestQuery: null,
+      responseBody: portalBenchmarkDatasetResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["portal.benchmark-export.read"].requestQuery).toBe(
+      portalBenchmarkExportQuerySchema
+    );
 
     expect(apiEndpointSchemaCatalog["portal.access-request.read"]).toEqual({
       requestBody: null,
