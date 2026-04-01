@@ -93,8 +93,8 @@ export const portalRunListItemSchema = z.object({
   benchmarkPackageId: z.string(),
   benchmarkPackageVersion: z.string(),
   benchmarkVersionId: z.string(),
-  completedAt: timestampSchema,
-  durationMs: z.number().int().nonnegative(),
+  completedAt: timestampSchema.nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
   failure: portalRunFailureSummarySchema,
   laneId: z.string(),
   latestAttemptId: z.string().nullable(),
@@ -111,7 +111,7 @@ export const portalRunListItemSchema = z.object({
   runState: runLifecycleStateSchema,
   startedAt: timestampSchema,
   toolProfile: z.string(),
-  verdictClass: evaluationVerdictClassSchema
+  verdictClass: evaluationVerdictClassSchema.nullable()
 });
 
 export const portalRunsProviderFilterOptionSchema = z.object({
@@ -161,27 +161,27 @@ export const portalRunTimelineEntrySchema = z.object({
 });
 
 export const portalRunJobSummarySchema = z.object({
-  completedAt: timestampSchema,
+  completedAt: timestampSchema.nullable(),
   failure: portalRunFailureSummarySchema,
   jobId: z.string().nullable(),
   runId: z.string(),
   startedAt: timestampSchema,
   state: jobLifecycleStateSchema,
-  stopReason: z.string(),
-  verdictClass: evaluationVerdictClassSchema
+  stopReason: z.string().nullable(),
+  verdictClass: evaluationVerdictClassSchema.nullable()
 });
 
 export const portalRunAttemptSummarySchema = z.object({
   attemptId: z.string(),
-  completedAt: timestampSchema,
+  completedAt: timestampSchema.nullable(),
   failure: portalRunFailureSummarySchema,
   jobId: z.string().nullable(),
   runId: z.string(),
   startedAt: timestampSchema,
   state: attemptLifecycleStateSchema,
-  stopReason: z.string(),
-  verdictClass: evaluationVerdictClassSchema,
-  verifierResult: z.string()
+  stopReason: z.string().nullable(),
+  verdictClass: evaluationVerdictClassSchema.nullable(),
+  verifierResult: z.string().nullable()
 });
 
 export const portalRunArtifactSummarySchema = z.object({

@@ -83,7 +83,11 @@ function formatTimestamp(timestamp: string) {
   });
 }
 
-function formatDuration(durationMs: number) {
+function formatDuration(durationMs: number | null) {
+  if (durationMs === null) {
+    return "In progress";
+  }
+
   if (durationMs <= 0) {
     return "Queued";
   }
@@ -92,6 +96,10 @@ function formatDuration(durationMs: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}m ${seconds}s`;
+}
+
+function getVerdictLabel(verdict: EvaluationVerdictClass | null) {
+  return verdict ? evaluationVerdictLabels[verdict] : "In progress";
 }
 
 function formatRunKind(value: string) {
@@ -548,9 +556,13 @@ function PortalRunsSurface({
                 <p className="portal-run-card-title">{item.benchmarkLabel}</p>
                 <p className="portal-run-card-meta">{item.modelConfigLabel}</p>
                 <div className="portal-run-card-footer">
-                  <span className={`portal-verdict-badge portal-verdict-${item.verdictClass}`}>
-                    {evaluationVerdictLabels[item.verdictClass]}
-                  </span>
+                  {item.verdictClass ? (
+                    <span className={`portal-verdict-badge portal-verdict-${item.verdictClass}`}>
+                      {evaluationVerdictLabels[item.verdictClass]}
+                    </span>
+                  ) : (
+                    <span className="role-chip role-chip-muted">In progress</span>
+                  )}
                   <span className="portal-run-card-timestamp">
                     {formatTimestamp(item.startedAt)}
                   </span>
@@ -581,9 +593,13 @@ function PortalRunsSurface({
                 <span className={`portal-state-badge portal-state-${item.runState}`}>
                   {runLifecycleStateLabels[item.runState]}
                 </span>
-                <span className={`portal-verdict-badge portal-verdict-${item.verdictClass}`}>
-                  {evaluationVerdictLabels[item.verdictClass]}
-                </span>
+                {item.verdictClass ? (
+                  <span className={`portal-verdict-badge portal-verdict-${item.verdictClass}`}>
+                    {evaluationVerdictLabels[item.verdictClass]}
+                  </span>
+                ) : (
+                  <span className="role-chip role-chip-muted">In progress</span>
+                )}
               </div>
             ))}
           </div>
@@ -1153,7 +1169,7 @@ function PortalRunDetailSurface({
               </article>
               <article className="portal-summary-card">
                 <span>Verdict</span>
-                <strong>{evaluationVerdictLabels[detail.item.verdictClass]}</strong>
+                <strong>{getVerdictLabel(detail.item.verdictClass)}</strong>
                 <small>{detail.item.failure.summary ?? "No terminal failure summary."}</small>
               </article>
             </div>

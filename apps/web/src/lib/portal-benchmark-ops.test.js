@@ -110,6 +110,50 @@ describe("buildRunsCsv", () => {
     expect(csv).toContain("'\t=family,'+code");
     expect(csv).toContain("\"'  =SUM(\"\"a\"\",\"\"b\"\")\"");
   });
+
+  it("leaves terminal-only run fields blank for active and pending rows", () => {
+    const csv = buildRunsCsv([
+      {
+        authMode: "oidc",
+        benchmarkItemId: "item-2",
+        benchmarkLabel: "problem9 core",
+        benchmarkPackageDigest: "sha256:def",
+        benchmarkPackageId: "problem9",
+        benchmarkPackageVersion: "2026.03",
+        benchmarkVersionId: "problem9@2026.03",
+        completedAt: null,
+        durationMs: null,
+        failure: { code: null, family: null, summary: null },
+        laneId: "lane-2",
+        latestAttemptId: "attempt-2",
+        latestJobId: "job-2",
+        lineage: {
+          attemptCount: 1,
+          attemptIds: ["attempt-2"],
+          jobCount: 1,
+          jobIds: ["job-2"],
+          latestAttemptId: "attempt-2",
+          latestJobId: "job-2"
+        },
+        modelConfigId: "gpt-oss",
+        modelConfigLabel: "GPT OSS",
+        modelSnapshotId: "gpt-oss-2026-03-13",
+        providerFamily: "openai",
+        runId: "PP-319",
+        runKind: "single_run",
+        runLifecycleBucket: "active",
+        runMode: "eval",
+        runState: "running",
+        startedAt: "2026-03-13T19:58:00.000Z",
+        toolProfile: "lean4-proof",
+        verdictClass: null
+      }
+    ]);
+
+    expect(csv).toContain(
+      "PP-319,job-2,attempt-2,problem9@2026.03,gpt-oss,GPT OSS,running,Running,active,Active,,,,,2026-03-13T19:58:00.000Z,,"
+    );
+  });
 });
 
 describe("benchmark dataset exports", () => {

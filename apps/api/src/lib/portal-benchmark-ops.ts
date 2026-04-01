@@ -88,6 +88,22 @@ function getRunLifecycleBucket(runState: RunRow["state"]): PortalRunsLifecycleBu
   );
 }
 
+const terminalRunStates = ["succeeded", "failed", "cancelled"] as const;
+const terminalJobStates = ["completed", "failed", "cancelled"] as const;
+const terminalAttemptStates = ["succeeded", "failed", "cancelled"] as const;
+
+function isTerminalRunState(state: RunRow["state"]) {
+  return (terminalRunStates as ReadonlyArray<RunRow["state"]>).includes(state);
+}
+
+function isTerminalJobState(state: JobRow["state"]) {
+  return (terminalJobStates as ReadonlyArray<JobRow["state"]>).includes(state);
+}
+
+function isTerminalAttemptState(state: AttemptRow["state"]) {
+  return (terminalAttemptStates as ReadonlyArray<AttemptRow["state"]>).includes(state);
+}
+
 function compareByCreatedAtDesc<T extends { createdAt: Date }>(left: T, right: T) {
   return right.createdAt.getTime() - left.createdAt.getTime();
 }
@@ -139,6 +155,7 @@ function buildRunListItem(options: {
 }): PortalRunListItem {
   const latestJob = [...options.jobRows].sort(compareByCreatedAtDesc)[0] ?? null;
   const latestAttempt = [...options.attemptRows].sort(compareByCreatedAtDesc)[0] ?? null;
+  const terminal = isTerminalRunState(options.runRow.state);
 
   return {
     authMode: options.runRow.authMode,
@@ -148,11 +165,13 @@ function buildRunListItem(options: {
     benchmarkPackageId: options.runRow.benchmarkPackageId,
     benchmarkPackageVersion: options.runRow.benchmarkPackageVersion,
     benchmarkVersionId: getBenchmarkVersionId(options.runRow),
-    completedAt: options.runRow.completedAt.toISOString(),
-    durationMs: Math.max(
-      options.runRow.completedAt.getTime() - options.runRow.createdAt.getTime(),
-      0
-    ),
+    completedAt: terminal ? options.runRow.completedAt.toISOString() : null,
+    durationMs: terminal
+      ? Math.max(
+          options.runRow.completedAt.getTime() - options.runRow.createdAt.getTime(),
+          0
+        )
+      : null,
     failure: getFailureSummary(options.runRow),
     laneId: options.runRow.laneId,
     latestAttemptId: latestAttempt?.sourceAttemptId ?? null,
@@ -178,20 +197,21 @@ function buildRunListItem(options: {
     runState: options.runRow.state,
     startedAt: options.runRow.createdAt.toISOString(),
     toolProfile: options.runRow.toolProfile,
-    verdictClass: options.runRow.verdictClass
+    verdictClass: terminal ? options.runRow.verdictClass : null
   };
 }
 
 function buildJobSummary(runRow: RunRow, jobRow: JobRow): PortalRunJobSummary {
+  const terminal = isTerminalJobState(jobRow.state);
   return {
-    completedAt: jobRow.completedAt.toISOString(),
+    completedAt: terminal ? jobRow.completedAt.toISOString() : null,
     failure: getFailureSummary(jobRow),
     jobId: jobRow.sourceJobId,
     runId: runRow.sourceRunId,
     startedAt: jobRow.createdAt.toISOString(),
     state: jobRow.state,
-    stopReason: jobRow.stopReason,
-    verdictClass: jobRow.verdictClass
+    stopReason: terminal ? jobRow.stopReason : null,
+    verdictClass: terminal ? jobRow.verdictClass : null
   };
 }
 
@@ -200,17 +220,18 @@ function buildAttemptSummary(
   attemptRow: AttemptRow,
   jobById: Map<string, JobRow>
 ): PortalRunAttemptSummary {
+  const terminal = isTerminalAttemptState(attemptRow.state);
   return {
     attemptId: attemptRow.sourceAttemptId,
-    completedAt: attemptRow.completedAt.toISOString(),
+    completedAt: terminal ? attemptRow.completedAt.toISOString() : null,
     failure: getFailureSummary(attemptRow),
     jobId: jobById.get(attemptRow.jobId)?.sourceJobId ?? null,
     runId: runRow.sourceRunId,
     startedAt: attemptRow.createdAt.toISOString(),
     state: attemptRow.state,
-    stopReason: attemptRow.stopReason,
-    verdictClass: attemptRow.verdictClass,
-    verifierResult: attemptRow.verifierResult
+    stopReason: terminal ? attemptRow.stopReason : null,
+    verdictClass: terminal ? attemptRow.verdictClass : null,
+    verifierResult: terminal ? attemptRow.verifierResult : null
   };
 }
 
@@ -269,6 +290,9 @@ function buildTimeline(options: {
   jobRows: JobRow[];
   runRow: RunRow;
 }): PortalRunTimelineEntry[] {
+  const runStateOccurredAt = isTerminalRunState(options.runRow.state)
+    ? options.runRow.completedAt
+    : options.runRow.updatedAt;
   const timeline: PortalRunTimelineEntry[] = [
     {
       label: "Run record created",
@@ -279,7 +303,7 @@ function buildTimeline(options: {
     },
     {
       label: `Run ${getRunLifecycleStateLabel(options.runRow.state).toLowerCase()}`,
-      occurredAt: options.runRow.completedAt.toISOString(),
+      occurredAt: runStateOccurredAt.toISOString(),
       scope: "run",
       sourceId: options.runRow.sourceRunId,
       state: options.runRow.state
@@ -287,6 +311,9 @@ function buildTimeline(options: {
   ];
 
   for (const jobRow of options.jobRows) {
+    const jobStateOccurredAt = isTerminalJobState(jobRow.state)
+      ? jobRow.completedAt
+      : jobRow.updatedAt;
     timeline.push({
       label: "Job started",
       occurredAt: jobRow.createdAt.toISOString(),
@@ -296,7 +323,7 @@ function buildTimeline(options: {
     });
     timeline.push({
       label: `Job ${getJobLifecycleStateLabel(jobRow.state).toLowerCase()}`,
-      occurredAt: jobRow.completedAt.toISOString(),
+      occurredAt: jobStateOccurredAt.toISOString(),
       scope: "job",
       sourceId: jobRow.sourceJobId,
       state: jobRow.state
@@ -304,6 +331,9 @@ function buildTimeline(options: {
   }
 
   for (const attemptRow of options.attemptById.values()) {
+    const attemptStateOccurredAt = isTerminalAttemptState(attemptRow.state)
+      ? attemptRow.completedAt
+      : attemptRow.updatedAt;
     timeline.push({
       label: "Attempt started",
       occurredAt: attemptRow.createdAt.toISOString(),
@@ -313,7 +343,7 @@ function buildTimeline(options: {
     });
     timeline.push({
       label: `Attempt ${getAttemptLifecycleStateLabel(attemptRow.state).toLowerCase()}`,
-      occurredAt: attemptRow.completedAt.toISOString(),
+      occurredAt: attemptStateOccurredAt.toISOString(),
       scope: "attempt",
       sourceId: attemptRow.sourceAttemptId,
       state: attemptRow.state
@@ -401,13 +431,33 @@ async function loadRunIdsForSourceAttemptId(
 function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
   switch (sortId) {
     case "finished_at_desc":
-      return [desc(runs.completedAt), desc(runs.createdAt)] as const;
+      return [
+        desc(
+          sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then ${runs.completedAt} end`
+        ),
+        desc(runs.createdAt)
+      ] as const;
     case "duration_desc":
-      return [desc(sql`${runs.completedAt} - ${runs.createdAt}`), desc(runs.createdAt)] as const;
+      return [
+        desc(
+          sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled')
+            then extract(epoch from ${runs.completedAt} - ${runs.createdAt})
+          end`
+        ),
+        desc(runs.createdAt)
+      ] as const;
     case "run_state_asc":
       return [runs.state, runs.sourceRunId] as const;
     case "verdict_asc":
-      return [runs.verdictClass, runs.sourceRunId] as const;
+      return [
+        sql`case
+          when ${runs.state} not in ('succeeded', 'failed', 'cancelled') then 99
+          when ${runs.verdictClass} = 'pass' then 0
+          when ${runs.verdictClass} = 'fail' then 1
+          else 2
+        end`,
+        runs.sourceRunId
+      ] as const;
     case "started_at_desc":
     default:
       return [desc(runs.createdAt), desc(runs.completedAt)] as const;
@@ -434,6 +484,21 @@ function incrementVerdictCounts(
   verdictClass: RunRow["verdictClass"]
 ) {
   verdictCounts[verdictClass] += 1;
+}
+
+function getLatestTerminalCompletedAt<T extends { completedAt: Date; state: string }>(
+  rows: T[],
+  isTerminalState: (state: T["state"]) => boolean
+) {
+  const timestamps = rows
+    .filter((row) => isTerminalState(row.state))
+    .map((row) => row.completedAt.getTime());
+
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  return new Date(Math.max(...timestamps)).toISOString();
 }
 
 function listSortedUnique(values: string[]) {
@@ -529,17 +594,22 @@ export function createPortalBenchmarkOpsReadModelService(
       for (const runRow of runRows) {
         const existing = benchmarks.get(runRow.benchmarkPackageId);
         const attemptCount = attemptCountsByRunId.get(runRow.id) ?? 0;
+        const completedAt = isTerminalRunState(runRow.state)
+          ? runRow.completedAt.toISOString()
+          : null;
 
         if (!existing) {
           const verdictCounts = createEmptyVerdictCounts();
-          incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+          if (runRow.state === "succeeded" || runRow.state === "failed" || runRow.state === "cancelled") {
+            incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+          }
           benchmarks.set(runRow.benchmarkPackageId, {
             attemptCount,
             benchmarkLabel: getBenchmarkPackageLabel(runRow.benchmarkPackageId, [
               runRow.benchmarkPackageVersion
             ]),
             benchmarkPackageId: runRow.benchmarkPackageId,
-            latestCompletedAt: runRow.completedAt.toISOString(),
+            latestCompletedAt: completedAt,
             latestRunId: runRow.sourceRunId,
             modelConfigIds: [runRow.modelConfigId],
             providerFamilies: [runRow.providerFamily],
@@ -552,10 +622,12 @@ export function createPortalBenchmarkOpsReadModelService(
 
         existing.attemptCount += attemptCount;
         existing.runCount += 1;
-        incrementVerdictCounts(existing.verdictCounts, runRow.verdictClass);
+        if (runRow.state === "succeeded" || runRow.state === "failed" || runRow.state === "cancelled") {
+          incrementVerdictCounts(existing.verdictCounts, runRow.verdictClass);
+        }
 
-        if (!existing.latestCompletedAt) {
-          existing.latestCompletedAt = runRow.completedAt.toISOString();
+        if (!existing.latestCompletedAt && completedAt) {
+          existing.latestCompletedAt = completedAt;
           existing.latestRunId = runRow.sourceRunId;
         }
 
@@ -622,7 +694,9 @@ export function createPortalBenchmarkOpsReadModelService(
       const latestRun = runRows[0] ?? null;
 
       for (const runRow of runRows) {
-        incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+        if (isTerminalRunState(runRow.state)) {
+          incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+        }
       }
 
       return {
@@ -667,7 +741,7 @@ export function createPortalBenchmarkOpsReadModelService(
         summary: {
           attemptCount: attemptRows.length,
           jobCount: jobRows.length,
-          latestCompletedAt: latestRun?.completedAt.toISOString() ?? null,
+          latestCompletedAt: getLatestTerminalCompletedAt(runRows, isTerminalRunState),
           runCount: runRows.length,
           verdictCounts
         }
@@ -692,7 +766,12 @@ export function createPortalBenchmarkOpsReadModelService(
       }
 
       if (query.verdict.length > 0) {
-        runConditions.push(inArray(runs.verdictClass, query.verdict));
+        runConditions.push(
+          and(
+            inArray(runs.state, [...terminalRunStates]),
+            inArray(runs.verdictClass, query.verdict)
+          )!
+        );
       }
 
       if (query.runKind) {
