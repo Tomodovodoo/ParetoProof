@@ -52,6 +52,7 @@
     "test:worker:cli-smoke": "bun --cwd apps/worker test:cli-smoke",
     "test:worker:verifier-smoke": "bun --cwd apps/worker test:verifier-smoke",
     "build:shared": "bun --cwd packages/shared build",
+    "test:shared": "bun run build:shared && bun --cwd packages/shared test",
     "test:api": "bun run build:shared && bun --cwd apps/api test",
     "typecheck:web": "bun --cwd apps/web typecheck",
     "typecheck:api": "bun --cwd apps/api typecheck",

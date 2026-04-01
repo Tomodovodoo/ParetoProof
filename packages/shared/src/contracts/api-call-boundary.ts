@@ -123,6 +123,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "admin.problem9-offline-ingest.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Problem 9 offline bundle ingest is an admin-only portal mutation, so the browser calls the protected admin route directly on the existing portal Access boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.access-request.list",
     mode: "browser_direct",
     origin: "portal_browser",
