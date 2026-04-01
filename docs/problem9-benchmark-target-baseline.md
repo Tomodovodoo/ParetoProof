@@ -26,10 +26,11 @@ The checked-in package must keep these layers aligned:
   canonical modules
 - `lakefile.toml` default-builds `FirstProof.Problem9.Gold`
 - `Gold.lean` imports `Statement.lean`
-- `Statement.lean` defines the benchmark proposition as `problem9_target`
-- both the exported statement axiom and the gold artifact bind to
-  `problem9_target n` instead of restating the proposition independently under
-  disconnected contracts
+- `Statement.lean` keeps the exported `problem9` header stable for worker-facing
+  statement extraction and also defines `problem9_target` as the shared
+  proposition alias
+- `Gold.lean` proves `problem9_target n` instead of restating the proposition
+  independently under a disconnected contract
 
 That arrangement keeps the package-local default build on the same path as the
 canonical statement contract.
@@ -63,10 +64,12 @@ The following files are part of that truth surface:
 The repository should fail validation if:
 
 - the canonical module names drift from the checked-in package files
-- the default Lake target stops building through `Gold.lean`
+- the default Lake target stops pointing at `Gold.lean`
 - `Gold.lean` stops importing `Statement.lean`
 - `Statement.lean` stops defining the canonical `problem9_target`
+- `Statement.lean` changes the exported `problem9` theorem header away from the
+  canonical benchmark statement
 - the gold artifact stops proving `problem9_target n`
 
-That keeps the benchmark target, gold proof artifact, and default local build
-mechanically aligned.
+That keeps the benchmark target, gold proof artifact, and default local package
+entrypoint mechanically aligned.

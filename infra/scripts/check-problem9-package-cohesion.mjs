@@ -54,15 +54,19 @@ if (
 }
 
 if (
-  !/def\s+problem9_target\s*\(n\s*:\s*Nat\)\s*:\s*Prop\s*:=\s*2\s*\*\s*triangular n\s*=\s*n\s*\*\s*Nat\.succ n/.test(
+  !/abbrev\s+problem9_target\s*\(n\s*:\s*Nat\)\s*:\s*Prop\s*:=\s*2\s*\*\s*triangular n\s*=\s*n\s*\*\s*Nat\.succ n/.test(
     statementSource
   )
 ) {
   fail("Statement.lean must define the canonical problem9_target proposition");
 }
 
-if (!/axiom\s+problem9\s*\(n\s*:\s*Nat\)\s*:\s*problem9_target n/.test(statementSource)) {
-  fail("Statement.lean must bind the exported problem9 axiom to problem9_target");
+if (
+  !/axiom\s+problem9\s*\(n\s*:\s*Nat\)\s*:\s*2\s*\*\s*triangular n\s*=\s*n\s*\*\s*Nat\.succ n/.test(
+    statementSource
+  )
+) {
+  fail("Statement.lean must keep the exported problem9 header on the canonical benchmark proposition");
 }
 
 if (!goldSource.includes("import FirstProof.Problem9.Statement")) {
