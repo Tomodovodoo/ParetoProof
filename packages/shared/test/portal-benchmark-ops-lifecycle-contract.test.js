@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
   portalBenchmarkDatasetResponseSchema,
+  portalRunAttemptSummarySchema,
+  portalRunJobSummarySchema,
+  portalRunListItemSchema,
   portalRunsListResponseSchema
 } from "../dist/index.js";
 
@@ -40,7 +43,87 @@ const baseRunItem = {
 };
 
 describe("portal benchmark-ops lifecycle contracts", () => {
-  it("allows active and pending runs to omit terminal-only fields", () => {
+  it("accepts non-terminal runs with null terminal-only fields", () => {
+    const parsed = portalRunListItemSchema.parse({
+      ...baseRunItem,
+      completedAt: null,
+      durationMs: null,
+      latestAttemptId: null,
+      latestJobId: null,
+      lineage: {
+        attemptCount: 0,
+        attemptIds: [],
+        jobCount: 0,
+        jobIds: [],
+        latestAttemptId: null,
+        latestJobId: null
+      },
+      runId: "PP-321",
+      runLifecycleBucket: "pending",
+      runState: "queued",
+      verdictClass: null
+    });
+
+    expect(parsed.completedAt).toBeNull();
+    expect(parsed.durationMs).toBeNull();
+    expect(parsed.verdictClass).toBeNull();
+  });
+
+  it("rejects non-terminal runs with invented terminal verdict data", () => {
+    const parsed = portalRunListItemSchema.safeParse({
+      ...baseRunItem,
+      completedAt: "2026-03-13T16:18:00.000Z",
+      durationMs: 0,
+      latestAttemptId: null,
+      latestJobId: null,
+      lineage: {
+        attemptCount: 0,
+        attemptIds: [],
+        jobCount: 0,
+        jobIds: [],
+        latestAttemptId: null,
+        latestJobId: null
+      },
+      runId: "PP-321",
+      runLifecycleBucket: "pending",
+      runState: "queued",
+      verdictClass: "pass"
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("accepts non-terminal job and attempt summaries with null terminal-only fields", () => {
+    const job = portalRunJobSummarySchema.parse({
+      completedAt: null,
+      failure: { code: null, family: null, summary: null },
+      jobId: "job-1",
+      runId: "PP-319",
+      startedAt: "2026-03-13T15:50:39.000Z",
+      state: "running",
+      stopReason: null,
+      verdictClass: null
+    });
+    const attempt = portalRunAttemptSummarySchema.parse({
+      attemptId: "attempt-1",
+      completedAt: null,
+      failure: { code: null, family: null, summary: null },
+      jobId: "job-1",
+      runId: "PP-319",
+      startedAt: "2026-03-13T15:50:39.000Z",
+      state: "active",
+      stopReason: null,
+      verdictClass: null,
+      verifierResult: null
+    });
+
+    expect(job.completedAt).toBeNull();
+    expect(job.stopReason).toBeNull();
+    expect(attempt.completedAt).toBeNull();
+    expect(attempt.verifierResult).toBeNull();
+  });
+
+  it("allows active and pending runs to omit terminal-only fields in the list response", () => {
     const parsed = portalRunsListResponseSchema.parse({
       filters: {
         modelConfigs: [],
@@ -114,7 +197,7 @@ describe("portal benchmark-ops lifecycle contracts", () => {
     expect(parsed.items[1].verdictClass).toBeNull();
   });
 
-  it("allows non-terminal attempt and job summaries to omit terminal-only fields", () => {
+  it("allows non-terminal attempt and job summaries to omit terminal-only fields in dataset responses", () => {
     const parsed = portalBenchmarkDatasetResponseSchema.parse({
       attempts: [
         {

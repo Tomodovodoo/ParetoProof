@@ -155,9 +155,7 @@ function buildRunListItem(options: {
 }): PortalRunListItem {
   const latestJob = [...options.jobRows].sort(compareByCreatedAtDesc)[0] ?? null;
   const latestAttempt = [...options.attemptRows].sort(compareByCreatedAtDesc)[0] ?? null;
-  const terminal = isTerminalRunState(options.runRow.state);
-
-  return {
+  const baseItem = {
     authMode: options.runRow.authMode,
     benchmarkItemId: options.runRow.benchmarkItemId,
     benchmarkLabel: getBenchmarkLabel(options.runRow),
@@ -165,13 +163,6 @@ function buildRunListItem(options: {
     benchmarkPackageId: options.runRow.benchmarkPackageId,
     benchmarkPackageVersion: options.runRow.benchmarkPackageVersion,
     benchmarkVersionId: getBenchmarkVersionId(options.runRow),
-    completedAt: terminal ? options.runRow.completedAt.toISOString() : null,
-    durationMs: terminal
-      ? Math.max(
-          options.runRow.completedAt.getTime() - options.runRow.createdAt.getTime(),
-          0
-        )
-      : null,
     failure: getFailureSummary(options.runRow),
     laneId: options.runRow.laneId,
     latestAttemptId: latestAttempt?.sourceAttemptId ?? null,
@@ -194,24 +185,56 @@ function buildRunListItem(options: {
     runKind: options.runRow.runKind,
     runLifecycleBucket: getRunLifecycleBucket(options.runRow.state),
     runMode: options.runRow.runMode,
-    runState: options.runRow.state,
     startedAt: options.runRow.createdAt.toISOString(),
-    toolProfile: options.runRow.toolProfile,
-    verdictClass: terminal ? options.runRow.verdictClass : null
+    toolProfile: options.runRow.toolProfile
+  };
+
+  if (isTerminalRunState(options.runRow.state)) {
+    return {
+      ...baseItem,
+      completedAt: options.runRow.completedAt.toISOString(),
+      durationMs: Math.max(
+        options.runRow.completedAt.getTime() - options.runRow.createdAt.getTime(),
+        0
+      ),
+      runState: options.runRow.state,
+      verdictClass: options.runRow.verdictClass
+    };
+  }
+
+  return {
+    ...baseItem,
+    completedAt: null,
+    durationMs: null,
+    runState: options.runRow.state,
+    verdictClass: null
   };
 }
 
 function buildJobSummary(runRow: RunRow, jobRow: JobRow): PortalRunJobSummary {
-  const terminal = isTerminalJobState(jobRow.state);
-  return {
-    completedAt: terminal ? jobRow.completedAt.toISOString() : null,
+  const baseSummary = {
     failure: getFailureSummary(jobRow),
     jobId: jobRow.sourceJobId,
     runId: runRow.sourceRunId,
-    startedAt: jobRow.createdAt.toISOString(),
+    startedAt: jobRow.createdAt.toISOString()
+  };
+
+  if (isTerminalJobState(jobRow.state)) {
+    return {
+      ...baseSummary,
+      completedAt: jobRow.completedAt.toISOString(),
+      state: jobRow.state,
+      stopReason: jobRow.stopReason,
+      verdictClass: jobRow.verdictClass
+    };
+  }
+
+  return {
+    ...baseSummary,
+    completedAt: null,
     state: jobRow.state,
-    stopReason: terminal ? jobRow.stopReason : null,
-    verdictClass: terminal ? jobRow.verdictClass : null
+    stopReason: null,
+    verdictClass: null
   };
 }
 
@@ -220,18 +243,32 @@ function buildAttemptSummary(
   attemptRow: AttemptRow,
   jobById: Map<string, JobRow>
 ): PortalRunAttemptSummary {
-  const terminal = isTerminalAttemptState(attemptRow.state);
-  return {
+  const baseSummary = {
     attemptId: attemptRow.sourceAttemptId,
-    completedAt: terminal ? attemptRow.completedAt.toISOString() : null,
     failure: getFailureSummary(attemptRow),
     jobId: jobById.get(attemptRow.jobId)?.sourceJobId ?? null,
     runId: runRow.sourceRunId,
-    startedAt: attemptRow.createdAt.toISOString(),
+    startedAt: attemptRow.createdAt.toISOString()
+  };
+
+  if (isTerminalAttemptState(attemptRow.state)) {
+    return {
+      ...baseSummary,
+      completedAt: attemptRow.completedAt.toISOString(),
+      state: attemptRow.state,
+      stopReason: attemptRow.stopReason,
+      verdictClass: attemptRow.verdictClass,
+      verifierResult: attemptRow.verifierResult
+    };
+  }
+
+  return {
+    ...baseSummary,
+    completedAt: null,
     state: attemptRow.state,
-    stopReason: terminal ? attemptRow.stopReason : null,
-    verdictClass: terminal ? attemptRow.verdictClass : null,
-    verifierResult: terminal ? attemptRow.verifierResult : null
+    stopReason: null,
+    verdictClass: null,
+    verifierResult: null
   };
 }
 

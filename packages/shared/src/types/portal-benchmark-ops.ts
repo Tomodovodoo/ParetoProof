@@ -89,7 +89,17 @@ export type PortalRunLineageSummary = {
   latestJobId: string | null;
 };
 
-export type PortalRunListItem = {
+export type PortalTerminalRunLifecycleState = Extract<
+  RunLifecycleState,
+  "succeeded" | "failed" | "cancelled"
+>;
+
+export type PortalNonTerminalRunLifecycleState = Exclude<
+  RunLifecycleState,
+  PortalTerminalRunLifecycleState
+>;
+
+type PortalRunListItemBase = {
   authMode: string;
   benchmarkItemId: string;
   benchmarkLabel: string;
@@ -97,8 +107,6 @@ export type PortalRunListItem = {
   benchmarkPackageId: string;
   benchmarkPackageVersion: string;
   benchmarkVersionId: string;
-  completedAt: string | null;
-  durationMs: number | null;
   failure: PortalRunFailureSummary;
   laneId: string;
   latestAttemptId: string | null;
@@ -112,11 +120,25 @@ export type PortalRunListItem = {
   runKind: RunKind;
   runLifecycleBucket: PortalRunsLifecycleBucket;
   runMode: string;
-  runState: RunLifecycleState;
   startedAt: string;
   toolProfile: string;
-  verdictClass: EvaluationVerdictClass | null;
 };
+
+export type PortalTerminalRunListItem = PortalRunListItemBase & {
+  completedAt: string;
+  durationMs: number;
+  runState: PortalTerminalRunLifecycleState;
+  verdictClass: EvaluationVerdictClass;
+};
+
+export type PortalNonTerminalRunListItem = PortalRunListItemBase & {
+  completedAt: null;
+  durationMs: null;
+  runState: PortalNonTerminalRunLifecycleState;
+  verdictClass: null;
+};
+
+export type PortalRunListItem = PortalTerminalRunListItem | PortalNonTerminalRunListItem;
 
 export type PortalRunsListResponse = {
   filters: PortalRunsAvailableFilters;
@@ -139,29 +161,78 @@ export type PortalRunTimelineEntry = {
   state: string | null;
 };
 
-export type PortalRunJobSummary = {
-  completedAt: string | null;
+export type PortalTerminalJobLifecycleState = Extract<
+  JobLifecycleState,
+  "completed" | "failed" | "cancelled"
+>;
+
+export type PortalNonTerminalJobLifecycleState = Exclude<
+  JobLifecycleState,
+  PortalTerminalJobLifecycleState
+>;
+
+type PortalRunJobSummaryBase = {
   failure: PortalRunFailureSummary;
   jobId: string | null;
   runId: string;
   startedAt: string;
-  state: JobLifecycleState;
-  stopReason: string | null;
-  verdictClass: EvaluationVerdictClass | null;
 };
 
-export type PortalRunAttemptSummary = {
+export type PortalTerminalRunJobSummary = PortalRunJobSummaryBase & {
+  completedAt: string;
+  state: PortalTerminalJobLifecycleState;
+  stopReason: string;
+  verdictClass: EvaluationVerdictClass;
+};
+
+export type PortalNonTerminalRunJobSummary = PortalRunJobSummaryBase & {
+  completedAt: null;
+  state: PortalNonTerminalJobLifecycleState;
+  stopReason: null;
+  verdictClass: null;
+};
+
+export type PortalRunJobSummary =
+  | PortalTerminalRunJobSummary
+  | PortalNonTerminalRunJobSummary;
+
+export type PortalTerminalAttemptLifecycleState = Extract<
+  AttemptLifecycleState,
+  "succeeded" | "failed" | "cancelled"
+>;
+
+export type PortalNonTerminalAttemptLifecycleState = Exclude<
+  AttemptLifecycleState,
+  PortalTerminalAttemptLifecycleState
+>;
+
+type PortalRunAttemptSummaryBase = {
   attemptId: string;
-  completedAt: string | null;
   failure: PortalRunFailureSummary;
   jobId: string | null;
   runId: string;
   startedAt: string;
-  state: AttemptLifecycleState;
-  stopReason: string | null;
-  verdictClass: EvaluationVerdictClass | null;
-  verifierResult: string | null;
 };
+
+export type PortalTerminalRunAttemptSummary = PortalRunAttemptSummaryBase & {
+  completedAt: string;
+  state: PortalTerminalAttemptLifecycleState;
+  stopReason: string;
+  verdictClass: EvaluationVerdictClass;
+  verifierResult: string;
+};
+
+export type PortalNonTerminalRunAttemptSummary = PortalRunAttemptSummaryBase & {
+  completedAt: null;
+  state: PortalNonTerminalAttemptLifecycleState;
+  stopReason: null;
+  verdictClass: null;
+  verifierResult: null;
+};
+
+export type PortalRunAttemptSummary =
+  | PortalTerminalRunAttemptSummary
+  | PortalNonTerminalRunAttemptSummary;
 
 export type PortalRunArtifactSummary = {
   artifactClassId: string;
