@@ -1,6 +1,7 @@
 import {
   getPortalLiveViewFreshness,
-  type PortalLiveViewFreshnessEntry
+  type PortalLiveViewFreshnessEntry,
+  type PortalRouteId
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -9,7 +10,7 @@ export type PortalFreshnessState = "fresh" | "manual" | "planned" | "stale";
 type UsePortalPollingOptions = {
   enabled?: boolean;
   onPoll: () => Promise<void>;
-  routeId: string;
+  routeId: PortalRouteId;
 };
 
 export function canPortalRefreshOnDemand(policy: PortalLiveViewFreshnessEntry | null) {

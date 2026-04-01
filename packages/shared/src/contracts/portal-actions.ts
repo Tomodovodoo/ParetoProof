@@ -1,5 +1,6 @@
 import type { PortalActionDefinition, PortalActionId } from "../types/portal-actions.js";
 import type { PortalRole } from "../types/portal-navigation.js";
+import type { PortalRouteId } from "../types/route-access.js";
 
 type PortalActionBlueprint = {
   collaboratorState: PortalActionDefinition["state"];
@@ -9,7 +10,7 @@ type PortalActionBlueprint = {
   helperState: PortalActionDefinition["state"];
   helperVisible: boolean;
   id: PortalActionId;
-  routeId: string;
+  routeId: PortalRouteId;
   title: string;
 };
 

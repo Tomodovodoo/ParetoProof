@@ -1,4 +1,5 @@
 import type { PortalRole } from "./portal-navigation.js";
+import type { PortalRouteId } from "./route-access.js";
 
 export type PortalActionId =
   | "review_runs"
@@ -13,7 +14,7 @@ export type PortalActionDefinition = {
   description: string;
   disabledReason?: string;
   id: PortalActionId;
-  routeId: string;
+  routeId: PortalRouteId;
   state: PortalActionState;
   title: string;
   visibleTo: PortalRole[];

@@ -1,4 +1,5 @@
 import type { PortalLiveViewFreshnessEntry } from "../types/portal-live-freshness.js";
+import type { PortalRouteId } from "../types/route-access.js";
 
 export const portalLiveViewFreshnessCatalog = [
   {
@@ -75,7 +76,7 @@ export const portalLiveViewFreshnessCatalog = [
   }
 ] satisfies PortalLiveViewFreshnessEntry[];
 
-export function getPortalLiveViewFreshness(routeId: string) {
+export function getPortalLiveViewFreshness(routeId: PortalRouteId) {
   return (
     portalLiveViewFreshnessCatalog.find((entry) => entry.routeId === routeId) ?? null
   );

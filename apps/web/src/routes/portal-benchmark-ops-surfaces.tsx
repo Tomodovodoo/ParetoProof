@@ -3,6 +3,7 @@ import {
   portalRunsSortOptions,
   type PortalBenchmarkExportFormat,
   type EvaluationVerdictClass,
+  type PortalRouteId,
   type PortalRunsLifecycleBucket,
   type PortalLaunchViewResponse,
   type PortalRunDetailResponse,
@@ -44,7 +45,7 @@ import { buildPortalUrl } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalBenchmarkOpsSurfaceProps = {
-  activeRouteId: string;
+  activeRouteId: PortalRouteId;
   activeSectionId: "launch" | "runs" | "workers";
   activeRunId: string | null;
   pathname: string;
@@ -436,7 +437,7 @@ export function PortalBenchmarkOpsSurface({
 }
 
 type SurfaceProps<TData> = {
-  activeRouteId: string;
+  activeRouteId: PortalRouteId;
   loadState: LoadState<TData>;
   onRefresh: () => Promise<void>;
 };

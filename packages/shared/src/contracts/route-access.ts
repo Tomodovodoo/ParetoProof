@@ -1,8 +1,13 @@
-import type { AppRouteMatrixEntry } from "../types/route-access.js";
-import type { AppSurface } from "../types/route-access.js";
+import type { AppRouteMatrixEntry, AppSurface } from "../types/route-access.js";
+
+function defineAppRouteEntry<TSurface extends AppSurface>(
+  entry: AppRouteMatrixEntry<TSurface>
+) {
+  return entry;
+}
 
 export const appRouteAccessMatrix = [
-  {
+  defineAppRouteEntry({
     access: "public",
     host: "paretoproof.com",
     id: "public.home",
@@ -10,8 +15,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "public_site",
     summary: "Marketing home and public project overview."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "public",
     host: "paretoproof.com",
     id: "public.project",
@@ -19,8 +24,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "public_site",
     summary: "Compact project pack for mission, contributor path, and contact rules."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "public",
     host: "paretoproof.com",
     id: "public.benchmarks",
@@ -28,8 +33,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "public_site",
     summary: "Public benchmark listing and methodology context."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "public",
     host: "paretoproof.com",
     id: "public.benchmark-report",
@@ -37,8 +42,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "public_site",
     summary: "Published benchmark report and aggregate public results."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "portal_authenticated",
     host: "portal.paretoproof.com",
     id: "portal.home",
@@ -46,8 +51,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "public_home",
     surface: "portal",
     summary: "Authenticated portal landing page after Cloudflare Access."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "access_request_required_only",
     host: "portal.paretoproof.com",
     id: "portal.access-request",
@@ -55,8 +60,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Contributor request screen for authenticated identities that have never been reviewed."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "approved_helper_or_higher",
     host: "portal.paretoproof.com",
     id: "portal.profile",
@@ -64,8 +69,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_pending",
     surface: "portal",
     summary: "Editable contributor profile details and linked Access identities."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "pending_only",
     host: "portal.paretoproof.com",
     id: "portal.pending",
@@ -73,8 +78,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_home",
     surface: "portal",
     summary: "Pending approval holding page after the user is identified."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "denied_only",
     host: "portal.paretoproof.com",
     id: "portal.denied",
@@ -82,8 +87,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Access denied page for rejected or insufficiently provisioned users."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "approved_helper_or_higher",
     host: "portal.paretoproof.com",
     id: "portal.runs",
@@ -91,8 +96,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_pending",
     surface: "portal",
     summary: "Read-only run listing for approved helpers and higher."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "approved_helper_or_higher",
     host: "portal.paretoproof.com",
     id: "portal.run-detail",
@@ -100,8 +105,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_pending",
     surface: "portal",
     summary: "Run detail page with status, events, and artifacts."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "approved_collaborator_or_higher",
     host: "portal.paretoproof.com",
     id: "portal.launch-run",
@@ -109,8 +114,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Run launch flow for collaborators and admins."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "approved_collaborator_or_higher",
     host: "portal.paretoproof.com",
     id: "portal.workers",
@@ -118,8 +123,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Worker fleet and queue overview for collaborators and admins."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "admin_only",
     host: "portal.paretoproof.com",
     id: "portal.admin.access-requests",
@@ -127,8 +132,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Manual contributor approval screen for portal admins."
-  },
-  {
+  }),
+  defineAppRouteEntry({
     access: "admin_only",
     host: "portal.paretoproof.com",
     id: "portal.admin.users",
@@ -136,8 +141,8 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Role management and contributor state inspection for admins."
-  }
-] satisfies AppRouteMatrixEntry[];
+  })
+] as const;
 
 export function matchesAppRoutePath(routePath: string, pathname: string) {
   if (routePath === pathname) {
@@ -160,10 +165,13 @@ export function matchesAppRoutePath(routePath: string, pathname: string) {
   });
 }
 
-export function findAppRouteBySurface(surface: AppSurface, pathname: string) {
-  return (
-    appRouteAccessMatrix.find(
-      (entry) => entry.surface === surface && matchesAppRoutePath(entry.path, pathname)
-    ) ?? null
+export function findAppRouteBySurface<TSurface extends AppSurface>(
+  surface: TSurface,
+  pathname: string
+) {
+  const matchingEntry = appRouteAccessMatrix.find(
+    (entry) => entry.surface === surface && matchesAppRoutePath(entry.path, pathname)
   );
+
+  return (matchingEntry as AppRouteMatrixEntry<TSurface> | undefined) ?? null;
 }
