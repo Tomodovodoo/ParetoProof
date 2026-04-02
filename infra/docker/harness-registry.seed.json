@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "problem9_hosted",
+      "familyId": "problem9",
+      "label": "Problem 9 hosted worker",
+      "summary": "Hosted managed Problem 9 execution through the ParetoProof worker pool.",
+      "runtimeClass": "hosted_worker",
+      "supportStatus": "supported",
+      "providerFamilies": [
+        "openai"
+      ],
+      "authModes": [
+        "machine_api_key"
+      ],
+      "runModes": [
+        "single_pass_probe",
+        "pass_k_probe",
+        "bounded_agentic_attempt"
+      ],
+      "toolProfiles": [
+        "no_tools",
+        "lean_mcp_readonly",
+        "workspace_edit_limited"
+      ],
+      "benchmarkFamilies": [
+        "firstproof"
+      ],
+      "harnessRevision": "problem9",
+      "imageRefs": [
+        {
+          "role": "hosted_worker_image",
+          "target": "paretoproof-worker",
+          "repository": "paretoproof-worker",
+          "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-worker",
+          "currentDigest": null,
+          "digestAuthority": "publish_workflow_artifact",
+          "publishedByWorkflow": ".github/workflows/publish-worker-image.yml",
+          "notes": [
+            "Hosted rollout target for the Modal worker fleet."
+          ]
+        },
+        {
+          "role": "execution_image",
+          "target": "problem9-execution",
+          "repository": "paretoproof-problem9-execution",
+          "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-execution",
+          "currentDigest": null,
+          "digestAuthority": "publish_workflow_artifact",
+          "publishedByWorkflow": ".github/workflows/publish-worker-image.yml",
+          "notes": [
+            "Coupled execution-environment image published by the same workflow."
+          ]
+        }
+      ],
+      "notes": [
+        "Hosted support is currently limited to provider family openai with machine_api_key auth.",
+        "Published digest fields remain null until release evidence writes or syncs them."
+      ]
+    },
+    {
+      "id": "problem9_trusted_local_devbox",
+      "familyId": "problem9",
+      "label": "Problem 9 trusted-local devbox",
+      "summary": "Trusted-local contributor/devbox execution for Problem 9 with host-side auth support.",
+      "runtimeClass": "trusted_local_devbox",
+      "supportStatus": "supported",
+      "providerFamilies": [
+        "openai"
+      ],
+      "authModes": [
+        "trusted_local_user",
+        "machine_api_key",
+        "local_stub"
+      ],
+      "runModes": [
+        "single_pass_probe",
+        "pass_k_probe",
+        "bounded_agentic_attempt"
+      ],
+      "toolProfiles": [
+        "no_tools",
+        "lean_mcp_readonly",
+        "workspace_edit_limited"
+      ],
+      "benchmarkFamilies": [
+        "firstproof"
+      ],
+      "harnessRevision": "problem9",
+      "imageRefs": [
+        {
+          "role": "devbox_image",
+          "target": "problem9-devbox",
+          "repository": "paretoproof-problem9-devbox",
+          "publishedImage": "ghcr.io/${{ github.repository_owner }}/paretoproof-problem9-devbox",
+          "currentDigest": null,
+          "digestAuthority": "publish_workflow_artifact",
+          "publishedByWorkflow": ".github/workflows/publish-problem9-devbox-image.yml",
+          "notes": [
+            "Trusted-local contributor/devbox image. Not a hosted rollout target."
+          ]
+        }
+      ],
+      "notes": [
+        "This harness is trusted-local only and must not be treated as a hosted worker posture."
+      ]
+    }
+  ]
+}

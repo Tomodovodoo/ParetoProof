@@ -34,6 +34,9 @@ jobs:
       - name: Check Problem 9 image policy
         run: node infra/scripts/check-problem9-image-policy.mjs
 
+      - name: Check harness registry seed
+        run: node infra/scripts/check-harness-registry-seed.mjs
+
       - name: Check Problem 9 package cohesion
         run: >-
           node infra/scripts/check-problem9-package-cohesion.mjs &&

@@ -7,6 +7,7 @@ import {
   portalAdminAccessRequestRejectInputSchema
 } from "../schemas/access-request.js";
 import { healthResponseSchema } from "../schemas/health.js";
+import { harnessRegistryCatalogSchema } from "../schemas/harness-registry.js";
 import {
   adminBenchmarkReleaseCreateInputSchema,
   adminBenchmarkVersionCreateInputSchema,
@@ -187,6 +188,12 @@ export const apiEndpointSchemaCatalog = {
     requestParams: null,
     requestQuery: null,
     responseBody: portalLaunchViewResponseSchema
+  },
+  "portal.harnesses.read": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: harnessRegistryCatalogSchema
   },
   "portal.workers.read": {
     requestBody: null,

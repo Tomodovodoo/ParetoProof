@@ -159,6 +159,15 @@ export const apiEndpointCatalog = [
       "Return launch preflight metadata for benchmark selection, run-shape policy, and contributor-visible governance limits."
   },
   {
+    access: "approved_helper_or_higher",
+    audience: "portal",
+    id: "portal.harnesses.read",
+    method: "GET",
+    path: "/portal/harnesses",
+    purpose:
+      "Return the official harness registry catalog, including runtime class, auth posture, and published image identity metadata."
+  },
+  {
     access: "approved_collaborator_or_higher",
     audience: "portal",
     id: "portal.workers.read",
