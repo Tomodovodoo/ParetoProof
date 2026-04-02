@@ -109,6 +109,8 @@ The accepted split is:
 
 The project should prefer explicit deep links between math and portal over duplicating whole execution consoles in both surfaces.
 
+The question-centric launch surface split also depends on a separate credential-ownership decision. `docs/math-provider-credential-policy-baseline.md` defines when math launch uses platform-managed hosted credentials, when local connected launch stays runner-host-local, and why browser surfaces must not become raw provider-secret collection points.
+
 ## What stays out of math
 
 `math.paretoproof.com` should not own:

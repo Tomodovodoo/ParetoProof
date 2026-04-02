@@ -10,6 +10,7 @@ This repo uses a small number of runtime rules.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
 - Do not copy `.codex/auth.json` or other trusted-local auth artifacts into the repository, Docker build contexts, or checked-in worker fixtures.
+- For math launches, provider-credential ownership and the no-browser-secret rule are defined in [math-provider-credential-policy-baseline.md](./math-provider-credential-policy-baseline.md).
 
 ## Deploy surfaces
 
