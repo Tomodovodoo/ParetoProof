@@ -12,7 +12,7 @@
     "check:deployment-workflow-node-runtime": "node infra/scripts/check-deployment-workflow-node-runtime.mjs",
     "check:env-contract": "node infra/scripts/check-runtime-env-examples.mjs",
     "check:main-branch-promotion-gate": "node infra/scripts/check-main-branch-promotion-gate.mjs",
-    "check:problem9-package-cohesion": "node infra/scripts/check-problem9-package-cohesion.mjs",
+    "check:problem9-package-cohesion": "node infra/scripts/check-problem9-package-cohesion.mjs && node --test infra/scripts/test/problem9-package-cohesion.test.mjs",
     "check:problem9-image-policy": "node infra/scripts/check-problem9-image-policy.mjs",
     "test:startup-validation": "bun infra/scripts/startup-validation-smoke.ts",
     "check:trusted-local-boundary": "node infra/scripts/check-trusted-local-boundaries.mjs",

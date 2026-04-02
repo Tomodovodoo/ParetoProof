@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { hasExpectedCanonicalModules } from "./lib/problem9-package-cohesion.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const benchmarkRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9");
@@ -28,10 +29,7 @@ const lakefile = readText(lakefilePath);
 const statementSource = readText(statementPath);
 const goldSource = readText(goldPath);
 
-if (
-  JSON.stringify(benchmarkPackage.canonicalModules) !==
-  JSON.stringify(expectedCanonicalModules)
-) {
+if (!hasExpectedCanonicalModules(benchmarkPackage.canonicalModules, expectedCanonicalModules)) {
   fail(
     `canonicalModules must stay aligned with ${JSON.stringify(expectedCanonicalModules)}`
   );
