@@ -34,6 +34,10 @@ export type PortalProfileLinkIntentInput = {
   redirectPath?: string | null;
 };
 
+export type PortalSessionRedirectInput = {
+  redirect?: string | null;
+};
+
 export type PortalProfileLinkIntent = {
   expiresAt: string;
   provider: PortalLinkableIdentityProvider;

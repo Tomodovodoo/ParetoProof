@@ -36,8 +36,11 @@ import {
   portalProfileLinkIntentInputSchema,
   portalProfileLinkIntentResponseSchema,
   portalProfileResponseSchema,
+  portalSessionRedirectInputSchema,
+  portalSessionRedirectRequestBodySchema,
   portalProfileUpdateInputSchema
 } from "../schemas/profile.js";
+import type { ApiEndpointId } from "./api-catalog.js";
 import {
   workerArtifactManifestRequestSchema,
   workerArtifactManifestResponseSchema,
@@ -71,19 +74,37 @@ export const apiEndpointSchemaCatalog = {
   "portal.session.retry.complete": {
     requestBody: null,
     requestParams: null,
-    requestQuery: null,
+    requestQuery: portalSessionRedirectInputSchema,
     responseBody: null
   },
   "portal.session.retry.finalize": {
     requestBody: null,
     requestParams: null,
-    requestQuery: null,
+    requestQuery: portalSessionRedirectInputSchema,
+    responseBody: null
+  },
+  "portal.session.finalize.read": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: portalSessionRedirectInputSchema,
+    responseBody: null
+  },
+  "portal.session.complete.submit": {
+    requestBody: portalSessionRedirectRequestBodySchema,
+    requestParams: null,
+    requestQuery: portalSessionRedirectInputSchema,
+    responseBody: null
+  },
+  "portal.session.finalize.submit": {
+    requestBody: portalSessionRedirectRequestBodySchema,
+    requestParams: null,
+    requestQuery: portalSessionRedirectInputSchema,
     responseBody: null
   },
   "portal.session.complete": {
-    requestBody: null,
+    requestBody: portalSessionRedirectRequestBodySchema,
     requestParams: null,
-    requestQuery: null,
+    requestQuery: portalSessionRedirectInputSchema,
     responseBody: null
   },
   "portal.access-request.create": {
@@ -248,4 +269,4 @@ export const apiEndpointSchemaCatalog = {
     requestQuery: null,
     responseBody: workerTerminalFailureResponseSchema
   }
-} satisfies Record<string, ApiEndpointSchemaCatalogEntry>;
+} satisfies Record<ApiEndpointId, ApiEndpointSchemaCatalogEntry>;

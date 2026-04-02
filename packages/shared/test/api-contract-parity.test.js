@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   apiCallBoundaryCatalog,
   apiEndpointCatalog,
+  apiEndpointSchemaCatalog,
   apiEndpointSchemaContract
 } from "../dist/index.js";
 
@@ -63,5 +64,16 @@ describe("shared api catalog parity", () => {
     expect(apiEndpointSchemaContract["portal.benchmark-export.read"].querySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-export.read"].requestBodySchema).toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-export.read"].responseBodySchema).toBeNull();
+  });
+
+  it("keeps the legacy schema contract derived from the schema catalog", () => {
+    for (const endpoint of apiEndpointCatalog) {
+      expect(apiEndpointSchemaContract[endpoint.id]).toEqual({
+        paramsSchema: apiEndpointSchemaCatalog[endpoint.id].requestParams,
+        querySchema: apiEndpointSchemaCatalog[endpoint.id].requestQuery,
+        requestBodySchema: apiEndpointSchemaCatalog[endpoint.id].requestBody,
+        responseBodySchema: apiEndpointSchemaCatalog[endpoint.id].responseBody
+      });
+    }
   });
 });

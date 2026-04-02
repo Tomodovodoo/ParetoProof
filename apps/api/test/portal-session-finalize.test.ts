@@ -164,6 +164,84 @@ test("GET /portal/session/finalize/submit creates an opaque DB-backed session fo
   assert.notEqual(insertedSessions[0]?.tokenHash, token);
 });
 
+test("POST /portal/session/finalize/submit returns the JSON redirect payload for approved users", async (t) => {
+  let mutationAttempted = false;
+  const insertedSessions: Array<typeof sessions.$inferInsert> = [];
+  const app = Fastify();
+  const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+
+  t.after(async () => {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = originalSecret;
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      insert() {
+        return {
+          values: async (value: unknown) => {
+            insertedSessions.push(value as typeof sessions.$inferInsert);
+            return value;
+          }
+        };
+      },
+      query: {
+        userIdentities: {
+          findFirst: async () => ({
+            id: "identity-1",
+            providerSubject: "subject-1",
+            userId: "user-1"
+          })
+        }
+      },
+      transaction: async () => {
+        mutationAttempted = true;
+        throw new Error("plain sign-in finalize submit should not hit the identity-link mutation path");
+      }
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      resolvePortalAccess: async (request) => {
+        request.accessIdentity = {
+          email: "person@example.com",
+          issuer: "https://paretoproof.cloudflareaccess.com",
+          provider: "cloudflare_google",
+          subject: "subject-1"
+        };
+        request.accessRbacContext = {
+          email: "person@example.com",
+          identityId: "identity-1",
+          roles: ["helper"],
+          status: "approved",
+          subject: "subject-1",
+          userId: "user-1"
+        };
+
+        return request.accessRbacContext;
+      }
+    }
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?redirect=/profile",
+    headers: {
+      accept: "application/json"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    redirectTo: "https://portal.paretoproof.com/profile"
+  });
+  assert.equal(mutationAttempted, false);
+  assert.equal(insertedSessions.length, 1);
+});
+
 test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
   const app = Fastify();
 
