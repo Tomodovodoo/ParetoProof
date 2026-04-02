@@ -34,6 +34,30 @@ export const apiCallBoundaryCatalog = [
       "Direct visits to the session-finalize URL should bounce back to the branded auth surface instead of exposing a raw API response."
   },
   {
+    credential: "none",
+    endpointId: "portal.session.finalize.read",
+    mode: "browser_navigation",
+    origin: "public_browser",
+    rationale:
+      "The branded auth handoff can arrive through a top-level GET navigation on the finalize-submit route, which either completes the session or redirects the browser back to the retry relay."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.session.complete.submit",
+    mode: "browser_navigation",
+    origin: "portal_browser",
+    rationale:
+      "Legacy same-site completion forms still POST to the complete alias, so the authenticated browser must retain an explicit contract for that handoff route."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "portal.session.finalize.submit",
+    mode: "browser_navigation",
+    origin: "portal_browser",
+    rationale:
+      "Legacy finalize POSTs stay on the same authenticated browser boundary as the canonical submit route while preserving redirect-bearing handoff semantics."
+  },
+  {
     credential: "cloudflare_access_jwt",
     endpointId: "portal.session.complete",
     mode: "browser_navigation",

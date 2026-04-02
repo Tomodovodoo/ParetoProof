@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+function normalizeOptionalRedirect(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return value;
+}
+
 export const portalIdentityProviderSchema = z.enum([
   "cloudflare_google",
   "cloudflare_github",
@@ -45,14 +53,14 @@ export const portalProfileUpdateInputSchema = z.object({
 
 export const portalProfileLinkIntentInputSchema = z.object({
   provider: portalLinkableIdentityProviderSchema,
-  redirectPath: z.string().trim().max(500).nullish().transform((value: string | null | undefined) => {
-    if (!value) {
-      return null;
-    }
-
-    return value;
-  })
+  redirectPath: z.string().trim().max(500).nullish().transform(normalizeOptionalRedirect)
 });
+
+export const portalSessionRedirectInputSchema = z.object({
+  redirect: z.string().trim().max(500).nullish().transform(normalizeOptionalRedirect)
+});
+
+export const portalSessionRedirectRequestBodySchema = portalSessionRedirectInputSchema.optional();
 
 export const portalProfileLinkIntentSchema = z.object({
   expiresAt: z.string(),

@@ -63,6 +63,10 @@ export const portalAdminAccessRequestApproveInputSchema = z.object({
   decisionNote: portalAccessDecisionNoteSchema
 });
 
+export const portalAccessRequestSummaryResponseSchema = z.object({
+  item: portalAccessRequestSummarySchema
+});
+
 export const portalAdminAccessRequestRejectInputSchema = z.object({
   decisionNote: portalAccessDecisionNoteSchema
 });

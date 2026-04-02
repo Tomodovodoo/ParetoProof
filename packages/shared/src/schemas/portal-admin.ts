@@ -133,6 +133,14 @@ export const portalAdminUserRevokeInputSchema = z.object({
   reason: z.string().trim().min(1).max(500)
 });
 
+export const portalAdminAccessRequestParamsSchema = z.object({
+  accessRequestId: z.string().uuid()
+});
+
+export const portalAdminUserParamsSchema = z.object({
+  userId: z.string().uuid()
+});
+
 export const portalAdminAccessRequestListResponseSchema = z.object({
   items: z.array(portalAdminAccessRequestListItemSchema)
 });

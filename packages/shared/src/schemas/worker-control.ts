@@ -320,6 +320,10 @@ export const workerArtifactManifestEntrySchema = z.object({
   sha256: sha256Schema
 });
 
+export const workerJobParamsSchema = z.object({
+  jobId: z.string().min(1)
+});
+
 export const workerArtifactManifestRequestSchema = z.object({
   artifacts: z.array(workerArtifactManifestEntrySchema).min(1),
   artifactManifestDigest: sha256Schema,

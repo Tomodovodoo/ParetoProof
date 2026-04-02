@@ -36,6 +36,33 @@ export const apiEndpointCatalog = [
       "Restart the branded auth entry when a browser lands on the raw session-finalize URL directly."
   },
   {
+    access: "anonymous",
+    audience: "public",
+    id: "portal.session.finalize.read",
+    method: "GET",
+    path: "/portal/session/finalize/submit",
+    purpose:
+      "Handle the branded-auth finalize navigation by either completing the session handoff or bouncing the browser back to the retry relay."
+  },
+  {
+    access: "authenticated_access_identity",
+    audience: "portal",
+    id: "portal.session.complete.submit",
+    method: "POST",
+    path: "/portal/session/complete",
+    purpose:
+      "Finish the Cloudflare Access login handoff on the legacy complete POST alias without requiring the caller to switch away from the authenticated browser surface."
+  },
+  {
+    access: "authenticated_access_identity",
+    audience: "portal",
+    id: "portal.session.finalize.submit",
+    method: "POST",
+    path: "/portal/session/finalize",
+    purpose:
+      "Finish the Cloudflare Access login handoff on the legacy finalize POST alias while preserving the same redirect-bearing session semantics as the canonical submit route."
+  },
+  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.session.complete",
