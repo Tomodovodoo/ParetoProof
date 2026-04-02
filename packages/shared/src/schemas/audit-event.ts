@@ -8,6 +8,9 @@ export const auditActorKindSchema = z.enum([
 
 export const auditSubjectKindSchema = z.enum([
   "access_request",
+  "benchmark_release",
+  "benchmark_version",
+  "benchmark_workflow",
   "role_grant",
   "run",
   "user_identity"

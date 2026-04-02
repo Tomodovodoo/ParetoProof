@@ -52,6 +52,9 @@ export const auditActorKindEnum = pgEnum("audit_actor_kind", [
 
 export const auditSubjectKindEnum = pgEnum("audit_subject_kind", [
   "access_request",
+  "benchmark_release",
+  "benchmark_version",
+  "benchmark_workflow",
   "role_grant",
   "run",
   "user_identity"
@@ -147,6 +150,38 @@ export const workerExecutionEventKindEnum = pgEnum("worker_execution_event_kind"
 export const workerRuntimeEnum = pgEnum("worker_runtime", [
   "local_docker",
   "modal"
+]);
+
+export const repoSyncStatusEnum = pgEnum("repo_sync_status", [
+  "proposed",
+  "pr_open",
+  "merged",
+  "rejected",
+  "superseded"
+]);
+
+export const packageFreezeStatusEnum = pgEnum("package_freeze_status", [
+  "active",
+  "withdrawn",
+  "superseded"
+]);
+
+export const benchmarkVersionLaunchabilityEnum = pgEnum(
+  "benchmark_version_launchability",
+  ["internal_only", "launchable", "withdrawn"]
+);
+
+export const benchmarkReleaseStatusEnum = pgEnum("benchmark_release_status", [
+  "draft",
+  "approved",
+  "published",
+  "withdrawn"
+]);
+
+export const benchmarkReleaseVisibilityEnum = pgEnum("benchmark_release_visibility", [
+  "internal_only",
+  "held_out",
+  "public"
 ]);
 
 export const users = pgTable(
@@ -342,6 +377,165 @@ export const auditEvents = pgTable(
     createdAtIndex: index("audit_events_created_at_idx").on(table.createdAt),
     eventIdIndex: index("audit_events_event_id_idx").on(table.eventId),
     targetUserIdIndex: index("audit_events_target_user_id_idx").on(table.targetUserId)
+  })
+);
+
+export const repoSyncRecords = pgTable(
+  "repo_sync_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    mathPackageCandidateId: text("math_package_candidate_id"),
+    repoOwner: text("repo_owner").notNull(),
+    repoName: text("repo_name").notNull(),
+    targetRepoPath: text("target_repo_path").notNull(),
+    pullRequestNumber: integer("pull_request_number"),
+    pullRequestUrl: text("pull_request_url"),
+    mergeCommitSha: text("merge_commit_sha"),
+    status: repoSyncStatusEnum("status").default("proposed").notNull(),
+    note: text("note"),
+    recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    lastUpdatedByUserId: uuid("last_updated_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    statusIndex: index("repo_sync_records_status_idx").on(table.status),
+    candidateIndex: index("repo_sync_records_math_package_candidate_id_idx").on(
+      table.mathPackageCandidateId
+    ),
+    pullRequestUnique: uniqueIndex("repo_sync_records_repo_pr_unique")
+      .on(table.repoOwner, table.repoName, table.pullRequestNumber)
+      .where(sql`${table.pullRequestNumber} is not null`)
+  })
+);
+
+export const packageFreezes = pgTable(
+  "package_freezes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    repoSyncRecordId: uuid("repo_sync_record_id")
+      .notNull()
+      .references(() => repoSyncRecords.id),
+    mathPackageCandidateId: text("math_package_candidate_id"),
+    packageId: text("package_id").notNull(),
+    packageVersion: text("package_version").notNull(),
+    packageDigest: text("package_digest").notNull(),
+    benchmarkFamily: text("benchmark_family").notNull(),
+    repoCommitSha: text("repo_commit_sha").notNull(),
+    repoTreePath: text("repo_tree_path").notNull(),
+    status: packageFreezeStatusEnum("status").default("active").notNull(),
+    note: text("note"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    repoSyncRecordIndex: index("package_freezes_repo_sync_record_id_idx").on(
+      table.repoSyncRecordId
+    ),
+    packageDigestUnique: uniqueIndex("package_freezes_package_digest_unique").on(
+      table.packageDigest
+    ),
+    mathPackageCandidateIndex: index("package_freezes_math_package_candidate_id_idx").on(
+      table.mathPackageCandidateId
+    )
+  })
+);
+
+export const benchmarkVersions = pgTable(
+  "benchmark_versions",
+  {
+    benchmarkVersionId: text("benchmark_version_id").primaryKey(),
+    packageFreezeId: uuid("package_freeze_id")
+      .notNull()
+      .references(() => packageFreezes.id),
+    packageId: text("package_id").notNull(),
+    packageVersion: text("package_version").notNull(),
+    packageDigest: text("package_digest").notNull(),
+    benchmarkFamily: text("benchmark_family").notNull(),
+    scopeLabel: text("scope_label").notNull(),
+    itemSetDefinition: jsonb("item_set_definition").$type<Record<string, unknown> | null>(),
+    launchability: benchmarkVersionLaunchabilityEnum("launchability")
+      .default("internal_only")
+      .notNull(),
+    displayLabel: text("display_label").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    packageFreezeUnique: uniqueIndex("benchmark_versions_package_freeze_id_unique").on(
+      table.packageFreezeId
+    ),
+    launchabilityIndex: index("benchmark_versions_launchability_idx").on(
+      table.launchability
+    ),
+    packageDigestIndex: index("benchmark_versions_package_digest_idx").on(
+      table.packageDigest
+    )
+  })
+);
+
+export const benchmarkReleases = pgTable(
+  "benchmark_releases",
+  {
+    benchmarkReleaseId: text("benchmark_release_id").primaryKey(),
+    benchmarkVersionId: text("benchmark_version_id")
+      .notNull()
+      .references(() => benchmarkVersions.benchmarkVersionId),
+    releaseLabel: text("release_label").notNull(),
+    status: benchmarkReleaseStatusEnum("status").default("draft").notNull(),
+    visibility: benchmarkReleaseVisibilityEnum("visibility")
+      .default("internal_only")
+      .notNull(),
+    methodologyArtifactRefs: jsonb("methodology_artifact_refs").$type<string[]>().notNull(),
+    summaryArtifactRefs: jsonb("summary_artifact_refs").$type<string[]>().notNull(),
+    summaryPayload: jsonb("summary_payload").$type<Record<string, unknown> | null>(),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    benchmarkVersionIndex: index("benchmark_releases_benchmark_version_id_idx").on(
+      table.benchmarkVersionId
+    ),
+    statusIndex: index("benchmark_releases_status_idx").on(table.status),
+    publicFeedIndex: index("benchmark_releases_status_visibility_published_at_idx").on(
+      table.status,
+      table.visibility,
+      table.publishedAt
+    )
   })
 );
 

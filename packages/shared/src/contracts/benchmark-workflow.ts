@@ -1,0 +1,38 @@
+import {
+  adminBenchmarkReleaseCreateInputSchema,
+  adminBenchmarkVersionCreateInputSchema,
+  adminBenchmarkVersionLaunchabilityUpdateInputSchema,
+  adminBenchmarkWorkflowActionInputSchema,
+  adminPackageFreezeCreateInputSchema,
+  adminRepoSyncRecordCreateInputSchema,
+  adminRepoSyncRecordStatusUpdateInputSchema,
+  benchmarkReleaseDetailResponseSchema,
+  benchmarkReleaseListResponseSchema,
+  benchmarkVersionDetailResponseSchema,
+  benchmarkVersionListResponseSchema,
+  packageFreezeDetailResponseSchema,
+  packageFreezeListResponseSchema,
+  publicBenchmarkReleaseListResponseSchema,
+  repoSyncRecordDetailResponseSchema,
+  repoSyncRecordListResponseSchema
+} from "../schemas/benchmark-workflow.js";
+
+export const benchmarkWorkflowContract = {
+  adminBenchmarkReleaseCreateInput: adminBenchmarkReleaseCreateInputSchema,
+  adminBenchmarkReleaseDetailResponse: benchmarkReleaseDetailResponseSchema,
+  adminBenchmarkReleaseListResponse: benchmarkReleaseListResponseSchema,
+  adminBenchmarkVersionCreateInput: adminBenchmarkVersionCreateInputSchema,
+  adminBenchmarkVersionDetailResponse: benchmarkVersionDetailResponseSchema,
+  adminBenchmarkVersionLaunchabilityUpdateInput:
+    adminBenchmarkVersionLaunchabilityUpdateInputSchema,
+  adminBenchmarkVersionListResponse: benchmarkVersionListResponseSchema,
+  adminBenchmarkWorkflowActionInput: adminBenchmarkWorkflowActionInputSchema,
+  adminPackageFreezeCreateInput: adminPackageFreezeCreateInputSchema,
+  adminPackageFreezeDetailResponse: packageFreezeDetailResponseSchema,
+  adminPackageFreezeListResponse: packageFreezeListResponseSchema,
+  adminRepoSyncRecordCreateInput: adminRepoSyncRecordCreateInputSchema,
+  adminRepoSyncRecordDetailResponse: repoSyncRecordDetailResponseSchema,
+  adminRepoSyncRecordListResponse: repoSyncRecordListResponseSchema,
+  adminRepoSyncRecordStatusUpdateInput: adminRepoSyncRecordStatusUpdateInputSchema,
+  publicBenchmarkReleaseListResponse: publicBenchmarkReleaseListResponseSchema
+};
