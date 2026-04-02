@@ -1,14 +1,43 @@
 import { z } from "zod";
 import {
-  attemptLifecycleStateSchema,
   evaluationVerdictClassSchema,
-  jobLifecycleStateSchema,
   runKindSchema,
   runLifecycleStateSchema
 } from "./run-control.js";
 import { runControlPolicySchema, runKindConcurrencyOverrideSchema } from "./run-governance.js";
 
 const timestampSchema = z.string().min(1);
+const portalTerminalRunLifecycleStateSchema = z.enum([
+  "succeeded",
+  "failed",
+  "cancelled"
+]);
+const portalNonTerminalRunLifecycleStateSchema = z.enum([
+  "created",
+  "queued",
+  "running",
+  "cancel_requested"
+]);
+const portalTerminalJobLifecycleStateSchema = z.enum([
+  "completed",
+  "failed",
+  "cancelled"
+]);
+const portalNonTerminalJobLifecycleStateSchema = z.enum([
+  "queued",
+  "claimed",
+  "running",
+  "cancel_requested"
+]);
+const portalTerminalAttemptLifecycleStateSchema = z.enum([
+  "succeeded",
+  "failed",
+  "cancelled"
+]);
+const portalNonTerminalAttemptLifecycleStateSchema = z.enum([
+  "prepared",
+  "active"
+]);
 
 function csvArraySchema<TItem extends z.ZodTypeAny>(itemSchema: TItem) {
   return z.preprocess((value) => {
@@ -85,7 +114,7 @@ export const portalRunLineageSummarySchema = z.object({
   latestJobId: z.string().nullable()
 });
 
-export const portalRunListItemSchema = z.object({
+const portalRunListItemBaseSchema = z.object({
   authMode: z.string(),
   benchmarkItemId: z.string(),
   benchmarkLabel: z.string(),
@@ -93,8 +122,6 @@ export const portalRunListItemSchema = z.object({
   benchmarkPackageId: z.string(),
   benchmarkPackageVersion: z.string(),
   benchmarkVersionId: z.string(),
-  completedAt: timestampSchema.nullable(),
-  durationMs: z.number().int().nonnegative().nullable(),
   failure: portalRunFailureSummarySchema,
   laneId: z.string(),
   latestAttemptId: z.string().nullable(),
@@ -108,11 +135,24 @@ export const portalRunListItemSchema = z.object({
   runKind: runKindSchema,
   runLifecycleBucket: portalRunsLifecycleBucketSchema,
   runMode: z.string(),
-  runState: runLifecycleStateSchema,
   startedAt: timestampSchema,
-  toolProfile: z.string(),
-  verdictClass: evaluationVerdictClassSchema.nullable()
+  toolProfile: z.string()
 });
+
+export const portalRunListItemSchema = z.union([
+  portalRunListItemBaseSchema.extend({
+    completedAt: timestampSchema,
+    durationMs: z.number().int().nonnegative(),
+    runState: portalTerminalRunLifecycleStateSchema,
+    verdictClass: evaluationVerdictClassSchema
+  }),
+  portalRunListItemBaseSchema.extend({
+    completedAt: z.null(),
+    durationMs: z.null(),
+    runState: portalNonTerminalRunLifecycleStateSchema,
+    verdictClass: z.null()
+  })
+]);
 
 export const portalRunsProviderFilterOptionSchema = z.object({
   count: z.number().int().nonnegative(),
@@ -160,29 +200,52 @@ export const portalRunTimelineEntrySchema = z.object({
   state: z.string().nullable()
 });
 
-export const portalRunJobSummarySchema = z.object({
-  completedAt: timestampSchema.nullable(),
+const portalRunJobSummaryBaseSchema = z.object({
   failure: portalRunFailureSummarySchema,
   jobId: z.string().nullable(),
   runId: z.string(),
-  startedAt: timestampSchema,
-  state: jobLifecycleStateSchema,
-  stopReason: z.string().nullable(),
-  verdictClass: evaluationVerdictClassSchema.nullable()
+  startedAt: timestampSchema
 });
 
-export const portalRunAttemptSummarySchema = z.object({
+export const portalRunJobSummarySchema = z.union([
+  portalRunJobSummaryBaseSchema.extend({
+    completedAt: timestampSchema,
+    state: portalTerminalJobLifecycleStateSchema,
+    stopReason: z.string(),
+    verdictClass: evaluationVerdictClassSchema
+  }),
+  portalRunJobSummaryBaseSchema.extend({
+    completedAt: z.null(),
+    state: portalNonTerminalJobLifecycleStateSchema,
+    stopReason: z.null(),
+    verdictClass: z.null()
+  })
+]);
+
+const portalRunAttemptSummaryBaseSchema = z.object({
   attemptId: z.string(),
-  completedAt: timestampSchema.nullable(),
   failure: portalRunFailureSummarySchema,
   jobId: z.string().nullable(),
   runId: z.string(),
-  startedAt: timestampSchema,
-  state: attemptLifecycleStateSchema,
-  stopReason: z.string().nullable(),
-  verdictClass: evaluationVerdictClassSchema.nullable(),
-  verifierResult: z.string().nullable()
+  startedAt: timestampSchema
 });
+
+export const portalRunAttemptSummarySchema = z.union([
+  portalRunAttemptSummaryBaseSchema.extend({
+    completedAt: timestampSchema,
+    state: portalTerminalAttemptLifecycleStateSchema,
+    stopReason: z.string(),
+    verdictClass: evaluationVerdictClassSchema,
+    verifierResult: z.string()
+  }),
+  portalRunAttemptSummaryBaseSchema.extend({
+    completedAt: z.null(),
+    state: portalNonTerminalAttemptLifecycleStateSchema,
+    stopReason: z.null(),
+    verdictClass: z.null(),
+    verifierResult: z.null()
+  })
+]);
 
 export const portalRunArtifactSummarySchema = z.object({
   artifactClassId: z.string(),

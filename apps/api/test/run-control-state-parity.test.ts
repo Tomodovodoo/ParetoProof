@@ -8,7 +8,9 @@ import {
   offlineIngestAttemptLifecycleStates,
   offlineIngestJobLifecycleStates,
   offlineIngestRunLifecycleStates,
+  portalRunJobSummarySchema,
   portalRunAttemptSummarySchema,
+  portalRunListItemSchema,
   problem9OfflineIngestResponseSchema,
   runKindCatalog,
   runKindValues,
@@ -29,6 +31,13 @@ import {
   runKindEnum,
   runStateEnum
 } from "../src/db/schema.ts";
+
+function collectUnionStateOptions(
+  schema: { options: Array<{ shape: Record<string, { options: readonly string[] }> }> },
+  key: string
+) {
+  return schema.options.flatMap((option) => [...(option.shape[key]?.options ?? [])]);
+}
 
 test("shared lifecycle catalogs, response schemas, and API Postgres enums stay in parity", () => {
   assert.deepEqual(runKindCatalog.map((entry) => entry.id), [...runKindValues]);
@@ -63,8 +72,16 @@ test("shared lifecycle catalogs, response schemas, and API Postgres enums stay i
   assert.deepEqual(attemptStateEnum.enumValues, [...attemptLifecycleStates]);
 
   assert.deepEqual(
-    portalRunAttemptSummarySchema.shape.state.options,
-    [...attemptLifecycleStates]
+    collectUnionStateOptions(portalRunListItemSchema, "runState").sort(),
+    [...runLifecycleStates].sort()
+  );
+  assert.deepEqual(
+    collectUnionStateOptions(portalRunJobSummarySchema, "state").sort(),
+    [...jobLifecycleStates].sort()
+  );
+  assert.deepEqual(
+    collectUnionStateOptions(portalRunAttemptSummarySchema, "state").sort(),
+    [...attemptLifecycleStates].sort()
   );
 
   assert.deepEqual(

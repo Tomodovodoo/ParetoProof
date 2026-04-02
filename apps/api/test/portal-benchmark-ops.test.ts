@@ -572,6 +572,61 @@ test("GET /portal/runs rejects invalid benchmark-ops query params", async (t) =>
   assert.equal(response.json().error, "invalid_portal_runs_query");
 });
 
+test("GET /portal/runs accepts non-terminal rows without invented terminal fields", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService({
+        getRunsList: async (query) => ({
+          ...buildRunsListResponse(query),
+          items: [
+            {
+              ...buildRunsListResponse(query).items[0],
+              completedAt: null,
+              durationMs: null,
+              runLifecycleBucket: "active",
+              runState: "running",
+              verdictClass: null
+            }
+          ],
+          summary: {
+            activeRuns: 1,
+            failedRuns: 0,
+            returnedCount: 1,
+            totalMatches: 1,
+            verdictCounts: {
+              fail: 0,
+              invalid_result: 0,
+              pass: 0
+            }
+          }
+        })
+      }),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/runs"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.runsListResponse.parse(response.json());
+  assert.equal(payload.items[0]?.completedAt, null);
+  assert.equal(payload.items[0]?.durationMs, null);
+  assert.equal(payload.items[0]?.verdictClass, null);
+  assert.equal(payload.summary.verdictCounts.pass, 0);
+});
+
 test("GET /portal/benchmarks returns a contract-valid package summary list", async (t) => {
   const app = Fastify();
 
