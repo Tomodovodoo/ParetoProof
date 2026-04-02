@@ -306,6 +306,142 @@ test("POST /internal/worker/claims returns an active lease when work is availabl
   assert.equal(response.json().workerJob?.jobId, "job-1");
 });
 
+test("POST /internal/worker/claims reclaims stale unstarted work without queued rewinds", async (t) => {
+  const app = Fastify();
+  const updateCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      attemptId: "attempt-1",
+                      attemptRowId: "attempt-row-1",
+                      benchmarkItemId: "Problem9",
+                      benchmarkPackageDigest: "a".repeat(64),
+                      benchmarkPackageId: "firstproof/Problem9",
+                      benchmarkPackageVersion: "2026.03.13",
+                      harnessRevision: "worker-harness.v1",
+                      jobId: "job-1",
+                      jobRowId: "job-row-1",
+                      laneId: "lean422_exact",
+                      modelConfigId: "openai/gpt-5",
+                      modelSnapshotId: "openai/gpt-5.2026-03-13",
+                      promptPackageDigest: "b".repeat(64),
+                      promptProtocolVersion: "problem9-prompt-protocol.v1",
+                      providerFamily: "openai",
+                      runId: "run-1",
+                      runKind: "single_run",
+                      runMode: "bounded_agentic_attempt",
+                      runRowId: "run-row-1",
+                      runState: "queued",
+                      toolProfile: "workspace_edit_limited"
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return {
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-2" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerInternalWorkerRoutes(app, fakeDb as never, buildRuntimeEnv());
+
+  const response = await app.inject({
+    method: "POST",
+    headers: {
+      authorization: "Bearer worker-bootstrap-token"
+    },
+    payload: buildClaimRequest(),
+    url: "/internal/worker/claims"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().leaseStatus, "active");
+  assert.equal(response.json().workerJob?.jobId, "job-1");
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 3);
+  assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].values.state, "claimed");
+  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(
+    updateCalls.some((call) => call.values.state === "queued"),
+    false
+  );
+});
+
 test("POST /internal/worker/jobs/:jobId/heartbeat returns continue responses for active leases", async (t) => {
   const app = Fastify();
 
@@ -614,7 +750,7 @@ test("artifact manifest validation rejects digest drift when reusing an existing
   );
 });
 
-test("claim requeues stale unstarted leases before assigning work", async () => {
+test("claim fences stale unstarted leases and reclaims work without queued rewinds", async () => {
   const updateCalls: Array<{
     target: unknown;
     values: Record<string, unknown>;
@@ -635,18 +771,6 @@ test("claim requeues stale unstarted leases before assigning work", async () => 
                   },
                   where() {
                     return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
-                  }
-                };
-              }
-            };
-          }
-
-          if (selectCount === 2) {
-            return {
-              from() {
-                return {
-                  where() {
-                    return Promise.resolve([]);
                   }
                 };
               }
@@ -734,16 +858,18 @@ test("claim requeues stale unstarted leases before assigning work", async () => 
 
   assert.equal(response.leaseStatus, "active");
   assert.equal(response.workerJob?.jobId, "job-1");
-  assert.equal(selectCount, 3);
-  assert.equal(updateCalls.length, 5);
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 3);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].values.state, "queued");
-  assert.equal(updateCalls[2].values.state, "queued");
-  assert.equal(updateCalls[3].values.state, "claimed");
-  assert.equal(updateCalls[4].values.state, "running");
+  assert.equal(updateCalls[1].values.state, "claimed");
+  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(
+    updateCalls.some((call) => call.values.state === "queued"),
+    false
+  );
 });
 
-test("stale-lease recovery does not downgrade a run while another job is still active", async () => {
+test("stale-lease recovery does not rewind durable job or run state", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
   let selectCount = 0;
   const fakeDb = {
@@ -761,18 +887,6 @@ test("stale-lease recovery does not downgrade a run while another job is still a
                   },
                   where() {
                     return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
-                  }
-                };
-              }
-            };
-          }
-
-          if (selectCount === 2) {
-            return {
-              from() {
-                return {
-                  where() {
-                    return Promise.resolve([{ runRowId: "run-row-1" }]);
                   }
                 };
               }
@@ -859,11 +973,11 @@ test("stale-lease recovery does not downgrade a run while another job is still a
   const response = await control.claim(buildClaimRequest());
 
   assert.equal(response.leaseStatus, "active");
-  assert.equal(selectCount, 3);
-  assert.equal(updateCalls.length, 3);
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 2);
   assert.equal(updateCalls[0].revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].state, "queued");
-  assert.equal(updateCalls[2].state, "claimed");
+  assert.equal(updateCalls[1].state, "claimed");
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
 });
 
 test("heartbeat rotates the job token while extending the lease", async () => {

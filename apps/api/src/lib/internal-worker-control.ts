@@ -218,9 +218,9 @@ function supportsCurrentProblem9Assignment(request: WorkerClaimRequest) {
   );
 }
 
-function queuedJobWhereClause(): SQL {
+function claimableUnstartedJobWhereClause(): SQL {
   return and(
-    eq(jobs.state, "queued"),
+    inArray(jobs.state, ["queued", "claimed"]),
     eq(attempts.state, "prepared"),
     eq(runs.runKind, "single_run"),
     inArray(runs.authMode, [...problem9HostedAuthModes]),
@@ -267,7 +267,7 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
         gt(workerJobLeases.leaseExpiresAt, now)
       )
     )
-    .where(and(queuedJobWhereClause(), isNull(workerJobLeases.id)))
+    .where(and(claimableUnstartedJobWhereClause(), isNull(workerJobLeases.id)))
     .orderBy(asc(jobs.createdAt), asc(attempts.createdAt))
     .limit(1);
 
@@ -305,7 +305,7 @@ function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
 }
 
-async function requeueExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
+async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
   const staleLeases = await tx
     .select({
       leaseRowId: workerJobLeases.id
@@ -343,55 +343,12 @@ async function requeueExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
       )
     )
     .returning({
-      jobRowId: workerJobLeases.jobId
+      leaseRowId: workerJobLeases.id
     });
 
   if (revokedLeases.length === 0) {
     return;
   }
-
-  const revokedJobRowIds = revokedLeases.map((lease) => lease.jobRowId);
-  const requeuedJobs = await tx
-    .update(jobs)
-    .set({
-      state: "queued",
-      updatedAt: now
-    })
-    .where(and(inArray(jobs.id, revokedJobRowIds), eq(jobs.state, "claimed")))
-    .returning({
-      runRowId: jobs.runId
-    });
-
-  if (requeuedJobs.length === 0) {
-    return;
-  }
-
-  const runRowIds = [...new Set(requeuedJobs.map((job) => job.runRowId))];
-  const activeRunRows = await tx
-    .select({
-      runRowId: jobs.runId
-    })
-    .from(jobs)
-    .where(
-      and(
-        inArray(jobs.runId, runRowIds),
-        inArray(jobs.state, ["claimed", "running", "cancel_requested"])
-      )
-    );
-  const activeRunIds = new Set(activeRunRows.map((run) => run.runRowId));
-  const runsToQueue = runRowIds.filter((runRowId) => !activeRunIds.has(runRowId));
-
-  if (runsToQueue.length === 0) {
-    return;
-  }
-
-  await tx
-    .update(runs)
-    .set({
-      state: "queued",
-      updatedAt: now
-    })
-    .where(and(inArray(runs.id, runsToQueue), eq(runs.state, "running")));
 }
 
 function normalizeRelativePath(relativePath: string) {
@@ -1025,7 +982,7 @@ export function createInternalWorkerControlService(db: DbClient) {
       }
 
       return db.transaction(async (tx) => {
-        await requeueExpiredUnstartedLeases(tx, new Date());
+        await revokeExpiredUnstartedLeases(tx, new Date());
         const candidate = await selectNextClaimCandidate(tx);
 
         if (!candidate) {
