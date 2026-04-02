@@ -57,7 +57,11 @@ export const auditSubjectKindEnum = pgEnum("audit_subject_kind", [
   "benchmark_workflow",
   "role_grant",
   "run",
-  "user_identity"
+  "user_identity",
+  "worker_pool",
+  "worker_instance",
+  "worker_incident",
+  "worker_rollout"
 ]);
 
 export const auditSeverityEnum = pgEnum("audit_severity", [
@@ -151,6 +155,26 @@ export const workerRuntimeEnum = pgEnum("worker_runtime", [
   "local_docker",
   "modal"
 ]);
+
+export const workerPoolRolloutClassEnum = pgEnum("worker_pool_rollout_class", [
+  "stable",
+  "canary",
+  "quarantine"
+]);
+
+export const workerInstanceLifecycleStateEnum = pgEnum(
+  "worker_instance_lifecycle_state",
+  [
+    "registering",
+    "ready",
+    "claiming",
+    "running",
+    "draining",
+    "unhealthy",
+    "recovering",
+    "terminated"
+  ]
+);
 
 export const repoSyncStatusEnum = pgEnum("repo_sync_status", [
   "proposed",
@@ -376,6 +400,72 @@ export const auditEvents = pgTable(
     createdAtIndex: index("audit_events_created_at_idx").on(table.createdAt),
     eventIdIndex: index("audit_events_event_id_idx").on(table.eventId),
     targetUserIdIndex: index("audit_events_target_user_id_idx").on(table.targetUserId)
+  })
+);
+
+export const workerPoolDefinitions = pgTable(
+  "worker_pool_definitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workerPool: text("worker_pool").notNull(),
+    workerRuntime: workerRuntimeEnum("worker_runtime").notNull(),
+    defaultRolloutClass: workerPoolRolloutClassEnum("default_rollout_class")
+      .default("stable")
+      .notNull(),
+    ownershipSummary: text("ownership_summary"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    workerPoolUnique: uniqueIndex("worker_pool_definitions_worker_pool_unique").on(
+      table.workerPool
+    ),
+    runtimeIndex: index("worker_pool_definitions_worker_runtime_idx").on(table.workerRuntime)
+  })
+);
+
+export const workerInstances = pgTable(
+  "worker_instances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workerId: text("worker_id").notNull(),
+    workerPoolDefinitionId: uuid("worker_pool_definition_id")
+      .notNull()
+      .references(() => workerPoolDefinitions.id),
+    workerRuntime: workerRuntimeEnum("worker_runtime").notNull(),
+    workerVersion: text("worker_version").notNull(),
+    currentLifecycleState: workerInstanceLifecycleStateEnum("current_lifecycle_state")
+      .default("ready")
+      .notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastClaimAt: timestamp("last_claim_at", { withTimezone: true }),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+    lastLeaseActivityAt: timestamp("last_lease_activity_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    workerIdUnique: uniqueIndex("worker_instances_worker_id_unique").on(table.workerId),
+    poolStateIndex: index("worker_instances_pool_state_idx").on(
+      table.workerPoolDefinitionId,
+      table.currentLifecycleState
+    ),
+    lastHeartbeatAtIndex: index("worker_instances_last_heartbeat_at_idx").on(
+      table.lastHeartbeatAt
+    )
   })
 );
 
@@ -753,6 +843,9 @@ export const workerJobLeases = pgTable(
     attemptId: uuid("attempt_id")
       .notNull()
       .references(() => attempts.id, { onDelete: "cascade" }),
+    workerInstanceId: uuid("worker_instance_id").references(() => workerInstances.id, {
+      onDelete: "set null"
+    }),
     workerId: text("worker_id").notNull(),
     workerPool: text("worker_pool").notNull(),
     workerRuntime: workerRuntimeEnum("worker_runtime").notNull(),
@@ -784,6 +877,9 @@ export const workerJobLeases = pgTable(
     runIndex: index("worker_job_leases_run_id_idx").on(table.runId),
     jobIndex: index("worker_job_leases_job_id_idx").on(table.jobId),
     attemptIndex: index("worker_job_leases_attempt_id_idx").on(table.attemptId),
+    workerInstanceIndex: index("worker_job_leases_worker_instance_id_idx").on(
+      table.workerInstanceId
+    ),
     leaseExpiryIndex: index("worker_job_leases_lease_expires_at_idx").on(table.leaseExpiresAt)
   })
 );

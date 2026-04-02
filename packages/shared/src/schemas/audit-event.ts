@@ -13,7 +13,11 @@ export const auditSubjectKindSchema = z.enum([
   "benchmark_workflow",
   "role_grant",
   "run",
-  "user_identity"
+  "user_identity",
+  "worker_pool",
+  "worker_instance",
+  "worker_incident",
+  "worker_rollout"
 ]);
 
 export const auditSeveritySchema = z.enum(["info", "warning", "critical"]);

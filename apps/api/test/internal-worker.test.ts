@@ -244,6 +244,7 @@ function buildLeaseStateRow(overrides: Partial<Record<string, unknown>> = {}) {
     revokedAt: null,
     runState: "running",
     verifierVerdict: null,
+    workerInstanceId: null,
     verdictDigest: null,
     ...overrides
   };
@@ -352,6 +353,10 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
     target: unknown;
     values: Record<string, unknown>;
   }> = [];
+  const insertCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
   let selectCount = 0;
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
@@ -367,7 +372,24 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
                     return this;
                   },
                   where() {
-                    return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-1"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
                   }
                 };
               }
@@ -430,15 +452,39 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
                   return this;
                 },
                 returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        workerInstanceId: "stale-worker-instance-1"
+                      }
+                    ]);
+                  }
+
                   return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
                 }
               };
             }
           };
         },
-        insert() {
+        insert(target: unknown) {
           return {
-            values() {
+            values(values: Record<string, unknown>) {
+              insertCalls.push({ target, values });
+
+              if (insertCalls.length < 3) {
+                return {
+                  onConflictDoUpdate() {
+                    return {
+                      returning() {
+                        return Promise.resolve([
+                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
+                        ]);
+                      }
+                    };
+                  }
+                };
+              }
+
               return {
                 returning() {
                   return Promise.resolve([{ id: "lease-row-2" }]);
@@ -471,11 +517,16 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().leaseStatus, "active");
   assert.equal(response.json().workerJob?.jobId, "job-1");
-  assert.equal(selectCount, 2);
-  assert.equal(updateCalls.length, 3);
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 3);
+  assert.equal(insertCalls[0]?.values.workerPool, "modal-dev");
+  assert.equal(insertCalls[1]?.values.currentLifecycleState, "running");
+  assert.equal(insertCalls[2]?.values.workerInstanceId, "worker-instance-1");
+  assert.equal(updateCalls.length, 4);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].values.state, "claimed");
-  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(updateCalls[1].values.currentLifecycleState, "ready");
+  assert.equal(updateCalls[2].values.state, "claimed");
+  assert.equal(updateCalls[3].values.state, "running");
   assert.equal(
     updateCalls.some((call) => call.values.state === "queued"),
     false
@@ -1472,6 +1523,10 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
     target: unknown;
     values: Record<string, unknown>;
   }> = [];
+  const insertCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
   let selectCount = 0;
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
@@ -1487,7 +1542,24 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
                     return this;
                   },
                   where() {
-                    return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-1"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
                   }
                 };
               }
@@ -1540,11 +1612,11 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
                 },
                 returning() {
                   if (updateCalls.length === 1) {
-                    return Promise.resolve([{ jobRowId: "job-row-1" }]);
-                  }
-
-                  if (updateCalls.length === 2) {
-                    return Promise.resolve([{ runRowId: "run-row-1" }]);
+                    return Promise.resolve([
+                      {
+                        workerInstanceId: "stale-worker-instance-1"
+                      }
+                    ]);
                   }
 
                   return Promise.resolve([{ id: "job-row-1" }]);
@@ -1553,9 +1625,25 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
             }
           };
         },
-        insert() {
+        insert(target: unknown) {
           return {
-            values() {
+            values(values: Record<string, unknown>) {
+              insertCalls.push({ target, values });
+
+              if (insertCalls.length < 3) {
+                return {
+                  onConflictDoUpdate() {
+                    return {
+                      returning() {
+                        return Promise.resolve([
+                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
+                        ]);
+                      }
+                    };
+                  }
+                };
+              }
+
               return {
                 returning() {
                   return Promise.resolve([{ id: "lease-row-2" }]);
@@ -1575,11 +1663,16 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
 
   assert.equal(response.leaseStatus, "active");
   assert.equal(response.workerJob?.jobId, "job-1");
-  assert.equal(selectCount, 2);
-  assert.equal(updateCalls.length, 3);
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 3);
+  assert.equal(insertCalls[0]?.values.workerPool, "modal-dev");
+  assert.equal(insertCalls[1]?.values.currentLifecycleState, "running");
+  assert.equal(insertCalls[2]?.values.workerInstanceId, "worker-instance-1");
+  assert.equal(updateCalls.length, 4);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].values.state, "claimed");
-  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(updateCalls[1].values.currentLifecycleState, "ready");
+  assert.equal(updateCalls[2].values.state, "claimed");
+  assert.equal(updateCalls[3].values.state, "running");
   assert.equal(
     updateCalls.some((call) => call.values.state === "queued"),
     false
@@ -1588,6 +1681,7 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
 
 test("stale-lease recovery does not rewind durable job or run state", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
   let selectCount = 0;
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
@@ -1603,7 +1697,24 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
                     return this;
                   },
                   where() {
-                    return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-2"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
                   }
                 };
               }
@@ -1656,11 +1767,11 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
                 },
                 returning() {
                   if (updateCalls.length === 1) {
-                    return Promise.resolve([{ jobRowId: "job-row-1" }]);
-                  }
-
-                  if (updateCalls.length === 2) {
-                    return Promise.resolve([{ runRowId: "run-row-1" }]);
+                    return Promise.resolve([
+                      {
+                        workerInstanceId: "stale-worker-instance-2"
+                      }
+                    ]);
                   }
 
                   return Promise.resolve([{ id: "job-row-1" }]);
@@ -1671,7 +1782,23 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
         },
         insert() {
           return {
-            values() {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length < 3) {
+                return {
+                  onConflictDoUpdate() {
+                    return {
+                      returning() {
+                        return Promise.resolve([
+                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
+                        ]);
+                      }
+                    };
+                  }
+                };
+              }
+
               return {
                 returning() {
                   return Promise.resolve([{ id: "lease-row-2" }]);
@@ -1690,16 +1817,20 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
   const response = await control.claim(buildClaimRequest());
 
   assert.equal(response.leaseStatus, "active");
-  assert.equal(selectCount, 2);
-  assert.equal(updateCalls.length, 2);
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 3);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "running");
+  assert.equal(insertCalls[2]?.workerInstanceId, "worker-instance-1");
+  assert.equal(updateCalls.length, 3);
   assert.equal(updateCalls[0].revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].state, "claimed");
+  assert.equal(updateCalls[1].currentLifecycleState, "ready");
+  assert.equal(updateCalls[2].state, "claimed");
   assert.equal(updateCalls.some((call) => call.state === "queued"), false);
 });
 
 test("claim keeps any still-unrevoked lease row blocking candidate selection", async () => {
   let capturedLeaseJoin: SQL | null = null;
-  let insertCalled = false;
+  const insertCalls: Array<Record<string, unknown>> = [];
   let updateCalled = false;
   let selectCount = 0;
   const fakeDb = {
@@ -1751,8 +1882,23 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
           throw new Error("claim should stay idle when a prior lease row is still unrevoked");
         },
         insert() {
-          insertCalled = true;
-          throw new Error("claim should not insert a new lease while an older row is still unrevoked");
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([
+                        { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
+                      ]);
+                    }
+                  };
+                }
+              };
+            }
+          };
         }
       };
 
@@ -1767,7 +1913,9 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
   assert.equal(response.leaseStatus, "idle");
   assert.equal(selectCount, 2);
   assert.equal(updateCalled, false);
-  assert.equal(insertCalled, false);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[0]?.workerPool, "modal-dev");
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
   assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
   assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
   assert.equal(query.params.length, 0);
@@ -2195,6 +2343,7 @@ test("heartbeat rotates the job token while extending the lease", async () => {
                       revokedAt: null,
                       runState: "queued",
                       verifierVerdict: {},
+                      workerInstanceId: "worker-instance-1",
                       verdictDigest: "d".repeat(64)
                     }
                   ]);
@@ -2233,9 +2382,11 @@ test("heartbeat rotates the job token while extending the lease", async () => {
   assert.notEqual(response.jobToken, "job-token-1");
   assert.ok(response.jobTokenExpiresAt);
   assert.equal(typeof updateCalls[0].jobTokenHash, "string");
-  assert.equal(updateCalls[1].state, "running");
-  assert.equal(updateCalls[2].state, "active");
-  assert.equal(updateCalls[3].state, "running");
+  assert.equal(updateCalls[1].currentLifecycleState, "running");
+  assert.equal(updateCalls[1].lastHeartbeatAt instanceof Date, true);
+  assert.equal(updateCalls[2].state, "running");
+  assert.equal(updateCalls[3].state, "active");
+  assert.equal(updateCalls[4].state, "running");
 });
 
 test("heartbeat returns expired when lease renewal loses the race with recovery revocation", async () => {
@@ -2267,6 +2418,7 @@ test("heartbeat returns expired when lease renewal loses the race with recovery 
                       revokedAt: null,
                       runState: "queued",
                       verifierVerdict: {},
+                      workerInstanceId: "worker-instance-1",
                       verdictDigest: "d".repeat(64)
                     }
                   ]);
