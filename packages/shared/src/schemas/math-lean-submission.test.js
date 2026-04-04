@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   mathLeanSubmissionDetailSchema,
   mathLeanSubmissionCreateInputSchema,
+  mathLeanReviewGateStatusSchema,
   mathLeanSubmissionUpdateInputSchema,
   mathLeanReviewGateUpdateInputSchema
 } from "./math-lean-submission.js";
@@ -79,6 +80,29 @@ describe("math lean submission schemas", () => {
         updatedAt: "2026-04-01T00:00:00.000Z"
       }).success
     ).toBeFalse();
+  });
+
+  it("rejects persisted blocked review gates without a rationale", () => {
+    expect(
+      mathLeanReviewGateStatusSchema.safeParse({
+        gateKind: "peer_review",
+        rationale: null,
+        source: "human_reviewer",
+        state: "blocked",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+        updatedByUserId: "user-9"
+      }).success
+    ).toBeFalse();
+    expect(
+      mathLeanReviewGateStatusSchema.safeParse({
+        gateKind: "peer_review",
+        rationale: null,
+        source: "default_policy",
+        state: "required",
+        updatedAt: null,
+        updatedByUserId: null
+      }).success
+    ).toBeTrue();
   });
 
   it("rejects blank review-gate rationales", () => {

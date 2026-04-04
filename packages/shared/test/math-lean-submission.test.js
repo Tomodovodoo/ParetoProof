@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  applyMathLeanSubmissionProfileUpdate,
   defaultLeanReviewGateMatrixBySubmissionKind,
   getApplicableLeanAutomationChecks,
   getGeneratedLeanArtifactRolesForCheckKind,
@@ -69,5 +70,58 @@ describe("math lean submission contracts", () => {
         mathQuestionRevisionId: "revision-1"
       }).success
     ).toBeTrue();
+  });
+
+  it("validates merged Lean submission profile updates against the full profile invariants", () => {
+    expect(() =>
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "not_applicable",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: null,
+          targetLaneId: null,
+          targetModuleName: null
+        },
+        {
+          equivalenceExpectation: "canonical_statement"
+        }
+      )
+    ).toThrow();
+
+    expect(() =>
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetLaneId: null,
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        },
+        {
+          targetModuleName: null
+        }
+      )
+    ).toThrow();
+
+    expect(
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetLaneId: null,
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        },
+        {
+          equivalenceExpectation: "prior_submission"
+        }
+      )
+    ).toEqual({
+      equivalenceExpectation: "prior_submission",
+      leanSubmissionKind: "lean_proof_submission",
+      targetDeclarationName: "FirstProof.Problem9.problem9",
+      targetLaneId: null,
+      targetModuleName: "FirstProof.Problem9.Candidate"
+    });
   });
 });

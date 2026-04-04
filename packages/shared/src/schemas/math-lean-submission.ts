@@ -116,6 +116,22 @@ function addMissingEquivalenceTargetIssues(
   }
 }
 
+function addMissingReviewGateRationaleIssues(
+  value: {
+    rationale?: string | null;
+    state: "required" | "satisfied" | "waived" | "blocked";
+  },
+  context: z.RefinementCtx
+) {
+  if ((value.state === "blocked" || value.state === "waived") && !value.rationale) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "rationale is required when a review gate is blocked or waived.",
+      path: ["rationale"]
+    });
+  }
+}
+
 export const mathLeanSubmissionProfileSchema = z.object({
   equivalenceExpectation: leanEquivalenceExpectationSchema,
   leanSubmissionKind: leanSubmissionKindSchema,
@@ -154,7 +170,7 @@ export const mathLeanReviewGateStatusSchema = z.object({
   state: leanReviewGateStateSchema,
   updatedAt: z.string().nullable(),
   updatedByUserId: z.string().min(1).nullable()
-});
+}).superRefine(addMissingReviewGateRationaleIssues);
 
 export const mathLeanSubmissionDetailSchema = z.object({
   artifacts: z.array(mathLeanArtifactRefSchema),
@@ -229,12 +245,4 @@ export const mathLeanAutomationEnqueueInputSchema = z.object({
 export const mathLeanReviewGateUpdateInputSchema = z.object({
   rationale: optionalNullableTrimmedStringSchema,
   state: leanReviewGateStateSchema
-}).superRefine((value, context) => {
-  if ((value.state === "blocked" || value.state === "waived") && !value.rationale) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "rationale is required when a review gate is blocked or waived.",
-      path: ["rationale"]
-    });
-  }
-});
+}).superRefine(addMissingReviewGateRationaleIssues);

@@ -3,6 +3,7 @@ import {
   mathLeanReviewGateUpdateInputSchema,
   mathLeanSubmissionCreateInputSchema,
   mathLeanSubmissionDetailSchema,
+  mathLeanSubmissionProfileSchema,
   mathLeanSubmissionUpdateInputSchema
 } from "../schemas/math-lean-submission.js";
 import type {
@@ -13,7 +14,9 @@ import type {
   LeanReviewGateCatalogEntry,
   LeanReviewGateKind,
   LeanSubmissionKind,
-  LeanSubmissionKindCatalogEntry
+  LeanSubmissionKindCatalogEntry,
+  MathLeanSubmissionProfile,
+  MathLeanSubmissionUpdateInput
 } from "../types/math-lean-submission.js";
 
 export const leanArtifactRoleCatalog = [
@@ -214,6 +217,33 @@ export function isLeanArtifactRoleAllowedForSubmissionKind(
   artifactRole: LeanArtifactRole
 ) {
   return getAllowedLeanInputArtifactRoles(kind).includes(artifactRole);
+}
+
+export function applyMathLeanSubmissionProfileUpdate(
+  profile: MathLeanSubmissionProfile,
+  update: MathLeanSubmissionUpdateInput
+): MathLeanSubmissionProfile {
+  const parsedProfile = mathLeanSubmissionProfileSchema.parse(profile);
+  const parsedUpdate = mathLeanSubmissionUpdateInputSchema.parse(update);
+
+  // PATCH payloads can omit unchanged target fields, so validate the merged result too.
+  return mathLeanSubmissionProfileSchema.parse({
+    equivalenceExpectation:
+      parsedUpdate.equivalenceExpectation ?? parsedProfile.equivalenceExpectation,
+    leanSubmissionKind: parsedProfile.leanSubmissionKind,
+    targetDeclarationName:
+      parsedUpdate.targetDeclarationName !== undefined
+        ? parsedUpdate.targetDeclarationName
+        : parsedProfile.targetDeclarationName,
+    targetLaneId:
+      parsedUpdate.targetLaneId !== undefined
+        ? parsedUpdate.targetLaneId
+        : parsedProfile.targetLaneId,
+    targetModuleName:
+      parsedUpdate.targetModuleName !== undefined
+        ? parsedUpdate.targetModuleName
+        : parsedProfile.targetModuleName
+  });
 }
 
 export const mathLeanSubmissionContract = {

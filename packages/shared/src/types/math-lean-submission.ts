@@ -119,14 +119,27 @@ export type MathLeanAutomationCheckStatus = {
   state: LeanAutomationCheckState;
 };
 
-export type MathLeanReviewGateStatus = {
+type MathLeanResolvedReviewGateStatus = {
   gateKind: LeanReviewGateKind;
   rationale: string | null;
   source: LeanReviewGateSource;
-  state: LeanReviewGateState;
+  state: "required" | "satisfied";
   updatedAt: string | null;
   updatedByUserId: string | null;
 };
+
+type MathLeanExplainedReviewGateStatus = {
+  gateKind: LeanReviewGateKind;
+  rationale: string;
+  source: LeanReviewGateSource;
+  state: "waived" | "blocked";
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+};
+
+export type MathLeanReviewGateStatus =
+  | MathLeanResolvedReviewGateStatus
+  | MathLeanExplainedReviewGateStatus;
 
 export type MathLeanSubmissionDetail = {
   artifacts: MathLeanArtifactRef[];
@@ -161,7 +174,16 @@ export type MathLeanAutomationEnqueueInput = {
   forceRerun?: boolean;
 };
 
-export type MathLeanReviewGateUpdateInput = {
+type MathLeanResolvedReviewGateUpdateInput = {
   rationale?: string | null;
-  state: LeanReviewGateState;
+  state: "required" | "satisfied";
 };
+
+type MathLeanExplainedReviewGateUpdateInput = {
+  rationale: string;
+  state: "waived" | "blocked";
+};
+
+export type MathLeanReviewGateUpdateInput =
+  | MathLeanResolvedReviewGateUpdateInput
+  | MathLeanExplainedReviewGateUpdateInput;
