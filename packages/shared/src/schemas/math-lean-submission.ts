@@ -132,13 +132,17 @@ function addMissingReviewGateRationaleIssues(
   }
 }
 
-export const mathLeanSubmissionProfileSchema = z.object({
+export const mathLeanSubmissionProfileBaseSchema = z.object({
   equivalenceExpectation: leanEquivalenceExpectationSchema,
   leanSubmissionKind: leanSubmissionKindSchema,
   targetDeclarationName: z.string().trim().min(1).nullable(),
   targetLaneId: z.string().trim().min(1).nullable(),
   targetModuleName: z.string().trim().min(1).nullable()
-}).superRefine(addMissingEquivalenceTargetIssues);
+});
+
+export const mathLeanSubmissionProfileSchema = mathLeanSubmissionProfileBaseSchema.superRefine(
+  addMissingEquivalenceTargetIssues
+);
 
 export const mathLeanArtifactRefSchema = z.object({
   artifactId: z.string().min(1).nullable(),

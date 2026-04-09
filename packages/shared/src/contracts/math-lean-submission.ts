@@ -3,6 +3,7 @@ import {
   mathLeanReviewGateUpdateInputSchema,
   mathLeanSubmissionCreateInputSchema,
   mathLeanSubmissionDetailSchema,
+  mathLeanSubmissionProfileBaseSchema,
   mathLeanSubmissionProfileSchema,
   mathLeanSubmissionUpdateInputSchema
 } from "../schemas/math-lean-submission.js";
@@ -223,7 +224,7 @@ export function applyMathLeanSubmissionProfileUpdate(
   profile: MathLeanSubmissionProfile,
   update: MathLeanSubmissionUpdateInput
 ): MathLeanSubmissionProfile {
-  const parsedProfile = mathLeanSubmissionProfileSchema.parse(profile);
+  const parsedProfile = mathLeanSubmissionProfileBaseSchema.parse(profile);
   const parsedUpdate = mathLeanSubmissionUpdateInputSchema.parse(update);
 
   // PATCH payloads can omit unchanged target fields, so validate the merged result too.

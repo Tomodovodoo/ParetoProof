@@ -124,4 +124,46 @@ describe("math lean submission contracts", () => {
       targetModuleName: "FirstProof.Problem9.Candidate"
     });
   });
+
+  it("still rejects targetless targeted-equivalence updates after merging with an invalid stored profile", () => {
+    expect(() =>
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: null,
+          targetLaneId: null,
+          targetModuleName: null
+        },
+        {
+          equivalenceExpectation: "prior_submission"
+        }
+      )
+    ).toThrow();
+  });
+
+  it("can repair a legacy invalid profile when the patch supplies the missing target fields", () => {
+    expect(
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: null,
+          targetLaneId: null,
+          targetModuleName: null
+        },
+        {
+          equivalenceExpectation: "canonical_statement",
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        }
+      )
+    ).toEqual({
+      equivalenceExpectation: "canonical_statement",
+      leanSubmissionKind: "lean_proof_submission",
+      targetDeclarationName: "FirstProof.Problem9.problem9",
+      targetLaneId: null,
+      targetModuleName: "FirstProof.Problem9.Candidate"
+    });
+  });
 });

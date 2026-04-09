@@ -50,6 +50,19 @@ describe("math lean submission schemas", () => {
     expect(mathLeanSubmissionUpdateInputSchema.safeParse({}).success).toBeFalse();
   });
 
+  it("allows sparse targeted-equivalence updates so merged validation can decide final validity", () => {
+    expect(
+      mathLeanSubmissionUpdateInputSchema.safeParse({
+        equivalenceExpectation: "canonical_statement"
+      }).success
+    ).toBeTrue();
+    expect(
+      mathLeanSubmissionUpdateInputSchema.safeParse({
+        equivalenceExpectation: "prior_submission"
+      }).success
+    ).toBeTrue();
+  });
+
   it("rejects explicit target clears when equivalence expectation still requires a target", () => {
     expect(
       mathLeanSubmissionUpdateInputSchema.safeParse({
