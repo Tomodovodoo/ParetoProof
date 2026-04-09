@@ -58,11 +58,70 @@ const portalVerdictOrder: Record<EvaluationVerdictClass, number> = {
 };
 
 function compareNullableTimestampDesc(left: string | null, right: string | null) {
-  return Date.parse(right ?? "") - Date.parse(left ?? "");
+  if (left === right) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return Date.parse(right) - Date.parse(left);
+}
+
+function compareRunCompletedAtDesc(left: PortalRunListItem, right: PortalRunListItem) {
+  const completedAtOrder = compareNullableTimestampDesc(left.completedAt, right.completedAt);
+
+  if (completedAtOrder !== 0) {
+    return completedAtOrder;
+  }
+
+  return Date.parse(right.startedAt) - Date.parse(left.startedAt);
+}
+
+function compareBenchmarkLatestCompletedAtDesc(
+  left: Pick<PortalBenchmarksListResponse["items"][number], "benchmarkPackageId" | "latestCompletedAt">,
+  right: Pick<PortalBenchmarksListResponse["items"][number], "benchmarkPackageId" | "latestCompletedAt">
+) {
+  const completedAtOrder = compareNullableTimestampDesc(
+    left.latestCompletedAt,
+    right.latestCompletedAt
+  );
+
+  if (completedAtOrder !== 0) {
+    return completedAtOrder;
+  }
+
+  return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
 }
 
 function getDurationSortValue(durationMs: number | null) {
   return durationMs ?? Number.NEGATIVE_INFINITY;
+}
+
+function compareRunDurationDesc(left: PortalRunListItem, right: PortalRunListItem) {
+  const leftDuration = getDurationSortValue(left.durationMs);
+  const rightDuration = getDurationSortValue(right.durationMs);
+
+  if (leftDuration !== rightDuration) {
+    return rightDuration - leftDuration;
+  }
+
+  return Date.parse(right.startedAt) - Date.parse(left.startedAt);
+}
+
+function compareBenchmarkLatestRunDesc(left: PortalRunListItem, right: PortalRunListItem) {
+  const completedAtOrder = compareNullableTimestampDesc(left.completedAt, right.completedAt);
+
+  if (completedAtOrder !== 0) {
+    return completedAtOrder;
+  }
+
+  return Date.parse(right.startedAt) - Date.parse(left.startedAt);
 }
 
 function getVerdictSortValue(verdictClass: EvaluationVerdictClass | null) {
@@ -761,7 +820,7 @@ function getBenchmarkPackageLabel(packageId: string, versions: string[]) {
 function buildLocalBenchmarkDataset(packageId: string): PortalBenchmarkDatasetResponse {
   const runs = localRunItems
     .filter((item) => item.benchmarkPackageId === packageId)
-    .sort((left, right) => compareNullableTimestampDesc(left.completedAt, right.completedAt));
+    .sort(compareRunCompletedAtDesc);
 
   if (runs.length === 0) {
     throw new Error(`Benchmark package ${packageId} was not found.`);
@@ -833,11 +892,9 @@ function buildLocalBenchmarksListResponse(): PortalBenchmarksListResponse {
     existing.runCount += 1;
     incrementVerdictCounts(existing.verdictCounts, run.verdictClass);
 
-    if (
-      run.completedAt !== null &&
-      (existing.latestCompletedAt === null ||
-        Date.parse(run.completedAt) > Date.parse(existing.latestCompletedAt))
-    ) {
+    const existingLatestRun = localRunItems.find((item) => item.runId === existing.latestRunId);
+
+    if (!existingLatestRun || compareBenchmarkLatestRunDesc(run, existingLatestRun) < 0) {
       existing.latestCompletedAt = run.completedAt;
       existing.latestRunId = run.runId;
     }
@@ -867,7 +924,7 @@ function buildLocalBenchmarksListResponse(): PortalBenchmarksListResponse {
           versions
         };
       })
-      .sort((left, right) => compareNullableTimestampDesc(left.latestCompletedAt, right.latestCompletedAt))
+      .sort(compareBenchmarkLatestCompletedAtDesc)
   };
 }
 
@@ -1024,9 +1081,9 @@ function sortPortalRuns(items: PortalRunListItem[], sortId: PortalRunsSortId) {
   return [...items].sort((left, right) => {
     switch (sortId) {
       case "finished_at_desc":
-        return compareNullableTimestampDesc(left.completedAt, right.completedAt);
+        return compareRunCompletedAtDesc(left, right);
       case "duration_desc":
-        return getDurationSortValue(right.durationMs) - getDurationSortValue(left.durationMs);
+        return compareRunDurationDesc(left, right);
       case "run_state_asc":
         return portalRunLifecycleStateOrder[left.runState] - portalRunLifecycleStateOrder[right.runState];
       case "verdict_asc":
@@ -1389,6 +1446,17 @@ function escapeCsvValue(value: string) {
 
   return safeValue;
 }
+
+export const portalBenchmarkOpsLocalTestUtils = {
+  buildLocalBenchmarkDataset,
+  buildLocalBenchmarksListResponse,
+  compareBenchmarkLatestCompletedAtDesc,
+  compareBenchmarkLatestRunDesc,
+  compareNullableTimestampDesc,
+  compareRunCompletedAtDesc,
+  compareRunDurationDesc,
+  sortPortalRuns
+};
 
 export function getWorkerIncidentTone(severity: PortalWorkerIncidentSeverity) {
   return `portal-severity-${severity}`;

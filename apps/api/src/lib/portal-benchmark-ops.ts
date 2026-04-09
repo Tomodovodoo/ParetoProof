@@ -27,7 +27,7 @@ import {
   type PortalWorkerLeaseSummary,
   type PortalWorkersViewResponse
 } from "@paretoproof/shared";
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   artifacts,
   attempts,
@@ -123,6 +123,25 @@ function compareByLeaseExpiryDesc(
   right: WorkerJobLeaseRow
 ) {
   return right.leaseExpiresAt.getTime() - left.leaseExpiresAt.getTime();
+}
+
+function compareNullableTimestampDescNullsLast(
+  left: string | null,
+  right: string | null
+) {
+  if (left === right) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return Date.parse(right) - Date.parse(left);
 }
 
 function groupByRunId<T extends { runId: string }>(items: T[]) {
@@ -409,6 +428,7 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  compareNullableTimestampDescNullsLast,
   getRunLifecycleBucket,
   getRunLifecycleStateLabel,
   getJobLifecycleStateLabel,
@@ -475,6 +495,7 @@ function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
   switch (sortId) {
     case "finished_at_desc":
       return [
+        asc(sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`),
         desc(
           sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then ${runs.completedAt} end`
         ),
@@ -482,6 +503,7 @@ function buildRunOrderBy(sortId: PortalRunsListQuery["sort"]) {
       ] as const;
     case "duration_desc":
       return [
+        asc(sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`),
         desc(
           sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled')
             then extract(epoch from ${runs.completedAt} - ${runs.createdAt})
@@ -699,11 +721,16 @@ export function createPortalBenchmarkOpsReadModelService(
           };
         })
         .sort((left, right) => {
-          if (!left.latestCompletedAt || !right.latestCompletedAt) {
-            return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
+          const completionOrder = compareNullableTimestampDescNullsLast(
+            left.latestCompletedAt,
+            right.latestCompletedAt
+          );
+
+          if (completionOrder !== 0) {
+            return completionOrder;
           }
 
-          return Date.parse(right.latestCompletedAt) - Date.parse(left.latestCompletedAt);
+          return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
         });
 
       return { items };
@@ -714,7 +741,11 @@ export function createPortalBenchmarkOpsReadModelService(
         .select()
         .from(runs)
         .where(eq(runs.benchmarkPackageId, packageId))
-        .orderBy(desc(runs.completedAt), desc(runs.createdAt));
+        .orderBy(
+          asc(sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`),
+          desc(runs.completedAt),
+          desc(runs.createdAt)
+        );
 
       if (runRows.length === 0) {
         return null;
