@@ -1,14 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
-import { hasExpectedCanonicalModules } from "./lib/problem9-package-cohesion.mjs";
+import {
+  hasExpectedAxiomSafetyNarrative,
+  hasExpectedCanonicalModules
+} from "./lib/problem9-package-cohesion.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const benchmarkRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9");
 
 const benchmarkPackagePath = path.join(benchmarkRoot, "benchmark-package.json");
 const lakefilePath = path.join(benchmarkRoot, "lakefile.toml");
+const benchmarkReadmePath = path.join(benchmarkRoot, "README.md");
 const statementPath = path.join(benchmarkRoot, "FirstProof", "Problem9", "Statement.lean");
 const goldPath = path.join(benchmarkRoot, "FirstProof", "Problem9", "Gold.lean");
+const targetBaselinePath = path.join(repoRoot, "docs", "problem9-benchmark-target-baseline.md");
 
 const expectedCanonicalModules = {
   statement: "FirstProof.Problem9.Statement",
@@ -26,8 +31,10 @@ function fail(message) {
 
 const benchmarkPackage = JSON.parse(readText(benchmarkPackagePath));
 const lakefile = readText(lakefilePath);
+const benchmarkReadme = readText(benchmarkReadmePath);
 const statementSource = readText(statementPath);
 const goldSource = readText(goldPath);
+const targetBaseline = readText(targetBaselinePath);
 
 if (!hasExpectedCanonicalModules(benchmarkPackage.canonicalModules, expectedCanonicalModules)) {
   fail(
@@ -75,4 +82,12 @@ if (!/theorem\s+problem9_gold\s*\(n\s*:\s*Nat\)\s*:\s*problem9_target n\s*:=\s*b
   fail(
     "Gold.lean must prove problem9_target n instead of restating the proposition independently"
   );
+}
+
+if (!hasExpectedAxiomSafetyNarrative(benchmarkReadme, "## Axiom safety model")) {
+  fail("README.md must explain the Problem 9 axiom safety model");
+}
+
+if (!hasExpectedAxiomSafetyNarrative(targetBaseline, "## Axiom safety contract")) {
+  fail("docs/problem9-benchmark-target-baseline.md must explain the Problem 9 axiom safety model");
 }
