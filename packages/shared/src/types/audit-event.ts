@@ -7,7 +7,11 @@ export type AuditSubjectKind =
   | "benchmark_workflow"
   | "role_grant"
   | "run"
-  | "user_identity";
+  | "user_identity"
+  | "worker_pool"
+  | "worker_instance"
+  | "worker_incident"
+  | "worker_rollout";
 
 export type AuditSeverity = "info" | "warning" | "critical";
 

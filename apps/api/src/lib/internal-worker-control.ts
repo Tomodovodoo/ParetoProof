@@ -38,7 +38,9 @@ import {
   jobs,
   runs,
   workerAttemptEvents,
-  workerJobLeases
+  workerInstances,
+  workerJobLeases,
+  workerPoolDefinitions
 } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -70,6 +72,7 @@ type DbClient = ReturnTypeOfCreateDbClient;
 type SelectExecutor = Pick<DbClient, "select">;
 type ReadExecutor = Pick<DbClient, "select">;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
+type MutationExecutor = Pick<DbClient, "insert" | "select" | "update">;
 
 type CandidateClaimRow = {
   authMode: Problem9HostedAuthMode;
@@ -108,6 +111,7 @@ type LeaseStateRow = {
   revokedAt: Date | null;
   runState: typeof runs.$inferSelect.state;
   verifierVerdict: Record<string, unknown>;
+  workerInstanceId: string | null;
   verdictDigest: string;
 };
 
@@ -303,6 +307,221 @@ function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
 }
 
+async function upsertWorkerPoolDefinition(
+  tx: MutationExecutor,
+  request: Pick<WorkerClaimRequest, "workerPool" | "workerRuntime">,
+  now: Date
+) {
+  const [insertedWorkerPoolDefinition] = await tx
+    .insert(workerPoolDefinitions)
+    .values({
+      defaultRolloutClass: "stable",
+      updatedAt: now,
+      workerPool: request.workerPool,
+      workerRuntime: request.workerRuntime
+    })
+    .onConflictDoNothing()
+    .returning({
+      id: workerPoolDefinitions.id
+    });
+
+  if (insertedWorkerPoolDefinition) {
+    return insertedWorkerPoolDefinition.id;
+  }
+
+  const [existingWorkerPoolDefinition] = await tx
+    .select({
+      id: workerPoolDefinitions.id,
+      workerRuntime: workerPoolDefinitions.workerRuntime
+    })
+    .from(workerPoolDefinitions)
+    .where(eq(workerPoolDefinitions.workerPool, request.workerPool))
+    .limit(1);
+
+  if (!existingWorkerPoolDefinition) {
+    throw new Error("Failed to persist the worker pool definition.");
+  }
+
+  if (existingWorkerPoolDefinition.workerRuntime !== request.workerRuntime) {
+    throw createConflictError(
+      "worker_pool_runtime_mismatch",
+      `Worker pool ${request.workerPool} is already registered for runtime ${existingWorkerPoolDefinition.workerRuntime}.`,
+      "workerRuntime"
+    );
+  }
+
+  return existingWorkerPoolDefinition.id;
+}
+
+async function upsertWorkerInstance(
+  tx: MutationExecutor,
+  options: {
+    currentLifecycleState: typeof workerInstances.$inferSelect.currentLifecycleState;
+    lastClaimAt?: Date;
+    lastHeartbeatAt?: Date;
+    lastLeaseActivityAt?: Date;
+    now: Date;
+    workerId: string;
+    workerPoolDefinitionId: string;
+    workerRuntime: typeof workerInstances.$inferSelect.workerRuntime;
+    workerVersion: string;
+  }
+) {
+  const [workerInstance] = await tx
+    .insert(workerInstances)
+    .values({
+      currentLifecycleState: options.currentLifecycleState,
+      lastSeenAt: options.now,
+      updatedAt: options.now,
+      workerId: options.workerId,
+      workerPoolDefinitionId: options.workerPoolDefinitionId,
+      workerRuntime: options.workerRuntime,
+      workerVersion: options.workerVersion,
+      ...(options.lastClaimAt !== undefined ? { lastClaimAt: options.lastClaimAt } : {}),
+      ...(options.lastHeartbeatAt !== undefined
+        ? { lastHeartbeatAt: options.lastHeartbeatAt }
+        : {}),
+      ...(options.lastLeaseActivityAt !== undefined
+        ? { lastLeaseActivityAt: options.lastLeaseActivityAt }
+        : {})
+    })
+    .onConflictDoUpdate({
+      target: workerInstances.workerId,
+      set: {
+        currentLifecycleState: options.currentLifecycleState,
+        lastSeenAt: options.now,
+        updatedAt: options.now,
+        workerPoolDefinitionId: options.workerPoolDefinitionId,
+        workerRuntime: options.workerRuntime,
+        workerVersion: options.workerVersion,
+        ...(options.lastClaimAt !== undefined ? { lastClaimAt: options.lastClaimAt } : {}),
+        ...(options.lastHeartbeatAt !== undefined
+          ? { lastHeartbeatAt: options.lastHeartbeatAt }
+          : {}),
+        ...(options.lastLeaseActivityAt !== undefined
+          ? { lastLeaseActivityAt: options.lastLeaseActivityAt }
+          : {})
+      }
+    })
+    .returning({
+      id: workerInstances.id
+    });
+
+  if (!workerInstance) {
+    throw new Error("Failed to persist the worker instance.");
+  }
+
+  return workerInstance.id;
+}
+
+async function touchWorkerInstanceHeartbeat(
+  tx: ReadWriteExecutor,
+  workerInstanceId: string | null,
+  now: Date
+) {
+  if (!workerInstanceId) {
+    return;
+  }
+
+  await tx
+    .update(workerInstances)
+    .set({
+      currentLifecycleState: "running",
+      lastHeartbeatAt: now,
+      lastLeaseActivityAt: now,
+      lastSeenAt: now,
+      updatedAt: now
+    })
+    .where(eq(workerInstances.id, workerInstanceId));
+}
+
+async function reconcileWorkerInstanceLifecycle(
+  tx: ReadWriteExecutor,
+  workerInstanceId: string | null,
+  now: Date
+) {
+  if (!workerInstanceId) {
+    return;
+  }
+
+  const [activeLease] = await tx
+    .select({
+      leaseId: workerJobLeases.id
+    })
+    .from(workerJobLeases)
+    .where(
+      and(
+        eq(workerJobLeases.workerInstanceId, workerInstanceId),
+        isNull(workerJobLeases.revokedAt),
+        gt(workerJobLeases.leaseExpiresAt, now)
+      )
+    )
+    .limit(1);
+
+  await tx
+    .update(workerInstances)
+    .set({
+      currentLifecycleState: activeLease ? "running" : "ready",
+      lastSeenAt: now,
+      updatedAt: now
+    })
+    .where(eq(workerInstances.id, workerInstanceId));
+}
+
+async function reconcileWorkerInstanceLifecycles(
+  tx: ReadWriteExecutor,
+  workerInstanceIds: Array<string | null>,
+  now: Date
+) {
+  const uniqueWorkerInstanceIds = [...new Set(workerInstanceIds.filter((id): id is string => !!id))];
+
+  if (uniqueWorkerInstanceIds.length === 0) {
+    return;
+  }
+
+  const activeLeaseRows = await tx
+    .select({
+      workerInstanceId: workerJobLeases.workerInstanceId
+    })
+    .from(workerJobLeases)
+    .where(
+      and(
+        inArray(workerJobLeases.workerInstanceId, uniqueWorkerInstanceIds),
+        isNull(workerJobLeases.revokedAt),
+        gt(workerJobLeases.leaseExpiresAt, now)
+      )
+    );
+
+  const activeWorkerInstanceIds = new Set(
+    activeLeaseRows
+      .map((row) => row.workerInstanceId)
+      .filter((id): id is string => !!id)
+  );
+  const readyWorkerInstanceIds = uniqueWorkerInstanceIds.filter(
+    (workerInstanceId) => !activeWorkerInstanceIds.has(workerInstanceId)
+  );
+
+  if (readyWorkerInstanceIds.length > 0) {
+    await tx
+      .update(workerInstances)
+      .set({
+        currentLifecycleState: "ready",
+        updatedAt: now
+      })
+      .where(inArray(workerInstances.id, readyWorkerInstanceIds));
+  }
+
+  if (activeWorkerInstanceIds.size > 0) {
+    await tx
+      .update(workerInstances)
+      .set({
+        currentLifecycleState: "running",
+        updatedAt: now
+      })
+      .where(inArray(workerInstances.id, [...activeWorkerInstanceIds]));
+  }
+}
+
 async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
   const staleLeases = await tx
     .select({
@@ -341,12 +560,18 @@ async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
       )
     )
     .returning({
-      leaseRowId: workerJobLeases.id
+      workerInstanceId: workerJobLeases.workerInstanceId
     });
 
   if (revokedLeases.length === 0) {
     return;
   }
+
+  await reconcileWorkerInstanceLifecycles(
+    tx,
+    revokedLeases.map((lease) => lease.workerInstanceId),
+    now
+  );
 }
 
 function normalizeRelativePath(relativePath: string) {
@@ -489,6 +714,7 @@ async function loadLeaseState(
       revokedAt: workerJobLeases.revokedAt,
       runState: runs.state,
       verifierVerdict: attempts.verifierVerdict,
+      workerInstanceId: workerJobLeases.workerInstanceId,
       verdictDigest: attempts.verdictDigest
     })
     .from(workerJobLeases)
@@ -1102,12 +1328,24 @@ export function createInternalWorkerControlService(db: DbClient) {
       return db.transaction(async (tx) => {
         await revokeExpiredUnstartedLeases(tx, new Date());
         const candidate = await selectNextClaimCandidate(tx);
+        const now = new Date();
+        const workerPoolDefinitionId = await upsertWorkerPoolDefinition(tx, request, now);
+        const workerInstanceId = await upsertWorkerInstance(tx, {
+          currentLifecycleState:
+            candidate || request.activeJobCount > 0 ? "running" : "ready",
+          lastClaimAt: candidate ? now : undefined,
+          lastLeaseActivityAt: candidate ? now : undefined,
+          now,
+          workerId: request.workerId,
+          workerPoolDefinitionId,
+          workerRuntime: request.workerRuntime,
+          workerVersion: request.workerVersion
+        });
 
         if (!candidate) {
           return buildIdleClaimResponse();
         }
 
-        const now = new Date();
         const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
         const jobTokenExpiresAt = createJobTokenExpiry(now);
         const { token, tokenHash } = issueJobToken();
@@ -1124,6 +1362,7 @@ export function createInternalWorkerControlService(db: DbClient) {
             jobTokenScopes: [...issuedJobTokenScopes],
             leaseExpiresAt,
             runId: candidate.runRowId,
+            workerInstanceId,
             workerId: request.workerId,
             workerPool: request.workerPool,
             workerRuntime: request.workerRuntime,
@@ -1233,6 +1472,8 @@ export function createInternalWorkerControlService(db: DbClient) {
             })
             .where(eq(workerJobLeases.id, authContext.leaseRowId));
 
+          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
           return {
             acknowledgedEventSequence,
             cancelRequested: false,
@@ -1259,6 +1500,8 @@ export function createInternalWorkerControlService(db: DbClient) {
             })
             .where(eq(workerJobLeases.id, authContext.leaseRowId));
 
+          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
           return {
             acknowledgedEventSequence,
             cancelRequested: false,
@@ -1279,6 +1522,8 @@ export function createInternalWorkerControlService(db: DbClient) {
               updatedAt: now
             })
             .where(eq(workerJobLeases.id, authContext.leaseRowId));
+
+          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
 
           return {
             acknowledgedEventSequence,
@@ -1315,6 +1560,8 @@ export function createInternalWorkerControlService(db: DbClient) {
           });
 
         if (renewedLeases.length === 0) {
+          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
           return {
             acknowledgedEventSequence,
             cancelRequested: false,
@@ -1325,6 +1572,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           } satisfies WorkerHeartbeatResponse;
         }
 
+        await touchWorkerInstanceHeartbeat(tx, lease.workerInstanceId, now);
         await promoteExecutionToRunning(tx, authContext, lease, now);
 
         return {
@@ -1680,6 +1928,8 @@ export function createInternalWorkerControlService(db: DbClient) {
           updatedAt: leaseFenceAt
         });
 
+        await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
         return {
           acceptedAt: now.toISOString(),
           attemptState: "succeeded",
@@ -1790,6 +2040,8 @@ export function createInternalWorkerControlService(db: DbClient) {
           revokedAt: leaseFenceAt,
           updatedAt: leaseFenceAt
         });
+
+        await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
 
         return {
           acceptedAt: now.toISOString(),
