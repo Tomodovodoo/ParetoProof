@@ -8,6 +8,27 @@ import {
 } from "../schemas/access-request.js";
 import { healthResponseSchema } from "../schemas/health.js";
 import {
+  adminBenchmarkReleaseCreateInputSchema,
+  adminBenchmarkVersionCreateInputSchema,
+  adminBenchmarkVersionLaunchabilityUpdateInputSchema,
+  adminBenchmarkWorkflowActionInputSchema,
+  adminPackageFreezeCreateInputSchema,
+  adminRepoSyncRecordCreateInputSchema,
+  adminRepoSyncRecordStatusUpdateInputSchema,
+  benchmarkReleaseDetailResponseSchema,
+  benchmarkReleaseListResponseSchema,
+  benchmarkReleaseParamsSchema,
+  benchmarkVersionDetailResponseSchema,
+  benchmarkVersionListResponseSchema,
+  benchmarkVersionParamsSchema,
+  packageFreezeDetailResponseSchema,
+  packageFreezeListResponseSchema,
+  packageFreezeParamsSchema,
+  repoSyncRecordDetailResponseSchema,
+  repoSyncRecordListResponseSchema,
+  repoSyncRecordParamsSchema
+} from "../schemas/benchmark-workflow.js";
+import {
   portalAdminAccessRequestParamsSchema,
   portalAdminAccessRequestDetailResponseSchema,
   portalAdminAccessRequestListResponseSchema,
@@ -232,6 +253,102 @@ export const apiEndpointSchemaCatalog = {
     requestParams: portalAdminUserParamsSchema,
     requestQuery: null,
     responseBody: portalAdminUserDetailResponseSchema
+  },
+  "admin.repo-sync-record.create": {
+    requestBody: adminRepoSyncRecordCreateInputSchema,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: repoSyncRecordDetailResponseSchema
+  },
+  "admin.repo-sync-record.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: repoSyncRecordListResponseSchema
+  },
+  "admin.repo-sync-record.detail": {
+    requestBody: null,
+    requestParams: repoSyncRecordParamsSchema,
+    requestQuery: null,
+    responseBody: repoSyncRecordDetailResponseSchema
+  },
+  "admin.repo-sync-record.status.update": {
+    requestBody: adminRepoSyncRecordStatusUpdateInputSchema,
+    requestParams: repoSyncRecordParamsSchema,
+    requestQuery: null,
+    responseBody: repoSyncRecordDetailResponseSchema
+  },
+  "admin.package-freeze.create": {
+    requestBody: adminPackageFreezeCreateInputSchema,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: packageFreezeDetailResponseSchema
+  },
+  "admin.package-freeze.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: packageFreezeListResponseSchema
+  },
+  "admin.package-freeze.detail": {
+    requestBody: null,
+    requestParams: packageFreezeParamsSchema,
+    requestQuery: null,
+    responseBody: packageFreezeDetailResponseSchema
+  },
+  "admin.benchmark-version.create": {
+    requestBody: adminBenchmarkVersionCreateInputSchema,
+    requestParams: packageFreezeParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkVersionDetailResponseSchema
+  },
+  "admin.benchmark-version.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: benchmarkVersionListResponseSchema
+  },
+  "admin.benchmark-version.detail": {
+    requestBody: null,
+    requestParams: benchmarkVersionParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkVersionDetailResponseSchema
+  },
+  "admin.benchmark-version.launchability.update": {
+    requestBody: adminBenchmarkVersionLaunchabilityUpdateInputSchema,
+    requestParams: benchmarkVersionParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkVersionDetailResponseSchema
+  },
+  "admin.benchmark-release.create": {
+    requestBody: adminBenchmarkReleaseCreateInputSchema,
+    requestParams: benchmarkVersionParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkReleaseDetailResponseSchema
+  },
+  "admin.benchmark-release.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: benchmarkReleaseListResponseSchema
+  },
+  "admin.benchmark-release.detail": {
+    requestBody: null,
+    requestParams: benchmarkReleaseParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkReleaseDetailResponseSchema
+  },
+  "admin.benchmark-release.approve": {
+    requestBody: adminBenchmarkWorkflowActionInputSchema,
+    requestParams: benchmarkReleaseParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkReleaseDetailResponseSchema
+  },
+  "admin.benchmark-release.publish": {
+    requestBody: adminBenchmarkWorkflowActionInputSchema,
+    requestParams: benchmarkReleaseParamsSchema,
+    requestQuery: null,
+    responseBody: benchmarkReleaseDetailResponseSchema
   },
   "internal.worker.claim": {
     requestBody: workerClaimRequestSchema,

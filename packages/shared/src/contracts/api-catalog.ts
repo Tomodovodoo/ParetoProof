@@ -255,6 +255,150 @@ export const apiEndpointCatalog = [
       "Revoke the active helper or collaborator role for one contributor, audit the reason, and invalidate active sessions."
   },
   {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.repo-sync-record.create",
+    method: "POST",
+    path: "/portal/admin/repo-sync-records",
+    purpose:
+      "Record the repository review linkage for one benchmark candidate before it may be frozen into a launchable package snapshot."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.repo-sync-record.list",
+    method: "GET",
+    path: "/portal/admin/repo-sync-records",
+    purpose:
+      "List repo sync records so admins can review candidate repository state and merge posture."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.repo-sync-record.detail",
+    method: "GET",
+    path: "/portal/admin/repo-sync-records/:repoSyncRecordId",
+    purpose:
+      "Return one repo sync record for detailed admin review before freeze creation."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.repo-sync-record.status.update",
+    method: "POST",
+    path: "/portal/admin/repo-sync-records/:repoSyncRecordId/status",
+    purpose:
+      "Advance or close the repository review state for one candidate, including merged linkage."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.package-freeze.create",
+    method: "POST",
+    path: "/portal/admin/package-freezes",
+    purpose:
+      "Create an immutable package freeze from a merged repo sync record so later versions and releases share a durable package snapshot."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.package-freeze.list",
+    method: "GET",
+    path: "/portal/admin/package-freezes",
+    purpose:
+      "List package freezes with their source repo sync linkage for admin workflow review."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.package-freeze.detail",
+    method: "GET",
+    path: "/portal/admin/package-freezes/:packageFreezeId",
+    purpose:
+      "Return one immutable package freeze with its recorded provenance fields."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-version.create",
+    method: "POST",
+    path: "/portal/admin/package-freezes/:packageFreezeId/benchmark-versions",
+    purpose:
+      "Create a benchmark version from an immutable freeze so launchability may be governed explicitly."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-version.list",
+    method: "GET",
+    path: "/portal/admin/benchmark-versions",
+    purpose:
+      "List benchmark versions and their launchability posture for admin review."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-version.detail",
+    method: "GET",
+    path: "/portal/admin/benchmark-versions/:benchmarkVersionId",
+    purpose:
+      "Return one benchmark version with its freeze-backed provenance and launchability state."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-version.launchability.update",
+    method: "POST",
+    path: "/portal/admin/benchmark-versions/:benchmarkVersionId/launchability",
+    purpose:
+      "Promote one benchmark version into launchable state without mutating the underlying freeze."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-release.create",
+    method: "POST",
+    path: "/portal/admin/benchmark-versions/:benchmarkVersionId/releases",
+    purpose:
+      "Create a draft benchmark release for one benchmark version with visibility and summary metadata."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-release.list",
+    method: "GET",
+    path: "/portal/admin/benchmark-releases",
+    purpose:
+      "List benchmark releases and their publication posture for admin reporting review."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-release.detail",
+    method: "GET",
+    path: "/portal/admin/benchmark-releases/:benchmarkReleaseId",
+    purpose:
+      "Return one benchmark release with its approval and publication state."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-release.approve",
+    method: "POST",
+    path: "/portal/admin/benchmark-releases/:benchmarkReleaseId/approve",
+    purpose:
+      "Approve one benchmark release so it becomes eligible for publication."
+  },
+  {
+    access: "admin_only",
+    audience: "portal",
+    id: "admin.benchmark-release.publish",
+    method: "POST",
+    path: "/portal/admin/benchmark-releases/:benchmarkReleaseId/publish",
+    purpose:
+      "Publish one approved public benchmark release so it can appear on the public reporting surface."
+  },
+  {
     access: "service_token",
     audience: "internal",
     id: "internal.worker.claim",

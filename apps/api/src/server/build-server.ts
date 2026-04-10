@@ -5,6 +5,7 @@ import type { ApiRuntimeEnv } from "../config/runtime.js";
 import { createAccessGuard } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
+import { registerBenchmarkWorkflowRoutes } from "../routes/benchmark-workflow.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
@@ -128,13 +129,13 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
 
           if (
             isAllowedCorsOrigin({
-              allowLocalhostCors,
-              allowedOrigins,
-              brandedAuthOrigins,
-              method: request.method,
-              origin,
-              routePath
-            })
+            allowLocalhostCors,
+            allowedOrigins,
+            brandedAuthOrigins,
+            method: request.method,
+            origin,
+            routePath
+          })
           ) {
             originCallback(null, true);
             return;
@@ -162,6 +163,9 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
     rateLimitPreHandlers
   });
   registerAdminRoutes(app, db, requireAccess, {
+    rateLimitPreHandlers
+  });
+  registerBenchmarkWorkflowRoutes(app, db, requireAccess, {
     rateLimitPreHandlers
   });
   registerOfflineIngestRoutes(app, db, requireAccess);

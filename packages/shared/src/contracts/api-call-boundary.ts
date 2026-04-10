@@ -234,6 +234,134 @@ export const apiCallBoundaryCatalog = [
       "Role revocation is an admin-only corrective action performed from the portal users workspace on the existing Access cookie boundary."
   },
   {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.repo-sync-record.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Admins record repository review linkage directly from the protected portal because the platform has no separate benchmark-governance backend."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.repo-sync-record.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Repo sync review stays on the same admin portal audience while the backend preserves admin-only access."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.repo-sync-record.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Detailed repo sync review belongs to the admin portal workflow and uses the same Access boundary as other admin tooling."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.repo-sync-record.status.update",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Repo sync state changes are admin-governed mutations initiated from the portal and protected by the existing admin Access boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.package-freeze.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Immutable package freezes are an admin-controlled workflow action and therefore remain on the authenticated admin portal audience."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.package-freeze.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Freeze review is an admin-owned portal surface that should not require a separate backend proxy."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.package-freeze.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Admins inspect one freeze in the portal while the backend narrows access to admin-only callers."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-version.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Benchmark versions are created from freeze records in the admin portal, so the browser calls the protected API route directly."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-version.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Version governance is a browser-owned admin workflow that still relies on backend RBAC enforcement."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-version.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Detailed benchmark-version inspection stays on the same admin Access boundary as other governance routes."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-version.launchability.update",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Launchability changes are admin-only mutations initiated from the portal and should not be exposed on public or worker boundaries."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-release.create",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Release drafting belongs to the admin reporting workflow and uses the existing protected portal audience."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-release.list",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Admins review release posture directly from the portal while backend RBAC keeps the surface private."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-release.detail",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Release detail reads stay on the protected admin portal boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-release.approve",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Release approval is an admin decision made from the portal and should remain a direct protected mutation."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "admin.benchmark-release.publish",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Publication is the final admin-controlled reporting mutation and remains on the existing Access cookie boundary."
+  },
+  {
     credential: "worker_bootstrap_token",
     endpointId: "internal.worker.claim",
     mode: "internal_service_only",
