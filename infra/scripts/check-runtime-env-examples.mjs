@@ -21,6 +21,7 @@ const checks = [
       { name: "DATABASE_URL", commented: false },
       { name: "MIGRATION_DATABASE_URL", commented: false },
       { name: "OWNER_EMAIL", commented: false },
+      { name: "OWNER_IDENTITY_PROVIDER", commented: false },
       { name: "CF_ACCESS_TEAM_DOMAIN", commented: false },
       { name: "CF_ACCESS_PORTAL_AUD", commented: false },
       { name: "CF_ACCESS_BRANDED_AUDS", commented: false },
