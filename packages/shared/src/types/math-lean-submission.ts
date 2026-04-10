@@ -163,7 +163,7 @@ export type MathLeanSubmissionCreateInput = {
   targetModuleName?: string | null;
 };
 
-export type MathLeanSubmissionUpdateInput = {
+export type MathLeanSubmissionPatchInput = {
   equivalenceExpectation?: LeanEquivalenceExpectation;
   targetDeclarationName?: string | null;
   targetLaneId?: string | null;

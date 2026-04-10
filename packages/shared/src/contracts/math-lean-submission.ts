@@ -1,11 +1,11 @@
 import {
   mathLeanAutomationEnqueueInputSchema,
   mathLeanReviewGateUpdateInputSchema,
+  mathLeanSubmissionPatchInputSchema,
   mathLeanSubmissionCreateInputSchema,
   mathLeanSubmissionDetailSchema,
   mathLeanSubmissionProfileBaseSchema,
-  mathLeanSubmissionProfileSchema,
-  mathLeanSubmissionUpdateInputSchema
+  mathLeanSubmissionProfileSchema
 } from "../schemas/math-lean-submission.js";
 import type {
   LeanArtifactRole,
@@ -16,8 +16,8 @@ import type {
   LeanReviewGateKind,
   LeanSubmissionKind,
   LeanSubmissionKindCatalogEntry,
+  MathLeanSubmissionPatchInput,
   MathLeanSubmissionProfile,
-  MathLeanSubmissionUpdateInput
 } from "../types/math-lean-submission.js";
 
 export const leanArtifactRoleCatalog = [
@@ -222,10 +222,10 @@ export function isLeanArtifactRoleAllowedForSubmissionKind(
 
 export function applyMathLeanSubmissionProfileUpdate(
   profile: MathLeanSubmissionProfile,
-  update: MathLeanSubmissionUpdateInput
+  update: MathLeanSubmissionPatchInput
 ): MathLeanSubmissionProfile {
   const parsedProfile = mathLeanSubmissionProfileBaseSchema.parse(profile);
-  const parsedUpdate = mathLeanSubmissionUpdateInputSchema.parse(update);
+  const parsedUpdate = mathLeanSubmissionPatchInputSchema.parse(update);
 
   // PATCH payloads can omit unchanged target fields, so validate the merged result too.
   return mathLeanSubmissionProfileSchema.parse({
@@ -250,7 +250,7 @@ export function applyMathLeanSubmissionProfileUpdate(
 export const mathLeanSubmissionContract = {
   automationEnqueueInput: mathLeanAutomationEnqueueInputSchema,
   reviewGateUpdateInput: mathLeanReviewGateUpdateInputSchema,
+  submissionPatchInput: mathLeanSubmissionPatchInputSchema,
   submissionCreateInput: mathLeanSubmissionCreateInputSchema,
-  submissionDetail: mathLeanSubmissionDetailSchema,
-  submissionUpdateInput: mathLeanSubmissionUpdateInputSchema
+  submissionDetail: mathLeanSubmissionDetailSchema
 };

@@ -72,6 +72,19 @@ describe("math lean submission contracts", () => {
     ).toBeTrue();
   });
 
+  it("exposes sparse patch validation through the shared contract", () => {
+    expect(
+      mathLeanSubmissionContract.submissionPatchInput.safeParse({
+        equivalenceExpectation: "canonical_statement"
+      }).success
+    ).toBeTrue();
+    expect(
+      mathLeanSubmissionContract.submissionPatchInput.safeParse({
+        equivalenceExpectation: "prior_submission"
+      }).success
+    ).toBeTrue();
+  });
+
   it("validates merged Lean submission profile updates against the full profile invariants", () => {
     expect(() =>
       applyMathLeanSubmissionProfileUpdate(
@@ -103,6 +116,29 @@ describe("math lean submission contracts", () => {
       )
     ).toThrow();
 
+    expect(
+      applyMathLeanSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetLaneId: null,
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        },
+        {
+          equivalenceExpectation: "prior_submission"
+        }
+      )
+    ).toEqual({
+      equivalenceExpectation: "prior_submission",
+      leanSubmissionKind: "lean_proof_submission",
+      targetDeclarationName: "FirstProof.Problem9.problem9",
+      targetLaneId: null,
+      targetModuleName: "FirstProof.Problem9.Candidate"
+    });
+  });
+
+  it("allows sparse targeted patches when the stored profile already has a valid target", () => {
     expect(
       applyMathLeanSubmissionProfileUpdate(
         {

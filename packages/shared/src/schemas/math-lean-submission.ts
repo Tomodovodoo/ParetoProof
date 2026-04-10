@@ -198,7 +198,7 @@ export const mathLeanSubmissionCreateInputSchema = z.object({
   targetModuleName: optionalNullableTrimmedStringSchema
 }).superRefine(addMissingEquivalenceTargetIssues);
 
-export const mathLeanSubmissionUpdateInputSchema = z
+export const mathLeanSubmissionPatchInputSchema = z
   .object({
     equivalenceExpectation: leanEquivalenceExpectationSchema.optional(),
     targetDeclarationName: optionalNullableTrimmedStringSchema,

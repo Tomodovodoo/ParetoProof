@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
   mathLeanSubmissionDetailSchema,
   mathLeanSubmissionCreateInputSchema,
+  mathLeanSubmissionPatchInputSchema,
   mathLeanReviewGateStatusSchema,
-  mathLeanSubmissionUpdateInputSchema,
   mathLeanReviewGateUpdateInputSchema
 } from "./math-lean-submission.js";
 
@@ -31,7 +31,7 @@ describe("math lean submission schemas", () => {
   });
 
   it("trims accepted update payload values", () => {
-    const parsed = mathLeanSubmissionUpdateInputSchema.safeParse({
+    const parsed = mathLeanSubmissionPatchInputSchema.safeParse({
       targetDeclarationName: "  FirstProof.Problem9.problem9  ",
       targetModuleName: "  FirstProof.Problem9.Candidate  "
     });
@@ -47,17 +47,17 @@ describe("math lean submission schemas", () => {
   });
 
   it("rejects empty update payloads", () => {
-    expect(mathLeanSubmissionUpdateInputSchema.safeParse({}).success).toBeFalse();
+    expect(mathLeanSubmissionPatchInputSchema.safeParse({}).success).toBeFalse();
   });
 
   it("allows sparse targeted-equivalence updates so merged validation can decide final validity", () => {
     expect(
-      mathLeanSubmissionUpdateInputSchema.safeParse({
+      mathLeanSubmissionPatchInputSchema.safeParse({
         equivalenceExpectation: "canonical_statement"
       }).success
     ).toBeTrue();
     expect(
-      mathLeanSubmissionUpdateInputSchema.safeParse({
+      mathLeanSubmissionPatchInputSchema.safeParse({
         equivalenceExpectation: "prior_submission"
       }).success
     ).toBeTrue();
@@ -65,7 +65,7 @@ describe("math lean submission schemas", () => {
 
   it("rejects explicit target clears when equivalence expectation still requires a target", () => {
     expect(
-      mathLeanSubmissionUpdateInputSchema.safeParse({
+      mathLeanSubmissionPatchInputSchema.safeParse({
         equivalenceExpectation: "canonical_statement",
         targetDeclarationName: null,
         targetModuleName: null
