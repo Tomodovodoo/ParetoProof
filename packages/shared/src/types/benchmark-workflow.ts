@@ -21,10 +21,6 @@ export type BenchmarkReleaseVisibility =
   | "held_out"
   | "public";
 
-export type PublicBenchmarkReleasePublicationStatus =
-  | "released"
-  | "withdrawn";
-
 export type BenchmarkWorkflowSummaryPayload = Record<string, unknown>;
 
 export type RepoSyncRecord = {
@@ -92,43 +88,6 @@ export type BenchmarkRelease = {
   summaryPayload: BenchmarkWorkflowSummaryPayload | null;
   updatedAt: string;
   visibility: BenchmarkReleaseVisibility;
-};
-
-export type PublicBenchmarkArtifactPresence = {
-  hasMethodologyArtifacts: boolean;
-  hasSummaryArtifacts: boolean;
-};
-
-export type PublicBenchmarkMetricSummary = {
-  label: string;
-  unitLabel: string | null;
-  value: number | null;
-  valueText: string | null;
-};
-
-export type PublicBenchmarkReleaseSummary = {
-  benchmarkReleaseId: string;
-  benchmarkLabel: string;
-  benchmarkVersionId: string;
-  benchmarkVersionLabel: string;
-  includedModelCount: number | null;
-  linkedPublicArtifactPresence: PublicBenchmarkArtifactPresence;
-  publicationStatus: PublicBenchmarkReleasePublicationStatus;
-  publishedAt: string;
-  releaseLabel: string;
-  topLineMetricSummary: PublicBenchmarkMetricSummary | null;
-};
-
-export type PublicBenchmarkReleaseDetail = PublicBenchmarkReleaseSummary & {
-  releaseMethodologySummary: string | null;
-  releasedAggregateMetrics: PublicBenchmarkMetricSummary[];
-};
-
-export type PublicReportingFreshness = {
-  generatedAt: string;
-  publishedAt: string | null;
-  recommendedRevalidateAfterSeconds: number;
-  snapshotVersion: string;
 };
 
 export type AdminRepoSyncRecordCreateInput = {
@@ -211,13 +170,5 @@ export type BenchmarkReleaseListResponse = {
 
 export type BenchmarkReleaseDetailResponse = {
   item: BenchmarkRelease;
-};
-
-export type PublicBenchmarkReleaseListResponse = PublicReportingFreshness & {
-  items: PublicBenchmarkReleaseSummary[];
-};
-
-export type PublicBenchmarkReleaseDetailResponse = PublicReportingFreshness & {
-  item: PublicBenchmarkReleaseDetail;
 };
 

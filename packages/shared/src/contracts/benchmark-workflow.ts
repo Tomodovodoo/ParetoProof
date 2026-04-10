@@ -12,8 +12,6 @@ import {
   adminRepoSyncRecordStatusUpdateInputSchema,
   benchmarkReleaseDetailResponseSchema,
   benchmarkReleaseListResponseSchema,
-  publicBenchmarkReleaseDetailResponseSchema,
-  publicBenchmarkReleaseListResponseSchema,
   benchmarkVersionDetailResponseSchema,
   benchmarkVersionListResponseSchema,
   packageFreezeDetailResponseSchema,
@@ -26,8 +24,6 @@ export const benchmarkWorkflowContract = {
   adminBenchmarkReleaseCreateInput: adminBenchmarkReleaseCreateInputSchema,
   adminBenchmarkReleaseDetailResponse: benchmarkReleaseDetailResponseSchema,
   adminBenchmarkReleaseListResponse: benchmarkReleaseListResponseSchema,
-  publicBenchmarkReleaseDetailResponse: publicBenchmarkReleaseDetailResponseSchema,
-  publicBenchmarkReleaseListResponse: publicBenchmarkReleaseListResponseSchema,
   adminBenchmarkVersionCreateInput: adminBenchmarkVersionCreateInputSchema,
   adminBenchmarkVersionDetailResponse: benchmarkVersionDetailResponseSchema,
   adminBenchmarkVersionLaunchabilityUpdateInput:

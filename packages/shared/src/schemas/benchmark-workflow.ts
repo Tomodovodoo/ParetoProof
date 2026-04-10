@@ -44,11 +44,6 @@ export const benchmarkReleaseVisibilitySchema = z.enum([
   "public"
 ]);
 
-export const publicBenchmarkReleasePublicationStatusSchema = z.enum([
-  "released",
-  "withdrawn"
-]);
-
 export const repoSyncRecordSchema = z.object({
   createdAt: timestampSchema,
   id: z.string().uuid(),
@@ -115,43 +110,6 @@ export const benchmarkReleaseSchema = z.object({
   updatedAt: timestampSchema,
   visibility: benchmarkReleaseVisibilitySchema
 });
-
-export const publicBenchmarkArtifactPresenceSchema = z.object({
-  hasMethodologyArtifacts: z.boolean(),
-  hasSummaryArtifacts: z.boolean()
-}).strict();
-
-export const publicBenchmarkMetricSummarySchema = z.object({
-  label: nonEmptyStringSchema,
-  unitLabel: nonEmptyStringSchema.nullable(),
-  value: z.number().finite().nullable(),
-  valueText: nonEmptyStringSchema.nullable()
-}).strict();
-
-export const publicBenchmarkReleaseSummarySchema = z.object({
-  benchmarkReleaseId: nonEmptyStringSchema,
-  benchmarkLabel: nonEmptyStringSchema,
-  benchmarkVersionId: nonEmptyStringSchema,
-  benchmarkVersionLabel: nonEmptyStringSchema,
-  includedModelCount: z.number().int().nonnegative().nullable(),
-  linkedPublicArtifactPresence: publicBenchmarkArtifactPresenceSchema,
-  publicationStatus: publicBenchmarkReleasePublicationStatusSchema,
-  publishedAt: timestampSchema,
-  releaseLabel: nonEmptyStringSchema,
-  topLineMetricSummary: publicBenchmarkMetricSummarySchema.nullable()
-}).strict();
-
-export const publicBenchmarkReleaseDetailSchema = publicBenchmarkReleaseSummarySchema.extend({
-  releaseMethodologySummary: nonEmptyStringSchema.nullable(),
-  releasedAggregateMetrics: z.array(publicBenchmarkMetricSummarySchema)
-}).strict();
-
-export const publicReportingFreshnessSchema = z.object({
-  generatedAt: timestampSchema,
-  publishedAt: timestampSchema.nullable(),
-  recommendedRevalidateAfterSeconds: z.number().int().positive(),
-  snapshotVersion: nonEmptyStringSchema
-}).strict();
 
 export const adminRepoSyncRecordCreateInputSchema = z
   .object({
@@ -287,16 +245,4 @@ export const benchmarkReleaseListResponseSchema = z.object({
 export const benchmarkReleaseDetailResponseSchema = z.object({
   item: benchmarkReleaseSchema
 });
-
-export const publicBenchmarkReleaseListResponseSchema = publicReportingFreshnessSchema
-  .extend({
-    items: z.array(publicBenchmarkReleaseSummarySchema)
-  })
-  .strict();
-
-export const publicBenchmarkReleaseDetailResponseSchema = publicReportingFreshnessSchema
-  .extend({
-    item: publicBenchmarkReleaseDetailSchema
-  })
-  .strict();
 

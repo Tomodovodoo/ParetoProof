@@ -3,9 +3,6 @@ import type {
   BenchmarkVersion,
   BenchmarkVersionLaunchability,
   PackageFreeze,
-  PublicBenchmarkReleaseDetail,
-  PublicBenchmarkMetricSummary,
-  PublicBenchmarkReleaseSummary,
   RepoSyncRecord,
   RepoSyncRecordStatus
 } from "@paretoproof/shared";
@@ -36,12 +33,6 @@ type DbRepoSyncRecordRow = typeof repoSyncRecords.$inferSelect;
 type DbPackageFreezeRow = typeof packageFreezes.$inferSelect;
 type DbBenchmarkVersionRow = typeof benchmarkVersions.$inferSelect;
 type DbBenchmarkReleaseRow = typeof benchmarkReleases.$inferSelect;
-type DbPublicBenchmarkReleaseRow = DbBenchmarkReleaseRow & {
-  publishedAt: Date;
-  status: "published";
-  visibility: "public";
-};
-
 const repoSyncStatusTransitions: Record<RepoSyncRecordStatus, RepoSyncRecordStatus[]> = {
   merged: ["merged", "superseded"],
   pr_open: ["pr_open", "merged", "rejected", "superseded"],
@@ -57,8 +48,6 @@ const benchmarkVersionLaunchabilityTransitions: Record<
   internal_only: ["internal_only", "launchable"],
   launchable: ["launchable"]
 };
-
-const publicReportingRevalidateAfterSeconds = 300;
 
 function readDatabaseConstraintName(error: unknown) {
   if (!error || typeof error !== "object") {
@@ -187,147 +176,6 @@ function toBenchmarkRelease(row: DbBenchmarkReleaseRow): BenchmarkRelease {
   };
 }
 
-function isPublicPublishedBenchmarkRelease(
-  row: DbBenchmarkReleaseRow
-): row is DbPublicBenchmarkReleaseRow {
-  return row.publishedAt !== null && row.status === "published" && row.visibility === "public";
-}
-
-function readIncludedModelCount(summaryPayload: Record<string, unknown> | null) {
-  const rawValue = summaryPayload?.includedModelCount;
-
-  return Number.isInteger(rawValue) && typeof rawValue === "number" && rawValue >= 0
-    ? rawValue
-    : null;
-}
-
-function readNonEmptyString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : null;
-}
-
-function toPublicBenchmarkMetricSummary(
-  value: unknown
-): PublicBenchmarkMetricSummary | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const label = readNonEmptyString(candidate.label);
-
-  if (!label) {
-    return null;
-  }
-
-  const unitLabel = readNonEmptyString(candidate.unitLabel);
-  const valueNumber =
-    typeof candidate.value === "number" && Number.isFinite(candidate.value)
-      ? candidate.value
-      : null;
-  const valueText = readNonEmptyString(candidate.valueText);
-
-  return {
-    label,
-    unitLabel,
-    value: valueNumber,
-    valueText
-  };
-}
-
-function readPublicTopLineMetricSummary(summaryPayload: Record<string, unknown> | null) {
-  const structuredSummary = toPublicBenchmarkMetricSummary(
-    summaryPayload?.topLineMetricSummary
-  );
-
-  if (structuredSummary) {
-    return structuredSummary;
-  }
-
-  const releaseSummary = readNonEmptyString(summaryPayload?.releaseSummary);
-
-  return releaseSummary
-    ? {
-        label: "release_summary",
-        unitLabel: null,
-        value: null,
-        valueText: releaseSummary
-      }
-    : null;
-}
-
-function readPublicReleaseMethodologySummary(
-  summaryPayload: Record<string, unknown> | null
-) {
-  return readNonEmptyString(summaryPayload?.methodologySummary);
-}
-
-function readPublicReleasedAggregateMetrics(
-  summaryPayload: Record<string, unknown> | null
-) {
-  const rawMetrics = summaryPayload?.releasedAggregateMetrics;
-
-  if (!Array.isArray(rawMetrics)) {
-    return [];
-  }
-
-  return rawMetrics.flatMap((metric) => {
-    const publicMetric = toPublicBenchmarkMetricSummary(metric);
-
-    return publicMetric ? [publicMetric] : [];
-  });
-}
-
-function buildLinkedPublicArtifactPresence(row: DbPublicBenchmarkReleaseRow) {
-  return {
-    hasMethodologyArtifacts: row.methodologyArtifactRefs.length > 0,
-    hasSummaryArtifacts: row.summaryArtifactRefs.length > 0
-  };
-}
-
-function toPublicBenchmarkReleaseSummary(
-  row: DbPublicBenchmarkReleaseRow,
-  benchmarkVersionRow: DbBenchmarkVersionRow
-): PublicBenchmarkReleaseSummary {
-  return {
-    benchmarkReleaseId: row.benchmarkReleaseId,
-    benchmarkLabel: benchmarkVersionRow.packageId,
-    benchmarkVersionId: row.benchmarkVersionId,
-    benchmarkVersionLabel: benchmarkVersionRow.displayLabel,
-    includedModelCount: readIncludedModelCount(row.summaryPayload),
-    linkedPublicArtifactPresence: buildLinkedPublicArtifactPresence(row),
-    publicationStatus: "released",
-    publishedAt: row.publishedAt.toISOString(),
-    releaseLabel: row.releaseLabel,
-    topLineMetricSummary: readPublicTopLineMetricSummary(row.summaryPayload)
-  };
-}
-
-function toPublicBenchmarkReleaseDetail(
-  row: DbPublicBenchmarkReleaseRow,
-  benchmarkVersionRow: DbBenchmarkVersionRow
-): PublicBenchmarkReleaseDetail {
-  return {
-    ...toPublicBenchmarkReleaseSummary(row, benchmarkVersionRow),
-    releaseMethodologySummary: readPublicReleaseMethodologySummary(row.summaryPayload),
-    releasedAggregateMetrics: readPublicReleasedAggregateMetrics(row.summaryPayload)
-  };
-}
-
-function createPublicReportingFreshness(options: {
-  generatedAt: Date;
-  publishedAt: Date | null;
-  snapshotVersion: string;
-}) {
-  return {
-    generatedAt: options.generatedAt.toISOString(),
-    publishedAt: toIso(options.publishedAt),
-    recommendedRevalidateAfterSeconds: publicReportingRevalidateAfterSeconds,
-    snapshotVersion: options.snapshotVersion
-  };
-}
-
 function canTransitionRepoSyncStatus(
   currentStatus: RepoSyncRecordStatus,
   nextStatus: RepoSyncRecordStatus
@@ -380,129 +228,6 @@ export function registerBenchmarkWorkflowRoutes(
     rateLimitPreHandlers?.authenticated
       ? [guard, rateLimitPreHandlers.authenticated]
       : [guard];
-  const publicRateLimit = rateLimitPreHandlers?.public;
-
-  app.get(
-    "/public/reporting/releases",
-    {
-      preHandler: publicRateLimit
-    },
-    async () => {
-      const releaseRows = await db.query.benchmarkReleases.findMany({
-        orderBy: [
-          desc(benchmarkReleases.publishedAt),
-          desc(benchmarkReleases.createdAt)
-        ],
-        where: and(
-          eq(benchmarkReleases.status, "published"),
-          eq(benchmarkReleases.visibility, "public")
-        )
-      });
-      const now = new Date();
-      const publicReleaseRows = releaseRows.filter(isPublicPublishedBenchmarkRelease);
-      const benchmarkVersionIds = [
-        ...new Set(publicReleaseRows.map((row) => row.benchmarkVersionId))
-      ];
-      const benchmarkVersionRows = benchmarkVersionIds.length === 0
-        ? []
-        : await db.query.benchmarkVersions.findMany({
-            where: inArray(benchmarkVersions.benchmarkVersionId, benchmarkVersionIds)
-          });
-      const benchmarkVersionById = new Map(
-        benchmarkVersionRows.map((row) => [row.benchmarkVersionId, row] as const)
-      );
-      const items = publicReleaseRows.flatMap((row) => {
-        const benchmarkVersionRow = benchmarkVersionById.get(row.benchmarkVersionId);
-
-        return benchmarkVersionRow
-          ? [toPublicBenchmarkReleaseSummary(row, benchmarkVersionRow)]
-          : [];
-      });
-      const newestPublishedAt = publicReleaseRows.reduce<Date | null>(
-        (latest, row) =>
-          latest === null || row.publishedAt > latest ? row.publishedAt : latest,
-        null
-      );
-      const latestReleaseUpdatedAt = publicReleaseRows.length === 0
-        ? null
-        : publicReleaseRows.reduce(
-            (latest, row) => row.updatedAt > latest ? row.updatedAt : latest,
-            publicReleaseRows[0].updatedAt
-          );
-      const latestVersionUpdatedAt = benchmarkVersionRows.length === 0
-        ? null
-        : benchmarkVersionRows.reduce(
-            (latest, row) => row.updatedAt > latest ? row.updatedAt : latest,
-            benchmarkVersionRows[0].updatedAt
-          );
-      const latestUpdatedAt =
-        latestReleaseUpdatedAt === null
-          ? latestVersionUpdatedAt
-          : latestVersionUpdatedAt === null
-            ? latestReleaseUpdatedAt
-            : latestVersionUpdatedAt > latestReleaseUpdatedAt
-              ? latestVersionUpdatedAt
-              : latestReleaseUpdatedAt;
-      const snapshotVersion = latestUpdatedAt?.toISOString() ?? "public-reporting-releases-empty";
-
-      return {
-        ...createPublicReportingFreshness({
-          generatedAt: now,
-          publishedAt: newestPublishedAt,
-          snapshotVersion
-        }),
-        items
-      };
-    }
-  );
-
-  app.get(
-    "/public/reporting/releases/:benchmarkReleaseId",
-    {
-      preHandler: publicRateLimit
-    },
-    async (request, reply) => {
-      const benchmarkReleaseId = (request.params as { benchmarkReleaseId?: string })
-        .benchmarkReleaseId;
-      const releaseRow = benchmarkReleaseId
-        ? await db.query.benchmarkReleases.findFirst({
-            where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId)
-          })
-        : null;
-
-      if (!releaseRow || !isPublicPublishedBenchmarkRelease(releaseRow)) {
-        reply.code(404).send({
-          error: "public_benchmark_release_not_found"
-        });
-        return;
-      }
-
-      const benchmarkVersionRow = await db.query.benchmarkVersions.findFirst({
-        where: eq(benchmarkVersions.benchmarkVersionId, releaseRow.benchmarkVersionId)
-      });
-
-      if (!benchmarkVersionRow) {
-        reply.code(404).send({
-          error: "public_benchmark_release_not_found"
-        });
-        return;
-      }
-
-      const now = new Date();
-
-      return {
-        ...createPublicReportingFreshness({
-          generatedAt: now,
-          publishedAt: releaseRow.publishedAt,
-          snapshotVersion:
-            (benchmarkVersionRow.updatedAt > releaseRow.updatedAt
-              ? benchmarkVersionRow.updatedAt
-              : releaseRow.updatedAt).toISOString()
-        }),
-        item: toPublicBenchmarkReleaseDetail(releaseRow, benchmarkVersionRow)
-      };
-    }
-  );
 
   app.get(
     "/portal/admin/repo-sync-records",

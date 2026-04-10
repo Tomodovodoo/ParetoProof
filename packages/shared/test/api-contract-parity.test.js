@@ -31,21 +31,8 @@ describe("shared api catalog parity", () => {
     );
   });
 
-  it("covers the public benchmark release feed boundary explicitly", () => {
-    expect(apiCallBoundaryCatalog).toContainEqual(
-      expect.objectContaining({
-        credential: "none",
-        endpointId: "public.reporting.release.list",
-        mode: "browser_direct",
-        origin: "public_browser"
-      })
-    );
-  });
-
   it("exposes non-null schemas for representative catalogued endpoints", () => {
     expect(apiEndpointSchemaContract["health.read"].responseBodySchema).not.toBeNull();
-    expect(apiEndpointSchemaContract["public.reporting.release.list"].responseBodySchema).not.toBeNull();
-    expect(apiEndpointSchemaContract["public.reporting.release.detail"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.read"].responseBodySchema).not.toBeNull();
