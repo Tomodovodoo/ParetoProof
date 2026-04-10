@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   isAllowedCorsOrigin,
   readCorsRoutePath,
-  readAllowedCorsOrigins
+  readAllowedCorsOrigins,
+  readAllowedPublicReportingCorsOrigins
 } from "../src/server/build-server.ts";
 
 test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allowlist", () => {
@@ -38,6 +39,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
   const allowedOrigins = [
     "https://portal.paretoproof.com"
   ];
+  const publicReportingOrigins = readAllowedPublicReportingCorsOrigins();
   const brandedAuthOrigins = [
     "https://auth.paretoproof.com",
     "https://github.auth.paretoproof.com",
@@ -51,6 +53,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "POST",
       origin: "https://github.auth.paretoproof.com",
+      publicReportingOrigins,
       routePath: "/portal/session/finalize/submit"
     }),
     true
@@ -62,6 +65,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "OPTIONS",
       origin: "https://github.auth.paretoproof.com",
+      publicReportingOrigins,
       routePath: readCorsRoutePath(
         "*",
         "/portal/session/finalize/submit?redirect=%2Fprofile"
@@ -76,6 +80,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "POST",
       origin: "https://github.auth.paretoproof.com",
+      publicReportingOrigins,
       routePath: "/portal/profile"
     }),
     false
@@ -87,6 +92,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "OPTIONS",
       origin: "https://github.auth.paretoproof.com",
+      publicReportingOrigins,
       routePath: "/portal/profile"
     }),
     false
@@ -98,6 +104,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "POST",
       origin: "http://github.auth.paretoproof.com:4371",
+      publicReportingOrigins,
       routePath: "/portal/session/finalize/submit"
     }),
     true
@@ -109,6 +116,7 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "OPTIONS",
       origin: "http://github.auth.paretoproof.com:4371",
+      publicReportingOrigins,
       routePath: "/portal/session/finalize/submit"
     }),
     true
@@ -120,7 +128,41 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
       brandedAuthOrigins,
       method: "POST",
       origin: "http://github.auth.paretoproof.com:4371",
+      publicReportingOrigins,
       routePath: "/portal/session/finalize/submit"
+    }),
+    false
+  );
+});
+
+test("isAllowedCorsOrigin allows the apex public site only on the public reporting boundary", () => {
+  const allowedOrigins = [
+    "https://portal.paretoproof.com"
+  ];
+  const publicReportingOrigins = readAllowedPublicReportingCorsOrigins();
+
+  assert.equal(
+    isAllowedCorsOrigin({
+      allowLocalhostCors: false,
+      allowedOrigins,
+      brandedAuthOrigins: [],
+      method: "GET",
+      origin: "https://paretoproof.com",
+      publicReportingOrigins,
+      routePath: "/public/reporting/releases"
+    }),
+    true
+  );
+
+  assert.equal(
+    isAllowedCorsOrigin({
+      allowLocalhostCors: false,
+      allowedOrigins,
+      brandedAuthOrigins: [],
+      method: "GET",
+      origin: "https://paretoproof.com",
+      publicReportingOrigins,
+      routePath: "/portal/profile"
     }),
     false
   );

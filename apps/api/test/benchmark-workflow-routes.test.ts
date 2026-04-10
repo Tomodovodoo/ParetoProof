@@ -370,6 +370,115 @@ test("POST /portal/admin/repo-sync-records/:id/status rejects promotion without 
   assert.equal(response.json().error, "repo_sync_record_pr_link_required");
 });
 
+test("POST /portal/admin/repo-sync-records/:id/status accepts explicit null PR linkage clears on non-PR states", async (t) => {
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const currentRow = buildRepoSyncRecord({
+    status: "pr_open"
+  });
+  const updatedRow = buildRepoSyncRecord({
+    lastUpdatedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    status: "rejected",
+    updatedAt: new Date("2026-04-02T18:05:00.000Z")
+  });
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (_table: unknown) => {
+          values: (_value: unknown) => Promise<unknown>;
+        };
+        query: {
+          repoSyncRecords: {
+            findFirst: () => Promise<typeof currentRow | null>;
+          };
+        };
+        update: (_table: unknown) => {
+          set: (_value: unknown) => {
+            where: (_value: unknown) => {
+              returning: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        insert(table: unknown) {
+          return {
+            values(value: unknown) {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+              }
+
+              return Promise.resolve(value);
+            }
+          };
+        },
+        query: {
+          repoSyncRecords: {
+            findFirst: async () => currentRow
+          }
+        },
+        update: () => ({
+          set: () => ({
+            where: () => ({
+              returning: async () => [updatedRow]
+            })
+          })
+        })
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      pullRequestNumber: null,
+      pullRequestUrl: null,
+      status: "rejected"
+    },
+    url: `/portal/admin/repo-sync-records/${currentRow.id}/status`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(
+    benchmarkWorkflowContract.adminRepoSyncRecordDetailResponse.safeParse(response.json()).success,
+    true
+  );
+  assert.equal(response.json().item.pullRequestNumber, null);
+  assert.equal(response.json().item.pullRequestUrl, null);
+  assert.equal(response.json().item.status, "rejected");
+  assert.equal(insertedAuditEvents[0]?.eventId, "benchmark_workflow.repo_sync_status_updated");
+});
+
+test("POST /portal/admin/repo-sync-records/:id/status rejects partial PR linkage clears", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, {} as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      pullRequestNumber: null,
+      status: "rejected"
+    },
+    url: "/portal/admin/repo-sync-records/11111111-1111-4111-8111-111111111111/status"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_repo_sync_record_status_payload");
+});
+
 test("POST /portal/admin/repo-sync-records/:id/status returns a conflict when another writer already changed the status", async (t) => {
   const currentRow = buildRepoSyncRecord({
     status: "pr_open"
@@ -834,6 +943,188 @@ test("POST /portal/admin/benchmark-releases/:id/publish blocks publication when 
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().error, "benchmark_version_not_launchable");
   assert.equal(response.json().item.launchability, "internal_only");
+});
+
+test("GET /public/reporting/releases returns only published public releases", async (t) => {
+  let capturedFindManyArgs: Record<string, unknown> | undefined;
+  let capturedVersionArgs: Record<string, unknown> | undefined;
+  const publicRow = buildBenchmarkRelease();
+  const draftRow = buildBenchmarkRelease({
+    benchmarkReleaseId: "problem9-draft-apr-2026",
+    publishedAt: null,
+    status: "draft"
+  });
+  const heldOutRow = buildBenchmarkRelease({
+    benchmarkReleaseId: "problem9-held-apr-2026",
+    visibility: "held_out"
+  });
+  const publicVersionRow = buildBenchmarkVersion({
+    benchmarkVersionId: publicRow.benchmarkVersionId,
+    displayLabel: "Problem 9 April 2026",
+    packageId: "firstproof/Problem9"
+  });
+  const db = {
+    query: {
+      benchmarkReleases: {
+        findMany: async (args: Record<string, unknown>) => {
+          capturedFindManyArgs = args;
+          return [publicRow, draftRow, heldOutRow];
+        }
+      },
+      benchmarkVersions: {
+        findMany: async (args: Record<string, unknown>) => {
+          capturedVersionArgs = args;
+          return [publicVersionRow];
+        }
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/public/reporting/releases"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(
+    benchmarkWorkflowContract.publicBenchmarkReleaseListResponse.safeParse(response.json()).success,
+    true
+  );
+  assert.ok(capturedFindManyArgs?.where);
+  assert.ok(capturedVersionArgs?.where);
+  assert.equal(response.json().items.length, 1);
+  assert.equal(response.json().items[0].benchmarkReleaseId, publicRow.benchmarkReleaseId);
+  assert.equal(response.json().items[0].benchmarkLabel, publicVersionRow.packageId);
+  assert.equal(response.json().items[0].benchmarkVersionId, publicRow.benchmarkVersionId);
+  assert.equal(response.json().items[0].benchmarkVersionLabel, publicVersionRow.displayLabel);
+  assert.equal(response.json().items[0].includedModelCount, null);
+  assert.deepEqual(response.json().items[0].linkedPublicArtifactPresence, {
+    hasMethodologyArtifacts: true,
+    hasSummaryArtifacts: true
+  });
+  assert.equal(response.json().items[0].publicationStatus, "released");
+  assert.equal(response.json().items[0].publishedAt, publicRow.publishedAt?.toISOString());
+  assert.equal(response.json().items[0].releaseLabel, publicRow.releaseLabel);
+  assert.deepEqual(response.json().items[0].topLineMetricSummary, {
+    label: "release_summary",
+    unitLabel: null,
+    value: null,
+    valueText: "Published release"
+  });
+  assert.equal(response.json().publishedAt, publicRow.publishedAt?.toISOString());
+  assert.equal(response.json().recommendedRevalidateAfterSeconds, 300);
+  assert.equal(response.json().snapshotVersion, publicRow.updatedAt.toISOString());
+  assert.equal(response.json().items[0].approvedByUserId, undefined);
+  assert.equal(response.json().items[0].createdByUserId, undefined);
+  assert.equal(response.json().items[0].summaryArtifactRefs, undefined);
+});
+
+test("GET /public/reporting/releases keeps a stable empty snapshot version", async (t) => {
+  const db = {
+    query: {
+      benchmarkReleases: {
+        findMany: async () => []
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/public/reporting/releases"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().publishedAt, null);
+  assert.equal(response.json().snapshotVersion, "public-reporting-releases-empty");
+  assert.deepEqual(response.json().items, []);
+});
+
+test("GET /public/reporting/releases/:benchmarkReleaseId returns one published public release", async (t) => {
+  const publicRow = buildBenchmarkRelease();
+  const publicVersionRow = buildBenchmarkVersion({
+    benchmarkVersionId: publicRow.benchmarkVersionId,
+    displayLabel: "Problem 9 April 2026",
+    packageId: "firstproof/Problem9"
+  });
+  const db = {
+    query: {
+      benchmarkReleases: {
+        findFirst: async () => publicRow
+      },
+      benchmarkVersions: {
+        findFirst: async () => publicVersionRow
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/public/reporting/releases/${publicRow.benchmarkReleaseId}`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(
+    benchmarkWorkflowContract.publicBenchmarkReleaseDetailResponse.safeParse(response.json()).success,
+    true
+  );
+  assert.equal(response.json().item.benchmarkReleaseId, publicRow.benchmarkReleaseId);
+  assert.equal(response.json().item.benchmarkLabel, publicVersionRow.packageId);
+  assert.equal(response.json().item.benchmarkVersionLabel, publicVersionRow.displayLabel);
+  assert.equal(response.json().item.publicationStatus, "released");
+  assert.equal(response.json().item.releaseMethodologySummary, null);
+  assert.deepEqual(response.json().item.releasedAggregateMetrics, []);
+  assert.equal(response.json().item.methodologyArtifactRefs, undefined);
+  assert.equal(response.json().item.summaryArtifactRefs, undefined);
+  assert.equal(response.json().item.approvedByUserId, undefined);
+});
+
+test("GET /public/reporting/releases/:benchmarkReleaseId hides non-public releases", async (t) => {
+  const heldOutRow = buildBenchmarkRelease({
+    visibility: "held_out"
+  });
+  const db = {
+    query: {
+      benchmarkReleases: {
+        findFirst: async () => heldOutRow
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/public/reporting/releases/${heldOutRow.benchmarkReleaseId}`
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json().error, "public_benchmark_release_not_found");
 });
 
 test("POST /portal/admin/package-freezes derives provenance fields from the repo sync record", async (t) => {

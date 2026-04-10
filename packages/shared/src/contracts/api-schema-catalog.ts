@@ -17,6 +17,8 @@ import {
   adminRepoSyncRecordStatusUpdateInputSchema,
   benchmarkReleaseDetailResponseSchema,
   benchmarkReleaseListResponseSchema,
+  publicBenchmarkReleaseDetailResponseSchema,
+  publicBenchmarkReleaseListResponseSchema,
   benchmarkReleaseParamsSchema,
   benchmarkVersionDetailResponseSchema,
   benchmarkVersionListResponseSchema,
@@ -85,6 +87,18 @@ export const apiEndpointSchemaCatalog = {
     requestParams: null,
     requestQuery: null,
     responseBody: healthResponseSchema
+  },
+  "public.reporting.release.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: publicBenchmarkReleaseListResponseSchema
+  },
+  "public.reporting.release.detail": {
+    requestBody: null,
+    requestParams: benchmarkReleaseParamsSchema,
+    requestQuery: null,
+    responseBody: publicBenchmarkReleaseDetailResponseSchema
   },
   "portal.me.read": {
     requestBody: null,

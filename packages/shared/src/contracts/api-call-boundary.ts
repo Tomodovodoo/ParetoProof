@@ -10,6 +10,22 @@ export const apiCallBoundaryCatalog = [
       "Health checks need to work without Access so Railway and external uptime probes can reach the API."
   },
   {
+    credential: "none",
+    endpointId: "public.reporting.release.list",
+    mode: "browser_direct",
+    origin: "public_browser",
+    rationale:
+      "Published public benchmark releases need an anonymous read feed so the public site can discover release objects without exposing admin-only metadata."
+  },
+  {
+    credential: "none",
+    endpointId: "public.reporting.release.detail",
+    mode: "browser_direct",
+    origin: "public_browser",
+    rationale:
+      "Public release detail pages need an anonymous read boundary that serves only published public release data."
+  },
+  {
     credential: "cloudflare_access_jwt",
     endpointId: "portal.me.read",
     mode: "browser_direct",

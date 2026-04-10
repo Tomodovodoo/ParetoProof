@@ -36,6 +36,12 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   ];
 }
 
+export function readAllowedPublicReportingCorsOrigins() {
+  return [
+    "https://paretoproof.com"
+  ];
+}
+
 function readBrandedAuthOrigins() {
   return [
     "https://auth.paretoproof.com",
@@ -49,6 +55,10 @@ function usesBrandedFinalizeSubmitCorsBoundary(method: string, routePath: string
     routePath === "/portal/session/finalize/submit" &&
     (method === "POST" || method === "OPTIONS")
   );
+}
+
+function usesPublicReportingCorsBoundary(routePath: string) {
+  return routePath === "/public/reporting/releases" || routePath.startsWith("/public/reporting/");
 }
 
 export function readCorsRoutePath(routePath: string | undefined, rawUrl: string | undefined) {
@@ -73,11 +83,19 @@ export function isAllowedCorsOrigin(options: {
   brandedAuthOrigins: string[];
   method: string;
   origin: string;
+  publicReportingOrigins: string[];
   routePath: string;
 }) {
   const normalizedOrigin = normalizeOrigin(options.origin);
 
   if (options.allowedOrigins.includes(normalizedOrigin)) {
+    return true;
+  }
+
+  if (
+    usesPublicReportingCorsBoundary(options.routePath) &&
+    options.publicReportingOrigins.includes(normalizedOrigin)
+  ) {
     return true;
   }
 
@@ -110,6 +128,7 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   const rateLimitPreHandlers = createRateLimitPreHandlers(createInMemoryRateLimiter());
   const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
   const brandedAuthOrigins = readBrandedAuthOrigins();
+  const publicReportingOrigins = readAllowedPublicReportingCorsOrigins();
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
 
   await app.register(cors, {
@@ -134,6 +153,7 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
               brandedAuthOrigins,
               method: request.method,
               origin,
+              publicReportingOrigins,
               routePath
             })
           ) {

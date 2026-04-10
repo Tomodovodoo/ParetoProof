@@ -10,6 +10,24 @@ export const apiEndpointCatalog = [
     purpose: "Infrastructure health probe for Railway and external uptime checks."
   },
   {
+    access: "anonymous",
+    audience: "public",
+    id: "public.reporting.release.list",
+    method: "GET",
+    path: "/public/reporting/releases",
+    purpose:
+      "List published public benchmark releases through the canonical anonymous public reporting discovery surface."
+  },
+  {
+    access: "anonymous",
+    audience: "public",
+    id: "public.reporting.release.detail",
+    method: "GET",
+    path: "/public/reporting/releases/:benchmarkReleaseId",
+    purpose:
+      "Return one published public benchmark release through the canonical anonymous public reporting detail surface."
+  },
+  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.me.read",

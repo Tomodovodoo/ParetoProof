@@ -44,6 +44,11 @@ export const benchmarkReleaseVisibilitySchema = z.enum([
   "public"
 ]);
 
+export const publicBenchmarkReleasePublicationStatusSchema = z.enum([
+  "released",
+  "withdrawn"
+]);
+
 export const repoSyncRecordSchema = z.object({
   createdAt: timestampSchema,
   id: z.string().uuid(),
@@ -111,6 +116,43 @@ export const benchmarkReleaseSchema = z.object({
   visibility: benchmarkReleaseVisibilitySchema
 });
 
+export const publicBenchmarkArtifactPresenceSchema = z.object({
+  hasMethodologyArtifacts: z.boolean(),
+  hasSummaryArtifacts: z.boolean()
+}).strict();
+
+export const publicBenchmarkMetricSummarySchema = z.object({
+  label: nonEmptyStringSchema,
+  unitLabel: nonEmptyStringSchema.nullable(),
+  value: z.number().finite().nullable(),
+  valueText: nonEmptyStringSchema.nullable()
+}).strict();
+
+export const publicBenchmarkReleaseSummarySchema = z.object({
+  benchmarkReleaseId: nonEmptyStringSchema,
+  benchmarkLabel: nonEmptyStringSchema,
+  benchmarkVersionId: nonEmptyStringSchema,
+  benchmarkVersionLabel: nonEmptyStringSchema,
+  includedModelCount: z.number().int().nonnegative().nullable(),
+  linkedPublicArtifactPresence: publicBenchmarkArtifactPresenceSchema,
+  publicationStatus: publicBenchmarkReleasePublicationStatusSchema,
+  publishedAt: timestampSchema,
+  releaseLabel: nonEmptyStringSchema,
+  topLineMetricSummary: publicBenchmarkMetricSummarySchema.nullable()
+}).strict();
+
+export const publicBenchmarkReleaseDetailSchema = publicBenchmarkReleaseSummarySchema.extend({
+  releaseMethodologySummary: nonEmptyStringSchema.nullable(),
+  releasedAggregateMetrics: z.array(publicBenchmarkMetricSummarySchema)
+}).strict();
+
+export const publicReportingFreshnessSchema = z.object({
+  generatedAt: timestampSchema,
+  publishedAt: timestampSchema.nullable(),
+  recommendedRevalidateAfterSeconds: z.number().int().positive(),
+  snapshotVersion: nonEmptyStringSchema
+}).strict();
+
 export const adminRepoSyncRecordCreateInputSchema = z
   .object({
     mathPackageCandidateId: nonEmptyStringSchema.nullable().default(null),
@@ -148,11 +190,14 @@ export const adminRepoSyncRecordStatusUpdateInputSchema = z
     status: repoSyncRecordStatusSchema
   })
   .superRefine((value, context) => {
-    const hasFullLink = hasRepoPullRequestLink(value);
-    const hasPartialLink = !hasFullLink && (
+    const hasLinkageFields =
       value.pullRequestNumber !== undefined ||
-      value.pullRequestUrl !== undefined
-    );
+      value.pullRequestUrl !== undefined;
+    const hasFullLink = hasRepoPullRequestLink(value);
+    const clearsLink =
+      value.pullRequestNumber === null &&
+      value.pullRequestUrl === null;
+    const hasPartialLink = hasLinkageFields && !hasFullLink && !clearsLink;
 
     if (hasPartialLink) {
       context.addIssue({
@@ -242,4 +287,16 @@ export const benchmarkReleaseListResponseSchema = z.object({
 export const benchmarkReleaseDetailResponseSchema = z.object({
   item: benchmarkReleaseSchema
 });
+
+export const publicBenchmarkReleaseListResponseSchema = publicReportingFreshnessSchema
+  .extend({
+    items: z.array(publicBenchmarkReleaseSummarySchema)
+  })
+  .strict();
+
+export const publicBenchmarkReleaseDetailResponseSchema = publicReportingFreshnessSchema
+  .extend({
+    item: publicBenchmarkReleaseDetailSchema
+  })
+  .strict();
 
