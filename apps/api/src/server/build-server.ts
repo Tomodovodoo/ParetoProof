@@ -44,7 +44,26 @@ function readBrandedAuthOrigins() {
 }
 
 function usesBrandedFinalizeSubmitCorsBoundary(method: string, routePath: string) {
-  return method === "POST" && routePath === "/portal/session/finalize/submit";
+  return (
+    routePath === "/portal/session/finalize/submit" &&
+    (method === "POST" || method === "OPTIONS")
+  );
+}
+
+export function readCorsRoutePath(routePath: string | undefined, rawUrl: string | undefined) {
+  if (routePath && routePath !== "*") {
+    return routePath;
+  }
+
+  if (!rawUrl || rawUrl === "*") {
+    return routePath ?? "";
+  }
+
+  try {
+    return new URL(rawUrl, "http://localhost").pathname;
+  } catch {
+    return rawUrl.split("?")[0] ?? rawUrl;
+  }
 }
 
 export function isAllowedCorsOrigin(options: {
@@ -94,7 +113,10 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
 
   await app.register(cors, {
     delegator(request, callback) {
-      const routePath = request.routeOptions.url ?? request.raw.url ?? "";
+      const routePath = readCorsRoutePath(
+        request.routeOptions.url,
+        request.raw.url
+      );
 
       callback(null, {
         credentials: true,
