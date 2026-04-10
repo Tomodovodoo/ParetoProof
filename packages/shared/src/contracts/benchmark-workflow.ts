@@ -12,7 +12,6 @@ import {
   benchmarkVersionListResponseSchema,
   packageFreezeDetailResponseSchema,
   packageFreezeListResponseSchema,
-  publicBenchmarkReleaseListResponseSchema,
   repoSyncRecordDetailResponseSchema,
   repoSyncRecordListResponseSchema
 } from "../schemas/benchmark-workflow.js";
@@ -33,6 +32,5 @@ export const benchmarkWorkflowContract = {
   adminRepoSyncRecordCreateInput: adminRepoSyncRecordCreateInputSchema,
   adminRepoSyncRecordDetailResponse: repoSyncRecordDetailResponseSchema,
   adminRepoSyncRecordListResponse: repoSyncRecordListResponseSchema,
-  adminRepoSyncRecordStatusUpdateInput: adminRepoSyncRecordStatusUpdateInputSchema,
-  publicBenchmarkReleaseListResponse: publicBenchmarkReleaseListResponseSchema
+  adminRepoSyncRecordStatusUpdateInput: adminRepoSyncRecordStatusUpdateInputSchema
 };

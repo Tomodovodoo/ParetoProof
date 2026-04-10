@@ -10,15 +10,6 @@ export const apiEndpointCatalog = [
     purpose: "Infrastructure health probe for Railway and external uptime checks."
   },
   {
-    access: "anonymous",
-    audience: "public",
-    id: "public.benchmark-release.list",
-    method: "GET",
-    path: "/public/benchmark-releases",
-    purpose:
-      "Return the public-safe feed of published benchmark releases that are approved for apex-site reporting."
-  },
-  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.me.read",

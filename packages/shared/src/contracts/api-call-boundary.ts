@@ -10,14 +10,6 @@ export const apiCallBoundaryCatalog = [
       "Health checks need to work without Access so Railway and external uptime probes can reach the API."
   },
   {
-    credential: "none",
-    endpointId: "public.benchmark-release.list",
-    mode: "browser_direct",
-    origin: "public_browser",
-    rationale:
-      "Published release reporting is a public browser surface and should remain readable without Access while the backend filters out non-public states."
-  },
-  {
     credential: "cloudflare_access_jwt",
     endpointId: "portal.me.read",
     mode: "browser_direct",

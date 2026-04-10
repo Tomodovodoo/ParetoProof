@@ -444,7 +444,7 @@ export const packageFreezes = pgTable(
       .notNull()
   },
   (table) => ({
-    repoSyncRecordIndex: index("package_freezes_repo_sync_record_id_idx").on(
+    repoSyncRecordUnique: uniqueIndex("package_freezes_repo_sync_record_id_unique").on(
       table.repoSyncRecordId
     ),
     packageDigestUnique: uniqueIndex("package_freezes_package_digest_unique").on(
@@ -484,9 +484,6 @@ export const benchmarkVersions = pgTable(
       .notNull()
   },
   (table) => ({
-    packageFreezeUnique: uniqueIndex("benchmark_versions_package_freeze_id_unique").on(
-      table.packageFreezeId
-    ),
     launchabilityIndex: index("benchmark_versions_launchability_idx").on(
       table.launchability
     ),

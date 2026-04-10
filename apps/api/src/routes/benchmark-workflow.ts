@@ -3,7 +3,6 @@ import type {
   BenchmarkVersion,
   BenchmarkVersionLaunchability,
   PackageFreeze,
-  PublicBenchmarkReleaseListItem,
   RepoSyncRecord,
   RepoSyncRecordStatus
 } from "@paretoproof/shared";
@@ -152,28 +151,6 @@ function toBenchmarkRelease(row: DbBenchmarkReleaseRow): BenchmarkRelease {
   };
 }
 
-function toPublicBenchmarkReleaseListItem(options: {
-  benchmarkReleaseRow: DbBenchmarkReleaseRow;
-  benchmarkVersionRow: DbBenchmarkVersionRow;
-  packageFreezeRow: DbPackageFreezeRow;
-}): PublicBenchmarkReleaseListItem {
-  return {
-    benchmarkFamily: options.packageFreezeRow.benchmarkFamily,
-    benchmarkReleaseId: options.benchmarkReleaseRow.benchmarkReleaseId,
-    benchmarkVersionId: options.benchmarkVersionRow.benchmarkVersionId,
-    displayLabel: options.benchmarkVersionRow.displayLabel,
-    methodologyArtifactRefs: options.benchmarkReleaseRow.methodologyArtifactRefs,
-    packageDigest: options.packageFreezeRow.packageDigest,
-    packageId: options.packageFreezeRow.packageId,
-    packageVersion: options.packageFreezeRow.packageVersion,
-    publishedAt: options.benchmarkReleaseRow.publishedAt?.toISOString() ?? options.benchmarkReleaseRow.updatedAt.toISOString(),
-    releaseLabel: options.benchmarkReleaseRow.releaseLabel,
-    scopeLabel: options.benchmarkVersionRow.scopeLabel,
-    summaryArtifactRefs: options.benchmarkReleaseRow.summaryArtifactRefs,
-    summaryPayload: options.benchmarkReleaseRow.summaryPayload
-  };
-}
-
 function canTransitionRepoSyncStatus(
   currentStatus: RepoSyncRecordStatus,
   nextStatus: RepoSyncRecordStatus
@@ -208,53 +185,9 @@ function createBenchmarkWorkflowAuditEvent(options: {
   };
 }
 
-async function loadPublicBenchmarkReleaseItems(
-  db: ReturnTypeOfCreateDbClient
-) {
-  const releaseRows = await db.query.benchmarkReleases.findMany({
-    orderBy: [desc(benchmarkReleases.publishedAt), desc(benchmarkReleases.createdAt)],
-    where: and(
-      eq(benchmarkReleases.status, "published"),
-      eq(benchmarkReleases.visibility, "public")
-    )
-  });
-
-  const items = await Promise.all(
-    releaseRows.map(async (benchmarkReleaseRow) => {
-      const benchmarkVersionRow = await db.query.benchmarkVersions.findFirst({
-        where: eq(
-          benchmarkVersions.benchmarkVersionId,
-          benchmarkReleaseRow.benchmarkVersionId
-        )
-      });
-
-      if (!benchmarkVersionRow) {
-        return null;
-      }
-
-      const packageFreezeRow = await db.query.packageFreezes.findFirst({
-        where: eq(packageFreezes.id, benchmarkVersionRow.packageFreezeId)
-      });
-
-      if (!packageFreezeRow) {
-        return null;
-      }
-
-      return toPublicBenchmarkReleaseListItem({
-        benchmarkReleaseRow,
-        benchmarkVersionRow,
-        packageFreezeRow
-      });
-    })
-  );
-
-  return items.filter((item): item is PublicBenchmarkReleaseListItem => item !== null);
-}
-
 export const benchmarkWorkflowRouteTestUtils = {
   canTransitionBenchmarkVersionLaunchability,
-  canTransitionRepoSyncStatus,
-  toPublicBenchmarkReleaseListItem
+  canTransitionRepoSyncStatus
 };
 
 export function registerBenchmarkWorkflowRoutes(
@@ -270,18 +203,6 @@ export function registerBenchmarkWorkflowRoutes(
     rateLimitPreHandlers?.authenticated
       ? [guard, rateLimitPreHandlers.authenticated]
       : [guard];
-
-  app.get(
-    "/public/benchmark-releases",
-    {
-      preHandler: rateLimitPreHandlers?.public
-    },
-    async () => {
-      return {
-        items: await loadPublicBenchmarkReleaseItems(db)
-      };
-    }
-  );
 
   app.get(
     "/portal/admin/repo-sync-records",
@@ -716,15 +637,14 @@ export function registerBenchmarkWorkflowRoutes(
           .values({
             benchmarkFamily: input.benchmarkFamily,
             createdByUserId: actorUserId,
-            mathPackageCandidateId:
-              input.mathPackageCandidateId ?? repoSyncRecordRow.mathPackageCandidateId,
+            mathPackageCandidateId: repoSyncRecordRow.mathPackageCandidateId,
             note: input.note,
             packageDigest: input.packageDigest,
             packageId: input.packageId,
             packageVersion: input.packageVersion,
             repoCommitSha: input.repoCommitSha,
             repoSyncRecordId: input.repoSyncRecordId,
-            repoTreePath: input.repoTreePath,
+            repoTreePath: repoSyncRecordRow.targetRepoPath,
             updatedAt: now
           })
           .returning();
@@ -878,13 +798,9 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
-        const existingVersion =
-          (await tx.query.benchmarkVersions.findFirst({
-            where: eq(benchmarkVersions.benchmarkVersionId, input.benchmarkVersionId)
-          })) ??
-          (await tx.query.benchmarkVersions.findFirst({
-            where: eq(benchmarkVersions.packageFreezeId, packageFreezeRow.id)
-          }));
+        const existingVersion = await tx.query.benchmarkVersions.findFirst({
+          where: eq(benchmarkVersions.benchmarkVersionId, input.benchmarkVersionId)
+        });
 
         if (existingVersion) {
           return {
@@ -1012,6 +928,26 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
+        if (
+          currentRow.launchability === "launchable" &&
+          parsedBody.data.launchability !== "launchable"
+        ) {
+          const publishedRelease = await tx.query.benchmarkReleases.findFirst({
+            where: and(
+              eq(benchmarkReleases.benchmarkVersionId, currentRow.benchmarkVersionId),
+              eq(benchmarkReleases.status, "published"),
+              eq(benchmarkReleases.visibility, "public")
+            )
+          });
+
+          if (publishedRelease) {
+            return {
+              kind: "published_release_exists" as const,
+              publishedRelease
+            };
+          }
+        }
+
         const now = new Date();
         const [updatedRow] = await tx
           .update(benchmarkVersions)
@@ -1054,6 +990,14 @@ export function registerBenchmarkWorkflowRoutes(
         reply.code(409).send({
           error: "benchmark_version_invalid_launchability_transition",
           item: toBenchmarkVersion(result.currentRow)
+        });
+        return;
+      }
+
+      if (result.kind === "published_release_exists") {
+        reply.code(409).send({
+          error: "benchmark_version_has_published_release",
+          release: toBenchmarkRelease(result.publishedRelease)
         });
         return;
       }
@@ -1259,8 +1203,23 @@ export function registerBenchmarkWorkflowRoutes(
             status: "approved",
             updatedAt: now
           })
-          .where(eq(benchmarkReleases.benchmarkReleaseId, currentRow.benchmarkReleaseId))
+          .where(
+            and(
+              eq(benchmarkReleases.benchmarkReleaseId, currentRow.benchmarkReleaseId),
+              eq(benchmarkReleases.status, "draft")
+            )
+          )
           .returning();
+
+        if (!updatedRow) {
+          return {
+            currentRow:
+              (await tx.query.benchmarkReleases.findFirst({
+                where: eq(benchmarkReleases.benchmarkReleaseId, currentRow.benchmarkReleaseId)
+              })) ?? currentRow,
+            kind: "not_draft" as const
+          };
+        }
 
         await tx.insert(auditEvents).values(
           createBenchmarkWorkflowAuditEvent({
@@ -1379,8 +1338,27 @@ export function registerBenchmarkWorkflowRoutes(
             status: "published",
             updatedAt: now
           })
-          .where(eq(benchmarkReleases.benchmarkReleaseId, currentReleaseRow.benchmarkReleaseId))
+          .where(
+            and(
+              eq(benchmarkReleases.benchmarkReleaseId, currentReleaseRow.benchmarkReleaseId),
+              eq(benchmarkReleases.status, "approved"),
+              eq(benchmarkReleases.visibility, "public")
+            )
+          )
           .returning();
+
+        if (!updatedReleaseRow) {
+          return {
+            currentReleaseRow:
+              (await tx.query.benchmarkReleases.findFirst({
+                where: eq(
+                  benchmarkReleases.benchmarkReleaseId,
+                  currentReleaseRow.benchmarkReleaseId
+                )
+              })) ?? currentReleaseRow,
+            kind: "release_not_approved" as const
+          };
+        }
 
         await tx.insert(auditEvents).values(
           createBenchmarkWorkflowAuditEvent({

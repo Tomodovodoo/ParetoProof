@@ -105,13 +105,11 @@ CREATE INDEX "repo_sync_records_math_package_candidate_id_idx" ON "repo_sync_rec
 --> statement-breakpoint
 CREATE UNIQUE INDEX "repo_sync_records_repo_pr_unique" ON "repo_sync_records" USING btree ("repo_owner","repo_name","pull_request_number") WHERE "repo_sync_records"."pull_request_number" is not null;
 --> statement-breakpoint
-CREATE INDEX "package_freezes_repo_sync_record_id_idx" ON "package_freezes" USING btree ("repo_sync_record_id");
+CREATE UNIQUE INDEX "package_freezes_repo_sync_record_id_unique" ON "package_freezes" USING btree ("repo_sync_record_id");
 --> statement-breakpoint
 CREATE UNIQUE INDEX "package_freezes_package_digest_unique" ON "package_freezes" USING btree ("package_digest");
 --> statement-breakpoint
 CREATE INDEX "package_freezes_math_package_candidate_id_idx" ON "package_freezes" USING btree ("math_package_candidate_id");
---> statement-breakpoint
-CREATE UNIQUE INDEX "benchmark_versions_package_freeze_id_unique" ON "benchmark_versions" USING btree ("package_freeze_id");
 --> statement-breakpoint
 CREATE INDEX "benchmark_versions_launchability_idx" ON "benchmark_versions" USING btree ("launchability");
 --> statement-breakpoint

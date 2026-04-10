@@ -114,14 +114,12 @@ export type AdminRepoSyncRecordStatusUpdateInput = {
 
 export type AdminPackageFreezeCreateInput = {
   benchmarkFamily: string;
-  mathPackageCandidateId: string | null;
   note: string | null;
   packageDigest: string;
   packageId: string;
   packageVersion: string;
   repoCommitSha: string;
   repoSyncRecordId: string;
-  repoTreePath: string;
 };
 
 export type AdminBenchmarkVersionCreateInput = {
@@ -142,22 +140,6 @@ export type AdminBenchmarkReleaseCreateInput = {
   summaryArtifactRefs: string[];
   summaryPayload: BenchmarkWorkflowSummaryPayload | null;
   visibility: BenchmarkReleaseVisibility;
-};
-
-export type PublicBenchmarkReleaseListItem = {
-  benchmarkFamily: string;
-  benchmarkReleaseId: string;
-  benchmarkVersionId: string;
-  displayLabel: string;
-  methodologyArtifactRefs: string[];
-  packageDigest: string;
-  packageId: string;
-  packageVersion: string;
-  publishedAt: string;
-  releaseLabel: string;
-  scopeLabel: string;
-  summaryArtifactRefs: string[];
-  summaryPayload: BenchmarkWorkflowSummaryPayload | null;
 };
 
 export type RepoSyncRecordListResponse = {
@@ -192,6 +174,3 @@ export type BenchmarkReleaseDetailResponse = {
   item: BenchmarkRelease;
 };
 
-export type PublicBenchmarkReleaseListResponse = {
-  items: PublicBenchmarkReleaseListItem[];
-};

@@ -169,14 +169,12 @@ export const adminRepoSyncRecordStatusUpdateInputSchema = z
 
 export const adminPackageFreezeCreateInputSchema = z.object({
   benchmarkFamily: nonEmptyStringSchema,
-  mathPackageCandidateId: nonEmptyStringSchema.nullable().default(null),
   note: nullableNoteSchema,
   packageDigest: nonEmptyStringSchema,
   packageId: nonEmptyStringSchema,
   packageVersion: nonEmptyStringSchema,
   repoCommitSha: nonEmptyStringSchema,
-  repoSyncRecordId: z.string().uuid(),
-  repoTreePath: nonEmptyStringSchema
+  repoSyncRecordId: z.string().uuid()
 });
 
 export const adminBenchmarkVersionCreateInputSchema = z.object({
@@ -233,22 +231,3 @@ export const benchmarkReleaseDetailResponseSchema = z.object({
   item: benchmarkReleaseSchema
 });
 
-export const publicBenchmarkReleaseListItemSchema = z.object({
-  benchmarkFamily: nonEmptyStringSchema,
-  benchmarkReleaseId: nonEmptyStringSchema,
-  benchmarkVersionId: nonEmptyStringSchema,
-  displayLabel: nonEmptyStringSchema,
-  methodologyArtifactRefs: z.array(nonEmptyStringSchema),
-  packageDigest: nonEmptyStringSchema,
-  packageId: nonEmptyStringSchema,
-  packageVersion: nonEmptyStringSchema,
-  publishedAt: timestampSchema,
-  releaseLabel: nonEmptyStringSchema,
-  scopeLabel: nonEmptyStringSchema,
-  summaryArtifactRefs: z.array(nonEmptyStringSchema),
-  summaryPayload: summaryPayloadSchema.nullable()
-});
-
-export const publicBenchmarkReleaseListResponseSchema = z.object({
-  items: z.array(publicBenchmarkReleaseListItemSchema)
-});
