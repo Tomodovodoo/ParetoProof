@@ -231,6 +231,24 @@ function buildJobAuthContext(scopes: WorkerJobTokenScope[] = [
   };
 }
 
+function buildLeaseStateRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactManifestDigest: null,
+    attemptState: "active",
+    bundleDigest: null,
+    candidateDigest: null,
+    heartbeatTimeoutSeconds: 180,
+    jobState: "running",
+    lastEventSequence: 3,
+    leaseExpiresAt: new Date("2099-03-13T15:03:00.000Z"),
+    revokedAt: null,
+    runState: "running",
+    verifierVerdict: null,
+    verdictDigest: null,
+    ...overrides
+  };
+}
+
 function createScopeError(scope: WorkerJobTokenScope) {
   return new InternalWorkerControlError({
     code: "worker_job_token_scope_missing",
@@ -1056,6 +1074,390 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
   assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
   assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
   assert.equal(query.params.length, 0);
+});
+
+test("reportEvent rejects submissions whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerExecutionEventResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+          return {
+            from() {
+              const chain = {
+                innerJoin() {
+                  return chain;
+                },
+                where() {
+                  return chain;
+                },
+                limit() {
+                  return Promise.resolve([buildLeaseStateRow()]);
+                }
+              };
+
+              return chain;
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return Promise.resolve();
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.reportEvent(buildEventRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
+});
+
+test("reportEvent rejects duplicate retries once the lease has been revoked", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerExecutionEventResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        lastEventSequence: 4
+                      })
+                    ]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              const chain = {
+                where() {
+                  return chain;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      createdAt: new Date("2026-03-13T15:00:10.000Z"),
+                      details: buildEventRequest().details,
+                      eventKind: buildEventRequest().eventKind,
+                      phase: buildEventRequest().phase,
+                      recordedAt: new Date(buildEventRequest().recordedAt),
+                      sequence: buildEventRequest().sequence,
+                      summary: buildEventRequest().summary
+                    }
+                  ]);
+                }
+              };
+
+              return chain;
+            }
+          };
+        },
+        insert() {
+          throw new Error("duplicate event retries should not insert a new event row");
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.reportEvent(buildEventRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.ok(selectCount >= 1);
+});
+
+test("submitArtifactManifest rejects submissions whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerArtifactManifestResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return {
+                returning() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildArtifactManifestRequest(),
+    artifacts: []
+  };
+
+  await assert.rejects(
+    () => control.submitArtifactManifest(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.ok(selectCount >= 1);
+});
+
+test("submitResult rejects terminal updates whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerResultMessageResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildResultRequest(),
+    artifactIds: []
+  };
+
+  await assert.rejects(
+    () => control.submitResult(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
+});
+
+test("submitFailure rejects terminal updates whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildFailureRequest(),
+    artifactIds: []
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
 });
 
 test("heartbeat rotates the job token while extending the lease", async () => {

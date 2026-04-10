@@ -510,6 +510,34 @@ function ensureLeaseIsActive(leaseState: LeaseStateRow, now: Date) {
   }
 }
 
+async function updateActiveLeaseRow(
+  tx: ReadWriteExecutor,
+  leaseRowId: string,
+  now: Date,
+  values: Partial<typeof workerJobLeases.$inferInsert>
+) {
+  const [lease] = await tx
+    .update(workerJobLeases)
+    .set(values)
+    .where(
+      and(
+        eq(workerJobLeases.id, leaseRowId),
+        isNull(workerJobLeases.revokedAt),
+        gt(workerJobLeases.leaseExpiresAt, now)
+      )
+    )
+    .returning({
+      id: workerJobLeases.id
+    });
+
+  if (!lease) {
+    throw createConflictError(
+      "worker_lease_not_active",
+      "The worker lease is no longer active for this submission."
+    );
+  }
+}
+
 function ensureSubmissionState(
   leaseState: LeaseStateRow,
   options: {
@@ -1251,6 +1279,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
 
           if (storedEvent && matchesStoredEvent(request, storedEvent)) {
+            const leaseFenceAt = new Date();
+
+            await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+              updatedAt: leaseFenceAt
+            });
+
             return {
               acceptedAt: storedEvent.createdAt.toISOString(),
               acknowledgedSequence: request.sequence
@@ -1297,6 +1331,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
 
           if (storedEvent && matchesStoredEvent(request, storedEvent)) {
+            const leaseFenceAt = new Date();
+
+            await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+              updatedAt: leaseFenceAt
+            });
+
             return {
               acceptedAt: storedEvent.createdAt.toISOString(),
               acknowledgedSequence: request.sequence
@@ -1310,13 +1350,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
         }
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            lastEventSequence: request.sequence,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          lastEventSequence: request.sequence,
+          updatedAt: leaseFenceAt
+        });
 
         await promoteExecutionToRunning(tx, authContext, lease, now);
 
@@ -1431,6 +1470,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(attempts.id, authContext.attemptRowId));
 
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          updatedAt: leaseFenceAt
+        });
+
         await promoteExecutionToRunning(tx, authContext, lease, now);
 
         return {
@@ -1535,13 +1580,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(runs.id, authContext.runRowId));
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            revokedAt: now,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          revokedAt: leaseFenceAt,
+          updatedAt: leaseFenceAt
+        });
 
         return {
           acceptedAt: now.toISOString(),
@@ -1645,13 +1689,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(runs.id, authContext.runRowId));
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            revokedAt: now,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          revokedAt: leaseFenceAt,
+          updatedAt: leaseFenceAt
+        });
 
         return {
           acceptedAt: now.toISOString(),
