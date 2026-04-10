@@ -18,6 +18,8 @@ Public benchmark releases stay on the apex site. Generic operational views stay 
 
 Redirect helpers, route tests, and public copy should preserve this split and reject cross-surface drift.
 
+Question-centric launch ownership does not authorize math to collect raw provider secrets from browsers. That credential boundary is defined separately in `docs/math-provider-credential-policy-baseline.md`.
+
 ## Contributor Path
 
 - Approved contributors start at the sign-in entry on `auth.paretoproof.com`.

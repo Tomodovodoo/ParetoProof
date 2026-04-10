@@ -167,7 +167,7 @@ const publicBands = [
   },
   {
     body:
-      "Coming soon: fully containerized Docker images where you can replay any benchmark run, bring your own API keys, and verify results independently.",
+      "Coming soon: fully containerized Docker images where you can replay any benchmark run locally with your own API keys and verify results independently.",
     eyebrow: "Coming soon",
     title: "Reproducible Docker replay"
   }

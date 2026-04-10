@@ -89,6 +89,8 @@ That means:
 
 For the currently supported hosted provider path, the operator-owned secret is `CODEX_API_KEY`.
 
+For math launches specifically, `docs/math-provider-credential-policy-baseline.md` makes this hosted ownership rule product-facing: math may offer hosted launch entry, but it must not become a browser path for supplying raw hosted provider secrets.
+
 ## Ownership boundary
 
 The ownership split is strict:
