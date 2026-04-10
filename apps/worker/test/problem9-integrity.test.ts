@@ -13,9 +13,9 @@ import {
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
 
 const expectedIntegrityDigests = {
-  benchmarkPackage: "e1655ac26ee234718c07c719396c7856c55895974092753d48cf7763622df345",
-  promptPackage: "c8b3b51316ab410631804b8e132fcacd009f929ff2bba097cfcc564e92c5f203",
-  runBundle: "2ec1ea32e9cf567bb92f4a781c95be83089f8b73871a075a4c66c8f6d4340580"
+  benchmarkPackage: "ca378023961740adbef777501d689757c1a38070399e686a8e3d4354caf520ac",
+  promptPackage: "ddebfb1bfdddd88b6b273c9770b4e97c78bb4ccc9a35cf64248dd1aa7238d1fb",
+  runBundle: "7fa0ac8d5e332ec018333aab54ce89008fe29f08f902371485e46e60abbd3cfb"
 } as const;
 
 // Update these only when the checked-in canonical Problem 9 fixtures intentionally change.

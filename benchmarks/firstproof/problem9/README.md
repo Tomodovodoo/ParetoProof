@@ -12,8 +12,8 @@ materialized manifest:
   `firstproof/Problem9/` output tree and writes a generated
   `benchmark-package.json` there with the file-hash inventory and package digest
 
-The benchmark theorem for this initial package is a narrow recurrence identity
-for the benchmark-owned `triangular` helper:
+The benchmark theorem for this package is the closed-form triangular-number
+identity for the benchmark-owned `triangular` helper:
 
 `2 * triangular n = n * (n + 1)`
 
@@ -24,7 +24,7 @@ reference proof:
   leaking the gold proof into prompt materialization
 - `FirstProof/Problem9/Gold.lean` carries the repository-owned proof artifact
 - `FirstProof/Problem9/Support.lean` keeps the benchmark-owned helper and the
-  old recurrence identity only as a support lemma
+  supporting recurrence and arithmetic lemmas used by the gold proof
 
 This keeps the immutable package honest while preserving deterministic local
 materialization and verifier behavior.

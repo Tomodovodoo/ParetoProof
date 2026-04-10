@@ -1,9 +1,8 @@
-import FirstProof.Problem9.Support
+import FirstProof.Problem9.Statement
 
 namespace FirstProof.Problem9
 
-theorem problem9_gold (n : Nat) :
-    2 * triangular n = n * Nat.succ n := by
+theorem problem9_gold (n : Nat) : problem9_target n := by
   induction n with
   | zero =>
       rfl
