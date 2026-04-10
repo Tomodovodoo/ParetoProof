@@ -129,12 +129,16 @@ Use this mode for `bun run bootstrap:owner-admin:api` and related owner-only set
 - Required env:
   - `MIGRATION_DATABASE_URL` or `DATABASE_URL`
   - `OWNER_EMAIL`
+  - `OWNER_IDENTITY_PROVIDER`
   - `CLOUDFLARE_ACCOUNT_ID`
   - either `CLOUDFLARE_API_TOKEN`, or `CLOUDFLARE_EMAIL` together with `CLOUDFLARE_GLOBAL_API_KEY`
 - Optional env: none
 - Secret env:
   - database credential used for the bootstrap
   - Cloudflare credential used for the bootstrap
+- Notes:
+  - `OWNER_IDENTITY_PROVIDER` must be `cloudflare_github` or `cloudflare_google`
+  - rerunning the bootstrap migrates a legacy `cloudflare_one_time_pin` owner identity for the same Access subject onto the declared provider
 - Do not treat as normal startup:
   - these owner-only values are not required for routine API serving
 

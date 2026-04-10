@@ -33,6 +33,15 @@ type PortalMeResponse = {
       | "unknown_identity";
     status: "approved" | "pending" | "denied";
   };
+  identity: {
+    provider: "cloudflare_one_time_pin" | "cloudflare_github" | "cloudflare_google" | null;
+  } | null;
+};
+
+type PortalMutationAction = "access_request" | "identity_recovery";
+
+type PortalMutationErrorPayload = {
+  error?: string;
 };
 
 function parseDeniedReason(
@@ -108,6 +117,46 @@ function formatPortalBootstrapError(error: unknown) {
 
   return "The portal could not finish loading right now. Try again in a moment.";
 }
+
+export function mapPortalMutationErrorMessage(
+  action: PortalMutationAction,
+  status: number,
+  errorCode: string | null
+) {
+  if (errorCode === "identity_provider_required") {
+    return "The sign-in provider could not be verified. Restart from the auth entry and choose GitHub or Google again.";
+  }
+
+  return action === "access_request"
+    ? `Access request failed with ${status}.`
+    : `Access recovery failed with ${status}.`;
+}
+
+async function readPortalMutationErrorMessage(
+  response: Pick<Response, "json" | "status">,
+  action: PortalMutationAction
+) {
+  let errorCode: string | null = null;
+
+  try {
+    errorCode = ((await response.json()) as PortalMutationErrorPayload).error ?? null;
+  } catch {
+    errorCode = null;
+  }
+
+  return mapPortalMutationErrorMessage(action, response.status, errorCode);
+}
+
+export function shouldRestartPortalAuthForMissingProvider(
+  payload: PortalMeResponse
+) {
+  return (
+    payload.access.status === "denied" &&
+    payload.access.reason === "identity_recovery_required" &&
+    payload.identity?.provider === null
+  );
+}
+
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
@@ -171,6 +220,11 @@ export function PortalBootstrap() {
         }
 
         const payload = (await response.json()) as PortalMeResponse;
+
+        if (shouldRestartPortalAuthForMissingProvider(payload)) {
+          setState({ status: "unauthenticated" });
+          return;
+        }
 
         if (payload.access.status === "approved") {
           setState({
@@ -264,7 +318,7 @@ export function PortalBootstrap() {
     });
 
     if (!response.ok) {
-      throw new Error(`Access request failed with ${response.status}.`);
+      throw new Error(await readPortalMutationErrorMessage(response, "access_request"));
     }
 
     setState({
@@ -296,7 +350,7 @@ export function PortalBootstrap() {
     });
 
     if (!response.ok) {
-      throw new Error(`Access recovery failed with ${response.status}.`);
+      throw new Error(await readPortalMutationErrorMessage(response, "identity_recovery"));
     }
 
     setState({

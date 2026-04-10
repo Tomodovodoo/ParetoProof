@@ -236,6 +236,88 @@ test("GET /portal/admin/access-requests returns the richer admin read model", as
   assert.equal(payload.items[0]?.recovery?.requestedIdentityAlreadyLinked, false);
 });
 
+test("GET /portal/admin/access-requests ignores recovery identity rows from a different provider", async (t) => {
+  const reviewer = buildUser({
+    displayName: "Admin Reviewer",
+    email: "admin@paretoproof.com",
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  });
+  const matchedUser = buildUser({
+    displayName: "Researcher One"
+  });
+  const recoveryRequest = {
+    ...buildAccessRequest({
+      createdAt: new Date("2026-03-13T18:00:00.000Z"),
+      email: "recover@paretoproof.com",
+      id: "78787878-7878-4787-8787-787878787878",
+      rationale: "Lost my Google login",
+      requestKind: "identity_recovery",
+      requestedIdentityProvider: "cloudflare_google",
+      requestedIdentitySubject: "recovery-subject",
+      status: "pending"
+    }),
+    reviewedByUser: null
+  };
+  const db = {
+    query: {
+      accessRequests: {
+        findMany: async () => [recoveryRequest]
+      },
+      userIdentities: {
+        findFirst: async () => ({
+          ...buildIdentity({
+            provider: "cloudflare_github",
+            providerSubject: "recovery-subject",
+            userId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+          }),
+          user: buildUser({
+            displayName: "Different Owner",
+            email: "different@paretoproof.com",
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+          })
+        })
+      },
+      users: {
+        findFirst: async () => ({
+          ...matchedUser,
+          accessRequests: [recoveryRequest],
+          auditEventsAsTarget: [],
+          identities: [buildIdentity()],
+          roleGrants: [
+            {
+              ...buildRoleGrant(),
+              grantedByUser: reviewer,
+              revokedByUser: null
+            }
+          ],
+          sessions: [buildSession()]
+        })
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/admin/access-requests"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(
+    portalAdminReadModelsContract.accessRequestListResponse.safeParse(payload).success,
+    true
+  );
+  assert.equal(payload.items[0]?.recovery?.conflictingUser, null);
+  assert.equal(payload.items[0]?.recovery?.requestedIdentityAlreadyLinked, false);
+});
+
 test("GET /portal/admin/access-requests keeps orphaned recovery requests unlinked", async (t) => {
   const orphanedRecoveryRequest = {
     ...buildAccessRequest({
@@ -920,6 +1002,8 @@ test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific
           },
           userIdentities: {
             findFirst: async () => ({
+              provider: "cloudflare_google",
+              providerSubject: "recovery-conflict",
               userId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
             })
           },

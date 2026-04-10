@@ -33,6 +33,10 @@ import {
   users
 } from "../db/schema.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
+import {
+  buildUserIdentityProviderSubjectMatch,
+  filterUserIdentityProviderSubjectMatch
+} from "../lib/identity-binding.js";
 import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
@@ -320,14 +324,22 @@ async function buildRecoveryContext(
     return null;
   }
 
-  const existingIdentity = requestRow.requestedIdentitySubject
-    ? await db.query.userIdentities.findFirst({
-        where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject),
-        with: {
-          user: true
-        }
-      })
-    : null;
+  const existingIdentity =
+    requestRow.requestedIdentityProvider && requestRow.requestedIdentitySubject
+      ? filterUserIdentityProviderSubjectMatch(
+          await db.query.userIdentities.findFirst({
+            where: buildUserIdentityProviderSubjectMatch(
+              requestRow.requestedIdentityProvider,
+              requestRow.requestedIdentitySubject
+            ),
+            with: {
+              user: true
+            }
+          }),
+          requestRow.requestedIdentityProvider,
+          requestRow.requestedIdentitySubject
+        )
+      : null;
   const activeRole = matchedUser
     ? toAdminRoleGrantSummary(findActiveRoleGrant(matchedUser.roleGrants))
     : null;
@@ -850,9 +862,16 @@ export function registerAdminRoutes(
             };
           }
 
-          const existingSubjectOwner = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, requestedIdentitySubject)
-          });
+          const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
+            await tx.query.userIdentities.findFirst({
+              where: buildUserIdentityProviderSubjectMatch(
+                requestedIdentityProvider,
+                requestedIdentitySubject
+              )
+            }),
+            requestedIdentityProvider,
+            requestedIdentitySubject
+          );
 
           if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
             return {
@@ -883,9 +902,16 @@ export function registerAdminRoutes(
           .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
 
         if (requestRow.requestKind === "identity_recovery") {
-          const existingSubjectOwner = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, requestRow.requestedIdentitySubject!)
-          });
+          const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
+            await tx.query.userIdentities.findFirst({
+              where: buildUserIdentityProviderSubjectMatch(
+                requestRow.requestedIdentityProvider!,
+                requestRow.requestedIdentitySubject!
+              )
+            }),
+            requestRow.requestedIdentityProvider!,
+            requestRow.requestedIdentitySubject!
+          );
 
           if (!existingSubjectOwner) {
             await tx.insert(userIdentities).values({

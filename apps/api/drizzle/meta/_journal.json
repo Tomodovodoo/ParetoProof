@@ -92,6 +92,13 @@
       "when": 1775116800000,
       "tag": "0012_frozen_stilt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1775810400000,
+      "tag": "0013_sharp_puck",
+      "breakpoints": true
     }
   ]
 }

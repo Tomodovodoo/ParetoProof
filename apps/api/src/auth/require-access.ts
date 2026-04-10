@@ -36,6 +36,13 @@ export function isAccessAssertionVerificationError(error: unknown) {
   return error instanceof AccessAssertionVerificationError;
 }
 
+export function resolveAccessIdentityProvider(
+  identity: Pick<CloudflareAccessIdentity, "provider" | "subject">,
+  cookieHeader: string | undefined
+) {
+  return verifyAccessProviderHint(cookieHeader, identity.subject) ?? identity.provider;
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     accessIdentity: CloudflareAccessIdentity | null;
@@ -113,10 +120,7 @@ async function resolveRequestAccess(
 
   identity = {
     ...identity,
-    provider: verifyAccessProviderHint(
-      cookieHeader,
-      identity.subject
-    ) ?? identity.provider
+    provider: resolveAccessIdentityProvider(identity, cookieHeader)
   };
 
   const context = await resolveAccessRbacContext(db, identity);
