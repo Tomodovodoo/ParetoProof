@@ -35,6 +35,17 @@ The checked-in package must keep these layers aligned:
 That arrangement keeps the package-local default build on the same path as the
 canonical statement contract.
 
+## Axiom safety contract
+
+- `Statement.lean` intentionally exports `axiom problem9` as the stable theorem
+  header.
+- The checked-in axiom is not accepted as benchmark proof evidence.
+- The runtime keeps the checked-in benchmark package read-only and writes model
+  output only to `FirstProof/Problem9/Candidate.lean`.
+- Importing `FirstProof.Problem9.Gold` is invalid.
+- Passing runs must match the canonical theorem target and clear the
+  no-axioms check for `FirstProof.Problem9.problem9`.
+
 ## Package shape
 
 The benchmark remains one immutable package version with:

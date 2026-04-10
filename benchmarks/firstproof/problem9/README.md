@@ -28,3 +28,14 @@ reference proof:
 
 This keeps the immutable package honest while preserving deterministic local
 materialization and verifier behavior.
+
+## Axiom safety model
+
+- `Statement.lean` intentionally exports `axiom problem9` as the stable theorem
+  header.
+- The checked-in axiom is not accepted as benchmark proof evidence.
+- The runtime keeps the checked-in benchmark package read-only and writes model
+  output only to `FirstProof/Problem9/Candidate.lean`.
+- Importing `FirstProof.Problem9.Gold` is invalid.
+- Passing runs must match the canonical theorem target and clear the
+  no-axioms check for `FirstProof.Problem9.problem9`.
