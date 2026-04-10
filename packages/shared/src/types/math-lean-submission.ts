@@ -88,7 +88,23 @@ export type LeanReviewGateCatalogEntry = {
   summary: string;
 };
 
-export type MathLeanSubmissionProfile = {
+type MathLeanUntargetedSubmissionProfile = {
+  equivalenceExpectation: "not_applicable";
+  leanSubmissionKind: "lean_proof_submission" | "lean_formalization_submission";
+  targetDeclarationName: null;
+  targetLaneId: null;
+  targetModuleName: null;
+};
+
+type MathLeanTargetedSubmissionProfile = {
+  equivalenceExpectation: "canonical_statement" | "prior_submission";
+  leanSubmissionKind: LeanSubmissionKind;
+  targetDeclarationName: string;
+  targetLaneId: string | null;
+  targetModuleName: string;
+};
+
+export type MathLeanSubmissionStoredProfile = {
   equivalenceExpectation: LeanEquivalenceExpectation;
   leanSubmissionKind: LeanSubmissionKind;
   targetDeclarationName: string | null;
@@ -96,28 +112,89 @@ export type MathLeanSubmissionProfile = {
   targetModuleName: string | null;
 };
 
-export type MathLeanArtifactRef = {
+export type MathLeanSubmissionProfile =
+  | MathLeanUntargetedSubmissionProfile
+  | MathLeanTargetedSubmissionProfile;
+
+type MathLeanBaseArtifactRef = {
   artifactId: string | null;
-  artifactRole: LeanArtifactRole;
   contentDigest: string | null;
   filename: string;
-  lifecycleStage: LeanArtifactLifecycleStage;
   mediaType: string | null;
-  ownerScope: LeanArtifactOwnerScope;
   pathHint: string | null;
 };
 
-export type MathLeanAutomationCheckStatus = {
-  applicability: LeanAutomationCheckApplicability;
+type MathLeanQuestionSourceArtifactRef = MathLeanBaseArtifactRef & {
+  artifactRole: "statement_source";
+  lifecycleStage: "question_source";
+  ownerScope: "question_revision";
+};
+
+type MathLeanSubmissionInputArtifactRef = MathLeanBaseArtifactRef & {
+  artifactRole: "supporting_lean_module" | "submission_entrypoint";
+  lifecycleStage: "submission_input";
+  ownerScope: "submission";
+};
+
+type MathLeanGeneratedArtifactRef = MathLeanBaseArtifactRef & {
+  artifactRole:
+    | "compile_output"
+    | "compile_diagnostics"
+    | "verifier_output"
+    | "equivalence_report";
+  lifecycleStage: "generated";
+  ownerScope: "submission";
+};
+
+type MathLeanReviewAttachmentArtifactRef = MathLeanBaseArtifactRef & {
+  artifactRole: "review_attachment";
+  lifecycleStage: "review_support";
+  ownerScope: "submission";
+};
+
+export type MathLeanArtifactRef =
+  | MathLeanQuestionSourceArtifactRef
+  | MathLeanSubmissionInputArtifactRef
+  | MathLeanGeneratedArtifactRef
+  | MathLeanReviewAttachmentArtifactRef;
+
+type MathLeanAutomationCheckStatusBase = {
   checkKind: LeanAutomationCheckKind;
   latestArtifactRefId: string | null;
   latestCheckRunId: string | null;
   latestCompletedAt: string | null;
   latestFailureCode: string | null;
   latestSummary: string | null;
-  required: boolean;
+};
+
+type MathLeanRequiredAutomationCheckStatus = MathLeanAutomationCheckStatusBase & {
+  applicability: "required";
+  required: true;
   state: LeanAutomationCheckState;
 };
+
+type MathLeanOptionalAutomationCheckStatus = MathLeanAutomationCheckStatusBase & {
+  applicability: "optional";
+  required: false;
+  state: LeanAutomationCheckState;
+};
+
+type MathLeanNotApplicableAutomationCheckStatus = {
+  applicability: "not_applicable";
+  checkKind: LeanAutomationCheckKind;
+  latestArtifactRefId: null;
+  latestCheckRunId: null;
+  latestCompletedAt: null;
+  latestFailureCode: null;
+  latestSummary: null;
+  required: false;
+  state: "not_requested";
+};
+
+export type MathLeanAutomationCheckStatus =
+  | MathLeanRequiredAutomationCheckStatus
+  | MathLeanOptionalAutomationCheckStatus
+  | MathLeanNotApplicableAutomationCheckStatus;
 
 type MathLeanResolvedReviewGateStatus = {
   gateKind: LeanReviewGateKind;
@@ -153,22 +230,59 @@ export type MathLeanSubmissionDetail = {
   updatedAt: string;
 };
 
-export type MathLeanSubmissionCreateInput = {
-  equivalenceExpectation: LeanEquivalenceExpectation;
+type MathLeanUntargetedSubmissionCreateInput = {
+  equivalenceExpectation: "not_applicable";
+  leanSubmissionKind: "lean_proof_submission" | "lean_formalization_submission";
+  mathQuestionId: string;
+  mathQuestionRevisionId: string;
+  targetDeclarationName?: null;
+  targetLaneId?: null;
+  targetModuleName?: null;
+};
+
+type MathLeanTargetedSubmissionCreateInput = {
+  equivalenceExpectation: "canonical_statement" | "prior_submission";
   leanSubmissionKind: LeanSubmissionKind;
   mathQuestionId: string;
   mathQuestionRevisionId: string;
-  targetDeclarationName?: string | null;
+  targetDeclarationName: string;
   targetLaneId?: string | null;
-  targetModuleName?: string | null;
+  targetModuleName: string;
 };
 
-export type MathLeanSubmissionPatchInput = {
-  equivalenceExpectation?: LeanEquivalenceExpectation;
+export type MathLeanSubmissionCreateInput =
+  | MathLeanUntargetedSubmissionCreateInput
+  | MathLeanTargetedSubmissionCreateInput;
+
+type RequireAtLeastOne<T, Keys extends keyof T = keyof T> = Keys extends keyof T
+  ? Required<Pick<T, Keys>> & Partial<Omit<T, Keys>>
+  : never;
+
+type MathLeanUntargetedSubmissionPatchInput = RequireAtLeastOne<{
+  equivalenceExpectation: "not_applicable";
+  targetDeclarationName?: null;
+  targetLaneId?: null;
+  targetModuleName?: null;
+}>;
+
+type MathLeanFieldOnlySubmissionPatchInput = RequireAtLeastOne<{
+  equivalenceExpectation?: never;
   targetDeclarationName?: string | null;
   targetLaneId?: string | null;
   targetModuleName?: string | null;
-};
+}>;
+
+type MathLeanTargetedSubmissionPatchInput = RequireAtLeastOne<{
+  equivalenceExpectation: "canonical_statement" | "prior_submission";
+  targetDeclarationName?: string;
+  targetLaneId?: string | null;
+  targetModuleName?: string;
+}>;
+
+export type MathLeanSubmissionPatchInput =
+  | MathLeanUntargetedSubmissionPatchInput
+  | MathLeanFieldOnlySubmissionPatchInput
+  | MathLeanTargetedSubmissionPatchInput;
 
 export type MathLeanAutomationEnqueueInput = {
   forceRerun?: boolean;

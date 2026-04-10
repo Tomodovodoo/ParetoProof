@@ -1,4 +1,6 @@
 import {
+  leanArtifactLifecycleStageByArtifactRole,
+  leanArtifactOwnerScopeByArtifactRole,
   mathLeanAutomationEnqueueInputSchema,
   mathLeanReviewGateUpdateInputSchema,
   mathLeanSubmissionPatchInputSchema,
@@ -18,66 +20,36 @@ import type {
   LeanSubmissionKindCatalogEntry,
   MathLeanSubmissionPatchInput,
   MathLeanSubmissionProfile,
+  MathLeanSubmissionStoredProfile,
 } from "../types/math-lean-submission.js";
 
-export const leanArtifactRoleCatalog = [
-  {
-    id: "statement_source",
-    lifecycleStage: "question_source",
-    ownerScope: "question_revision",
-    summary:
-      "Canonical statement material owned by the question revision rather than the submission."
-  },
-  {
-    id: "supporting_lean_module",
-    lifecycleStage: "submission_input",
-    ownerScope: "submission",
-    summary:
-      "Optional Lean source supplied alongside the submission entrypoint to satisfy imports or local helper definitions."
-  },
-  {
-    id: "submission_entrypoint",
-    lifecycleStage: "submission_input",
-    ownerScope: "submission",
-    summary:
-      "Primary Lean module or declaration submitted for compile, verifier, and equivalence checks."
-  },
-  {
-    id: "compile_output",
-    lifecycleStage: "generated",
-    ownerScope: "submission",
-    summary:
-      "Generated stdout or build output emitted by the authoritative Lean compile step."
-  },
-  {
-    id: "compile_diagnostics",
-    lifecycleStage: "generated",
-    ownerScope: "submission",
-    summary:
-      "Structured diagnostics generated from the compile step for reviewer and submitter follow-up."
-  },
-  {
-    id: "verifier_output",
-    lifecycleStage: "generated",
-    ownerScope: "submission",
-    summary:
-      "Structured verifier and proof-policy output generated after successful compilation."
-  },
-  {
-    id: "equivalence_report",
-    lifecycleStage: "generated",
-    ownerScope: "submission",
-    summary:
-      "Generated equivalence-check output comparing a submission against the relevant canonical target."
-  },
-  {
-    id: "review_attachment",
-    lifecycleStage: "review_support",
-    ownerScope: "submission",
-    summary:
-      "Supplementary reviewer-facing attachment that is not itself part of the Lean automation input."
-  }
-] satisfies LeanArtifactRoleCatalogEntry[];
+const leanArtifactRoleSummaryById = {
+  statement_source:
+    "Canonical statement material owned by the question revision rather than the submission.",
+  supporting_lean_module:
+    "Optional Lean source supplied alongside the submission entrypoint to satisfy imports or local helper definitions.",
+  submission_entrypoint:
+    "Primary Lean module or declaration submitted for compile, verifier, and equivalence checks.",
+  compile_output:
+    "Generated stdout or build output emitted by the authoritative Lean compile step.",
+  compile_diagnostics:
+    "Structured diagnostics generated from the compile step for reviewer and submitter follow-up.",
+  verifier_output:
+    "Structured verifier and proof-policy output generated after successful compilation.",
+  equivalence_report:
+    "Generated equivalence-check output comparing a submission against the relevant canonical target.",
+  review_attachment:
+    "Supplementary reviewer-facing attachment that is not itself part of the Lean automation input."
+} as const satisfies Record<LeanArtifactRole, string>;
+
+export const leanArtifactRoleCatalog = (
+  Object.entries(leanArtifactRoleSummaryById) as [LeanArtifactRole, string][]
+).map(([id, summary]) => ({
+  id,
+  lifecycleStage: leanArtifactLifecycleStageByArtifactRole[id],
+  ownerScope: leanArtifactOwnerScopeByArtifactRole[id],
+  summary
+})) satisfies LeanArtifactRoleCatalogEntry[];
 
 export const leanAutomationCheckCatalog = [
   {
@@ -174,10 +146,22 @@ export function getLeanSubmissionKindDefinition(kind: LeanSubmissionKind) {
   return leanSubmissionKindCatalogById.get(kind) ?? null;
 }
 
-export function getApplicableLeanAutomationChecks(
-  kind: LeanSubmissionKind
+export function getDefaultLeanAutomationChecks(
+  profile: Pick<
+    MathLeanSubmissionStoredProfile,
+    "equivalenceExpectation" | "leanSubmissionKind"
+  >
 ): LeanAutomationCheckKind[] {
-  return [...(getLeanSubmissionKindDefinition(kind)?.defaultApplicableCheckKinds ?? [])];
+  const defaultChecks = [
+    ...(getLeanSubmissionKindDefinition(profile.leanSubmissionKind)?.defaultApplicableCheckKinds ??
+      [])
+  ];
+
+  if (profile.equivalenceExpectation === "not_applicable") {
+    return defaultChecks.filter((checkKind) => checkKind !== "equivalence");
+  }
+
+  return defaultChecks;
 }
 
 export function getDefaultLeanReviewGates(kind: LeanSubmissionKind): LeanReviewGateKind[] {
@@ -220,28 +204,48 @@ export function isLeanArtifactRoleAllowedForSubmissionKind(
   return getAllowedLeanInputArtifactRoles(kind).includes(artifactRole);
 }
 
-export function applyMathLeanSubmissionProfileUpdate(
-  profile: MathLeanSubmissionProfile,
+export function applyMathLeanStoredSubmissionProfileUpdate(
+  profile: MathLeanSubmissionStoredProfile,
   update: MathLeanSubmissionPatchInput
 ): MathLeanSubmissionProfile {
   const parsedProfile = mathLeanSubmissionProfileBaseSchema.parse(profile);
   const parsedUpdate = mathLeanSubmissionPatchInputSchema.parse(update);
+  const hasExplicitEquivalenceExpectation = "equivalenceExpectation" in parsedUpdate;
+  const setsTargetReference =
+    parsedUpdate.targetDeclarationName !== undefined &&
+      parsedUpdate.targetDeclarationName !== null ||
+    parsedUpdate.targetLaneId !== undefined &&
+      parsedUpdate.targetLaneId !== null ||
+    parsedUpdate.targetModuleName !== undefined &&
+      parsedUpdate.targetModuleName !== null;
+  const nextEquivalenceExpectation =
+    (hasExplicitEquivalenceExpectation ? parsedUpdate.equivalenceExpectation : undefined) ??
+    parsedProfile.equivalenceExpectation;
+  const clearsTarget = nextEquivalenceExpectation === "not_applicable";
 
-  // PATCH payloads can omit unchanged target fields, so validate the merged result too.
+  if (clearsTarget && !hasExplicitEquivalenceExpectation && setsTargetReference) {
+    throw new Error(
+      "Target field updates require equivalenceExpectation to reference an existing target."
+    );
+  }
+
+  // Stored profiles can be legacy-invalid, so validate the merged normalized result too.
   return mathLeanSubmissionProfileSchema.parse({
-    equivalenceExpectation:
-      parsedUpdate.equivalenceExpectation ?? parsedProfile.equivalenceExpectation,
+    equivalenceExpectation: nextEquivalenceExpectation,
     leanSubmissionKind: parsedProfile.leanSubmissionKind,
-    targetDeclarationName:
-      parsedUpdate.targetDeclarationName !== undefined
+    targetDeclarationName: clearsTarget
+      ? null
+      : parsedUpdate.targetDeclarationName !== undefined
         ? parsedUpdate.targetDeclarationName
         : parsedProfile.targetDeclarationName,
-    targetLaneId:
-      parsedUpdate.targetLaneId !== undefined
+    targetLaneId: clearsTarget
+      ? null
+      : parsedUpdate.targetLaneId !== undefined
         ? parsedUpdate.targetLaneId
         : parsedProfile.targetLaneId,
-    targetModuleName:
-      parsedUpdate.targetModuleName !== undefined
+    targetModuleName: clearsTarget
+      ? null
+      : parsedUpdate.targetModuleName !== undefined
         ? parsedUpdate.targetModuleName
         : parsedProfile.targetModuleName
   });

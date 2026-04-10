@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
-  applyMathLeanSubmissionProfileUpdate,
+  applyMathLeanStoredSubmissionProfileUpdate,
   defaultLeanReviewGateMatrixBySubmissionKind,
-  getApplicableLeanAutomationChecks,
+  getDefaultLeanAutomationChecks,
   getGeneratedLeanArtifactRolesForCheckKind,
   getRequiredLeanInputArtifactRoles,
   isLeanArtifactRoleAllowedForSubmissionKind,
@@ -20,11 +20,22 @@ describe("math lean submission contracts", () => {
   });
 
   it("exposes default checks and gates per submission kind", () => {
-    expect(getApplicableLeanAutomationChecks("lean_proof_submission")).toEqual([
+    expect(
+      getDefaultLeanAutomationChecks({
+        equivalenceExpectation: "canonical_statement",
+        leanSubmissionKind: "lean_proof_submission"
+      })
+    ).toEqual([
       "compile",
       "verifier",
       "equivalence"
     ]);
+    expect(
+      getDefaultLeanAutomationChecks({
+        equivalenceExpectation: "not_applicable",
+        leanSubmissionKind: "lean_proof_submission"
+      })
+    ).toEqual(["compile", "verifier"]);
     expect(defaultLeanReviewGateMatrixBySubmissionKind.lean_formalization_submission).toEqual([
       "peer_review",
       "editor_review",
@@ -87,7 +98,7 @@ describe("math lean submission contracts", () => {
 
   it("validates merged Lean submission profile updates against the full profile invariants", () => {
     expect(() =>
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "not_applicable",
           leanSubmissionKind: "lean_proof_submission",
@@ -102,7 +113,7 @@ describe("math lean submission contracts", () => {
     ).toThrow();
 
     expect(() =>
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "canonical_statement",
           leanSubmissionKind: "lean_proof_submission",
@@ -117,7 +128,7 @@ describe("math lean submission contracts", () => {
     ).toThrow();
 
     expect(
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "canonical_statement",
           leanSubmissionKind: "lean_proof_submission",
@@ -140,7 +151,7 @@ describe("math lean submission contracts", () => {
 
   it("allows sparse targeted patches when the stored profile already has a valid target", () => {
     expect(
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "canonical_statement",
           leanSubmissionKind: "lean_proof_submission",
@@ -161,9 +172,50 @@ describe("math lean submission contracts", () => {
     });
   });
 
+  it("clears target fields when a stored profile is switched to not_applicable", () => {
+    expect(
+      applyMathLeanStoredSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "canonical_statement",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetLaneId: "lane-1",
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        },
+        {
+          equivalenceExpectation: "not_applicable"
+        }
+      )
+    ).toEqual({
+      equivalenceExpectation: "not_applicable",
+      leanSubmissionKind: "lean_proof_submission",
+      targetDeclarationName: null,
+      targetLaneId: null,
+      targetModuleName: null
+    });
+  });
+
+  it("rejects field-only target patches when the stored profile is still not_applicable", () => {
+    expect(() =>
+      applyMathLeanStoredSubmissionProfileUpdate(
+        {
+          equivalenceExpectation: "not_applicable",
+          leanSubmissionKind: "lean_proof_submission",
+          targetDeclarationName: null,
+          targetLaneId: null,
+          targetModuleName: null
+        },
+        {
+          targetDeclarationName: "FirstProof.Problem9.problem9",
+          targetModuleName: "FirstProof.Problem9.Candidate"
+        }
+      )
+    ).toThrow("Target field updates require equivalenceExpectation");
+  });
+
   it("still rejects targetless targeted-equivalence updates after merging with an invalid stored profile", () => {
     expect(() =>
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "canonical_statement",
           leanSubmissionKind: "lean_proof_submission",
@@ -180,7 +232,7 @@ describe("math lean submission contracts", () => {
 
   it("can repair a legacy invalid profile when the patch supplies the missing target fields", () => {
     expect(
-      applyMathLeanSubmissionProfileUpdate(
+      applyMathLeanStoredSubmissionProfileUpdate(
         {
           equivalenceExpectation: "canonical_statement",
           leanSubmissionKind: "lean_proof_submission",
