@@ -2,6 +2,7 @@ import {
   portalBenchmarkOpsReadModelsContract,
   portalBenchmarkDatasetParamsSchema,
   portalBenchmarkExportQuerySchema,
+  portalHarnessRegistryReadContract,
   portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
   portalRunDetailParamsSchema,
@@ -39,6 +40,7 @@ import {
   createPortalBenchmarkOpsReadModelService,
   type PortalBenchmarkOpsReadModelService
 } from "../lib/portal-benchmark-ops.js";
+import { createHarnessRegistryService } from "../lib/harness-registry.js";
 import {
   buildSignedAccessCookie,
   verifyAccessProviderHint,
@@ -382,6 +384,7 @@ export function registerPortalRoutes(
   const resolvePortalAccess = options?.resolvePortalAccess ?? createAccessResolver(db);
   const portalBenchmarkOpsReadModels =
     options?.portalBenchmarkOpsReadModels ?? createPortalBenchmarkOpsReadModelService(db);
+  const harnessRegistry = createHarnessRegistryService();
   const rateLimitPreHandlers = options?.rateLimitPreHandlers;
   const withAuthenticatedRateLimit = (guard: preHandlerHookHandler) =>
     rateLimitPreHandlers?.authenticated
@@ -947,6 +950,19 @@ export function registerPortalRoutes(
 
       return detail;
     }
+  );
+
+  app.get(
+    "/portal/harnesses",
+    {
+      config: {
+        contract: portalHarnessRegistryReadContract.catalogResponse
+      },
+      preHandler: [
+        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
+      ]
+    },
+    async () => harnessRegistry.getCatalog()
   );
 
   app.get(

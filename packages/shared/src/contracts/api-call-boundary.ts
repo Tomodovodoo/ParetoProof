@@ -147,6 +147,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.harnesses.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Approved helpers read the harness catalog directly from the portal surface while the backend keeps the seed-backed registry behind the authenticated API boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.workers.read",
     mode: "browser_direct",
     origin: "portal_browser",

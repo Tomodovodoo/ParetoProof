@@ -7,6 +7,7 @@ Current helper scripts:
 - `infra/scripts/check-cloudflare-api-access.mjs`: owner-only live audit for the hosted Cloudflare Access split on `api.paretoproof.com`; it requires `/portal/*` to bypass Access for browser fetches while `/internal/*` remains protected for owner and service-token callers.
 - `infra/scripts/check-bidi-chars.mjs`: fails CI when tracked files contain hidden or bidirectional Unicode control characters that could hide malicious diffs or review artifacts. It does not scan issue bodies, PR bodies, comments, or other GitHub discussion text, so GitHub can still warn on pasted content even when this repo check passes.
 - `infra/scripts/check-runtime-env-examples.mjs`: fails CI when app `.env.example` files or README env pointers drift from the approved runtime-env contract shape.
+- `infra/scripts/check-harness-registry-seed.mjs`: fails CI when the harness registry seed manifest drifts from the approved image graph, hosted capability matrix, or root script wiring.
 - `infra/scripts/check-problem9-image-policy.mjs`: fails CI when the Problem 9 image manifest, publish workflows, root build scripts, or operator docs drift apart.
 - `infra/scripts/check-deployment-workflow-node-runtime.mjs`: fails CI when deployment workflows drift away from the approved Node 24-compatible action/runtime shape, replaces the Node-20-only Wrangler JavaScript action with a local `bunx wrangler` deploy step, and pins the active deployment workflows to Node-24-compatible action revisions.
 - `infra/scripts/verify-problem9-image-toolchains.mjs`: runs toolchain checks against a built `problem9-execution` or `problem9-devbox` image, or against a filesystem export of one, and fails on Lean, Node, Bun, Codex CLI, or `lean-lsp-mcp` drift.
@@ -17,5 +18,5 @@ Pull-request image smoke:
 
 Problem 9 image policy:
 - `infra/docker/problem9-image-policy.json`: authoritative manifest for the repository-owned Problem 9 image targets, local tags, published GHCR names, and owning workflows.
+- `infra/docker/harness-registry.seed.json`: authoritative seed manifest for product-facing harness registry entries and their mapping onto approved image targets.
 - `infra/problem9-image-policy.md`: operator-facing policy for mutable tags, immutable provenance tags, workflow ownership, and rollback by digest.
-
