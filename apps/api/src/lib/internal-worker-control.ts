@@ -230,7 +230,6 @@ function claimableUnstartedJobWhereClause(): SQL {
 }
 
 async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateClaimRow | null> {
-  const now = new Date();
   const [candidate] = await tx
     .select({
       authMode: runs.authMode,
@@ -263,8 +262,7 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
       workerJobLeases,
       and(
         eq(workerJobLeases.jobId, jobs.id),
-        isNull(workerJobLeases.revokedAt),
-        gt(workerJobLeases.leaseExpiresAt, now)
+        isNull(workerJobLeases.revokedAt)
       )
     )
     .where(and(claimableUnstartedJobWhereClause(), isNull(workerJobLeases.id)))

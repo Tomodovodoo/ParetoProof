@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import Fastify from "fastify";
 import type {
   WorkerArtifactManifestRequest,
@@ -978,6 +980,82 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
   assert.equal(updateCalls[0].revokedAt instanceof Date, true);
   assert.equal(updateCalls[1].state, "claimed");
   assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+});
+
+test("claim keeps any still-unrevoked lease row blocking candidate selection", async () => {
+  let capturedLeaseJoin: SQL | null = null;
+  let insertCalled = false;
+  let updateCalled = false;
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin(_target: unknown, condition: SQL) {
+                  capturedLeaseJoin = condition;
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          updateCalled = true;
+          throw new Error("claim should stay idle when a prior lease row is still unrevoked");
+        },
+        insert() {
+          insertCalled = true;
+          throw new Error("claim should not insert a new lease while an older row is still unrevoked");
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+  const query = new PgDialect().sqlToQuery(capturedLeaseJoin!);
+
+  assert.equal(response.leaseStatus, "idle");
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalled, false);
+  assert.equal(insertCalled, false);
+  assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
+  assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
+  assert.equal(query.params.length, 0);
 });
 
 test("heartbeat rotates the job token while extending the lease", async () => {
