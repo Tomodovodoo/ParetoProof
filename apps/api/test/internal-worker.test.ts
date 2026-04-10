@@ -471,14 +471,24 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
             values(values: Record<string, unknown>) {
               insertCalls.push({ target, values });
 
-              if (insertCalls.length < 3) {
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              if (insertCalls.length === 2) {
                 return {
                   onConflictDoUpdate() {
                     return {
                       returning() {
-                        return Promise.resolve([
-                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
-                        ]);
+                        return Promise.resolve([{ id: "worker-instance-1" }]);
                       }
                     };
                   }
@@ -1631,14 +1641,24 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
             values(values: Record<string, unknown>) {
               insertCalls.push({ target, values });
 
-              if (insertCalls.length < 3) {
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              if (insertCalls.length === 2) {
                 return {
                   onConflictDoUpdate() {
                     return {
                       returning() {
-                        return Promise.resolve([
-                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
-                        ]);
+                        return Promise.resolve([{ id: "worker-instance-1" }]);
                       }
                     };
                   }
@@ -1787,14 +1807,24 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
             values(values: Record<string, unknown>) {
               insertCalls.push(values);
 
-              if (insertCalls.length < 3) {
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              if (insertCalls.length === 2) {
                 return {
                   onConflictDoUpdate() {
                     return {
                       returning() {
-                        return Promise.resolve([
-                          { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
-                        ]);
+                        return Promise.resolve([{ id: "worker-instance-1" }]);
                       }
                     };
                   }
@@ -1889,13 +1919,23 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
             values(values: Record<string, unknown>) {
               insertCalls.push(values);
 
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
               return {
                 onConflictDoUpdate() {
                   return {
                     returning() {
-                      return Promise.resolve([
-                        { id: insertCalls.length === 1 ? "pool-def-1" : "worker-instance-1" }
-                      ]);
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
                     }
                   };
                 }
@@ -1924,10 +1964,10 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
   assert.equal(query.params.length, 0);
 });
 
-test("claim preserves the stored worker pool runtime on pool definition conflicts", async () => {
-  let capturedPoolConflictSet: Record<string, unknown> | null = null;
+test("claim reuses existing worker pool definitions without hot-row updates", async () => {
   let selectCount = 0;
   let insertCount = 0;
+  let poolInsertUsedConflictDoNothing = false;
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
       const tx = {
@@ -1943,6 +1983,21 @@ test("claim preserves the stored worker pool runtime on pool definition conflict
                   },
                   where() {
                     return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 3) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([{ id: "pool-def-1", workerRuntime: "modal" }]);
                   }
                 };
               }
@@ -1979,17 +2034,25 @@ test("claim preserves the stored worker pool runtime on pool definition conflict
 
           return {
             values() {
-              return {
-                onConflictDoUpdate(options: { set: Record<string, unknown> }) {
-                  if (insertCount === 1) {
-                    capturedPoolConflictSet = options.set;
-                  }
+              if (insertCount === 1) {
+                return {
+                  onConflictDoNothing() {
+                    poolInsertUsedConflictDoNothing = true;
 
+                    return {
+                      returning() {
+                        return Promise.resolve([]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
                   return {
                     returning() {
-                      return Promise.resolve([
-                        { id: insertCount === 1 ? "pool-def-1" : "worker-instance-1" }
-                      ]);
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
                     }
                   };
                 }
@@ -2007,11 +2070,109 @@ test("claim preserves the stored worker pool runtime on pool definition conflict
   const response = await control.claim(buildClaimRequest());
 
   assert.equal(response.leaseStatus, "idle");
-  assert.equal(selectCount, 2);
+  assert.equal(selectCount, 3);
   assert.equal(insertCount, 2);
-  assert.ok(capturedPoolConflictSet);
-  assert.equal(capturedPoolConflictSet?.updatedAt instanceof Date, true);
-  assert.equal(Object.hasOwn(capturedPoolConflictSet!, "workerRuntime"), false);
+  assert.equal(poolInsertUsedConflictDoNothing, true);
+});
+
+test("claim rejects worker runtime mismatches against existing pool definitions", async () => {
+  let selectCount = 0;
+  let insertCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  leftJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  orderBy() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    { id: "pool-def-1", workerRuntime: "local_docker" }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          insertCount += 1;
+
+          return {
+            values() {
+              return {
+                onConflictDoNothing() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("runtime mismatches should reject before any updates");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.claim(buildClaimRequest()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_pool_runtime_mismatch"
+  );
+
+  assert.equal(selectCount, 3);
+  assert.equal(insertCount, 1);
 });
 
 test("reportEvent rejects submissions whose lease is revoked after the initial read", async () => {
@@ -2484,37 +2645,55 @@ test("heartbeat rotates the job token while extending the lease", async () => {
 
 test("heartbeat returns expired when lease renewal loses the race with recovery revocation", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
       const tx = {
         select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      {
+                        artifactManifestDigest: "a".repeat(64),
+                        attemptState: "prepared",
+                        bundleDigest: "b".repeat(64),
+                        candidateDigest: "c".repeat(64),
+                        heartbeatTimeoutSeconds: 180,
+                        jobState: "claimed",
+                        lastEventSequence: 2,
+                        leaseExpiresAt: new Date(Date.now() + 60_000),
+                        revokedAt: null,
+                        runState: "queued",
+                        verifierVerdict: {},
+                        workerInstanceId: "worker-instance-1",
+                        verdictDigest: "d".repeat(64)
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
           return {
             from() {
               return {
-                innerJoin() {
-                  return this;
-                },
                 where() {
                   return this;
                 },
                 limit() {
-                  return Promise.resolve([
-                    {
-                      artifactManifestDigest: "a".repeat(64),
-                      attemptState: "prepared",
-                      bundleDigest: "b".repeat(64),
-                      candidateDigest: "c".repeat(64),
-                      heartbeatTimeoutSeconds: 180,
-                      jobState: "claimed",
-                      lastEventSequence: 2,
-                      leaseExpiresAt: new Date(Date.now() + 60_000),
-                      revokedAt: null,
-                      runState: "queued",
-                      verifierVerdict: {},
-                      workerInstanceId: "worker-instance-1",
-                      verdictDigest: "d".repeat(64)
-                    }
-                  ]);
+                  return Promise.resolve([]);
                 }
               };
             }
@@ -2553,5 +2732,7 @@ test("heartbeat returns expired when lease renewal loses the race with recovery 
     leaseExpiresAt: null,
     leaseStatus: "expired"
   });
-  assert.equal(updateCalls.length, 1);
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 2);
+  assert.equal(updateCalls[1]?.currentLifecycleState, "ready");
 });

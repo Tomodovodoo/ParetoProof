@@ -312,7 +312,7 @@ async function upsertWorkerPoolDefinition(
   request: Pick<WorkerClaimRequest, "workerPool" | "workerRuntime">,
   now: Date
 ) {
-  const [workerPoolDefinition] = await tx
+  const [insertedWorkerPoolDefinition] = await tx
     .insert(workerPoolDefinitions)
     .values({
       defaultRolloutClass: "stable",
@@ -320,21 +320,37 @@ async function upsertWorkerPoolDefinition(
       workerPool: request.workerPool,
       workerRuntime: request.workerRuntime
     })
-    .onConflictDoUpdate({
-      target: workerPoolDefinitions.workerPool,
-      set: {
-        updatedAt: now
-      }
-    })
+    .onConflictDoNothing()
     .returning({
       id: workerPoolDefinitions.id
     });
 
-  if (!workerPoolDefinition) {
+  if (insertedWorkerPoolDefinition) {
+    return insertedWorkerPoolDefinition.id;
+  }
+
+  const [existingWorkerPoolDefinition] = await tx
+    .select({
+      id: workerPoolDefinitions.id,
+      workerRuntime: workerPoolDefinitions.workerRuntime
+    })
+    .from(workerPoolDefinitions)
+    .where(eq(workerPoolDefinitions.workerPool, request.workerPool))
+    .limit(1);
+
+  if (!existingWorkerPoolDefinition) {
     throw new Error("Failed to persist the worker pool definition.");
   }
 
-  return workerPoolDefinition.id;
+  if (existingWorkerPoolDefinition.workerRuntime !== request.workerRuntime) {
+    throw createConflictError(
+      "worker_pool_runtime_mismatch",
+      `Worker pool ${request.workerPool} is already registered for runtime ${existingWorkerPoolDefinition.workerRuntime}.`,
+      "workerRuntime"
+    );
+  }
+
+  return existingWorkerPoolDefinition.id;
 }
 
 async function upsertWorkerInstance(
@@ -1544,6 +1560,8 @@ export function createInternalWorkerControlService(db: DbClient) {
           });
 
         if (renewedLeases.length === 0) {
+          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
           return {
             acknowledgedEventSequence,
             cancelRequested: false,
