@@ -323,8 +323,7 @@ async function upsertWorkerPoolDefinition(
     .onConflictDoUpdate({
       target: workerPoolDefinitions.workerPool,
       set: {
-        updatedAt: now,
-        workerRuntime: request.workerRuntime
+        updatedAt: now
       }
     })
     .returning({
@@ -491,7 +490,6 @@ async function reconcileWorkerInstanceLifecycles(
       .update(workerInstances)
       .set({
         currentLifecycleState: "ready",
-        lastSeenAt: now,
         updatedAt: now
       })
       .where(inArray(workerInstances.id, readyWorkerInstanceIds));
@@ -502,7 +500,6 @@ async function reconcileWorkerInstanceLifecycles(
       .update(workerInstances)
       .set({
         currentLifecycleState: "running",
-        lastSeenAt: now,
         updatedAt: now
       })
       .where(inArray(workerInstances.id, [...activeWorkerInstanceIds]));

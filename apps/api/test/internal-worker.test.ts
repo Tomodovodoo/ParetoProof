@@ -525,6 +525,7 @@ test("POST /internal/worker/claims reclaims stale unstarted work without queued 
   assert.equal(updateCalls.length, 4);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
   assert.equal(updateCalls[1].values.currentLifecycleState, "ready");
+  assert.equal(Object.hasOwn(updateCalls[1].values, "lastSeenAt"), false);
   assert.equal(updateCalls[2].values.state, "claimed");
   assert.equal(updateCalls[3].values.state, "running");
   assert.equal(
@@ -1671,6 +1672,7 @@ test("claim fences stale unstarted leases and reclaims work without queued rewin
   assert.equal(updateCalls.length, 4);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
   assert.equal(updateCalls[1].values.currentLifecycleState, "ready");
+  assert.equal(Object.hasOwn(updateCalls[1].values, "lastSeenAt"), false);
   assert.equal(updateCalls[2].values.state, "claimed");
   assert.equal(updateCalls[3].values.state, "running");
   assert.equal(
@@ -1824,6 +1826,7 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
   assert.equal(updateCalls.length, 3);
   assert.equal(updateCalls[0].revokedAt instanceof Date, true);
   assert.equal(updateCalls[1].currentLifecycleState, "ready");
+  assert.equal(Object.hasOwn(updateCalls[1], "lastSeenAt"), false);
   assert.equal(updateCalls[2].state, "claimed");
   assert.equal(updateCalls.some((call) => call.state === "queued"), false);
 });
@@ -1919,6 +1922,96 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
   assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
   assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
   assert.equal(query.params.length, 0);
+});
+
+test("claim preserves the stored worker pool runtime on pool definition conflicts", async () => {
+  let capturedPoolConflictSet: Record<string, unknown> | null = null;
+  let selectCount = 0;
+  let insertCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("idle claims should not issue updates");
+        },
+        insert() {
+          insertCount += 1;
+
+          return {
+            values() {
+              return {
+                onConflictDoUpdate(options: { set: Record<string, unknown> }) {
+                  if (insertCount === 1) {
+                    capturedPoolConflictSet = options.set;
+                  }
+
+                  return {
+                    returning() {
+                      return Promise.resolve([
+                        { id: insertCount === 1 ? "pool-def-1" : "worker-instance-1" }
+                      ]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.equal(response.leaseStatus, "idle");
+  assert.equal(selectCount, 2);
+  assert.equal(insertCount, 2);
+  assert.ok(capturedPoolConflictSet);
+  assert.equal(capturedPoolConflictSet?.updatedAt instanceof Date, true);
+  assert.equal(Object.hasOwn(capturedPoolConflictSet!, "workerRuntime"), false);
 });
 
 test("reportEvent rejects submissions whose lease is revoked after the initial read", async () => {
