@@ -1279,6 +1279,82 @@ test("submitFailure rejects synthetic pre-bundle refs for non-pre-bundle failure
   );
 });
 
+test("submitFailure rejects synthetic pre-bundle refs when persisted lease state is post-bundle", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        artifactManifestDigest: "a".repeat(64)
+                      })
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error(
+            "synthetic pre-bundle refs with persisted bundle state should reject before any updates"
+          );
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const { artifactIds: _artifactIds, ...baseRequest } = buildFailureRequest();
+  const request: WorkerTerminalFailureRequest = {
+    ...baseRequest,
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      ...buildFailureRequest().failure,
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "provider_auth_error",
+      failureFamily: "provider",
+      phase: "generate",
+      summary: "provider auth failed for hosted attempt"
+    },
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_failure_evidence_reference_invalid"
+  );
+});
+
 test("submitResult rejects quarantined artifacts at terminal submission", async () => {
   const control = createInternalWorkerControlService({
     transaction: async (callback: (tx: unknown) => Promise<WorkerResultMessageResponse>) => {

@@ -735,7 +735,8 @@ function assertArtifactsReferenceableAtTerminalSubmission(
 
 function assertFailureEvidenceArtifactRefs(
   request: WorkerTerminalFailureRequest,
-  artifactRows: StoredArtifactRow[]
+  artifactRows: StoredArtifactRow[],
+  lease: LeaseStateRow
 ) {
   const allowedSyntheticPreBundleFailureCodes: ReadonlySet<
     WorkerTerminalFailureRequest["failure"]["failureCode"]
@@ -751,13 +752,19 @@ function assertFailureEvidenceArtifactRefs(
     "provider_malformed_response",
     "harness_crashed"
   ]);
+  const effectiveArtifactManifestDigest =
+    request.artifactManifestDigest ?? lease.artifactManifestDigest;
+  const effectiveBundleDigest = request.bundleDigest ?? lease.bundleDigest;
+  const effectiveCandidateDigest = request.candidateDigest ?? lease.candidateDigest;
+  const effectiveVerifierVerdict = request.verifierVerdict ?? lease.verifierVerdict;
+  const effectiveVerdictDigest = request.verdictDigest ?? lease.verdictDigest;
   const allowsSyntheticPreBundleFailureRef =
     artifactRows.length === 0 &&
-    request.artifactManifestDigest === null &&
-    request.bundleDigest === null &&
-    request.candidateDigest === null &&
-    request.verifierVerdict === null &&
-    request.verdictDigest === null &&
+    effectiveArtifactManifestDigest === null &&
+    effectiveBundleDigest === null &&
+    effectiveCandidateDigest === null &&
+    effectiveVerifierVerdict === null &&
+    effectiveVerdictDigest === null &&
     allowedSyntheticPreBundleFailureCodes.has(request.failure.failureCode);
   const selectedArtifactPaths = new Set(
     artifactRows.map((artifactRow) => normalizeRelativePath(artifactRow.relativePath))
@@ -1720,7 +1727,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           "artifactIds"
         );
         assertArtifactsReferenceableAtTerminalSubmission(artifactRows, "artifactIds");
-        assertFailureEvidenceArtifactRefs(request, artifactRows);
+        assertFailureEvidenceArtifactRefs(request, artifactRows, lease);
 
         const verdictClass = selectFailureVerdictClass(request);
         const completedAt = new Date(request.failedAt);
