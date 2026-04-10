@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const timestampSchema = z.string().min(1);
 const nonEmptyStringSchema = z.string().trim().min(1);
+const nonPaddedNonBlankParamStringSchema = z
+  .string()
+  .min(1)
+  .refine((value) => value.trim().length > 0 && value === value.trim(), {
+    message: "Path params must not be blank or padded with whitespace."
+  });
 const nullableNoteSchema = z.string().trim().min(1).max(2_000).nullable().default(null);
 const summaryPayloadSchema = z.record(z.string(), z.unknown());
 
@@ -207,11 +213,11 @@ export const packageFreezeParamsSchema = z.object({
 });
 
 export const benchmarkVersionParamsSchema = z.object({
-  benchmarkVersionId: nonEmptyStringSchema
+  benchmarkVersionId: nonPaddedNonBlankParamStringSchema
 });
 
 export const benchmarkReleaseParamsSchema = z.object({
-  benchmarkReleaseId: nonEmptyStringSchema
+  benchmarkReleaseId: nonPaddedNonBlankParamStringSchema
 });
 
 export const repoSyncRecordListResponseSchema = z.object({

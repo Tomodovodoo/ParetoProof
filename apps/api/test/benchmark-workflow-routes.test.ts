@@ -1799,3 +1799,245 @@ test("POST /portal/admin/benchmark-releases/:id/publish remaps public-version un
     conflictingReleaseRow.benchmarkReleaseId
   );
 });
+
+test("GET /portal/admin/repo-sync-records/:id rejects malformed UUID params before querying", async (t) => {
+  let repoSyncLookupTouched = false;
+  const db = {
+    query: {
+      repoSyncRecords: {
+        findFirst: async () => {
+          repoSyncLookupTouched = true;
+          throw new Error("repo sync lookup should not run for malformed UUID params");
+        }
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/admin/repo-sync-records/not-a-uuid"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_repo_sync_record_params");
+  assert.equal(repoSyncLookupTouched, false);
+});
+
+test("POST /portal/admin/repo-sync-records/:id/status rejects malformed UUID params before opening a transaction", async (t) => {
+  let transactionTouched = false;
+  const db = {
+    transaction: async () => {
+      transactionTouched = true;
+      throw new Error("repo sync status transaction should not run for malformed UUID params");
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      status: "rejected"
+    },
+    url: "/portal/admin/repo-sync-records/not-a-uuid/status"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_repo_sync_record_params");
+  assert.equal(transactionTouched, false);
+});
+
+test("GET /portal/admin/package-freezes/:id rejects malformed UUID params before querying", async (t) => {
+  let packageFreezeLookupTouched = false;
+  const db = {
+    query: {
+      packageFreezes: {
+        findFirst: async () => {
+          packageFreezeLookupTouched = true;
+          throw new Error("package freeze lookup should not run for malformed UUID params");
+        }
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/admin/package-freezes/not-a-uuid"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_package_freeze_params");
+  assert.equal(packageFreezeLookupTouched, false);
+});
+
+test("POST /portal/admin/package-freezes/:id/benchmark-versions rejects malformed UUID params before opening a transaction", async (t) => {
+  let transactionTouched = false;
+  const db = {
+    transaction: async () => {
+      transactionTouched = true;
+      throw new Error(
+        "benchmark version create transaction should not run for malformed UUID params"
+      );
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      benchmarkVersionId: "firstproof/Problem9@2026-04-02",
+      itemSetDefinition: {
+        slice: "full"
+      },
+      scopeLabel: "full"
+    },
+    url: "/portal/admin/package-freezes/not-a-uuid/benchmark-versions"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_package_freeze_params");
+  assert.equal(transactionTouched, false);
+});
+
+test("GET /portal/admin/benchmark-versions/:id rejects whitespace-padded params before querying", async (t) => {
+  let benchmarkVersionLookupTouched = false;
+  const db = {
+    query: {
+      benchmarkVersions: {
+        findFirst: async () => {
+          benchmarkVersionLookupTouched = true;
+          throw new Error("benchmark version lookup should not run for padded params");
+        }
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/portal/admin/benchmark-versions/${encodeURIComponent(" firstproof/Problem9@2026-04-02 ")}`
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_benchmark_version_params");
+  assert.equal(benchmarkVersionLookupTouched, false);
+});
+
+test("POST /portal/admin/benchmark-versions/:id/launchability rejects whitespace-padded params before opening a transaction", async (t) => {
+  let transactionTouched = false;
+  const db = {
+    transaction: async () => {
+      transactionTouched = true;
+      throw new Error(
+        "benchmark version launchability transaction should not run for padded params"
+      );
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      launchability: "launchable"
+    },
+    url: `/portal/admin/benchmark-versions/${encodeURIComponent(" firstproof/Problem9@2026-04-02 ")}/launchability`
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_benchmark_version_params");
+  assert.equal(transactionTouched, false);
+});
+
+test("GET /portal/admin/benchmark-releases/:id rejects whitespace-padded params before querying", async (t) => {
+  let benchmarkReleaseLookupTouched = false;
+  const db = {
+    query: {
+      benchmarkReleases: {
+        findFirst: async () => {
+          benchmarkReleaseLookupTouched = true;
+          throw new Error("benchmark release lookup should not run for padded params");
+        }
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/portal/admin/benchmark-releases/${encodeURIComponent(" problem9-apr-2026 ")}`
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_benchmark_release_params");
+  assert.equal(benchmarkReleaseLookupTouched, false);
+});
+
+test("POST /portal/admin/benchmark-releases/:id/approve rejects whitespace-padded params before opening a transaction", async (t) => {
+  let transactionTouched = false;
+  const db = {
+    transaction: async () => {
+      transactionTouched = true;
+      throw new Error("benchmark release approve transaction should not run for padded params");
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {},
+    url: `/portal/admin/benchmark-releases/${encodeURIComponent(" problem9-apr-2026 ")}/approve`
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_benchmark_release_params");
+  assert.equal(transactionTouched, false);
+});

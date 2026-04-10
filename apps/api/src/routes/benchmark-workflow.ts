@@ -15,6 +15,7 @@ import {
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type {
   FastifyInstance,
+  FastifyReply,
   FastifyRequest,
   preHandlerHookHandler
 } from "fastify";
@@ -88,6 +89,70 @@ function getAdminActorUserId(request: FastifyRequest) {
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
+}
+
+function parseRepoSyncRecordParams(request: FastifyRequest, reply: FastifyReply) {
+  const parsedParams = benchmarkWorkflowContract.repoSyncRecordParams.safeParse(
+    request.params ?? {}
+  );
+
+  if (!parsedParams.success) {
+    reply.code(400).send({
+      error: "invalid_repo_sync_record_params",
+      issues: parsedParams.error.issues
+    });
+    return null;
+  }
+
+  return parsedParams.data;
+}
+
+function parsePackageFreezeParams(request: FastifyRequest, reply: FastifyReply) {
+  const parsedParams = benchmarkWorkflowContract.packageFreezeParams.safeParse(
+    request.params ?? {}
+  );
+
+  if (!parsedParams.success) {
+    reply.code(400).send({
+      error: "invalid_package_freeze_params",
+      issues: parsedParams.error.issues
+    });
+    return null;
+  }
+
+  return parsedParams.data;
+}
+
+function parseBenchmarkVersionParams(request: FastifyRequest, reply: FastifyReply) {
+  const parsedParams = benchmarkWorkflowContract.benchmarkVersionParams.safeParse(
+    request.params ?? {}
+  );
+
+  if (!parsedParams.success) {
+    reply.code(400).send({
+      error: "invalid_benchmark_version_params",
+      issues: parsedParams.error.issues
+    });
+    return null;
+  }
+
+  return parsedParams.data;
+}
+
+function parseBenchmarkReleaseParams(request: FastifyRequest, reply: FastifyReply) {
+  const parsedParams = benchmarkWorkflowContract.benchmarkReleaseParams.safeParse(
+    request.params ?? {}
+  );
+
+  if (!parsedParams.success) {
+    reply.code(400).send({
+      error: "invalid_benchmark_release_params",
+      issues: parsedParams.error.issues
+    });
+    return null;
+  }
+
+  return parsedParams.data;
 }
 
 function getDefaultBenchmarkDisplayLabel(packageId: string, packageVersion: string) {
@@ -251,12 +316,15 @@ export function registerBenchmarkWorkflowRoutes(
       preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
-      const repoSyncRecordId = (request.params as { repoSyncRecordId?: string }).repoSyncRecordId;
-      const row = repoSyncRecordId
-        ? await db.query.repoSyncRecords.findFirst({
-            where: eq(repoSyncRecords.id, repoSyncRecordId)
-          })
-        : null;
+      const parsedParams = parseRepoSyncRecordParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
+      const row = await db.query.repoSyncRecords.findFirst({
+        where: eq(repoSyncRecords.id, parsedParams.repoSyncRecordId)
+      });
 
       if (!row) {
         reply.code(404).send({
@@ -440,8 +508,12 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const repoSyncRecordId = (request.params as { repoSyncRecordId?: string }).repoSyncRecordId;
+      const parsedParams = parseRepoSyncRecordParams(request, reply);
       const input = parsedBody.data;
+
+      if (!parsedParams) {
+        return;
+      }
 
       let result:
         | { kind: "not_found" }
@@ -455,7 +527,7 @@ export function registerBenchmarkWorkflowRoutes(
         result = await db.transaction(async (tx) => {
           const initialRow =
             (await tx.query.repoSyncRecords.findFirst({
-              where: eq(repoSyncRecords.id, repoSyncRecordId ?? "")
+              where: eq(repoSyncRecords.id, parsedParams.repoSyncRecordId)
             })) ?? null;
 
           if (!initialRow) {
@@ -600,7 +672,7 @@ export function registerBenchmarkWorkflowRoutes(
         if (isDatabaseUniqueConstraintError(error, ["repo_sync_records_repo_pr_unique"])) {
           const latestRow =
             (await db.query.repoSyncRecords.findFirst({
-              where: eq(repoSyncRecords.id, repoSyncRecordId ?? "")
+              where: eq(repoSyncRecords.id, parsedParams.repoSyncRecordId)
             })) ?? null;
           const effectivePullRequestNumber =
             input.pullRequestNumber === undefined
@@ -700,12 +772,15 @@ export function registerBenchmarkWorkflowRoutes(
       preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
-      const packageFreezeId = (request.params as { packageFreezeId?: string }).packageFreezeId;
-      const row = packageFreezeId
-        ? await db.query.packageFreezes.findFirst({
-            where: eq(packageFreezes.id, packageFreezeId)
-          })
-        : null;
+      const parsedParams = parsePackageFreezeParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
+      const row = await db.query.packageFreezes.findFirst({
+        where: eq(packageFreezes.id, parsedParams.packageFreezeId)
+      });
 
       if (!row) {
         reply.code(404).send({
@@ -988,13 +1063,15 @@ export function registerBenchmarkWorkflowRoutes(
       preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
-      const benchmarkVersionId = (request.params as { benchmarkVersionId?: string })
-        .benchmarkVersionId;
-      const row = benchmarkVersionId
-        ? await db.query.benchmarkVersions.findFirst({
-            where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId)
-          })
-        : null;
+      const parsedParams = parseBenchmarkVersionParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
+      const row = await db.query.benchmarkVersions.findFirst({
+        where: eq(benchmarkVersions.benchmarkVersionId, parsedParams.benchmarkVersionId)
+      });
 
       if (!row) {
         reply.code(404).send({
@@ -1028,7 +1105,12 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const packageFreezeId = (request.params as { packageFreezeId?: string }).packageFreezeId;
+      const parsedParams = parsePackageFreezeParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
       const input = parsedBody.data as AdminBenchmarkVersionCreateInput;
 
       let result:
@@ -1040,7 +1122,7 @@ export function registerBenchmarkWorkflowRoutes(
       try {
         result = await db.transaction(async (tx) => {
           const packageFreezeRow = await tx.query.packageFreezes.findFirst({
-            where: eq(packageFreezes.id, packageFreezeId ?? "")
+            where: eq(packageFreezes.id, parsedParams.packageFreezeId)
           });
 
         if (!packageFreezeRow) {
@@ -1179,13 +1261,16 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const benchmarkVersionId = (request.params as { benchmarkVersionId?: string })
-        .benchmarkVersionId;
+      const parsedParams = parseBenchmarkVersionParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
 
       const result = await db.transaction(async (tx) => {
         const initialRow =
           (await tx.query.benchmarkVersions.findFirst({
-            where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
+            where: eq(benchmarkVersions.benchmarkVersionId, parsedParams.benchmarkVersionId)
           })) ?? null;
 
         if (!initialRow) {
@@ -1308,13 +1393,15 @@ export function registerBenchmarkWorkflowRoutes(
       preHandler: withAuthenticatedRateLimit(requireAccess("admin_only"))
     },
     async (request, reply) => {
-      const benchmarkReleaseId = (request.params as { benchmarkReleaseId?: string })
-        .benchmarkReleaseId;
-      const row = benchmarkReleaseId
-        ? await db.query.benchmarkReleases.findFirst({
-            where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId)
-          })
-        : null;
+      const parsedParams = parseBenchmarkReleaseParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
+      const row = await db.query.benchmarkReleases.findFirst({
+        where: eq(benchmarkReleases.benchmarkReleaseId, parsedParams.benchmarkReleaseId)
+      });
 
       if (!row) {
         reply.code(404).send({
@@ -1348,8 +1435,12 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const benchmarkVersionId = (request.params as { benchmarkVersionId?: string })
-        .benchmarkVersionId;
+      const parsedParams = parseBenchmarkVersionParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
+
       const input = parsedBody.data as AdminBenchmarkReleaseCreateInput;
 
       let result:
@@ -1360,7 +1451,7 @@ export function registerBenchmarkWorkflowRoutes(
       try {
         result = await db.transaction(async (tx) => {
           const benchmarkVersionRow = await tx.query.benchmarkVersions.findFirst({
-            where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
+            where: eq(benchmarkVersions.benchmarkVersionId, parsedParams.benchmarkVersionId)
           });
 
         if (!benchmarkVersionRow) {
@@ -1476,12 +1567,15 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const benchmarkReleaseId = (request.params as { benchmarkReleaseId?: string })
-        .benchmarkReleaseId;
+      const parsedParams = parseBenchmarkReleaseParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
 
       const result = await db.transaction(async (tx) => {
         const currentRow = await tx.query.benchmarkReleases.findFirst({
-          where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
+          where: eq(benchmarkReleases.benchmarkReleaseId, parsedParams.benchmarkReleaseId)
         });
 
         if (!currentRow) {
@@ -1584,8 +1678,11 @@ export function registerBenchmarkWorkflowRoutes(
       }
 
       const actorUserId = getAdminActorUserId(request);
-      const benchmarkReleaseId = (request.params as { benchmarkReleaseId?: string })
-        .benchmarkReleaseId;
+      const parsedParams = parseBenchmarkReleaseParams(request, reply);
+
+      if (!parsedParams) {
+        return;
+      }
 
       let result:
         | { kind: "release_not_found" }
@@ -1607,7 +1704,7 @@ export function registerBenchmarkWorkflowRoutes(
       try {
         result = await db.transaction(async (tx) => {
           const currentReleaseRow = await tx.query.benchmarkReleases.findFirst({
-            where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
+            where: eq(benchmarkReleases.benchmarkReleaseId, parsedParams.benchmarkReleaseId)
           });
 
         if (!currentReleaseRow) {
@@ -1724,7 +1821,7 @@ export function registerBenchmarkWorkflowRoutes(
         if (isDatabaseUniqueConstraintError(error, ["benchmark_releases_public_version_unique"])) {
           const currentReleaseRow =
             (await db.query.benchmarkReleases.findFirst({
-              where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
+              where: eq(benchmarkReleases.benchmarkReleaseId, parsedParams.benchmarkReleaseId)
             })) ?? null;
 
           if (!currentReleaseRow) {
