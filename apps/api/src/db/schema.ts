@@ -161,21 +161,18 @@ export const repoSyncStatusEnum = pgEnum("repo_sync_status", [
 ]);
 
 export const packageFreezeStatusEnum = pgEnum("package_freeze_status", [
-  "active",
-  "withdrawn",
-  "superseded"
+  "active"
 ]);
 
 export const benchmarkVersionLaunchabilityEnum = pgEnum(
   "benchmark_version_launchability",
-  ["internal_only", "launchable", "withdrawn"]
+  ["internal_only", "launchable"]
 );
 
 export const benchmarkReleaseStatusEnum = pgEnum("benchmark_release_status", [
   "draft",
   "approved",
-  "published",
-  "withdrawn"
+  "published"
 ]);
 
 export const benchmarkReleaseVisibilityEnum = pgEnum("benchmark_release_visibility", [
@@ -527,6 +524,11 @@ export const benchmarkReleases = pgTable(
     benchmarkVersionIndex: index("benchmark_releases_benchmark_version_id_idx").on(
       table.benchmarkVersionId
     ),
+    publicVersionUnique: uniqueIndex("benchmark_releases_public_version_unique")
+      .on(table.benchmarkVersionId)
+      .where(
+        sql`${table.status} = 'published' and ${table.visibility} = 'public'`
+      ),
     statusIndex: index("benchmark_releases_status_idx").on(table.status),
     publicFeedIndex: index("benchmark_releases_status_visibility_published_at_idx").on(
       table.status,

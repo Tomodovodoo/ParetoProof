@@ -5,18 +5,16 @@ export type RepoSyncRecordStatus =
   | "rejected"
   | "superseded";
 
-export type PackageFreezeStatus = "active" | "withdrawn" | "superseded";
+export type PackageFreezeStatus = "active";
 
 export type BenchmarkVersionLaunchability =
   | "internal_only"
-  | "launchable"
-  | "withdrawn";
+  | "launchable";
 
 export type BenchmarkReleaseStatus =
   | "draft"
   | "approved"
-  | "published"
-  | "withdrawn";
+  | "published";
 
 export type BenchmarkReleaseVisibility =
   | "internal_only"

@@ -6,11 +6,11 @@ ALTER TYPE "public"."audit_subject_kind" ADD VALUE IF NOT EXISTS 'benchmark_work
 --> statement-breakpoint
 CREATE TYPE "public"."repo_sync_status" AS ENUM('proposed', 'pr_open', 'merged', 'rejected', 'superseded');
 --> statement-breakpoint
-CREATE TYPE "public"."package_freeze_status" AS ENUM('active', 'withdrawn', 'superseded');
+CREATE TYPE "public"."package_freeze_status" AS ENUM('active');
 --> statement-breakpoint
-CREATE TYPE "public"."benchmark_version_launchability" AS ENUM('internal_only', 'launchable', 'withdrawn');
+CREATE TYPE "public"."benchmark_version_launchability" AS ENUM('internal_only', 'launchable');
 --> statement-breakpoint
-CREATE TYPE "public"."benchmark_release_status" AS ENUM('draft', 'approved', 'published', 'withdrawn');
+CREATE TYPE "public"."benchmark_release_status" AS ENUM('draft', 'approved', 'published');
 --> statement-breakpoint
 CREATE TYPE "public"."benchmark_release_visibility" AS ENUM('internal_only', 'held_out', 'public');
 --> statement-breakpoint
@@ -116,6 +116,8 @@ CREATE INDEX "benchmark_versions_launchability_idx" ON "benchmark_versions" USIN
 CREATE INDEX "benchmark_versions_package_digest_idx" ON "benchmark_versions" USING btree ("package_digest");
 --> statement-breakpoint
 CREATE INDEX "benchmark_releases_benchmark_version_id_idx" ON "benchmark_releases" USING btree ("benchmark_version_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "benchmark_releases_public_version_unique" ON "benchmark_releases" USING btree ("benchmark_version_id") WHERE "benchmark_releases"."status" = 'published' and "benchmark_releases"."visibility" = 'public';
 --> statement-breakpoint
 CREATE INDEX "benchmark_releases_status_idx" ON "benchmark_releases" USING btree ("status");
 --> statement-breakpoint

@@ -24,22 +24,18 @@ export const repoSyncRecordStatusSchema = z.enum([
 ]);
 
 export const packageFreezeStatusSchema = z.enum([
-  "active",
-  "withdrawn",
-  "superseded"
+  "active"
 ]);
 
 export const benchmarkVersionLaunchabilitySchema = z.enum([
   "internal_only",
-  "launchable",
-  "withdrawn"
+  "launchable"
 ]);
 
 export const benchmarkReleaseStatusSchema = z.enum([
   "draft",
   "approved",
-  "published",
-  "withdrawn"
+  "published"
 ]);
 
 export const benchmarkReleaseVisibilitySchema = z.enum([
@@ -198,6 +194,22 @@ export const adminBenchmarkReleaseCreateInputSchema = z.object({
 });
 
 export const adminBenchmarkWorkflowActionInputSchema = z.object({}).strict();
+
+export const repoSyncRecordParamsSchema = z.object({
+  repoSyncRecordId: z.string().uuid()
+});
+
+export const packageFreezeParamsSchema = z.object({
+  packageFreezeId: z.string().uuid()
+});
+
+export const benchmarkVersionParamsSchema = z.object({
+  benchmarkVersionId: nonEmptyStringSchema
+});
+
+export const benchmarkReleaseParamsSchema = z.object({
+  benchmarkReleaseId: nonEmptyStringSchema
+});
 
 export const repoSyncRecordListResponseSchema = z.object({
   items: z.array(repoSyncRecordSchema)

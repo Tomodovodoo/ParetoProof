@@ -12,7 +12,7 @@ import {
   type AdminBenchmarkVersionCreateInput,
   type AdminPackageFreezeCreateInput
 } from "@paretoproof/shared";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type {
   FastifyInstance,
   FastifyRequest,
@@ -46,10 +46,36 @@ const benchmarkVersionLaunchabilityTransitions: Record<
   BenchmarkVersionLaunchability,
   BenchmarkVersionLaunchability[]
 > = {
-  internal_only: ["internal_only", "launchable", "withdrawn"],
-  launchable: ["launchable", "internal_only", "withdrawn"],
-  withdrawn: ["withdrawn", "internal_only"]
+  internal_only: ["internal_only", "launchable"],
+  launchable: ["launchable"]
 };
+
+function readDatabaseConstraintName(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  return "constraint_name" in error
+    ? String(error.constraint_name)
+    : "constraint" in error
+      ? String(error.constraint)
+      : null;
+}
+
+function isDatabaseUniqueConstraintError(error: unknown, constraintNames: string[]) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const databaseCode = "code" in error ? String(error.code) : null;
+  const constraintName = readDatabaseConstraintName(error);
+
+  return (
+    databaseCode === "23505" &&
+    constraintName !== null &&
+    constraintNames.includes(constraintName)
+  );
+}
 
 function getAdminActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
@@ -303,46 +329,94 @@ export function registerBenchmarkWorkflowRoutes(
         return;
       }
 
-      const row = await db.transaction(async (tx) => {
-        const [insertedRow] = await tx
-          .insert(repoSyncRecords)
-          .values({
-            lastUpdatedByUserId: actorUserId,
-            mathPackageCandidateId: input.mathPackageCandidateId,
-            mergeCommitSha: input.mergeCommitSha,
-            note: input.note,
-            pullRequestNumber: input.pullRequestNumber,
-            pullRequestUrl: input.pullRequestUrl,
-            recordedByUserId: actorUserId,
-            repoName: input.repoName,
-            repoOwner: input.repoOwner,
-            status: input.status,
-            targetRepoPath: input.targetRepoPath,
-            updatedAt: now
-          })
-          .returning();
+      let result:
+        | {
+            item: DbRepoSyncRecordRow;
+            kind: "created";
+          }
+        | {
+            existingRow: DbRepoSyncRecordRow;
+            kind: "already_exists";
+          };
 
-        await tx.insert(auditEvents).values(
-          createBenchmarkWorkflowAuditEvent({
-            actorUserId,
-            eventId: "benchmark_workflow.repo_sync_recorded",
-            payload: {
-              actorUserId,
+      try {
+        result = await db.transaction(async (tx) => {
+          const [insertedRow] = await tx
+            .insert(repoSyncRecords)
+            .values({
+              lastUpdatedByUserId: actorUserId,
+              mathPackageCandidateId: input.mathPackageCandidateId,
+              mergeCommitSha: input.mergeCommitSha,
+              note: input.note,
+              pullRequestNumber: input.pullRequestNumber,
+              pullRequestUrl: input.pullRequestUrl,
+              recordedByUserId: actorUserId,
               repoName: input.repoName,
               repoOwner: input.repoOwner,
-              repoSyncRecordId: insertedRow.id,
-              status: insertedRow.status
-            },
-            severity: "info",
-            subjectKind: "benchmark_workflow"
-          })
-        );
+              status: input.status,
+              targetRepoPath: input.targetRepoPath,
+              updatedAt: now
+            })
+            .returning();
 
-        return insertedRow;
-      });
+          await tx.insert(auditEvents).values(
+            createBenchmarkWorkflowAuditEvent({
+              actorUserId,
+              eventId: "benchmark_workflow.repo_sync_recorded",
+              payload: {
+                actorUserId,
+                repoName: input.repoName,
+                repoOwner: input.repoOwner,
+                repoSyncRecordId: insertedRow.id,
+                status: insertedRow.status
+              },
+              severity: "info",
+              subjectKind: "benchmark_workflow"
+            })
+          );
+
+          return {
+            item: insertedRow,
+            kind: "created" as const
+          };
+        });
+      } catch (error) {
+        if (
+          input.pullRequestNumber !== null &&
+          isDatabaseUniqueConstraintError(error, ["repo_sync_records_repo_pr_unique"])
+        ) {
+          const conflictingRow =
+            (await db.query.repoSyncRecords.findFirst({
+              where: and(
+                eq(repoSyncRecords.repoOwner, input.repoOwner),
+                eq(repoSyncRecords.repoName, input.repoName),
+                eq(repoSyncRecords.pullRequestNumber, input.pullRequestNumber)
+              )
+            })) ?? null;
+
+          if (!conflictingRow) {
+            throw error;
+          }
+
+          result = {
+            existingRow: conflictingRow,
+            kind: "already_exists"
+          };
+        } else {
+          throw error;
+        }
+      }
+
+      if (result.kind === "already_exists") {
+        reply.code(409).send({
+          error: "repo_sync_record_already_exists",
+          item: toRepoSyncRecord(result.existingRow)
+        });
+        return;
+      }
 
       return {
-        item: toRepoSyncRecord(row)
+        item: toRepoSyncRecord(result.item)
       };
     }
   );
@@ -370,111 +444,195 @@ export function registerBenchmarkWorkflowRoutes(
       const repoSyncRecordId = (request.params as { repoSyncRecordId?: string }).repoSyncRecordId;
       const input = parsedBody.data;
 
-      const result = await db.transaction(async (tx) => {
-        const currentRow = await tx.query.repoSyncRecords.findFirst({
-          where: eq(repoSyncRecords.id, repoSyncRecordId ?? "")
-        });
+      let result:
+        | { kind: "not_found" }
+        | { kind: "invalid_transition"; currentRow: DbRepoSyncRecordRow }
+        | { kind: "merge_commit_required"; currentRow: DbRepoSyncRecordRow }
+        | { kind: "pull_request_link_required"; currentRow: DbRepoSyncRecordRow }
+        | { kind: "pull_request_conflict"; conflictingRow: DbRepoSyncRecordRow }
+        | { kind: "updated"; item: DbRepoSyncRecordRow };
 
-        if (!currentRow) {
-          return {
-            kind: "not_found" as const
-          };
-        }
+      try {
+        result = await db.transaction(async (tx) => {
+          const initialRow =
+            (await tx.query.repoSyncRecords.findFirst({
+              where: eq(repoSyncRecords.id, repoSyncRecordId ?? "")
+            })) ?? null;
 
-        if (
-          !canTransitionRepoSyncStatus(currentRow.status, input.status)
-        ) {
-          return {
-            currentRow,
-            kind: "invalid_transition" as const
-          };
-        }
-
-        const mergeCommitSha =
-          input.mergeCommitSha === undefined
-            ? currentRow.mergeCommitSha
-            : input.mergeCommitSha;
-        const pullRequestNumber =
-          input.pullRequestNumber === undefined
-            ? currentRow.pullRequestNumber
-            : input.pullRequestNumber;
-        const pullRequestUrl =
-          input.pullRequestUrl === undefined
-            ? currentRow.pullRequestUrl
-            : input.pullRequestUrl;
-
-        if (input.status === "merged" && !mergeCommitSha) {
-          return {
-            currentRow,
-            kind: "merge_commit_required" as const
-          };
-        }
-
-        if (
-          (input.status === "pr_open" || input.status === "merged") &&
-          !hasRepoPullRequestLink({
-            pullRequestNumber,
-            pullRequestUrl
-          })
-        ) {
-          return {
-            currentRow,
-            kind: "pull_request_link_required" as const
-          };
-        }
-
-        if (pullRequestNumber !== null) {
-          const conflictingRow = await tx.query.repoSyncRecords.findFirst({
-            where: and(
-              eq(repoSyncRecords.repoOwner, currentRow.repoOwner),
-              eq(repoSyncRecords.repoName, currentRow.repoName),
-              eq(repoSyncRecords.pullRequestNumber, pullRequestNumber)
-            )
-          });
-
-          if (conflictingRow && conflictingRow.id !== currentRow.id) {
+          if (!initialRow) {
             return {
-              conflictingRow,
-              kind: "pull_request_conflict" as const
+              kind: "not_found" as const
             };
           }
+
+          let currentRow: DbRepoSyncRecordRow = initialRow;
+
+          for (;;) {
+            const seenRow: DbRepoSyncRecordRow = currentRow;
+
+          if (!canTransitionRepoSyncStatus(seenRow.status, input.status)) {
+            return {
+              currentRow: seenRow,
+              kind: "invalid_transition" as const
+            };
+          }
+
+          const mergeCommitSha =
+            input.mergeCommitSha === undefined
+              ? seenRow.mergeCommitSha
+              : input.mergeCommitSha;
+          const pullRequestNumber =
+            input.pullRequestNumber === undefined
+              ? seenRow.pullRequestNumber
+              : input.pullRequestNumber;
+          const pullRequestUrl =
+            input.pullRequestUrl === undefined
+              ? seenRow.pullRequestUrl
+              : input.pullRequestUrl;
+
+          if (input.status === "merged" && !mergeCommitSha) {
+            return {
+              currentRow: seenRow,
+              kind: "merge_commit_required" as const
+            };
+          }
+
+          if (
+            (input.status === "pr_open" || input.status === "merged") &&
+            !hasRepoPullRequestLink({
+              pullRequestNumber,
+              pullRequestUrl
+            })
+          ) {
+            return {
+              currentRow: seenRow,
+              kind: "pull_request_link_required" as const
+            };
+          }
+
+          if (
+            seenRow.status === "merged" &&
+            (mergeCommitSha !== seenRow.mergeCommitSha ||
+              pullRequestNumber !== seenRow.pullRequestNumber ||
+              pullRequestUrl !== seenRow.pullRequestUrl)
+          ) {
+            return {
+              currentRow: seenRow,
+              kind: "invalid_transition" as const
+            };
+          }
+
+          if (pullRequestNumber !== null) {
+            const conflictingRow = await tx.query.repoSyncRecords.findFirst({
+              where: and(
+                eq(repoSyncRecords.repoOwner, seenRow.repoOwner),
+                eq(repoSyncRecords.repoName, seenRow.repoName),
+                eq(repoSyncRecords.pullRequestNumber, pullRequestNumber)
+              )
+            });
+
+            if (conflictingRow && conflictingRow.id !== seenRow.id) {
+              return {
+                conflictingRow,
+                kind: "pull_request_conflict" as const
+              };
+            }
+          }
+
+            const now = new Date();
+            const previousStatus = seenRow.status;
+            const [updatedRow] = await tx
+              .update(repoSyncRecords)
+              .set({
+                lastUpdatedByUserId: actorUserId,
+                mergeCommitSha,
+                note: input.note === undefined ? seenRow.note : input.note,
+                pullRequestNumber,
+                pullRequestUrl,
+                status: input.status,
+                updatedAt: now
+              })
+              .where(
+                and(
+                  eq(repoSyncRecords.id, seenRow.id),
+                  eq(repoSyncRecords.updatedAt, seenRow.updatedAt)
+                )
+              )
+              .returning();
+
+            if (!updatedRow) {
+              const latestRow =
+                (await tx.query.repoSyncRecords.findFirst({
+                  where: eq(repoSyncRecords.id, seenRow.id)
+                })) ?? null;
+
+              if (!latestRow) {
+                return {
+                  kind: "not_found" as const
+                };
+              }
+
+              currentRow = latestRow;
+              continue;
+            }
+
+            await tx.insert(auditEvents).values(
+              createBenchmarkWorkflowAuditEvent({
+                actorUserId,
+                eventId: "benchmark_workflow.repo_sync_status_updated",
+                payload: {
+                  actorUserId,
+                  previousStatus,
+                  repoSyncRecordId: updatedRow.id,
+                  status: updatedRow.status
+                },
+                severity: "warning",
+                subjectKind: "benchmark_workflow"
+              })
+            );
+
+            return {
+              item: updatedRow,
+              kind: "updated" as const
+            };
+          }
+        });
+      } catch (error) {
+        if (isDatabaseUniqueConstraintError(error, ["repo_sync_records_repo_pr_unique"])) {
+          const latestRow =
+            (await db.query.repoSyncRecords.findFirst({
+              where: eq(repoSyncRecords.id, repoSyncRecordId ?? "")
+            })) ?? null;
+          const effectivePullRequestNumber =
+            input.pullRequestNumber === undefined
+              ? (latestRow?.pullRequestNumber ?? null)
+              : input.pullRequestNumber;
+
+          if (!latestRow || effectivePullRequestNumber === null) {
+            throw error;
+          }
+
+          const conflictingRow =
+            (await db.query.repoSyncRecords.findFirst({
+              where: and(
+                eq(repoSyncRecords.repoOwner, latestRow.repoOwner),
+                eq(repoSyncRecords.repoName, latestRow.repoName),
+                eq(repoSyncRecords.pullRequestNumber, effectivePullRequestNumber)
+              )
+            })) ?? null;
+
+          if (!conflictingRow || conflictingRow.id === latestRow.id) {
+            throw error;
+          }
+
+          result = {
+            conflictingRow,
+            kind: "pull_request_conflict"
+          };
+        } else {
+          throw error;
         }
-
-        const now = new Date();
-        const [updatedRow] = await tx
-          .update(repoSyncRecords)
-          .set({
-            lastUpdatedByUserId: actorUserId,
-            mergeCommitSha,
-            note: input.note === undefined ? currentRow.note : input.note,
-            pullRequestNumber,
-            pullRequestUrl,
-            status: input.status,
-            updatedAt: now
-          })
-          .where(eq(repoSyncRecords.id, currentRow.id))
-          .returning();
-
-        await tx.insert(auditEvents).values(
-          createBenchmarkWorkflowAuditEvent({
-            actorUserId,
-            eventId: "benchmark_workflow.repo_sync_status_updated",
-            payload: {
-              actorUserId,
-              previousStatus: currentRow.status,
-              repoSyncRecordId: currentRow.id,
-              status: updatedRow.status
-            },
-            severity: "warning",
-            subjectKind: "benchmark_workflow"
-          })
-        );
-
-        return {
-          item: updatedRow,
-          kind: "updated" as const
-        };
-      });
+      }
 
       if (result.kind === "not_found") {
         reply.code(404).send({
@@ -584,10 +742,19 @@ export function registerBenchmarkWorkflowRoutes(
       const actorUserId = getAdminActorUserId(request);
       const input = parsedBody.data as AdminPackageFreezeCreateInput;
 
-      const result = await db.transaction(async (tx) => {
-        const repoSyncRecordRow = await tx.query.repoSyncRecords.findFirst({
-          where: eq(repoSyncRecords.id, input.repoSyncRecordId)
-        });
+      let result:
+        | { kind: "repo_sync_not_found" }
+        | { kind: "repo_sync_not_merged"; repoSyncRecordRow: DbRepoSyncRecordRow }
+        | { kind: "repo_sync_pr_link_missing"; repoSyncRecordRow: DbRepoSyncRecordRow }
+        | { kind: "commit_mismatch"; repoSyncRecordRow: DbRepoSyncRecordRow }
+        | { kind: "already_exists"; existingFreeze: DbPackageFreezeRow }
+        | { kind: "created"; item: DbPackageFreezeRow };
+
+      try {
+        result = await db.transaction(async (tx) => {
+          const repoSyncRecordRow = await tx.query.repoSyncRecords.findFirst({
+            where: eq(repoSyncRecords.id, input.repoSyncRecordId)
+          });
 
         if (!repoSyncRecordRow) {
           return {
@@ -616,6 +783,63 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
+        const repoSyncPullRequestNumberMatches =
+          repoSyncRecordRow.pullRequestNumber === null
+            ? isNull(repoSyncRecords.pullRequestNumber)
+            : eq(repoSyncRecords.pullRequestNumber, repoSyncRecordRow.pullRequestNumber);
+        const repoSyncPullRequestUrlMatches =
+          repoSyncRecordRow.pullRequestUrl === null
+            ? isNull(repoSyncRecords.pullRequestUrl)
+            : eq(repoSyncRecords.pullRequestUrl, repoSyncRecordRow.pullRequestUrl);
+
+        const lockedRepoSyncRows = await tx.execute(sql`
+          select ${repoSyncRecords.id}
+          from ${repoSyncRecords}
+          where ${repoSyncRecords.id} = ${repoSyncRecordRow.id}
+            and ${repoSyncRecords.status} = ${repoSyncRecordRow.status}
+            and ${repoSyncRecords.mergeCommitSha} = ${repoSyncRecordRow.mergeCommitSha}
+            and ${repoSyncPullRequestNumberMatches}
+            and ${repoSyncPullRequestUrlMatches}
+          for update
+        `);
+
+        if (lockedRepoSyncRows.length === 0) {
+          const latestRepoSyncRecordRow =
+            (await tx.query.repoSyncRecords.findFirst({
+              where: eq(repoSyncRecords.id, input.repoSyncRecordId)
+            })) ?? null;
+
+          if (!latestRepoSyncRecordRow) {
+            return {
+              kind: "repo_sync_not_found" as const
+            };
+          }
+
+          if (
+            latestRepoSyncRecordRow.status !== "merged" ||
+            !latestRepoSyncRecordRow.mergeCommitSha
+          ) {
+            return {
+              kind: "repo_sync_not_merged" as const,
+              repoSyncRecordRow: latestRepoSyncRecordRow
+            };
+          }
+
+          if (!hasRepoPullRequestLink(latestRepoSyncRecordRow)) {
+            return {
+              kind: "repo_sync_pr_link_missing" as const,
+              repoSyncRecordRow: latestRepoSyncRecordRow
+            };
+          }
+
+          if (latestRepoSyncRecordRow.mergeCommitSha !== input.repoCommitSha) {
+            return {
+              kind: "commit_mismatch" as const,
+              repoSyncRecordRow: latestRepoSyncRecordRow
+            };
+          }
+        }
+
         const existingFreeze =
           (await tx.query.packageFreezes.findFirst({
             where: eq(packageFreezes.packageDigest, input.packageDigest)
@@ -631,23 +855,23 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
-        const now = new Date();
-        const [insertedRow] = await tx
-          .insert(packageFreezes)
-          .values({
-            benchmarkFamily: input.benchmarkFamily,
-            createdByUserId: actorUserId,
-            mathPackageCandidateId: repoSyncRecordRow.mathPackageCandidateId,
-            note: input.note,
-            packageDigest: input.packageDigest,
-            packageId: input.packageId,
-            packageVersion: input.packageVersion,
-            repoCommitSha: input.repoCommitSha,
-            repoSyncRecordId: input.repoSyncRecordId,
-            repoTreePath: repoSyncRecordRow.targetRepoPath,
-            updatedAt: now
-          })
-          .returning();
+          const now = new Date();
+          const [insertedRow] = await tx
+            .insert(packageFreezes)
+            .values({
+              benchmarkFamily: input.benchmarkFamily,
+              createdByUserId: actorUserId,
+              mathPackageCandidateId: repoSyncRecordRow.mathPackageCandidateId,
+              note: input.note,
+              packageDigest: input.packageDigest,
+              packageId: input.packageId,
+              packageVersion: input.packageVersion,
+              repoCommitSha: input.repoCommitSha,
+              repoSyncRecordId: input.repoSyncRecordId,
+              repoTreePath: repoSyncRecordRow.targetRepoPath,
+              updatedAt: now
+            })
+            .returning();
 
         await tx.insert(auditEvents).values(
           createBenchmarkWorkflowAuditEvent({
@@ -664,11 +888,39 @@ export function registerBenchmarkWorkflowRoutes(
           })
         );
 
-        return {
-          item: insertedRow,
-          kind: "created" as const
-        };
-      });
+          return {
+            item: insertedRow,
+            kind: "created" as const
+          };
+        });
+      } catch (error) {
+        if (
+          isDatabaseUniqueConstraintError(error, [
+            "package_freezes_package_digest_unique",
+            "package_freezes_repo_sync_record_id_unique"
+          ])
+        ) {
+          const conflictingFreeze =
+            (await db.query.packageFreezes.findFirst({
+              where: eq(packageFreezes.packageDigest, input.packageDigest)
+            })) ??
+            (await db.query.packageFreezes.findFirst({
+              where: eq(packageFreezes.repoSyncRecordId, input.repoSyncRecordId)
+            })) ??
+            null;
+
+          if (!conflictingFreeze) {
+            throw error;
+          }
+
+          result = {
+            existingFreeze: conflictingFreeze,
+            kind: "already_exists"
+          };
+        } else {
+          throw error;
+        }
+      }
 
       if (result.kind === "repo_sync_not_found") {
         reply.code(404).send({
@@ -780,10 +1032,17 @@ export function registerBenchmarkWorkflowRoutes(
       const packageFreezeId = (request.params as { packageFreezeId?: string }).packageFreezeId;
       const input = parsedBody.data as AdminBenchmarkVersionCreateInput;
 
-      const result = await db.transaction(async (tx) => {
-        const packageFreezeRow = await tx.query.packageFreezes.findFirst({
-          where: eq(packageFreezes.id, packageFreezeId ?? "")
-        });
+      let result:
+        | { kind: "package_freeze_not_found" }
+        | { kind: "package_freeze_not_active"; packageFreezeRow: DbPackageFreezeRow }
+        | { kind: "already_exists"; existingVersion: DbBenchmarkVersionRow }
+        | { kind: "created"; item: DbBenchmarkVersionRow };
+
+      try {
+        result = await db.transaction(async (tx) => {
+          const packageFreezeRow = await tx.query.packageFreezes.findFirst({
+            where: eq(packageFreezes.id, packageFreezeId ?? "")
+          });
 
         if (!packageFreezeRow) {
           return {
@@ -809,29 +1068,29 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
-        const now = new Date();
-        const [insertedRow] = await tx
-          .insert(benchmarkVersions)
-          .values({
-            benchmarkFamily: packageFreezeRow.benchmarkFamily,
-            benchmarkVersionId: input.benchmarkVersionId,
-            createdByUserId: actorUserId,
-            displayLabel:
-              input.displayLabel ??
-              getDefaultBenchmarkDisplayLabel(
-                packageFreezeRow.packageId,
-                packageFreezeRow.packageVersion
-              ),
-            itemSetDefinition: input.itemSetDefinition,
-            launchability: "internal_only",
-            packageDigest: packageFreezeRow.packageDigest,
-            packageFreezeId: packageFreezeRow.id,
-            packageId: packageFreezeRow.packageId,
-            packageVersion: packageFreezeRow.packageVersion,
-            scopeLabel: input.scopeLabel,
-            updatedAt: now
-          })
-          .returning();
+          const now = new Date();
+          const [insertedRow] = await tx
+            .insert(benchmarkVersions)
+            .values({
+              benchmarkFamily: packageFreezeRow.benchmarkFamily,
+              benchmarkVersionId: input.benchmarkVersionId,
+              createdByUserId: actorUserId,
+              displayLabel:
+                input.displayLabel ??
+                getDefaultBenchmarkDisplayLabel(
+                  packageFreezeRow.packageId,
+                  packageFreezeRow.packageVersion
+                ),
+              itemSetDefinition: input.itemSetDefinition,
+              launchability: "internal_only",
+              packageDigest: packageFreezeRow.packageDigest,
+              packageFreezeId: packageFreezeRow.id,
+              packageId: packageFreezeRow.packageId,
+              packageVersion: packageFreezeRow.packageVersion,
+              scopeLabel: input.scopeLabel,
+              updatedAt: now
+            })
+            .returning();
 
         await tx.insert(auditEvents).values(
           createBenchmarkWorkflowAuditEvent({
@@ -847,11 +1106,30 @@ export function registerBenchmarkWorkflowRoutes(
           })
         );
 
-        return {
-          item: insertedRow,
-          kind: "created" as const
-        };
-      });
+          return {
+            item: insertedRow,
+            kind: "created" as const
+          };
+        });
+      } catch (error) {
+        if (isDatabaseUniqueConstraintError(error, ["benchmark_versions_pkey"])) {
+          const conflictingVersion =
+            (await db.query.benchmarkVersions.findFirst({
+              where: eq(benchmarkVersions.benchmarkVersionId, input.benchmarkVersionId)
+            })) ?? null;
+
+          if (!conflictingVersion) {
+            throw error;
+          }
+
+          result = {
+            existingVersion: conflictingVersion,
+            kind: "already_exists"
+          };
+        } else {
+          throw error;
+        }
+      }
 
       if (result.kind === "package_freeze_not_found") {
         reply.code(404).send({
@@ -906,77 +1184,86 @@ export function registerBenchmarkWorkflowRoutes(
         .benchmarkVersionId;
 
       const result = await db.transaction(async (tx) => {
-        const currentRow = await tx.query.benchmarkVersions.findFirst({
-          where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
-        });
+        const initialRow =
+          (await tx.query.benchmarkVersions.findFirst({
+            where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
+          })) ?? null;
 
-        if (!currentRow) {
+        if (!initialRow) {
           return {
             kind: "not_found" as const
           };
         }
 
-        if (
-          !canTransitionBenchmarkVersionLaunchability(
-            currentRow.launchability,
-            parsedBody.data.launchability
-          )
-        ) {
-          return {
-            currentRow,
-            kind: "invalid_transition" as const
-          };
-        }
+        let currentRow: DbBenchmarkVersionRow = initialRow;
 
-        if (
-          currentRow.launchability === "launchable" &&
-          parsedBody.data.launchability !== "launchable"
-        ) {
-          const publishedRelease = await tx.query.benchmarkReleases.findFirst({
-            where: and(
-              eq(benchmarkReleases.benchmarkVersionId, currentRow.benchmarkVersionId),
-              eq(benchmarkReleases.status, "published"),
-              eq(benchmarkReleases.visibility, "public")
+        for (;;) {
+          const seenRow: DbBenchmarkVersionRow = currentRow;
+
+          if (
+            !canTransitionBenchmarkVersionLaunchability(
+              seenRow.launchability,
+              parsedBody.data.launchability
             )
-          });
-
-          if (publishedRelease) {
+          ) {
             return {
-              kind: "published_release_exists" as const,
-              publishedRelease
+              currentRow: seenRow,
+              kind: "invalid_transition" as const
             };
           }
-        }
 
-        const now = new Date();
-        const [updatedRow] = await tx
-          .update(benchmarkVersions)
-          .set({
-            launchability: parsedBody.data.launchability,
-            updatedAt: now
-          })
-          .where(eq(benchmarkVersions.benchmarkVersionId, currentRow.benchmarkVersionId))
-          .returning();
+          const previousLaunchability = seenRow.launchability;
+          const now = new Date();
+          const [updatedRow] = await tx
+            .update(benchmarkVersions)
+            .set({
+              launchability: parsedBody.data.launchability,
+              updatedAt: now
+            })
+            .where(
+              and(
+                eq(benchmarkVersions.benchmarkVersionId, seenRow.benchmarkVersionId),
+                eq(benchmarkVersions.launchability, seenRow.launchability)
+              )
+            )
+            .returning();
 
-        await tx.insert(auditEvents).values(
-          createBenchmarkWorkflowAuditEvent({
-            actorUserId,
-            eventId: "benchmark_version.launchability_updated",
-            payload: {
+          if (!updatedRow) {
+            const latestRow =
+              (await tx.query.benchmarkVersions.findFirst({
+                where: eq(benchmarkVersions.benchmarkVersionId, seenRow.benchmarkVersionId)
+              })) ?? null;
+
+            if (!latestRow) {
+              return {
+                kind: "not_found" as const
+              };
+            }
+
+            currentRow = latestRow;
+            continue;
+          }
+
+          await tx.insert(auditEvents).values(
+            createBenchmarkWorkflowAuditEvent({
               actorUserId,
-              benchmarkVersionId: updatedRow.benchmarkVersionId,
-              launchability: updatedRow.launchability,
-              previousLaunchability: currentRow.launchability
-            },
-            severity: "critical",
-            subjectKind: "benchmark_version"
-          })
-        );
+              eventId: "benchmark_version.launchability_updated",
+              payload: {
+                actorUserId,
+                benchmarkVersionId: updatedRow.benchmarkVersionId,
+                launchability: updatedRow.launchability,
+                previousLaunchability
+              },
+              severity: "critical",
+              subjectKind: "benchmark_version"
+            })
+          );
 
-        return {
-          item: updatedRow,
-          kind: "updated" as const
-        };
+          return {
+            item: updatedRow,
+            kind: "updated" as const
+          };
+        }
       });
 
       if (result.kind === "not_found") {
@@ -990,14 +1277,6 @@ export function registerBenchmarkWorkflowRoutes(
         reply.code(409).send({
           error: "benchmark_version_invalid_launchability_transition",
           item: toBenchmarkVersion(result.currentRow)
-        });
-        return;
-      }
-
-      if (result.kind === "published_release_exists") {
-        reply.code(409).send({
-          error: "benchmark_version_has_published_release",
-          release: toBenchmarkRelease(result.publishedRelease)
         });
         return;
       }
@@ -1074,10 +1353,16 @@ export function registerBenchmarkWorkflowRoutes(
         .benchmarkVersionId;
       const input = parsedBody.data as AdminBenchmarkReleaseCreateInput;
 
-      const result = await db.transaction(async (tx) => {
-        const benchmarkVersionRow = await tx.query.benchmarkVersions.findFirst({
-          where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
-        });
+      let result:
+        | { kind: "benchmark_version_not_found" }
+        | { kind: "already_exists"; existingRelease: DbBenchmarkReleaseRow }
+        | { kind: "created"; item: DbBenchmarkReleaseRow };
+
+      try {
+        result = await db.transaction(async (tx) => {
+          const benchmarkVersionRow = await tx.query.benchmarkVersions.findFirst({
+            where: eq(benchmarkVersions.benchmarkVersionId, benchmarkVersionId ?? "")
+          });
 
         if (!benchmarkVersionRow) {
           return {
@@ -1096,21 +1381,21 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
-        const now = new Date();
-        const [insertedRow] = await tx
-          .insert(benchmarkReleases)
-          .values({
-            benchmarkReleaseId: input.benchmarkReleaseId,
-            benchmarkVersionId: benchmarkVersionRow.benchmarkVersionId,
-            createdByUserId: actorUserId,
-            methodologyArtifactRefs: input.methodologyArtifactRefs,
-            releaseLabel: input.releaseLabel,
-            summaryArtifactRefs: input.summaryArtifactRefs,
-            summaryPayload: input.summaryPayload,
-            updatedAt: now,
-            visibility: input.visibility
-          })
-          .returning();
+          const now = new Date();
+          const [insertedRow] = await tx
+            .insert(benchmarkReleases)
+            .values({
+              benchmarkReleaseId: input.benchmarkReleaseId,
+              benchmarkVersionId: benchmarkVersionRow.benchmarkVersionId,
+              createdByUserId: actorUserId,
+              methodologyArtifactRefs: input.methodologyArtifactRefs,
+              releaseLabel: input.releaseLabel,
+              summaryArtifactRefs: input.summaryArtifactRefs,
+              summaryPayload: input.summaryPayload,
+              updatedAt: now,
+              visibility: input.visibility
+            })
+            .returning();
 
         await tx.insert(auditEvents).values(
           createBenchmarkWorkflowAuditEvent({
@@ -1127,11 +1412,30 @@ export function registerBenchmarkWorkflowRoutes(
           })
         );
 
-        return {
-          item: insertedRow,
-          kind: "created" as const
-        };
-      });
+          return {
+            item: insertedRow,
+            kind: "created" as const
+          };
+        });
+      } catch (error) {
+        if (isDatabaseUniqueConstraintError(error, ["benchmark_releases_pkey"])) {
+          const conflictingRelease =
+            (await db.query.benchmarkReleases.findFirst({
+              where: eq(benchmarkReleases.benchmarkReleaseId, input.benchmarkReleaseId)
+            })) ?? null;
+
+          if (!conflictingRelease) {
+            throw error;
+          }
+
+          result = {
+            existingRelease: conflictingRelease,
+            kind: "already_exists"
+          };
+        } else {
+          throw error;
+        }
+      }
 
       if (result.kind === "benchmark_version_not_found") {
         reply.code(404).send({
@@ -1284,10 +1588,28 @@ export function registerBenchmarkWorkflowRoutes(
       const benchmarkReleaseId = (request.params as { benchmarkReleaseId?: string })
         .benchmarkReleaseId;
 
-      const result = await db.transaction(async (tx) => {
-        const currentReleaseRow = await tx.query.benchmarkReleases.findFirst({
-          where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
-        });
+      let result:
+        | { kind: "release_not_found" }
+        | { kind: "release_not_approved"; currentReleaseRow: DbBenchmarkReleaseRow }
+        | { kind: "release_not_public"; currentReleaseRow: DbBenchmarkReleaseRow }
+        | { kind: "benchmark_version_not_found" }
+        | {
+            kind: "benchmark_version_not_launchable";
+            benchmarkVersionRow: DbBenchmarkVersionRow;
+            currentReleaseRow: DbBenchmarkReleaseRow;
+          }
+        | {
+            kind: "public_release_conflict";
+            conflictingPublishedRelease: DbBenchmarkReleaseRow;
+            currentReleaseRow: DbBenchmarkReleaseRow;
+          }
+        | { kind: "published"; item: DbBenchmarkReleaseRow };
+
+      try {
+        result = await db.transaction(async (tx) => {
+          const currentReleaseRow = await tx.query.benchmarkReleases.findFirst({
+            where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
+          });
 
         if (!currentReleaseRow) {
           return {
@@ -1330,22 +1652,41 @@ export function registerBenchmarkWorkflowRoutes(
           };
         }
 
-        const now = new Date();
-        const [updatedReleaseRow] = await tx
-          .update(benchmarkReleases)
-          .set({
-            publishedAt: now,
-            status: "published",
-            updatedAt: now
-          })
-          .where(
-            and(
-              eq(benchmarkReleases.benchmarkReleaseId, currentReleaseRow.benchmarkReleaseId),
-              eq(benchmarkReleases.status, "approved"),
-              eq(benchmarkReleases.visibility, "public")
-            )
+        const conflictingPublishedRelease = await tx.query.benchmarkReleases.findFirst({
+          where: and(
+            eq(benchmarkReleases.benchmarkVersionId, currentReleaseRow.benchmarkVersionId),
+            eq(benchmarkReleases.status, "published"),
+            eq(benchmarkReleases.visibility, "public")
           )
-          .returning();
+        });
+
+        if (
+          conflictingPublishedRelease &&
+          conflictingPublishedRelease.benchmarkReleaseId !== currentReleaseRow.benchmarkReleaseId
+        ) {
+          return {
+            conflictingPublishedRelease,
+            currentReleaseRow,
+            kind: "public_release_conflict" as const
+          };
+        }
+
+          const now = new Date();
+          const [updatedReleaseRow] = await tx
+            .update(benchmarkReleases)
+            .set({
+              publishedAt: now,
+              status: "published",
+              updatedAt: now
+            })
+            .where(
+              and(
+                eq(benchmarkReleases.benchmarkReleaseId, currentReleaseRow.benchmarkReleaseId),
+                eq(benchmarkReleases.status, "approved"),
+                eq(benchmarkReleases.visibility, "public")
+              )
+            )
+            .returning();
 
         if (!updatedReleaseRow) {
           return {
@@ -1375,11 +1716,47 @@ export function registerBenchmarkWorkflowRoutes(
           })
         );
 
-        return {
-          item: updatedReleaseRow,
-          kind: "published" as const
-        };
-      });
+          return {
+            item: updatedReleaseRow,
+            kind: "published" as const
+          };
+        });
+      } catch (error) {
+        if (isDatabaseUniqueConstraintError(error, ["benchmark_releases_public_version_unique"])) {
+          const currentReleaseRow =
+            (await db.query.benchmarkReleases.findFirst({
+              where: eq(benchmarkReleases.benchmarkReleaseId, benchmarkReleaseId ?? "")
+            })) ?? null;
+
+          if (!currentReleaseRow) {
+            throw error;
+          }
+
+          const conflictingPublishedRelease =
+            (await db.query.benchmarkReleases.findFirst({
+              where: and(
+                eq(benchmarkReleases.benchmarkVersionId, currentReleaseRow.benchmarkVersionId),
+                eq(benchmarkReleases.status, "published"),
+                eq(benchmarkReleases.visibility, "public")
+              )
+            })) ?? null;
+
+          if (
+            !conflictingPublishedRelease ||
+            conflictingPublishedRelease.benchmarkReleaseId === currentReleaseRow.benchmarkReleaseId
+          ) {
+            throw error;
+          }
+
+          result = {
+            conflictingPublishedRelease,
+            currentReleaseRow,
+            kind: "public_release_conflict"
+          };
+        } else {
+          throw error;
+        }
+      }
 
       if (result.kind === "release_not_found") {
         reply.code(404).send({
@@ -1416,6 +1793,15 @@ export function registerBenchmarkWorkflowRoutes(
           error: "benchmark_version_not_launchable",
           item: toBenchmarkVersion(result.benchmarkVersionRow),
           release: toBenchmarkRelease(result.currentReleaseRow)
+        });
+        return;
+      }
+
+      if (result.kind === "public_release_conflict") {
+        reply.code(409).send({
+          error: "benchmark_release_public_version_conflict",
+          item: toBenchmarkRelease(result.currentReleaseRow),
+          conflictingRelease: toBenchmarkRelease(result.conflictingPublishedRelease)
         });
         return;
       }

@@ -351,7 +351,7 @@ export const apiEndpointCatalog = [
     method: "POST",
     path: "/portal/admin/benchmark-versions/:benchmarkVersionId/launchability",
     purpose:
-      "Promote or withdraw one benchmark version from launchable state without mutating the underlying freeze."
+      "Promote one benchmark version into launchable state without mutating the underlying freeze."
   },
   {
     access: "admin_only",
