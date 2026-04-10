@@ -144,6 +144,30 @@ function compareNullableTimestampDescNullsLast(
   return Date.parse(right) - Date.parse(left);
 }
 
+function compareBenchmarkListItemLatestCompletedAtDesc(
+  left: Pick<PortalBenchmarkListItem, "benchmarkPackageId" | "latestCompletedAt">,
+  right: Pick<PortalBenchmarkListItem, "benchmarkPackageId" | "latestCompletedAt">
+) {
+  const completionOrder = compareNullableTimestampDescNullsLast(
+    left.latestCompletedAt,
+    right.latestCompletedAt
+  );
+
+  if (completionOrder !== 0) {
+    return completionOrder;
+  }
+
+  return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
+}
+
+function buildBenchmarkDatasetRunOrderBy() {
+  return [
+    asc(sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`),
+    desc(runs.completedAt),
+    desc(runs.createdAt)
+  ] as const;
+}
+
 function groupByRunId<T extends { runId: string }>(items: T[]) {
   const grouped = new Map<string, T[]>();
 
@@ -428,6 +452,9 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  buildBenchmarkDatasetRunOrderBy,
+  buildRunOrderBy,
+  compareBenchmarkListItemLatestCompletedAtDesc,
   compareNullableTimestampDescNullsLast,
   getRunLifecycleBucket,
   getRunLifecycleStateLabel,
@@ -712,26 +739,15 @@ export function createPortalBenchmarkOpsReadModelService(
       const items = [...benchmarks.values()]
         .map((item) => {
           const versions = listSortedUnique(item.versions);
-          return {
-            ...item,
-            benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
-            modelConfigIds: listSortedUnique(item.modelConfigIds),
-            providerFamilies: listSortedUnique(item.providerFamilies),
-            versions
-          };
-        })
-        .sort((left, right) => {
-          const completionOrder = compareNullableTimestampDescNullsLast(
-            left.latestCompletedAt,
-            right.latestCompletedAt
-          );
-
-          if (completionOrder !== 0) {
-            return completionOrder;
-          }
-
-          return left.benchmarkPackageId.localeCompare(right.benchmarkPackageId);
-        });
+        return {
+          ...item,
+          benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
+          modelConfigIds: listSortedUnique(item.modelConfigIds),
+          providerFamilies: listSortedUnique(item.providerFamilies),
+          versions
+        };
+      })
+        .sort(compareBenchmarkListItemLatestCompletedAtDesc);
 
       return { items };
     },
@@ -741,11 +757,7 @@ export function createPortalBenchmarkOpsReadModelService(
         .select()
         .from(runs)
         .where(eq(runs.benchmarkPackageId, packageId))
-        .orderBy(
-          asc(sql`case when ${runs.state} in ('succeeded', 'failed', 'cancelled') then 0 else 1 end`),
-          desc(runs.completedAt),
-          desc(runs.createdAt)
-        );
+        .orderBy(...buildBenchmarkDatasetRunOrderBy());
 
       if (runRows.length === 0) {
         return null;
