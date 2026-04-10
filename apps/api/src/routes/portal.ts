@@ -30,6 +30,12 @@ import {
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
 import {
+  buildRequestedIdentityProviderSubjectMatch,
+  buildUserIdentityProviderSubjectMatch,
+  filterUserIdentityProviderSubjectMatch,
+  matchesUserIdentityProviderSubject
+} from "../lib/identity-binding.js";
+import {
   createPortalBenchmarkOpsReadModelService,
   type PortalBenchmarkOpsReadModelService
 } from "../lib/portal-benchmark-ops.js";
@@ -210,6 +216,7 @@ function buildBrandedFinalizeRelayUrl(origin: string, redirectPath: string) {
 }
 
 function toPortalProfile(options: {
+  currentProvider: (typeof userIdentities.$inferSelect)["provider"] | null;
   currentSubject: string;
   fallbackEmail: string | null;
   linkedIdentityRows: (typeof userIdentities.$inferSelect)[];
@@ -223,7 +230,13 @@ function toPortalProfile(options: {
       .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
       .map((identityRow) => ({
         createdAt: identityRow.createdAt.toISOString(),
-        current: identityRow.providerSubject === options.currentSubject,
+        current:
+          options.currentProvider !== null &&
+          matchesUserIdentityProviderSubject(
+            identityRow,
+            options.currentProvider,
+            options.currentSubject
+          ),
         id: identityRow.id,
         lastSeenAt: identityRow.lastSeenAt.toISOString(),
         provider: identityRow.provider,
@@ -323,20 +336,32 @@ function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
 
 async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
   fallbackEmail: string | null;
+  identityProvider: (typeof userIdentities.$inferSelect)["provider"] | null;
   identitySubject: string;
 }) {
-  const linkedIdentity = await db.query.userIdentities.findFirst({
-    where: eq(userIdentities.providerSubject, options.identitySubject),
-    with: {
-      user: {
-        with: {
-          identities: true
-        }
-      }
-    }
-  });
+  const linkedIdentity =
+    options.identityProvider === null
+      ? null
+      : filterUserIdentityProviderSubjectMatch(
+          await db.query.userIdentities.findFirst({
+            where: buildUserIdentityProviderSubjectMatch(
+              options.identityProvider,
+              options.identitySubject
+            ),
+            with: {
+              user: {
+                with: {
+                  identities: true
+                }
+              }
+            }
+          }),
+          options.identityProvider,
+          options.identitySubject
+        );
 
   return toPortalProfile({
+    currentProvider: options.identityProvider,
     currentSubject: options.identitySubject,
     fallbackEmail: options.fallbackEmail,
     linkedIdentityRows: linkedIdentity?.user.identities ?? [],
@@ -407,16 +432,23 @@ export function registerPortalRoutes(
           return "invalid";
         }
 
-        const existingSubjectOwner = await tx.query.userIdentities.findFirst({
-          where: eq(userIdentities.providerSubject, identity.subject)
-        });
+        if (providerHint !== intentRow.targetProvider) {
+          return "provider_mismatch";
+        }
+
+        const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
+          await tx.query.userIdentities.findFirst({
+            where: buildUserIdentityProviderSubjectMatch(
+              intentRow.targetProvider,
+              identity.subject
+            )
+          }),
+          intentRow.targetProvider,
+          identity.subject
+        );
 
         if (existingSubjectOwner && existingSubjectOwner.userId !== intentRow.userId) {
           return "conflict";
-        }
-
-        if (providerHint !== intentRow.targetProvider) {
-          return "provider_mismatch";
         }
 
         const now = new Date();
@@ -681,9 +713,19 @@ export function registerPortalRoutes(
         throw new Error("Authenticated Access identity was not attached to the request.");
       }
 
-      const linkedIdentity = await db.query.userIdentities.findFirst({
-        where: eq(userIdentities.providerSubject, identity.subject)
-      });
+      const linkedIdentity =
+        identity.provider === null
+          ? null
+          : filterUserIdentityProviderSubjectMatch(
+              await db.query.userIdentities.findFirst({
+                where: buildUserIdentityProviderSubjectMatch(
+                  identity.provider,
+                  identity.subject
+                )
+              }),
+              identity.provider,
+              identity.subject
+            );
 
       const latestRequest =
         (linkedIdentity
@@ -737,6 +779,7 @@ export function registerPortalRoutes(
       return {
         profile: await loadPortalProfile(db, {
           fallbackEmail: normalizeOptionalEmail(identity.email),
+          identityProvider: identity.provider,
           identitySubject: identity.subject
         })
       };
@@ -952,12 +995,22 @@ export function registerPortalRoutes(
       throw new Error("Authenticated Access identity was not attached to the request.");
     }
 
-    const linkedIdentity = await db.query.userIdentities.findFirst({
-      where: eq(userIdentities.providerSubject, identity.subject),
-      with: {
-        user: true
-      }
-    });
+    const linkedIdentity =
+      identity.provider === null
+        ? null
+        : filterUserIdentityProviderSubjectMatch(
+            await db.query.userIdentities.findFirst({
+              where: buildUserIdentityProviderSubjectMatch(
+                identity.provider,
+                identity.subject
+              ),
+              with: {
+                user: true
+              }
+            }),
+            identity.provider,
+            identity.subject
+          );
 
     if (!linkedIdentity) {
       reply.code(409).send({
@@ -977,6 +1030,7 @@ export function registerPortalRoutes(
     return {
       profile: await loadPortalProfile(db, {
         fallbackEmail: normalizeOptionalEmail(identity.email),
+        identityProvider: identity.provider,
         identitySubject: identity.subject
       })
     };
@@ -1027,16 +1081,26 @@ export function registerPortalRoutes(
         throw new Error("Approved Access identity was not attached to the request.");
       }
 
-      const linkedIdentity = await db.query.userIdentities.findFirst({
-        where: eq(userIdentities.providerSubject, identity.subject),
-        with: {
-          user: {
-            with: {
-              identities: true
-            }
-          }
-        }
-      });
+      const linkedIdentity =
+        identity.provider === null
+          ? null
+          : filterUserIdentityProviderSubjectMatch(
+              await db.query.userIdentities.findFirst({
+                where: buildUserIdentityProviderSubjectMatch(
+                  identity.provider,
+                  identity.subject
+                ),
+                with: {
+                  user: {
+                    with: {
+                      identities: true
+                    }
+                  }
+                }
+              }),
+              identity.provider,
+              identity.subject
+            );
 
       if (!linkedIdentity) {
         reply.code(409).send({
@@ -1153,7 +1217,6 @@ export function registerPortalRoutes(
       }
 
       const accessEmail = normalizeOptionalEmail(identity.email);
-      const accessProvider = identity.provider ?? "cloudflare_one_time_pin";
 
       if (!accessEmail) {
         reply.code(400).send({
@@ -1162,13 +1225,29 @@ export function registerPortalRoutes(
         return;
       }
 
+      if (!identity.provider) {
+        reply.code(409).send({
+          error: "identity_provider_required"
+        });
+        return;
+      }
+
+      const accessProvider = identity.provider;
+
       let latestRequest;
 
       try {
         latestRequest = await db.transaction(async (tx) => {
-          const existingIdentity = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, identity.subject)
-          });
+          const existingIdentity = filterUserIdentityProviderSubjectMatch(
+            await tx.query.userIdentities.findFirst({
+              where: buildUserIdentityProviderSubjectMatch(
+                accessProvider,
+                identity.subject
+              )
+            }),
+            accessProvider,
+            identity.subject
+          );
 
           const linkedUser = existingIdentity
             ? await tx.query.users.findFirst({
@@ -1406,7 +1485,6 @@ export function registerPortalRoutes(
       }
 
       const accessEmail = normalizeOptionalEmail(identity.email);
-      const accessProvider = identity.provider ?? "cloudflare_one_time_pin";
 
       if (!accessEmail) {
         reply.code(400).send({
@@ -1415,13 +1493,29 @@ export function registerPortalRoutes(
         return;
       }
 
+      if (!identity.provider) {
+        reply.code(409).send({
+          error: "identity_provider_required"
+        });
+        return;
+      }
+
+      const accessProvider = identity.provider;
+
       let latestRequest;
 
       try {
         latestRequest = await db.transaction(async (tx) => {
-          const existingIdentity = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.providerSubject, identity.subject)
-          });
+          const existingIdentity = filterUserIdentityProviderSubjectMatch(
+            await tx.query.userIdentities.findFirst({
+              where: buildUserIdentityProviderSubjectMatch(
+                accessProvider,
+                identity.subject
+              )
+            }),
+            accessProvider,
+            identity.subject
+          );
 
           if (existingIdentity) {
             throw new PortalAccessRequestConflictError("identity_already_linked");

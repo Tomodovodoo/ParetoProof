@@ -93,6 +93,7 @@ test("GET /portal/session/finalize/submit creates an opaque DB-backed session fo
         userIdentities: {
           findFirst: async () => ({
             id: "identity-1",
+            provider: "cloudflare_google",
             providerSubject: "subject-1",
             userId: "user-1"
           })
@@ -191,6 +192,7 @@ test("POST /portal/session/finalize/submit returns the JSON redirect payload for
         userIdentities: {
           findFirst: async () => ({
             id: "identity-1",
+            provider: "cloudflare_google",
             providerSubject: "subject-1",
             userId: "user-1"
           })

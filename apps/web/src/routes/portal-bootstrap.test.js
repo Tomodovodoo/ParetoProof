@@ -3,6 +3,10 @@ import {
   buildLocalPendingPortalUrl,
   reducePortalStateAfterAuthExpiry
 } from "./portal-bootstrap-state.ts";
+import {
+  mapPortalMutationErrorMessage,
+  shouldRestartPortalAuthForMissingProvider
+} from "./portal-bootstrap.tsx";
 
 describe("buildLocalPendingPortalUrl", () => {
   it("promotes the local access state to pending and clears denial-only params", () => {
@@ -39,5 +43,53 @@ describe("buildLocalPendingPortalUrl", () => {
     ).toEqual({
       status: "loading"
     });
+  });
+});
+
+describe("mapPortalMutationErrorMessage", () => {
+  it("surfaces a restart message when the API cannot prove the sign-in provider", () => {
+    expect(
+      mapPortalMutationErrorMessage("access_request", 409, "identity_provider_required")
+    ).toBe(
+      "The sign-in provider could not be verified. Restart from the auth entry and choose GitHub or Google again."
+    );
+  });
+
+  it("falls back to the request-specific status message for unknown API errors", () => {
+    expect(mapPortalMutationErrorMessage("identity_recovery", 500, "unexpected")).toBe(
+      "Access recovery failed with 500."
+    );
+  });
+});
+
+describe("shouldRestartPortalAuthForMissingProvider", () => {
+  it("restarts auth when the portal bootstrap sees providerless recovery drift", () => {
+    expect(
+      shouldRestartPortalAuthForMissingProvider({
+        access: {
+          email: "owner@example.com",
+          reason: "identity_recovery_required",
+          status: "denied"
+        },
+        identity: {
+          provider: null
+        }
+      })
+    ).toBe(true);
+  });
+
+  it("does not restart auth for ordinary linked recovery flows", () => {
+    expect(
+      shouldRestartPortalAuthForMissingProvider({
+        access: {
+          email: "owner@example.com",
+          reason: "identity_recovery_required",
+          status: "denied"
+        },
+        identity: {
+          provider: "cloudflare_google"
+        }
+      })
+    ).toBe(false);
   });
 });

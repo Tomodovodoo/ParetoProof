@@ -5,6 +5,7 @@ import { parseApiRuntimeEnv } from "../config/runtime.js";
 import { sessions, userIdentities } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
+import { matchesUserIdentityProviderSubject } from "../lib/identity-binding.js";
 import { readCookieValue } from "./cloudflare-access.js";
 import {
   resolveAccessRbacContext,
@@ -66,7 +67,15 @@ export async function createPortalAccessSession(
     )
   });
 
-  if (!linkedIdentity || linkedIdentity.providerSubject !== identity.subject) {
+  if (
+    !identity.provider ||
+    !linkedIdentity ||
+    !matchesUserIdentityProviderSubject(
+      linkedIdentity,
+      identity.provider,
+      identity.subject
+    )
+  ) {
     throw new Error("Approved portal session identity could not be resolved.");
   }
 

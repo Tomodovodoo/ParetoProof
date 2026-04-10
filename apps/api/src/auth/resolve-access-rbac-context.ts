@@ -3,12 +3,17 @@ import { createDbClient } from "../db/client.js";
 import {
   accessRequests,
   roleGrants,
-  userIdentities,
   users,
   type accessRoleEnum
 } from "../db/schema.js";
 import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
+import type { PortalIdentityProvider } from "@paretoproof/shared";
 import { normalizeOptionalEmail } from "../lib/email.js";
+import {
+  buildRequestedIdentityProviderSubjectMatch,
+  buildUserIdentityProviderSubjectMatch,
+  filterUserIdentityProviderSubjectMatch
+} from "../lib/identity-binding.js";
 
 type DbClient = ReturnType<typeof createDbClient>;
 type AccessRole = (typeof accessRoleEnum.enumValues)[number];
@@ -61,6 +66,7 @@ async function getLatestAccessRequestByEmail(db: DbClient, email: string) {
 async function getPendingRecoveryRequestForSubject(
   db: DbClient,
   email: string,
+  provider: PortalIdentityProvider,
   subject: string
 ) {
   return db.query.accessRequests.findFirst({
@@ -68,7 +74,7 @@ async function getPendingRecoveryRequestForSubject(
     where: and(
       eq(accessRequests.email, email),
       eq(accessRequests.requestKind, "identity_recovery"),
-      eq(accessRequests.requestedIdentitySubject, subject),
+      buildRequestedIdentityProviderSubjectMatch(provider, subject),
       eq(accessRequests.status, "pending")
     )
   });
@@ -77,6 +83,7 @@ async function getPendingRecoveryRequestForSubject(
 async function getLatestRecoveryRequestForSubject(
   db: DbClient,
   email: string,
+  provider: PortalIdentityProvider,
   subject: string
 ) {
   return db.query.accessRequests.findFirst({
@@ -84,7 +91,7 @@ async function getLatestRecoveryRequestForSubject(
     where: and(
       eq(accessRequests.email, email),
       eq(accessRequests.requestKind, "identity_recovery"),
-      eq(accessRequests.requestedIdentitySubject, subject)
+      buildRequestedIdentityProviderSubjectMatch(provider, subject)
     )
   });
 }
@@ -94,12 +101,21 @@ export async function resolveAccessRbacContext(
   identity: CloudflareAccessIdentity
 ): Promise<AccessRbacContext> {
   const normalizedIdentityEmail = normalizeOptionalEmail(identity.email);
-  const linkedIdentity = await db.query.userIdentities.findFirst({
-    where: eq(userIdentities.providerSubject, identity.subject),
-    with: {
-      user: true
-    }
-  });
+  const linkedIdentity = identity.provider
+    ? filterUserIdentityProviderSubjectMatch(
+        await db.query.userIdentities.findFirst({
+          where: buildUserIdentityProviderSubjectMatch(
+            identity.provider,
+            identity.subject
+          ),
+          with: {
+            user: true
+          }
+        }),
+        identity.provider,
+        identity.subject
+      )
+    : null;
 
   if (linkedIdentity) {
     const roles = await getActiveRoles(db, linkedIdentity.user.id);
@@ -168,11 +184,14 @@ export async function resolveAccessRbacContext(
   const latestRequest = await getLatestAccessRequestByEmail(db, normalizedIdentityEmail);
 
   if (matchingUser && activeMatchingUserRoles.length > 0) {
-    const pendingRecoveryRequest = await getPendingRecoveryRequestForSubject(
-      db,
-      normalizedIdentityEmail,
-      identity.subject
-    );
+    const pendingRecoveryRequest = identity.provider
+      ? await getPendingRecoveryRequestForSubject(
+          db,
+          normalizedIdentityEmail,
+          identity.provider,
+          identity.subject
+        )
+      : null;
 
     if (pendingRecoveryRequest) {
       return {
@@ -184,11 +203,14 @@ export async function resolveAccessRbacContext(
       };
     }
 
-    const latestRecoveryRequest = await getLatestRecoveryRequestForSubject(
-      db,
-      normalizedIdentityEmail,
-      identity.subject
-    );
+    const latestRecoveryRequest = identity.provider
+      ? await getLatestRecoveryRequestForSubject(
+          db,
+          normalizedIdentityEmail,
+          identity.provider,
+          identity.subject
+        )
+      : null;
 
     if (
       latestRecoveryRequest &&

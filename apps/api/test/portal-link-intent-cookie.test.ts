@@ -45,6 +45,8 @@ test("POST /portal/profile/link-intents issues a Strict PortalLinkIntent cookie 
     query: {
       userIdentities: {
         findFirst: async () => ({
+          provider: "cloudflare_google",
+          providerSubject: "subject-1",
           user: {
             id: "user-1",
             identities: [

@@ -15,6 +15,20 @@ type AuthEntryProps = {
   redirectPath: string;
 };
 
+type AuthEntrySessionCheckPayload = {
+  access: {
+    reason?:
+      | "access_request_required"
+      | "identity_recovery_required"
+      | "rejected_or_withdrawn"
+      | "unknown_identity";
+    status: "approved" | "pending" | "denied";
+  };
+  identity: {
+    provider: "cloudflare_one_time_pin" | "cloudflare_github" | "cloudflare_google" | null;
+  } | null;
+};
+
 const signInChecks = [
   "We match this provider to your existing ParetoProof account whenever possible.",
   "If your account still needs approval, we will let you know clearly before portal entry.",
@@ -42,8 +56,25 @@ export function buildAuthEntrySessionCheckRequestInit(signal: AbortSignal): Requ
   };
 }
 
-export function resolveAuthEntrySessionCheckAction(response: Pick<Response, "ok" | "status" | "type">) {
+export function shouldStayOnAuthEntryForProviderlessRecovery(
+  payload: AuthEntrySessionCheckPayload | null
+) {
+  return (
+    payload?.access.status === "denied" &&
+    payload.access.reason === "identity_recovery_required" &&
+    payload.identity?.provider === null
+  );
+}
+
+export function resolveAuthEntrySessionCheckAction(
+  response: Pick<Response, "ok" | "status" | "type">,
+  payload: AuthEntrySessionCheckPayload | null = null
+) {
   if (response.ok) {
+    if (shouldStayOnAuthEntryForProviderlessRecovery(payload)) {
+      return "stay_on_auth_entry";
+    }
+
     return "redirect_portal";
   }
 
@@ -83,7 +114,9 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
           `${apiBaseUrl}/portal/me`,
           buildAuthEntrySessionCheckRequestInit(controller.signal)
         );
-        const action = resolveAuthEntrySessionCheckAction(response);
+        const payload =
+          response.ok ? ((await response.json()) as AuthEntrySessionCheckPayload) : null;
+        const action = resolveAuthEntrySessionCheckAction(response, payload);
 
         if (action === "redirect_portal") {
           window.location.replace(portalUrl);

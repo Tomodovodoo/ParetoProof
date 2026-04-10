@@ -1,9 +1,11 @@
 import postgres from "postgres";
-
-type CloudflareAccessUser = {
-  email: string;
-  uid: string;
-};
+import {
+  selectBootstrapOwnerAccessUser,
+  parseBootstrapOwnerIdentityProvider,
+  type BootstrapOwnerIdentityProvider,
+  type CloudflareAccessUserCandidate,
+  type CloudflareLastSeenIdentity
+} from "../src/lib/owner-identity-provider.js";
 
 type BootstrapUserRow = {
   id: string;
@@ -11,6 +13,7 @@ type BootstrapUserRow = {
 
 type ExistingIdentityRow = {
   id: string;
+  provider: BootstrapOwnerIdentityProvider | "cloudflare_one_time_pin";
   user_id: string;
 };
 
@@ -40,6 +43,10 @@ function getOwnerEmail() {
   }
 
   return email;
+}
+
+function getOwnerIdentityProvider() {
+  return parseBootstrapOwnerIdentityProvider(process.env.OWNER_IDENTITY_PROVIDER);
 }
 
 function getCloudflareHeaders(): Record<string, string> {
@@ -76,7 +83,7 @@ async function readCloudflareAccessUser(ownerEmail: string) {
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/access/users`
   );
   requestUrl.searchParams.set("email", ownerEmail);
-  requestUrl.searchParams.set("per_page", "1");
+  requestUrl.searchParams.set("per_page", "50");
 
   const response = await fetch(
     requestUrl,
@@ -92,7 +99,7 @@ async function readCloudflareAccessUser(ownerEmail: string) {
   }
 
   const payload = (await response.json()) as {
-    result?: CloudflareAccessUser[];
+    result?: CloudflareAccessUserCandidate[];
     success?: boolean;
   };
 
@@ -100,22 +107,72 @@ async function readCloudflareAccessUser(ownerEmail: string) {
     throw new Error("Cloudflare Access users response was not successful.");
   }
 
-  const matchingUser = payload.result.find(
-    ({ email }) => email.toLowerCase() === ownerEmail
-  );
+  return payload.result;
+}
 
-  if (!matchingUser) {
+async function readCloudflareAccessLastSeenIdentity(userId: string) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+
+  if (!accountId) {
     throw new Error(
-      `No Cloudflare Access user found for ${ownerEmail}. Sign into the protected portal once before bootstrapping.`
+      "CLOUDFLARE_ACCOUNT_ID is required to resolve the owner Access identity."
     );
   }
 
-  return matchingUser;
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/access/users/${encodeURIComponent(userId)}/last_seen_identity`,
+    {
+      headers: getCloudflareHeaders()
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to read Cloudflare Access last seen identity: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const payload = (await response.json()) as {
+    result?: {
+      idp?: {
+        type?: string;
+      };
+      user_uuid?: string;
+    };
+    success?: boolean;
+  };
+
+  if (!payload.success || !payload.result) {
+    throw new Error("Cloudflare Access last seen identity response was not successful.");
+  }
+
+  return {
+    idpType: payload.result.idp?.type ?? null,
+    userUuid: payload.result.user_uuid ?? null
+  } satisfies CloudflareLastSeenIdentity;
 }
 
 async function main() {
   const ownerEmail = getOwnerEmail();
-  const ownerAccessUser = await readCloudflareAccessUser(ownerEmail);
+  const ownerIdentityProvider = getOwnerIdentityProvider();
+  const ownerAccessUsers = await readCloudflareAccessUser(ownerEmail);
+  const lastSeenIdentityByUserId = new Map<string, CloudflareLastSeenIdentity>();
+
+  await Promise.all(
+    ownerAccessUsers.map(async (candidate) => {
+      lastSeenIdentityByUserId.set(
+        candidate.id,
+        await readCloudflareAccessLastSeenIdentity(candidate.id)
+      );
+    })
+  );
+
+  const ownerAccessUser = selectBootstrapOwnerAccessUser(
+    ownerAccessUsers,
+    ownerEmail,
+    ownerIdentityProvider,
+    lastSeenIdentityByUserId
+  );
   const sql = postgres(getDatabaseUrl(), {
     max: 1,
     prepare: false
@@ -139,9 +196,18 @@ async function main() {
 
       // The Access users API returns the stable user uid that the portal JWT subject resolves to for the current IdP.
       const [existingIdentity] = await tx<Array<ExistingIdentityRow>>`
-        select id, user_id
+        select id, provider, user_id
         from public.user_identities
-        where provider_subject = ${ownerAccessUser.uid}
+        where provider = ${ownerIdentityProvider}
+          and provider_subject = ${ownerAccessUser.uid}
+        limit 1
+      `;
+
+      const [legacyOtpIdentity] = await tx<Array<ExistingIdentityRow>>`
+        select id, provider, user_id
+        from public.user_identities
+        where provider = ${"cloudflare_one_time_pin"}
+          and provider_subject = ${ownerAccessUser.uid}
         limit 1
       `;
 
@@ -151,7 +217,28 @@ async function main() {
         );
       }
 
-      if (!existingIdentity) {
+      if (legacyOtpIdentity && legacyOtpIdentity.user_id !== user.id) {
+        throw new Error(
+          `Legacy Cloudflare Access subject ${ownerAccessUser.uid} is already linked to a different user.`
+        );
+      }
+
+      if (existingIdentity) {
+        await tx`
+          update public.user_identities
+          set provider_email = ${ownerEmail},
+              last_seen_at = now()
+          where id = ${existingIdentity.id}
+        `;
+      } else if (legacyOtpIdentity) {
+        await tx`
+          update public.user_identities
+          set provider = ${ownerIdentityProvider},
+              provider_email = ${ownerEmail},
+              last_seen_at = now()
+          where id = ${legacyOtpIdentity.id}
+        `;
+      } else {
         await tx`
           insert into public.user_identities (
             user_id,
@@ -161,17 +248,10 @@ async function main() {
           )
           values (
             ${user.id},
-            ${"cloudflare_one_time_pin"},
+            ${ownerIdentityProvider},
             ${ownerAccessUser.uid},
             ${ownerEmail}
           )
-        `;
-      } else {
-        await tx`
-          update public.user_identities
-          set provider_email = ${ownerEmail},
-              last_seen_at = now()
-          where id = ${existingIdentity.id}
         `;
       }
 
@@ -220,6 +300,7 @@ async function main() {
             ${"critical"},
             ${user.id},
             ${JSON.stringify({
+              provider: ownerIdentityProvider,
               providerSubject: ownerAccessUser.uid,
               targetEmail: ownerEmail,
               targetUserId: user.id

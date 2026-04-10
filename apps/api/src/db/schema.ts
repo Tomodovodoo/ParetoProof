@@ -219,6 +219,7 @@ export const userIdentities = pgTable(
   },
   (table) => ({
     providerSubjectUnique: uniqueIndex("user_identities_provider_subject_unique").on(
+      table.provider,
       table.providerSubject
     ),
     idUserUnique: uniqueIndex("user_identities_id_user_id_unique").on(
@@ -285,6 +286,7 @@ export const accessRequests = pgTable(
   (table) => ({
     emailIndex: index("access_requests_email_idx").on(table.email),
     requestedIdentitySubjectIndex: index("access_requests_requested_identity_subject_idx").on(
+      table.requestedIdentityProvider,
       table.requestedIdentitySubject
     ),
     statusIndex: index("access_requests_status_idx").on(table.status),
