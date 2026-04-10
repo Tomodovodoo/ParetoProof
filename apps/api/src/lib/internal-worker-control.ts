@@ -711,6 +711,96 @@ function assertArtifactSelection(
   }
 }
 
+function assertArtifactsReferenceableAtTerminalSubmission(
+  artifactRows: StoredArtifactRow[],
+  path: string
+) {
+  const unsupportedArtifact = artifactRows.find(
+    (artifactRow) =>
+      artifactRow.lifecycleState !== "registered" &&
+      artifactRow.lifecycleState !== "available" &&
+      artifactRow.lifecycleState !== "missing"
+  );
+
+  if (!unsupportedArtifact) {
+    return;
+  }
+
+  throw createConflictError(
+    "worker_artifact_not_ready",
+    `Artifact ${unsupportedArtifact.relativePath} is in lifecycle state ${unsupportedArtifact.lifecycleState} and cannot be referenced from a terminal submission.`,
+    path
+  );
+}
+
+function assertFailureEvidenceArtifactRefs(
+  request: WorkerTerminalFailureRequest,
+  artifactRows: StoredArtifactRow[],
+  lease: LeaseStateRow
+) {
+  const allowedSyntheticPreBundleFailureCodes: ReadonlySet<
+    WorkerTerminalFailureRequest["failure"]["failureCode"]
+  > = new Set([
+    "benchmark_input_digest_mismatch",
+    "benchmark_input_missing",
+    "prompt_package_missing",
+    "run_configuration_invalid",
+    "provider_unsupported_request",
+    "provider_auth_error",
+    "tool_permission_violation",
+    "provider_timeout",
+    "provider_malformed_response",
+    "harness_crashed"
+  ]);
+  const effectiveArtifactManifestDigest =
+    request.artifactManifestDigest ?? lease.artifactManifestDigest;
+  const effectiveBundleDigest = request.bundleDigest ?? lease.bundleDigest;
+  const effectiveCandidateDigest = request.candidateDigest ?? lease.candidateDigest;
+  const effectiveVerifierVerdict = request.verifierVerdict ?? lease.verifierVerdict;
+  const effectiveVerdictDigest = request.verdictDigest ?? lease.verdictDigest;
+  const allowsSyntheticPreBundleFailureRef =
+    artifactRows.length === 0 &&
+    effectiveArtifactManifestDigest === null &&
+    effectiveBundleDigest === null &&
+    effectiveCandidateDigest === null &&
+    effectiveVerifierVerdict === null &&
+    effectiveVerdictDigest === null &&
+    allowedSyntheticPreBundleFailureCodes.has(request.failure.failureCode);
+  const selectedArtifactPaths = new Set(
+    artifactRows.map((artifactRow) => normalizeRelativePath(artifactRow.relativePath))
+  );
+  const allowedSyntheticRefs = allowsSyntheticPreBundleFailureRef
+    ? new Set(["worker-control/pre-bundle-failure"])
+    : new Set<string>();
+
+  const assertRefs = (artifactRefs: string[], path: string) => {
+    const invalidArtifactRef = artifactRefs.find((artifactRef) => {
+      const normalizedArtifactRef = normalizeRelativePath(artifactRef);
+      return (
+        !selectedArtifactPaths.has(normalizedArtifactRef) &&
+        !allowedSyntheticRefs.has(normalizedArtifactRef)
+      );
+    });
+
+    if (invalidArtifactRef) {
+      throw createValidationError(
+        "worker_failure_evidence_reference_invalid",
+        `${path} must reference selected artifact relative paths for the same terminal submission.`,
+        path
+      );
+    }
+  };
+
+  assertRefs(request.failure.evidenceArtifactRefs, "failure.evidenceArtifactRefs");
+
+  if (request.verifierVerdict?.primaryFailure) {
+    assertRefs(
+      request.verifierVerdict.primaryFailure.evidenceArtifactRefs,
+      "verifierVerdict.primaryFailure.evidenceArtifactRefs"
+    );
+  }
+}
+
 async function loadStoredAttemptEvent(
   db: ReadExecutor,
   attemptRowId: string,
@@ -932,6 +1022,8 @@ function isWorkerAttemptEventDuplicateError(error: unknown) {
 
 export const internalWorkerControlTestUtils = {
   assertArtifactRowsMatchManifest,
+  assertArtifactsReferenceableAtTerminalSubmission,
+  assertFailureEvidenceArtifactRefs,
   assertFailurePayload,
   assertResultPayload
 };
@@ -1526,6 +1618,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           request.artifactManifestDigest,
           "artifactIds"
         );
+        assertArtifactsReferenceableAtTerminalSubmission(artifactRows, "artifactIds");
 
         const completedAt = new Date(request.completedAt);
 
@@ -1633,6 +1726,8 @@ export function createInternalWorkerControlService(db: DbClient) {
           request.artifactManifestDigest,
           "artifactIds"
         );
+        assertArtifactsReferenceableAtTerminalSubmission(artifactRows, "artifactIds");
+        assertFailureEvidenceArtifactRefs(request, artifactRows, lease);
 
         const verdictClass = selectFailureVerdictClass(request);
         const completedAt = new Date(request.failedAt);

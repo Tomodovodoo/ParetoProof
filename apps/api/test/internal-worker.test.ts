@@ -161,7 +161,7 @@ function buildFailureRequest(): WorkerTerminalFailureRequest {
     candidateDigest: "f".repeat(64),
     failedAt: "2026-03-13T15:06:00.000Z",
     failure: {
-      evidenceArtifactRefs: ["artifact-1"],
+      evidenceArtifactRefs: ["candidate/Candidate.lean"],
       failureCode: "compile_failed",
       failureFamily: "compile",
       phase: "compile",
@@ -185,7 +185,7 @@ function buildFailureRequest(): WorkerTerminalFailureRequest {
       diagnosticGate: "failed",
       laneId: "problem9-default",
       primaryFailure: {
-        evidenceArtifactRefs: ["artifact-1"],
+        evidenceArtifactRefs: ["candidate/Candidate.lean"],
         failureCode: "compile_failed",
         failureFamily: "compile",
         phase: "compile",
@@ -245,6 +245,26 @@ function buildLeaseStateRow(overrides: Partial<Record<string, unknown>> = {}) {
     runState: "running",
     verifierVerdict: null,
     verdictDigest: null,
+    ...overrides
+  };
+}
+
+function buildStoredArtifactRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactClassId: "candidate_source",
+    artifactManifestDigest: "d".repeat(64),
+    bucketName: "paretoproof-dev-artifacts",
+    byteSize: 128,
+    contentEncoding: null,
+    id: "artifact-1",
+    lifecycleState: "registered",
+    mediaType: "text/plain",
+    objectKey: "runs/run-1/artifacts/attempt-1/candidate/Candidate.lean",
+    prefixFamily: "run_artifacts",
+    relativePath: "candidate/Candidate.lean",
+    requiredForIngest: true,
+    sha256: "f".repeat(64),
+    storageProvider: "cloudflare_r2",
     ...overrides
   };
 }
@@ -767,6 +787,683 @@ test("artifact manifest validation rejects digest drift when reusing an existing
     (error: unknown) =>
       error instanceof InternalWorkerControlError &&
       error.code === "worker_artifact_manifest_conflict"
+  );
+});
+
+test("terminal artifact reference validation rejects quarantined artifacts", () => {
+  assert.throws(
+    () =>
+      internalWorkerControlTestUtils.assertArtifactsReferenceableAtTerminalSubmission(
+        [buildStoredArtifactRow({ lifecycleState: "quarantined" })],
+        "artifactIds"
+      ),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError && error.code === "worker_artifact_not_ready"
+  );
+});
+
+test("terminal artifact reference validation rejects deleted artifacts", () => {
+  assert.throws(
+    () =>
+      internalWorkerControlTestUtils.assertArtifactsReferenceableAtTerminalSubmission(
+        [buildStoredArtifactRow({ lifecycleState: "deleted" })],
+        "artifactIds"
+      ),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError && error.code === "worker_artifact_not_ready"
+  );
+});
+
+test("terminal artifact reference validation accepts missing artifacts", () => {
+  internalWorkerControlTestUtils.assertArtifactsReferenceableAtTerminalSubmission(
+    [buildStoredArtifactRow({ lifecycleState: "missing" })],
+    "artifactIds"
+  );
+});
+
+test("submitResult accepts registered and missing artifacts without mutating artifact lifecycle", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerResultMessageResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([
+                    buildStoredArtifactRow({
+                      id: "artifact-1",
+                      lifecycleState: "registered"
+                    }),
+                    buildStoredArtifactRow({
+                      id: "artifact-2",
+                      lifecycleState: "missing",
+                      objectKey: "runs/run-1/logs/attempt-1/verification/compiler-output.txt",
+                      relativePath: "verification/compiler-output.txt"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const request = {
+    ...buildResultRequest(),
+    artifactIds: ["artifact-1", "artifact-2"]
+  };
+
+  const response = await control.submitResult(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "succeeded",
+    jobState: "completed",
+    runState: "succeeded"
+  });
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 4);
+  assert.equal(updateCalls[0]!.values.state, "succeeded");
+  assert.equal(updateCalls[1]!.values.state, "completed");
+  assert.equal(updateCalls[2]!.values.state, "succeeded");
+  assert.equal(updateCalls[3]!.values.revokedAt instanceof Date, true);
+  assert.equal(
+    updateCalls.some((call) => Object.hasOwn(call.values, "lifecycleState")),
+    false
+  );
+});
+
+test("submitFailure accepts registered and missing artifacts without mutating artifact lifecycle", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([
+                    buildStoredArtifactRow({
+                      id: "artifact-1",
+                      lifecycleState: "registered"
+                    }),
+                    buildStoredArtifactRow({
+                      id: "artifact-2",
+                      lifecycleState: "missing",
+                      objectKey: "runs/run-1/logs/attempt-1/verification/compiler-output.txt",
+                      relativePath: "verification/compiler-output.txt"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const baselineRequest = buildFailureRequest();
+  const request = {
+    ...baselineRequest,
+    artifactIds: ["artifact-1", "artifact-2"],
+    failure: {
+      ...baselineRequest.failure,
+      evidenceArtifactRefs: ["candidate/Candidate.lean"]
+    },
+    verifierVerdict: {
+      ...baselineRequest.verifierVerdict!,
+      primaryFailure: {
+        ...baselineRequest.verifierVerdict!.primaryFailure!,
+        evidenceArtifactRefs: ["candidate/Candidate.lean"]
+      }
+    }
+  };
+
+  const response = await control.submitFailure(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "failed",
+    jobState: "failed",
+    runState: "failed"
+  });
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 4);
+  assert.equal(updateCalls[0]!.values.state, "failed");
+  assert.equal(updateCalls[1]!.values.state, "failed");
+  assert.equal(updateCalls[2]!.values.state, "failed");
+  assert.equal(updateCalls[3]!.values.revokedAt instanceof Date, true);
+  assert.equal(
+    updateCalls.some((call) => Object.hasOwn(call.values, "lifecycleState")),
+    false
+  );
+});
+
+test("submitFailure rejects failure evidence refs outside selected artifact relative paths", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([buildStoredArtifactRow()]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("invalid failure evidence refs should reject before any updates");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = buildFailureRequest();
+  request.failure.evidenceArtifactRefs = ["verification/compiler-output.txt"];
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_failure_evidence_reference_invalid"
+  );
+});
+
+test("submitFailure rejects verifier primary failure evidence refs outside selected artifact relative paths", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([buildStoredArtifactRow()]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error(
+            "invalid verifier primary failure evidence refs should reject before any updates"
+          );
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = buildFailureRequest();
+  request.verifierVerdict = {
+    ...request.verifierVerdict!,
+    primaryFailure: {
+      ...request.verifierVerdict!.primaryFailure!,
+      evidenceArtifactRefs: ["verification/compiler-output.txt"]
+    }
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_failure_evidence_reference_invalid"
+  );
+});
+
+test("submitFailure accepts pre-bundle harness failures with omitted artifactIds", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([buildLeaseStateRow()]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const { artifactIds: _artifactIds, ...baseRequest } = buildFailureRequest();
+  const request: WorkerTerminalFailureRequest = {
+    ...baseRequest,
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      ...buildFailureRequest().failure,
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "provider_auth_error",
+      failureFamily: "provider",
+      phase: "generate",
+      summary: "provider auth failed for hosted attempt"
+    },
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  const response = await control.submitFailure(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "failed",
+    jobState: "failed",
+    runState: "failed"
+  });
+  assert.equal(selectCount, 1);
+  assert.equal(updateCalls.length, 4);
+  assert.equal(updateCalls[0]!.values.state, "failed");
+  assert.equal(updateCalls[1]!.values.state, "failed");
+  assert.equal(updateCalls[2]!.values.state, "failed");
+  assert.equal(updateCalls[3]!.values.revokedAt instanceof Date, true);
+  assert.equal(
+    updateCalls.some((call) => Object.hasOwn(call.values, "lifecycleState")),
+    false
+  );
+});
+
+test("submitFailure rejects synthetic pre-bundle refs for non-pre-bundle failure codes", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([buildLeaseStateRow()]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error(
+            "non-pre-bundle failure codes should reject synthetic refs before any updates"
+          );
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const { artifactIds: _artifactIds, ...baseRequest } = buildFailureRequest();
+  const request: WorkerTerminalFailureRequest = {
+    ...baseRequest,
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      ...buildFailureRequest().failure,
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"]
+    },
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_failure_evidence_reference_invalid"
+  );
+});
+
+test("submitFailure rejects synthetic pre-bundle refs when persisted lease state is post-bundle", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        artifactManifestDigest: "a".repeat(64)
+                      })
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error(
+            "synthetic pre-bundle refs with persisted bundle state should reject before any updates"
+          );
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const { artifactIds: _artifactIds, ...baseRequest } = buildFailureRequest();
+  const request: WorkerTerminalFailureRequest = {
+    ...baseRequest,
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      ...buildFailureRequest().failure,
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "provider_auth_error",
+      failureFamily: "provider",
+      phase: "generate",
+      summary: "provider auth failed for hosted attempt"
+    },
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_failure_evidence_reference_invalid"
+  );
+});
+
+test("submitResult rejects quarantined artifacts at terminal submission", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerResultMessageResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([
+                    buildStoredArtifactRow({
+                      lifecycleState: "quarantined"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("quarantined artifacts should reject before any terminal updates");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.submitResult(buildResultRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError && error.code === "worker_artifact_not_ready"
+  );
+});
+
+test("submitFailure rejects deleted artifacts at terminal submission", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([
+                    buildStoredArtifactRow({
+                      lifecycleState: "deleted"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("deleted artifacts should reject before any terminal updates");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.submitFailure(buildFailureRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError && error.code === "worker_artifact_not_ready"
   );
 });
 
@@ -1447,7 +2144,16 @@ test("submitFailure rejects terminal updates whose lease is revoked after the in
   } as never);
   const request = {
     ...buildFailureRequest(),
-    artifactIds: []
+    artifactIds: [],
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      ...buildFailureRequest().failure,
+      evidenceArtifactRefs: []
+    },
+    verifierVerdict: null,
+    verdictDigest: null
   };
 
   await assert.rejects(

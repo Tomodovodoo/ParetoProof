@@ -598,7 +598,7 @@ async function processClaimedJob(
         failedAt: dependencies.now().toISOString(),
         failure:
           bundleSubmission.verifierVerdict.primaryFailure ??
-          buildStaticFailure({
+          buildSelectedArtifactFallbackFailure(manifestResponse.artifacts, {
             summary: "Worker produced a failing verdict without a canonical primaryFailure payload.",
             failureCode: "proof_policy_failed",
             phase: "verify"
@@ -1102,6 +1102,23 @@ function classifyHostedAttemptError(error: unknown): WorkerFailureClassification
     failureCode: "harness_crashed",
     phase: "finalize"
   });
+}
+
+function buildSelectedArtifactFallbackFailure(
+  artifacts: Pick<WorkerArtifactManifestResponse["artifacts"][number], "artifactRole" | "relativePath">[],
+  options: {
+    failureCode: WorkerFailureClassification["failureCode"];
+    phase: WorkerExecutionPhase;
+    summary: string;
+  }
+): WorkerFailureClassification {
+  const preferredArtifact =
+    artifacts.find((artifact) => artifact.artifactRole === "verdict_record") ?? artifacts[0];
+
+  return {
+    ...buildStaticFailure(options),
+    evidenceArtifactRefs: [preferredArtifact?.relativePath ?? "worker-control/pre-bundle-failure"]
+  };
 }
 
 function buildStaticFailure(options: {

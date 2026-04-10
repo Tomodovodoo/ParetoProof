@@ -966,6 +966,14 @@ function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
 }
 
 async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArtifactManifestEntry[]) {
+  await writeBundleOutputsWithVerdict(outputRoot, artifactEntries);
+}
+
+async function writeBundleOutputsWithVerdict(
+  outputRoot: string,
+  artifactEntries: WorkerArtifactManifestEntry[],
+  verdictOverrides: Record<string, unknown> = {}
+) {
   await mkdir(path.join(outputRoot, "verification"), { recursive: true });
   await writeFile(
     path.join(outputRoot, "artifact-manifest.json"),
@@ -1004,7 +1012,8 @@ async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArt
         result: "pass",
         semanticEquality: "matched",
         surfaceEquality: "matched",
-        verdictSchemaVersion: "problem9-verdict.v1"
+        verdictSchemaVersion: "problem9-verdict.v1",
+        ...verdictOverrides
       },
       null,
       2
@@ -1012,6 +1021,163 @@ async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArt
     "utf8"
   );
 }
+
+test("runWorkerClaimLoop uses selected artifact refs when a failing verdict omits primaryFailure", async () => {
+  const tempRoot = await mkdtemp(
+    path.join(os.tmpdir(), "paretoproof-worker-claim-fail-without-primary-failure-")
+  );
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    const artifactEntries = buildArtifactEntries();
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 0,
+            jobToken: "job-token-2"
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 1
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            artifactManifestDigest,
+            artifacts: artifactEntries.map((artifact, index) => ({
+              artifactId: `artifact-${index + 1}`,
+              artifactRole: artifact.artifactRole,
+              relativePath: artifact.relativePath
+            }))
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/artifacts`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 2
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 3
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/failure`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async (options) => {
+          await writeBundleOutputsWithVerdict(options.outputRoot, artifactEntries, {
+            diagnosticGate: "failed",
+            result: "fail"
+          });
+
+          return {
+            artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            authMode: "machine_api_key",
+            bundleDigest,
+            compileRepairCount: 0,
+            outputRoot: options.outputRoot,
+            promptPackageDigest: promptDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 2,
+            result: "fail",
+            runConfigDigest: "2".repeat(64),
+            runId: workerJob.runId,
+            stopReason: "verifier_failed",
+            verifierRepairCount: 0,
+            verdictDigest
+          };
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/failure`);
+    assert.deepEqual(failureBody.artifactIds, ["artifact-1", "artifact-2"]);
+    assert.equal(failureBody.failure.failureCode, "proof_policy_failed");
+    assert.deepEqual(failureBody.failure.evidenceArtifactRefs, ["verification/verdict.json"]);
+    assert.equal(failureBody.bundleDigest, bundleDigest);
+    assert.notEqual(failureBody.verifierVerdict, null);
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
 
 function createFetchMock(script: ApiMockResponse[], calls: ApiCall[]) {
   return async (input: URL | RequestInfo, init?: RequestInit) => {
