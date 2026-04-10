@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import Fastify from "fastify";
 import type {
   WorkerArtifactManifestRequest,
@@ -229,6 +231,24 @@ function buildJobAuthContext(scopes: WorkerJobTokenScope[] = [
   };
 }
 
+function buildLeaseStateRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactManifestDigest: null,
+    attemptState: "active",
+    bundleDigest: null,
+    candidateDigest: null,
+    heartbeatTimeoutSeconds: 180,
+    jobState: "running",
+    lastEventSequence: 3,
+    leaseExpiresAt: new Date("2099-03-13T15:03:00.000Z"),
+    revokedAt: null,
+    runState: "running",
+    verifierVerdict: null,
+    verdictDigest: null,
+    ...overrides
+  };
+}
+
 function createScopeError(scope: WorkerJobTokenScope) {
   return new InternalWorkerControlError({
     code: "worker_job_token_scope_missing",
@@ -304,6 +324,142 @@ test("POST /internal/worker/claims returns an active lease when work is availabl
   assert.equal(response.statusCode, 200);
   assert.equal(receivedRequest?.workerId, "worker-1");
   assert.equal(response.json().workerJob?.jobId, "job-1");
+});
+
+test("POST /internal/worker/claims reclaims stale unstarted work without queued rewinds", async (t) => {
+  const app = Fastify();
+  const updateCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      attemptId: "attempt-1",
+                      attemptRowId: "attempt-row-1",
+                      benchmarkItemId: "Problem9",
+                      benchmarkPackageDigest: "a".repeat(64),
+                      benchmarkPackageId: "firstproof/Problem9",
+                      benchmarkPackageVersion: "2026.03.13",
+                      harnessRevision: "worker-harness.v1",
+                      jobId: "job-1",
+                      jobRowId: "job-row-1",
+                      laneId: "lean422_exact",
+                      modelConfigId: "openai/gpt-5",
+                      modelSnapshotId: "openai/gpt-5.2026-03-13",
+                      promptPackageDigest: "b".repeat(64),
+                      promptProtocolVersion: "problem9-prompt-protocol.v1",
+                      providerFamily: "openai",
+                      runId: "run-1",
+                      runKind: "single_run",
+                      runMode: "bounded_agentic_attempt",
+                      runRowId: "run-row-1",
+                      runState: "queued",
+                      toolProfile: "workspace_edit_limited"
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return {
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-2" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerInternalWorkerRoutes(app, fakeDb as never, buildRuntimeEnv());
+
+  const response = await app.inject({
+    method: "POST",
+    headers: {
+      authorization: "Bearer worker-bootstrap-token"
+    },
+    payload: buildClaimRequest(),
+    url: "/internal/worker/claims"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().leaseStatus, "active");
+  assert.equal(response.json().workerJob?.jobId, "job-1");
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 3);
+  assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].values.state, "claimed");
+  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(
+    updateCalls.some((call) => call.values.state === "queued"),
+    false
+  );
 });
 
 test("POST /internal/worker/jobs/:jobId/heartbeat returns continue responses for active leases", async (t) => {
@@ -614,7 +770,7 @@ test("artifact manifest validation rejects digest drift when reusing an existing
   );
 });
 
-test("claim requeues stale unstarted leases before assigning work", async () => {
+test("claim fences stale unstarted leases and reclaims work without queued rewinds", async () => {
   const updateCalls: Array<{
     target: unknown;
     values: Record<string, unknown>;
@@ -635,18 +791,6 @@ test("claim requeues stale unstarted leases before assigning work", async () => 
                   },
                   where() {
                     return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
-                  }
-                };
-              }
-            };
-          }
-
-          if (selectCount === 2) {
-            return {
-              from() {
-                return {
-                  where() {
-                    return Promise.resolve([]);
                   }
                 };
               }
@@ -734,16 +878,18 @@ test("claim requeues stale unstarted leases before assigning work", async () => 
 
   assert.equal(response.leaseStatus, "active");
   assert.equal(response.workerJob?.jobId, "job-1");
-  assert.equal(selectCount, 3);
-  assert.equal(updateCalls.length, 5);
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 3);
   assert.equal(updateCalls[0].values.revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].values.state, "queued");
-  assert.equal(updateCalls[2].values.state, "queued");
-  assert.equal(updateCalls[3].values.state, "claimed");
-  assert.equal(updateCalls[4].values.state, "running");
+  assert.equal(updateCalls[1].values.state, "claimed");
+  assert.equal(updateCalls[2].values.state, "running");
+  assert.equal(
+    updateCalls.some((call) => call.values.state === "queued"),
+    false
+  );
 });
 
-test("stale-lease recovery does not downgrade a run while another job is still active", async () => {
+test("stale-lease recovery does not rewind durable job or run state", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
   let selectCount = 0;
   const fakeDb = {
@@ -761,18 +907,6 @@ test("stale-lease recovery does not downgrade a run while another job is still a
                   },
                   where() {
                     return Promise.resolve([{ leaseRowId: "lease-row-1" }]);
-                  }
-                };
-              }
-            };
-          }
-
-          if (selectCount === 2) {
-            return {
-              from() {
-                return {
-                  where() {
-                    return Promise.resolve([{ runRowId: "run-row-1" }]);
                   }
                 };
               }
@@ -859,11 +993,471 @@ test("stale-lease recovery does not downgrade a run while another job is still a
   const response = await control.claim(buildClaimRequest());
 
   assert.equal(response.leaseStatus, "active");
-  assert.equal(selectCount, 3);
-  assert.equal(updateCalls.length, 3);
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 2);
   assert.equal(updateCalls[0].revokedAt instanceof Date, true);
-  assert.equal(updateCalls[1].state, "queued");
-  assert.equal(updateCalls[2].state, "claimed");
+  assert.equal(updateCalls[1].state, "claimed");
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+});
+
+test("claim keeps any still-unrevoked lease row blocking candidate selection", async () => {
+  let capturedLeaseJoin: SQL | null = null;
+  let insertCalled = false;
+  let updateCalled = false;
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin(_target: unknown, condition: SQL) {
+                  capturedLeaseJoin = condition;
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          updateCalled = true;
+          throw new Error("claim should stay idle when a prior lease row is still unrevoked");
+        },
+        insert() {
+          insertCalled = true;
+          throw new Error("claim should not insert a new lease while an older row is still unrevoked");
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+  const query = new PgDialect().sqlToQuery(capturedLeaseJoin!);
+
+  assert.equal(response.leaseStatus, "idle");
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalled, false);
+  assert.equal(insertCalled, false);
+  assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
+  assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
+  assert.equal(query.params.length, 0);
+});
+
+test("reportEvent rejects submissions whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerExecutionEventResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+          return {
+            from() {
+              const chain = {
+                innerJoin() {
+                  return chain;
+                },
+                where() {
+                  return chain;
+                },
+                limit() {
+                  return Promise.resolve([buildLeaseStateRow()]);
+                }
+              };
+
+              return chain;
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return Promise.resolve();
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.reportEvent(buildEventRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
+});
+
+test("reportEvent rejects duplicate retries once the lease has been revoked", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerExecutionEventResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        lastEventSequence: 4
+                      })
+                    ]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              const chain = {
+                where() {
+                  return chain;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      createdAt: new Date("2026-03-13T15:00:10.000Z"),
+                      details: buildEventRequest().details,
+                      eventKind: buildEventRequest().eventKind,
+                      phase: buildEventRequest().phase,
+                      recordedAt: new Date(buildEventRequest().recordedAt),
+                      sequence: buildEventRequest().sequence,
+                      summary: buildEventRequest().summary
+                    }
+                  ]);
+                }
+              };
+
+              return chain;
+            }
+          };
+        },
+        insert() {
+          throw new Error("duplicate event retries should not insert a new event row");
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.reportEvent(buildEventRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.ok(selectCount >= 1);
+});
+
+test("submitArtifactManifest rejects submissions whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerArtifactManifestResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values() {
+              return {
+                returning() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildArtifactManifestRequest(),
+    artifacts: []
+  };
+
+  await assert.rejects(
+    () => control.submitArtifactManifest(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.ok(selectCount >= 1);
+});
+
+test("submitResult rejects terminal updates whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerResultMessageResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildResultRequest(),
+    artifactIds: []
+  };
+
+  await assert.rejects(
+    () => control.submitResult(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
+});
+
+test("submitFailure rejects terminal updates whose lease is revoked after the initial read", async () => {
+  let selectCount = 0;
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                const chain = {
+                  innerJoin() {
+                    return chain;
+                  },
+                  where() {
+                    return chain;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+
+                return chain;
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where() {
+                  return {
+                    returning() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request = {
+    ...buildFailureRequest(),
+    artifactIds: []
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_lease_not_active"
+  );
+
+  assert.equal(selectCount, 1);
 });
 
 test("heartbeat rotates the job token while extending the lease", async () => {

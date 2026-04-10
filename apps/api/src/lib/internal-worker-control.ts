@@ -218,9 +218,9 @@ function supportsCurrentProblem9Assignment(request: WorkerClaimRequest) {
   );
 }
 
-function queuedJobWhereClause(): SQL {
+function claimableUnstartedJobWhereClause(): SQL {
   return and(
-    eq(jobs.state, "queued"),
+    inArray(jobs.state, ["queued", "claimed"]),
     eq(attempts.state, "prepared"),
     eq(runs.runKind, "single_run"),
     inArray(runs.authMode, [...problem9HostedAuthModes]),
@@ -230,7 +230,6 @@ function queuedJobWhereClause(): SQL {
 }
 
 async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateClaimRow | null> {
-  const now = new Date();
   const [candidate] = await tx
     .select({
       authMode: runs.authMode,
@@ -263,11 +262,10 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
       workerJobLeases,
       and(
         eq(workerJobLeases.jobId, jobs.id),
-        isNull(workerJobLeases.revokedAt),
-        gt(workerJobLeases.leaseExpiresAt, now)
+        isNull(workerJobLeases.revokedAt)
       )
     )
-    .where(and(queuedJobWhereClause(), isNull(workerJobLeases.id)))
+    .where(and(claimableUnstartedJobWhereClause(), isNull(workerJobLeases.id)))
     .orderBy(asc(jobs.createdAt), asc(attempts.createdAt))
     .limit(1);
 
@@ -305,7 +303,7 @@ function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
 }
 
-async function requeueExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
+async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
   const staleLeases = await tx
     .select({
       leaseRowId: workerJobLeases.id
@@ -343,55 +341,12 @@ async function requeueExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
       )
     )
     .returning({
-      jobRowId: workerJobLeases.jobId
+      leaseRowId: workerJobLeases.id
     });
 
   if (revokedLeases.length === 0) {
     return;
   }
-
-  const revokedJobRowIds = revokedLeases.map((lease) => lease.jobRowId);
-  const requeuedJobs = await tx
-    .update(jobs)
-    .set({
-      state: "queued",
-      updatedAt: now
-    })
-    .where(and(inArray(jobs.id, revokedJobRowIds), eq(jobs.state, "claimed")))
-    .returning({
-      runRowId: jobs.runId
-    });
-
-  if (requeuedJobs.length === 0) {
-    return;
-  }
-
-  const runRowIds = [...new Set(requeuedJobs.map((job) => job.runRowId))];
-  const activeRunRows = await tx
-    .select({
-      runRowId: jobs.runId
-    })
-    .from(jobs)
-    .where(
-      and(
-        inArray(jobs.runId, runRowIds),
-        inArray(jobs.state, ["claimed", "running", "cancel_requested"])
-      )
-    );
-  const activeRunIds = new Set(activeRunRows.map((run) => run.runRowId));
-  const runsToQueue = runRowIds.filter((runRowId) => !activeRunIds.has(runRowId));
-
-  if (runsToQueue.length === 0) {
-    return;
-  }
-
-  await tx
-    .update(runs)
-    .set({
-      state: "queued",
-      updatedAt: now
-    })
-    .where(and(inArray(runs.id, runsToQueue), eq(runs.state, "running")));
 }
 
 function normalizeRelativePath(relativePath: string) {
@@ -548,6 +503,34 @@ async function loadLeaseState(
 
 function ensureLeaseIsActive(leaseState: LeaseStateRow, now: Date) {
   if (leaseState.revokedAt || leaseState.leaseExpiresAt.getTime() <= now.getTime()) {
+    throw createConflictError(
+      "worker_lease_not_active",
+      "The worker lease is no longer active for this submission."
+    );
+  }
+}
+
+async function updateActiveLeaseRow(
+  tx: ReadWriteExecutor,
+  leaseRowId: string,
+  now: Date,
+  values: Partial<typeof workerJobLeases.$inferInsert>
+) {
+  const [lease] = await tx
+    .update(workerJobLeases)
+    .set(values)
+    .where(
+      and(
+        eq(workerJobLeases.id, leaseRowId),
+        isNull(workerJobLeases.revokedAt),
+        gt(workerJobLeases.leaseExpiresAt, now)
+      )
+    )
+    .returning({
+      id: workerJobLeases.id
+    });
+
+  if (!lease) {
     throw createConflictError(
       "worker_lease_not_active",
       "The worker lease is no longer active for this submission."
@@ -1025,7 +1008,7 @@ export function createInternalWorkerControlService(db: DbClient) {
       }
 
       return db.transaction(async (tx) => {
-        await requeueExpiredUnstartedLeases(tx, new Date());
+        await revokeExpiredUnstartedLeases(tx, new Date());
         const candidate = await selectNextClaimCandidate(tx);
 
         if (!candidate) {
@@ -1296,6 +1279,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
 
           if (storedEvent && matchesStoredEvent(request, storedEvent)) {
+            const leaseFenceAt = new Date();
+
+            await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+              updatedAt: leaseFenceAt
+            });
+
             return {
               acceptedAt: storedEvent.createdAt.toISOString(),
               acknowledgedSequence: request.sequence
@@ -1342,6 +1331,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
 
           if (storedEvent && matchesStoredEvent(request, storedEvent)) {
+            const leaseFenceAt = new Date();
+
+            await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+              updatedAt: leaseFenceAt
+            });
+
             return {
               acceptedAt: storedEvent.createdAt.toISOString(),
               acknowledgedSequence: request.sequence
@@ -1355,13 +1350,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           );
         }
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            lastEventSequence: request.sequence,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          lastEventSequence: request.sequence,
+          updatedAt: leaseFenceAt
+        });
 
         await promoteExecutionToRunning(tx, authContext, lease, now);
 
@@ -1476,6 +1470,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(attempts.id, authContext.attemptRowId));
 
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          updatedAt: leaseFenceAt
+        });
+
         await promoteExecutionToRunning(tx, authContext, lease, now);
 
         return {
@@ -1580,13 +1580,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(runs.id, authContext.runRowId));
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            revokedAt: now,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          revokedAt: leaseFenceAt,
+          updatedAt: leaseFenceAt
+        });
 
         return {
           acceptedAt: now.toISOString(),
@@ -1690,13 +1689,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           })
           .where(eq(runs.id, authContext.runRowId));
 
-        await tx
-          .update(workerJobLeases)
-          .set({
-            revokedAt: now,
-            updatedAt: now
-          })
-          .where(eq(workerJobLeases.id, authContext.leaseRowId));
+        const leaseFenceAt = new Date();
+
+        await updateActiveLeaseRow(tx, authContext.leaseRowId, leaseFenceAt, {
+          revokedAt: leaseFenceAt,
+          updatedAt: leaseFenceAt
+        });
 
         return {
           acceptedAt: now.toISOString(),
