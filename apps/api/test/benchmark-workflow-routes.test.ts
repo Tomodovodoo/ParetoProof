@@ -457,6 +457,143 @@ test("POST /portal/admin/repo-sync-records/:id/status accepts explicit null PR l
   assert.equal(insertedAuditEvents[0]?.eventId, "benchmark_workflow.repo_sync_status_updated");
 });
 
+test("POST /portal/admin/repo-sync-records/:id/status allows merged rows to clear PR linkage when superseded", async (t) => {
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const currentRow = buildRepoSyncRecord({
+    mergeCommitSha: "deadbeefcafebabe",
+    status: "merged"
+  });
+  const updatedRow = buildRepoSyncRecord({
+    lastUpdatedByUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    mergeCommitSha: currentRow.mergeCommitSha,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    status: "superseded",
+    updatedAt: new Date("2026-04-02T18:05:00.000Z")
+  });
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (_table: unknown) => {
+          values: (_value: unknown) => Promise<unknown>;
+        };
+        query: {
+          repoSyncRecords: {
+            findFirst: () => Promise<typeof currentRow | null>;
+          };
+        };
+        update: (_table: unknown) => {
+          set: (_value: unknown) => {
+            where: (_value: unknown) => {
+              returning: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        insert(table: unknown) {
+          return {
+            values(value: unknown) {
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+              }
+
+              return Promise.resolve(value);
+            }
+          };
+        },
+        query: {
+          repoSyncRecords: {
+            findFirst: async () => currentRow
+          }
+        },
+        update: () => ({
+          set: () => ({
+            where: () => ({
+              returning: async () => [updatedRow]
+            })
+          })
+        })
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      pullRequestNumber: null,
+      pullRequestUrl: null,
+      status: "superseded"
+    },
+    url: `/portal/admin/repo-sync-records/${currentRow.id}/status`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(
+    benchmarkWorkflowContract.adminRepoSyncRecordDetailResponse.safeParse(response.json()).success,
+    true
+  );
+  assert.equal(response.json().item.mergeCommitSha, currentRow.mergeCommitSha);
+  assert.equal(response.json().item.pullRequestNumber, null);
+  assert.equal(response.json().item.pullRequestUrl, null);
+  assert.equal(response.json().item.status, "superseded");
+  assert.equal(insertedAuditEvents[0]?.eventId, "benchmark_workflow.repo_sync_status_updated");
+});
+
+test("POST /portal/admin/repo-sync-records/:id/status still rejects merged supersede clears that change the merge commit", async (t) => {
+  const currentRow = buildRepoSyncRecord({
+    mergeCommitSha: "deadbeefcafebabe",
+    status: "merged"
+  });
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          repoSyncRecords: {
+            findFirst: () => Promise<typeof currentRow | null>;
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          repoSyncRecords: {
+            findFirst: async () => currentRow
+          }
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      mergeCommitSha: "feedfacecafebeef",
+      pullRequestNumber: null,
+      pullRequestUrl: null,
+      status: "superseded"
+    },
+    url: `/portal/admin/repo-sync-records/${currentRow.id}/status`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "repo_sync_record_invalid_transition");
+  assert.equal(response.json().item.id, currentRow.id);
+});
+
 test("POST /portal/admin/repo-sync-records/:id/status rejects partial PR linkage clears", async (t) => {
   const app = Fastify();
 

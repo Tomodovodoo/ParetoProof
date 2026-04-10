@@ -581,11 +581,20 @@ export function registerBenchmarkWorkflowRoutes(
             };
           }
 
+          const allowsMergedPullRequestLinkClear =
+            seenRow.status === "merged" &&
+            input.status === "superseded" &&
+            mergeCommitSha === seenRow.mergeCommitSha &&
+            input.pullRequestNumber === null &&
+            input.pullRequestUrl === null;
+          const mergedPullRequestLinkChanged =
+            pullRequestNumber !== seenRow.pullRequestNumber ||
+            pullRequestUrl !== seenRow.pullRequestUrl;
+
           if (
             seenRow.status === "merged" &&
             (mergeCommitSha !== seenRow.mergeCommitSha ||
-              pullRequestNumber !== seenRow.pullRequestNumber ||
-              pullRequestUrl !== seenRow.pullRequestUrl)
+              (mergedPullRequestLinkChanged && !allowsMergedPullRequestLinkClear))
           ) {
             return {
               currentRow: seenRow,
