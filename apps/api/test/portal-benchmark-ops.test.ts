@@ -10,10 +10,18 @@ import type {
   PortalRunsListResponse,
   PortalWorkersViewResponse
 } from "@paretoproof/shared";
+import { sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { portalBenchmarkOpsReadModelsContract } from "@paretoproof/shared";
 import type { PortalBenchmarkOpsReadModelService } from "../src/lib/portal-benchmark-ops.ts";
 import { portalBenchmarkOpsReadModelTestUtils } from "../src/lib/portal-benchmark-ops.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
+
+const pgDialect = new PgDialect();
+
+function renderOrderBySql(orderBy: ReadonlyArray<unknown>) {
+  return pgDialect.sqlToQuery(sql.join(orderBy as never[], sql`, `)).sql;
+}
 
 function createRequireAccessStub(roles: Array<"admin" | "collaborator" | "helper">) {
   return (requiredAccess: string) =>
@@ -767,6 +775,72 @@ test("GET /portal/benchmarks/:packageId/export neutralizes whitespace-prefixed s
   assert.match(response.body, /,"'  =SUM\(""a"",""b""\)"$/m);
 });
 
+test("GET /portal/benchmarks/:packageId/export leaves nullable run fields blank in API CSV output", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService({
+        getBenchmarkDataset: async () => ({
+          ...buildBenchmarkDatasetResponse(),
+          attempts: [
+            {
+              attemptId: "attempt-2",
+              completedAt: null,
+              failure: { code: null, family: null, summary: null },
+              jobId: "job-2",
+              runId: "PP-319",
+              startedAt: "2026-03-13T19:58:30.000Z",
+              state: "active",
+              stopReason: null,
+              verdictClass: null,
+              verifierResult: null
+            }
+          ],
+          runs: [
+            {
+              ...buildBenchmarkDatasetResponse().runs[0],
+              completedAt: null,
+              durationMs: null,
+              latestAttemptId: "attempt-2",
+              latestJobId: "job-2",
+              runId: "PP-319",
+              runLifecycleBucket: "active",
+              runState: "running",
+              verdictClass: null
+            }
+          ],
+          summary: {
+            ...buildBenchmarkDatasetResponse().summary,
+            latestCompletedAt: null,
+            verdictCounts: {
+              fail: 0,
+              invalid_result: 0,
+              pass: 0
+            }
+          }
+        })
+      }),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/benchmarks/problem9/export?format=csv"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /PP-319,running,,openai,gpt-oss,2026-03-13T19:58:00.000Z,,,job-2,attempt-2,active,,,/);
+});
+
 test("GET /portal/runs/:runId returns 404 when the run read model is missing", async (t) => {
   const app = Fastify();
 
@@ -913,4 +987,89 @@ test("portal benchmark ops normalization helpers keep canonical lifecycle wordin
     portalBenchmarkOpsReadModelTestUtils.getRunLifecycleBucket("succeeded"),
     "terminal_success"
   );
+});
+
+test("portal benchmark ops timestamp comparator keeps nulls last", () => {
+  const items = [
+    { id: "active-only", latestCompletedAt: null },
+    { id: "recent", latestCompletedAt: "2026-03-13T20:00:00.000Z" },
+    { id: "older", latestCompletedAt: "2026-03-13T19:00:00.000Z" }
+  ];
+
+  items.sort((left, right) =>
+    portalBenchmarkOpsReadModelTestUtils.compareNullableTimestampDescNullsLast(
+      left.latestCompletedAt,
+      right.latestCompletedAt
+    )
+  );
+
+  assert.deepEqual(items.map((item) => item.id), ["recent", "older", "active-only"]);
+});
+
+test("portal benchmark ops benchmark-list comparator keeps nulls last", () => {
+  const items = [
+    { benchmarkPackageId: "active-only", latestCompletedAt: null },
+    { benchmarkPackageId: "completed", latestCompletedAt: "2026-03-13T20:00:00.000Z" }
+  ];
+
+  items.sort((left, right) =>
+    portalBenchmarkOpsReadModelTestUtils.compareBenchmarkListItemLatestCompletedAtDesc(
+      left,
+      right
+    )
+  );
+
+  assert.deepEqual(items.map((item) => item.benchmarkPackageId), [
+    "completed",
+    "active-only"
+  ]);
+});
+
+test("portal benchmark ops benchmark-list comparator ties equal timestamps by package id", () => {
+  const items = [
+    { benchmarkPackageId: "problem9-zeta", latestCompletedAt: null },
+    { benchmarkPackageId: "problem9-alpha", latestCompletedAt: null }
+  ];
+
+  items.sort((left, right) =>
+    portalBenchmarkOpsReadModelTestUtils.compareBenchmarkListItemLatestCompletedAtDesc(
+      left,
+      right
+    )
+  );
+
+  assert.deepEqual(items.map((item) => item.benchmarkPackageId), [
+    "problem9-alpha",
+    "problem9-zeta"
+  ]);
+});
+
+test("portal benchmark ops runs-list finished-at ordering keeps non-terminal rows last in SQL", () => {
+  const sqlText = renderOrderBySql(
+    portalBenchmarkOpsReadModelTestUtils.buildRunOrderBy("finished_at_desc")
+  );
+
+  assert.match(sqlText, /then 0 else 1 end asc/i);
+  assert.match(sqlText, /completed_at.*desc/i);
+  assert.match(sqlText, /created_at.*desc/i);
+});
+
+test("portal benchmark ops runs-list duration ordering keeps non-terminal rows last in SQL", () => {
+  const sqlText = renderOrderBySql(
+    portalBenchmarkOpsReadModelTestUtils.buildRunOrderBy("duration_desc")
+  );
+
+  assert.match(sqlText, /then 0 else 1 end asc/i);
+  assert.match(sqlText, /extract\(epoch from[\s\S]*completed_at[\s\S]*created_at[\s\S]*\)[\s\S]*desc/i);
+  assert.match(sqlText, /created_at.*desc/i);
+});
+
+test("portal benchmark ops dataset ordering keeps non-terminal rows last in SQL", () => {
+  const sqlText = renderOrderBySql(
+    portalBenchmarkOpsReadModelTestUtils.buildBenchmarkDatasetRunOrderBy()
+  );
+
+  assert.match(sqlText, /then 0 else 1 end asc/i);
+  assert.match(sqlText, /completed_at.*desc/i);
+  assert.match(sqlText, /created_at.*desc/i);
 });

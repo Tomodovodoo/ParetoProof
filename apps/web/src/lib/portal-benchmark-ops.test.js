@@ -8,6 +8,7 @@ import {
   defaultPortalRunsQuery,
   extractPortalRunsQueryString,
   parsePortalRunsQuery,
+  portalBenchmarkOpsLocalTestUtils,
   sanitizePortalRunsQueryString
 } from "./portal-benchmark-ops.ts";
 
@@ -364,5 +365,274 @@ describe("runs filter option builders", () => {
         providerFamily: ""
       }
     ]);
+  });
+});
+
+describe("local benchmark ops sorting", () => {
+  it("keeps finished runs ahead of active runs for finished-at sorting", () => {
+    const sorted = portalBenchmarkOpsLocalTestUtils.sortPortalRuns(
+      [
+        {
+          authMode: "oidc",
+          benchmarkItemId: "item-running-older",
+          benchmarkLabel: "problem9 active older",
+          benchmarkPackageDigest: "sha256:def",
+          benchmarkPackageId: "problem9",
+          benchmarkPackageVersion: "2026.03",
+          benchmarkVersionId: "problem9@2026.03",
+          completedAt: null,
+          durationMs: null,
+          failure: { code: null, family: null, summary: null },
+          laneId: "lane-2",
+          latestAttemptId: "attempt-2",
+          latestJobId: "job-2",
+          lineage: {
+            attemptCount: 1,
+            attemptIds: ["attempt-2"],
+            jobCount: 1,
+            jobIds: ["job-2"],
+            latestAttemptId: "attempt-2",
+            latestJobId: "job-2"
+          },
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "GPT OSS",
+          modelSnapshotId: "gpt-oss-2026-03-13",
+          providerFamily: "openai",
+          runId: "PP-319",
+          runKind: "single_run",
+          runLifecycleBucket: "active",
+          runMode: "eval",
+          runState: "running",
+          startedAt: "2026-03-13T19:58:00.000Z",
+          toolProfile: "lean4-proof",
+          verdictClass: null
+        },
+        {
+          authMode: "oidc",
+          benchmarkItemId: "item-finished",
+          benchmarkLabel: "problem9 finished",
+          benchmarkPackageDigest: "sha256:abc",
+          benchmarkPackageId: "problem9",
+          benchmarkPackageVersion: "2026.03",
+          benchmarkVersionId: "problem9@2026.03",
+          completedAt: "2026-03-13T20:00:00.000Z",
+          durationMs: 120000,
+          failure: { code: null, family: null, summary: null },
+          laneId: "lane-1",
+          latestAttemptId: "attempt-1",
+          latestJobId: "job-1",
+          lineage: {
+            attemptCount: 1,
+            attemptIds: ["attempt-1"],
+            jobCount: 1,
+            jobIds: ["job-1"],
+            latestAttemptId: "attempt-1",
+            latestJobId: "job-1"
+          },
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "GPT OSS",
+          modelSnapshotId: "gpt-oss-2026-03-13",
+          providerFamily: "openai",
+          runId: "PP-318",
+          runKind: "single_run",
+          runLifecycleBucket: "terminal_success",
+          runMode: "eval",
+          runState: "succeeded",
+          startedAt: "2026-03-13T19:57:00.000Z",
+          toolProfile: "lean4-proof",
+          verdictClass: "pass"
+        },
+        {
+          authMode: "oidc",
+          benchmarkItemId: "item-running-newer",
+          benchmarkLabel: "problem9 active newer",
+          benchmarkPackageDigest: "sha256:def",
+          benchmarkPackageId: "problem9",
+          benchmarkPackageVersion: "2026.03",
+          benchmarkVersionId: "problem9@2026.03",
+          completedAt: null,
+          durationMs: null,
+          failure: { code: null, family: null, summary: null },
+          laneId: "lane-3",
+          latestAttemptId: "attempt-3",
+          latestJobId: "job-3",
+          lineage: {
+            attemptCount: 1,
+            attemptIds: ["attempt-3"],
+            jobCount: 1,
+            jobIds: ["job-3"],
+            latestAttemptId: "attempt-3",
+            latestJobId: "job-3"
+          },
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "GPT OSS",
+          modelSnapshotId: "gpt-oss-2026-03-13",
+          providerFamily: "openai",
+          runId: "PP-321",
+          runKind: "single_run",
+          runLifecycleBucket: "active",
+          runMode: "eval",
+          runState: "running",
+          startedAt: "2026-03-13T20:02:00.000Z",
+          toolProfile: "lean4-proof",
+          verdictClass: null
+        }
+      ],
+      "finished_at_desc"
+    );
+
+    expect(sorted.map((item) => item.runId)).toEqual(["PP-318", "PP-321", "PP-319"]);
+  });
+
+  it("orders mixed null and non-null benchmark timestamps with nulls last", () => {
+    const items = [
+      { benchmarkPackageId: "active-only", latestCompletedAt: null },
+      { benchmarkPackageId: "completed", latestCompletedAt: "2026-03-13T20:00:00.000Z" }
+    ];
+
+    items.sort((left, right) =>
+      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestCompletedAtDesc(left, right)
+    );
+
+    expect(items.map((item) => item.benchmarkPackageId)).toEqual([
+      "completed",
+      "active-only"
+    ]);
+  });
+
+  it("ties equal benchmark timestamps by benchmark package id", () => {
+    const items = [
+      { benchmarkPackageId: "problem9-zeta", latestCompletedAt: null },
+      { benchmarkPackageId: "problem9-alpha", latestCompletedAt: null }
+    ];
+
+    items.sort((left, right) =>
+      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestCompletedAtDesc(left, right)
+    );
+
+    expect(items.map((item) => item.benchmarkPackageId)).toEqual([
+      "problem9-alpha",
+      "problem9-zeta"
+    ]);
+  });
+
+  it("ties equal latest completed times by newest started-at first", () => {
+    const newer = {
+      benchmarkPackageId: "problem9-core",
+      completedAt: "2026-03-13T20:00:00.000Z",
+      startedAt: "2026-03-13T20:02:00.000Z"
+    };
+    const older = {
+      benchmarkPackageId: "problem9-core",
+      completedAt: "2026-03-13T20:00:00.000Z",
+      startedAt: "2026-03-13T19:58:00.000Z"
+    };
+
+    expect(
+      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestRunDesc(newer, older)
+    ).toBeLessThan(0);
+  });
+
+  it("prefers the newest active run for active-only benchmark packages", () => {
+    const newer = {
+      benchmarkPackageId: "problem9-core",
+      completedAt: null,
+      startedAt: "2026-03-13T20:02:00.000Z"
+    };
+    const older = {
+      benchmarkPackageId: "problem9-core",
+      completedAt: null,
+      startedAt: "2026-03-13T19:58:00.000Z"
+    };
+
+    expect(
+      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestRunDesc(newer, older)
+    ).toBeLessThan(0);
+  });
+
+  it("ties equal duration values by newest started-at first", () => {
+    const sorted = portalBenchmarkOpsLocalTestUtils.sortPortalRuns(
+      [
+        {
+          authMode: "oidc",
+          benchmarkItemId: "item-running-older",
+          benchmarkLabel: "problem9 active older",
+          benchmarkPackageDigest: "sha256:def",
+          benchmarkPackageId: "problem9",
+          benchmarkPackageVersion: "2026.03",
+          benchmarkVersionId: "problem9@2026.03",
+          completedAt: null,
+          durationMs: null,
+          failure: { code: null, family: null, summary: null },
+          laneId: "lane-2",
+          latestAttemptId: "attempt-2",
+          latestJobId: "job-2",
+          lineage: {
+            attemptCount: 1,
+            attemptIds: ["attempt-2"],
+            jobCount: 1,
+            jobIds: ["job-2"],
+            latestAttemptId: "attempt-2",
+            latestJobId: "job-2"
+          },
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "GPT OSS",
+          modelSnapshotId: "gpt-oss-2026-03-13",
+          providerFamily: "openai",
+          runId: "PP-319",
+          runKind: "single_run",
+          runLifecycleBucket: "active",
+          runMode: "eval",
+          runState: "running",
+          startedAt: "2026-03-13T19:58:00.000Z",
+          toolProfile: "lean4-proof",
+          verdictClass: null
+        },
+        {
+          authMode: "oidc",
+          benchmarkItemId: "item-running-newer",
+          benchmarkLabel: "problem9 active newer",
+          benchmarkPackageDigest: "sha256:def",
+          benchmarkPackageId: "problem9",
+          benchmarkPackageVersion: "2026.03",
+          benchmarkVersionId: "problem9@2026.03",
+          completedAt: null,
+          durationMs: null,
+          failure: { code: null, family: null, summary: null },
+          laneId: "lane-3",
+          latestAttemptId: "attempt-3",
+          latestJobId: "job-3",
+          lineage: {
+            attemptCount: 1,
+            attemptIds: ["attempt-3"],
+            jobCount: 1,
+            jobIds: ["job-3"],
+            latestAttemptId: "attempt-3",
+            latestJobId: "job-3"
+          },
+          modelConfigId: "gpt-oss",
+          modelConfigLabel: "GPT OSS",
+          modelSnapshotId: "gpt-oss-2026-03-13",
+          providerFamily: "openai",
+          runId: "PP-321",
+          runKind: "single_run",
+          runLifecycleBucket: "active",
+          runMode: "eval",
+          runState: "running",
+          startedAt: "2026-03-13T20:02:00.000Z",
+          toolProfile: "lean4-proof",
+          verdictClass: null
+        }
+      ],
+      "duration_desc"
+    );
+
+    expect(sorted.map((item) => item.runId)).toEqual(["PP-321", "PP-319"]);
+  });
+
+  it("keeps completed benchmark dataset runs ahead of active runs locally", () => {
+    const dataset = portalBenchmarkOpsLocalTestUtils.buildLocalBenchmarkDataset("problem9-core");
+
+    expect(dataset.runs.map((run) => run.runId)).toEqual(["PP-318", "PP-321", "PP-319"]);
   });
 });
