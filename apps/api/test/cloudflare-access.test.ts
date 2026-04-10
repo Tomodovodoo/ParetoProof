@@ -295,7 +295,7 @@ test("createAccessResolver rejects revoked opaque portal sessions", async () => 
   }
 });
 
-test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on the relay audiences", () => {
+test("selectCloudflareAccessVerifier keeps branded relay audiences only on POST finalize-submit", () => {
   const verifiers = {
     brandedRelay: { audiences: ["portal-aud", "github-aud", "google-aud"] },
     internal: { audiences: ["internal-aud"] },
@@ -305,6 +305,7 @@ test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on th
   assert.equal(
     selectCloudflareAccessVerifier(
       {
+        method: "POST",
         raw: {
           url: "/portal/session/finalize"
         },
@@ -314,11 +315,12 @@ test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on th
       } as never,
       verifiers as never
     ),
-    verifiers.brandedRelay
+    verifiers.portal
   );
   assert.equal(
     selectCloudflareAccessVerifier(
       {
+        method: "POST",
         raw: {
           url: "/portal/session/finalize/submit"
         },
@@ -333,6 +335,22 @@ test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on th
   assert.equal(
     selectCloudflareAccessVerifier(
       {
+        method: "GET",
+        raw: {
+          url: "/portal/session/finalize/submit"
+        },
+        routeOptions: {
+          url: "/portal/session/finalize/submit"
+        }
+      } as never,
+      verifiers as never
+    ),
+    verifiers.portal
+  );
+  assert.equal(
+    selectCloudflareAccessVerifier(
+      {
+        method: "GET",
         raw: {
           url: "/portal/me"
         },
@@ -347,6 +365,7 @@ test("selectCloudflareAccessVerifier keeps the branded finalize boundaries on th
   assert.equal(
     selectCloudflareAccessVerifier(
       {
+        method: "POST",
         raw: {
           url: "/internal/worker/claims"
         },

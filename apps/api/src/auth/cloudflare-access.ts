@@ -71,11 +71,8 @@ function normalizeTeamDomain(teamDomain: string) {
   return teamDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
-function usesBrandedFinalizeRelayAudiences(routePath: string) {
-  return (
-    routePath === "/portal/session/finalize" ||
-    routePath === "/portal/session/finalize/submit"
-  );
+function usesBrandedFinalizeRelayAudiences(method: string, routePath: string) {
+  return method === "POST" && routePath === "/portal/session/finalize/submit";
 }
 
 export function readCookieValue(cookieHeader: string | undefined, name: string) {
@@ -273,7 +270,7 @@ export function createCloudflareAccessVerifier(options: {
 }
 
 export function selectCloudflareAccessVerifier(
-  request: Pick<FastifyRequest, "raw" | "routeOptions">,
+  request: Pick<FastifyRequest, "method" | "raw" | "routeOptions">,
   verifiers: CloudflareAccessVerifierSet
 ) {
   const routePath = request.routeOptions?.url ?? request.raw.url ?? "";
@@ -282,7 +279,7 @@ export function selectCloudflareAccessVerifier(
     return verifiers.internal;
   }
 
-  if (usesBrandedFinalizeRelayAudiences(routePath)) {
+  if (usesBrandedFinalizeRelayAudiences(request.method, routePath)) {
     return verifiers.brandedRelay;
   }
 

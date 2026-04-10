@@ -255,7 +255,7 @@ export function buildAccessFinalizeUrl(targetPath = "/") {
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
 
   if (isLocalOrigin()) {
-    const completionUrl = new URL("/portal/session/finalize", getApiBaseUrl());
+    const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
 
     if (normalizedTargetPath !== "/") {
       completionUrl.searchParams.set("redirect", normalizedTargetPath);

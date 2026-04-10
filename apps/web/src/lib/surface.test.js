@@ -74,7 +74,7 @@ describe("buildPortalUrl", () => {
     setWindowUrl("http://github.auth.paretoproof.com:4371/");
 
     expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "http://github.auth.paretoproof.com:3000/portal/session/finalize?redirect=%2Fprofile"
+      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?redirect=%2Fprofile"
     );
   });
 
