@@ -594,6 +594,54 @@ test("POST /portal/admin/repo-sync-records/:id/status still rejects merged super
   assert.equal(response.json().item.id, currentRow.id);
 });
 
+test("POST /portal/admin/repo-sync-records/:id/status still rejects merged supersede updates that rewrite PR linkage", async (t) => {
+  const currentRow = buildRepoSyncRecord({
+    mergeCommitSha: "deadbeefcafebabe",
+    pullRequestNumber: 42,
+    pullRequestUrl: "https://github.com/Tomodovodoo/ParetoProof/pull/42",
+    status: "merged"
+  });
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          repoSyncRecords: {
+            findFirst: () => Promise<typeof currentRow | null>;
+          };
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          repoSyncRecords: {
+            findFirst: async () => currentRow
+          }
+        }
+      } as never)
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerBenchmarkWorkflowRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      pullRequestNumber: 77,
+      pullRequestUrl: "https://github.com/Tomodovodoo/ParetoProof/pull/77",
+      status: "superseded"
+    },
+    url: `/portal/admin/repo-sync-records/${currentRow.id}/status`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "repo_sync_record_invalid_transition");
+  assert.equal(response.json().item.id, currentRow.id);
+});
+
 test("POST /portal/admin/repo-sync-records/:id/status rejects partial PR linkage clears", async (t) => {
   const app = Fastify();
 
