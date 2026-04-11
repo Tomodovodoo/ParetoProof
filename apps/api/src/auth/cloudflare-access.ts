@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { normalizeOptionalEmail } from "../lib/email.js";
-import { parseApiRuntimeEnv } from "../config/runtime.js";
+import { parseApiRuntimeEnv, type ApiRuntimeEnv } from "../config/runtime.js";
 import type { PortalIdentityProvider } from "@paretoproof/shared";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
@@ -22,8 +22,8 @@ export type VerifiedAccessLinkIntent = {
   intentId: string;
 };
 
-function readAccessProviderStateSecret() {
-  return process.env.ACCESS_PROVIDER_STATE_SECRET;
+function readAccessProviderStateSecret(secret?: string) {
+  return secret ?? process.env.ACCESS_PROVIDER_STATE_SECRET;
 }
 
 function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 600) {
@@ -66,6 +66,15 @@ export type CloudflareAccessVerifierSet = {
   internal: CloudflareAccessVerifier;
   portal: CloudflareAccessVerifier;
 };
+
+export type CloudflareAccessRuntimeConfig = Pick<
+  ApiRuntimeEnv,
+  | "accessProviderStateSecret"
+  | "brandedAccessAudiences"
+  | "internalAccessAudience"
+  | "portalAccessAudience"
+  | "teamDomain"
+>;
 
 function normalizeTeamDomain(teamDomain: string) {
   return teamDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -137,12 +146,15 @@ function verifySignedAccessCookie(
 
 export function verifyAccessProviderHint(
   cookieHeader: string | undefined,
-  expectedSubject?: string
+  options?: {
+    expectedSubject?: string;
+    secret?: string;
+  }
 ) {
   const verifiedCookie = verifySignedAccessCookie(
     cookieHeader,
     "PortalAccessProvider",
-    readAccessProviderStateSecret()
+    readAccessProviderStateSecret(options?.secret)
   );
   const parsedPayload = verifiedCookie?.payload
     ? parseVerifiedProviderHintPayload(verifiedCookie.payload)
@@ -152,18 +164,27 @@ export function verifyAccessProviderHint(
     return null;
   }
 
-  if (parsedPayload.boundSubject && expectedSubject && parsedPayload.boundSubject !== expectedSubject) {
+  if (
+    parsedPayload.boundSubject &&
+    options?.expectedSubject &&
+    parsedPayload.boundSubject !== options.expectedSubject
+  ) {
     return null;
   }
 
   return parsedPayload.provider;
 }
 
-export function verifyAccessLinkIntent(cookieHeader: string | undefined) {
+export function verifyAccessLinkIntent(
+  cookieHeader: string | undefined,
+  options?: {
+    secret?: string;
+  }
+) {
   const verifiedCookie = verifySignedAccessCookie(
     cookieHeader,
     "PortalLinkIntent",
-    readAccessProviderStateSecret()
+    readAccessProviderStateSecret(options?.secret)
   );
 
   if (!verifiedCookie?.payload) {
@@ -205,9 +226,10 @@ export function buildSignedAccessCookie(
   options?: {
     maxAgeSeconds?: number;
     sameSite?: "Strict" | "Lax";
+    secret?: string;
   }
 ) {
-  const secret = readAccessProviderStateSecret();
+  const secret = readAccessProviderStateSecret(options?.secret);
 
   if (!secret) {
     throw new Error("ACCESS_PROVIDER_STATE_SECRET is not configured.");
@@ -288,6 +310,12 @@ export function selectCloudflareAccessVerifier(
 
 export function createCloudflareAccessVerifierSetFromEnv() {
   const runtimeEnv = parseApiRuntimeEnv();
+  return createCloudflareAccessVerifierSet(runtimeEnv);
+}
+
+export function createCloudflareAccessVerifierSet(
+  runtimeEnv: CloudflareAccessRuntimeConfig
+) {
   const brandedRelayAudiences = [
     runtimeEnv.portalAccessAudience,
     ...runtimeEnv.brandedAccessAudiences

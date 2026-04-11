@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parseApiRuntimeEnv } from "../src/config/runtime.ts";
 import {
+  buildServer,
   isAllowedCorsOrigin,
   readCorsRoutePath,
   readAllowedCorsOrigins
@@ -124,4 +126,90 @@ test("isAllowedCorsOrigin keeps branded finalize callers scoped to finalize-subm
     }),
     false
   );
+});
+
+test("buildServer keeps the parsed runtime contract authoritative during boot and health checks", async (t) => {
+  const originalEnv = {
+    ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+    CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN
+  };
+
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "wrong-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "wrong-branded-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "wrong-portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "wrong-team.example";
+
+  let readinessChecks = 0;
+  const app = await buildServer(
+    parseApiRuntimeEnv({
+      ACCESS_PROVIDER_STATE_SECRET: "runtime-secret",
+      CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+      CF_ACCESS_PORTAL_AUD: "portal-audience",
+      CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+      DATABASE_URL: "postgres://localhost:5432/paretoproof",
+      WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
+    }),
+    {
+      createDbClient: () => ({
+        execute: async () => {
+          readinessChecks += 1;
+        }
+      }) as never
+    }
+  );
+
+  t.after(async () => {
+    Object.assign(process.env, originalEnv);
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/health"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    ok: true,
+    service: "api"
+  });
+  assert.equal(readinessChecks, 1);
+});
+
+test("buildServer maps default DB readiness failures to 503 health responses", async (t) => {
+  const app = await buildServer(
+    parseApiRuntimeEnv({
+      ACCESS_PROVIDER_STATE_SECRET: "runtime-secret",
+      CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+      CF_ACCESS_PORTAL_AUD: "portal-audience",
+      CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+      DATABASE_URL: "postgres://localhost:5432/paretoproof",
+      WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
+    }),
+    {
+      createDbClient: () => ({
+        execute: async () => {
+          throw new Error("database_unreachable");
+        }
+      }) as never
+    }
+  );
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/health"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.json(), {
+    error: "service_unavailable",
+    ok: false,
+    service: "api"
+  });
 });

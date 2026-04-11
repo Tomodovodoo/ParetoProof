@@ -53,7 +53,8 @@ import {
 } from "../auth/portal-access-session.js";
 import {
   createAccessResolver,
-  isAccessAssertionVerificationError
+  isAccessAssertionVerificationError,
+  type AccessResolverOptions
 } from "../auth/require-access.js";
 import { resolveAccessRbacContext } from "../auth/resolve-access-rbac-context.js";
 import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
@@ -376,12 +377,19 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard,
   options?: {
+    accessProviderStateSecret?: string;
+    accessResolverOptions?: AccessResolverOptions;
     portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
     rateLimitPreHandlers?: ReturnType<typeof createRateLimitPreHandlers>;
     resolvePortalAccess?: ReturnType<typeof createAccessResolver>;
   }
 ) {
-  const resolvePortalAccess = options?.resolvePortalAccess ?? createAccessResolver(db);
+  const accessResolverOptions = options?.accessResolverOptions;
+  const accessProviderStateSecret =
+    options?.accessProviderStateSecret ??
+    accessResolverOptions?.accessProviderStateSecret;
+  const resolvePortalAccess =
+    options?.resolvePortalAccess ?? createAccessResolver(db, accessResolverOptions);
   const portalBenchmarkOpsReadModels =
     options?.portalBenchmarkOpsReadModels ?? createPortalBenchmarkOpsReadModelService(db);
   const harnessRegistry = createHarnessRegistryService();
@@ -421,8 +429,13 @@ export function registerPortalRoutes(
         null
     );
     const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
-    const linkIntent = verifyAccessLinkIntent(cookieHeader);
-    const providerHint = verifyAccessProviderHint(cookieHeader, identity?.subject);
+    const linkIntent = verifyAccessLinkIntent(cookieHeader, {
+      secret: accessProviderStateSecret
+    });
+    const providerHint = verifyAccessProviderHint(cookieHeader, {
+      expectedSubject: identity?.subject,
+      secret: accessProviderStateSecret
+    });
     let resolvedAccessContext = accessContext;
 
     if (identity && linkIntent) {
@@ -520,7 +533,10 @@ export function registerPortalRoutes(
         ? buildSignedAccessCookie(
             "PortalAccessProvider",
             `${providerHint}|${identity.subject}`,
-            { maxAgeSeconds: 24 * 60 * 60 }
+            {
+              maxAgeSeconds: 24 * 60 * 60,
+              secret: accessProviderStateSecret
+            }
           )
         : clearSignedAccessCookie("PortalAccessProvider"),
       clearSignedAccessCookie("PortalLinkIntent")
@@ -548,7 +564,7 @@ export function registerPortalRoutes(
       typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
 
     // Cross-site GETs must not be enough to consume a pending identity-link intent.
-    if (verifyAccessLinkIntent(cookieHeader)) {
+    if (verifyAccessLinkIntent(cookieHeader, { secret: accessProviderStateSecret })) {
       handlePortalSessionRetryRedirect(request, reply);
       return;
     }
@@ -1196,7 +1212,9 @@ export function registerPortalRoutes(
 
       reply.header(
         "set-cookie",
-        buildSignedAccessCookie("PortalLinkIntent", intent.id)
+        buildSignedAccessCookie("PortalLinkIntent", intent.id, {
+          secret: accessProviderStateSecret
+        })
       );
 
       return {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { parseApiRuntimeEnv } from "../../apps/api/src/config/runtime.ts";
+import { buildServer } from "../../apps/api/src/server/build-server.ts";
 import { parseWebRuntimeEnv } from "../../apps/web/src/lib/runtime-env.ts";
 import { parseWorkerRuntimeEnv } from "../../apps/worker/src/lib/runtime.ts";
 
@@ -35,6 +36,54 @@ await expectPass("API startup accepts the documented local runtime contract", ()
     "portal-audience"
   );
 });
+
+await expectPass(
+  "API startup uses the parsed runtime contract for boot and readiness without reparsing process.env",
+  async () => {
+    const originalEnv = {
+      ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+      CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+      CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+      CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN
+    };
+
+    process.env.ACCESS_PROVIDER_STATE_SECRET = "wrong-secret";
+    process.env.CF_ACCESS_BRANDED_AUDS = "wrong-branded-audience";
+    process.env.CF_ACCESS_PORTAL_AUD = "wrong-portal-audience";
+    process.env.CF_ACCESS_TEAM_DOMAIN = "wrong-team.example";
+
+    const app = await buildServer(
+      parseApiRuntimeEnv({
+        ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+        CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+        CF_ACCESS_PORTAL_AUD: "portal-audience",
+        CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+        DATABASE_URL: "postgres://localhost:5432/paretoproof",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
+      }),
+      {
+        checkReadiness: async () => {},
+        createDbClient: () => ({}) as never
+      }
+    );
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/health"
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.deepEqual(response.json(), {
+        ok: true,
+        service: "api"
+      });
+    } finally {
+      Object.assign(process.env, originalEnv);
+      await app.close();
+    }
+  }
+);
 
 await expectFailure(
   "API startup rejects missing required worker bootstrap auth",

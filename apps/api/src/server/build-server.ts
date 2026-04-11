@@ -1,8 +1,12 @@
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
+import { sql } from "drizzle-orm";
 import Fastify from "fastify";
 import type { ApiRuntimeEnv } from "../config/runtime.js";
-import { createAccessGuard } from "../auth/require-access.js";
+import {
+  createAccessGuard,
+  runtimeEnvToAccessResolverOptions
+} from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
 import { registerBenchmarkWorkflowRoutes } from "../routes/benchmark-workflow.js";
@@ -20,6 +24,7 @@ import {
   isAllowedLocalOrigin,
   normalizeOrigin
 } from "./trusted-mutation-origin.js";
+import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   const brandedAuthOrigins = new Set(readBrandedAuthOrigins());
@@ -101,16 +106,32 @@ export function isAllowedCorsOrigin(options: {
   );
 }
 
-export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
+type BuildServerOptions = {
+  checkReadiness?: () => Promise<void>;
+  createDbClient?: (connectionString: string) => ReturnTypeOfCreateDbClient;
+};
+
+function createDatabaseReadinessCheck(db: ReturnTypeOfCreateDbClient) {
+  return async () => {
+    await db.execute(sql`select 1`);
+  };
+}
+
+export async function buildServer(
+  runtimeEnv: ApiRuntimeEnv,
+  options?: BuildServerOptions
+) {
   const app = Fastify({
     logger: true
   });
-  const db = createDbClient(runtimeEnv.databaseUrl);
-  const requireAccess = createAccessGuard(db);
+  const db = (options?.createDbClient ?? createDbClient)(runtimeEnv.databaseUrl);
+  const accessResolverOptions = runtimeEnvToAccessResolverOptions(runtimeEnv);
+  const requireAccess = createAccessGuard(db, accessResolverOptions);
   const rateLimitPreHandlers = createRateLimitPreHandlers(createInMemoryRateLimiter());
   const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
   const brandedAuthOrigins = readBrandedAuthOrigins();
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
+  const checkReadiness = options?.checkReadiness ?? createDatabaseReadinessCheck(db);
 
   await app.register(cors, {
     delegator(request, callback) {
@@ -157,9 +178,12 @@ export async function buildServer(runtimeEnv: ApiRuntimeEnv) {
   );
 
   registerHealthRoute(app, {
+    checkReadiness,
     rateLimitPreHandlers
   });
   registerPortalRoutes(app, db, requireAccess, {
+    accessProviderStateSecret: runtimeEnv.accessProviderStateSecret,
+    accessResolverOptions,
     rateLimitPreHandlers
   });
   registerAdminRoutes(app, db, requireAccess, {
