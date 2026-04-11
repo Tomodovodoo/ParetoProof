@@ -2,7 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { normalizeOptionalEmail } from "../lib/email.js";
-import { parseApiRuntimeEnv, type ApiRuntimeEnv } from "../config/runtime.js";
+import {
+  resolveApiOriginRuntimeConfig,
+  parseApiRuntimeEnv,
+  type ApiRuntimeEnv,
+} from "../config/runtime.js";
 import type { PortalIdentityProvider } from "@paretoproof/shared";
 
 type CloudflareAccessTokenClaims = JWTPayload & {
@@ -26,10 +30,16 @@ function readAccessProviderStateSecret(secret?: string) {
   return secret ?? process.env.ACCESS_PROVIDER_STATE_SECRET;
 }
 
-function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 600) {
+function createSignedAccessValue(
+  value: string,
+  secret: string,
+  maxAgeSeconds = 600,
+) {
   const expiresAt = Math.floor(Date.now() / 1000) + maxAgeSeconds;
   const payload = `${value}.${expiresAt}`;
-  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+  const signature = createHmac("sha256", secret)
+    .update(payload)
+    .digest("base64url");
 
   return `${payload}.${signature}`;
 }
@@ -37,10 +47,7 @@ function createSignedAccessValue(value: string, secret: string, maxAgeSeconds = 
 function parseVerifiedProviderHintPayload(payload: string) {
   const [provider, ...subjectParts] = payload.split("|");
 
-  if (
-    provider !== "cloudflare_github" &&
-    provider !== "cloudflare_google"
-  ) {
+  if (provider !== "cloudflare_github" && provider !== "cloudflare_google") {
     return null;
   }
 
@@ -48,7 +55,7 @@ function parseVerifiedProviderHintPayload(payload: string) {
 
   return {
     boundSubject,
-    provider
+    provider,
   } satisfies {
     boundSubject: string | null;
     provider: PortalIdentityProvider;
@@ -84,7 +91,10 @@ function usesBrandedFinalizeRelayAudiences(method: string, routePath: string) {
   return method === "POST" && routePath === "/portal/session/finalize/submit";
 }
 
-export function readCookieValue(cookieHeader: string | undefined, name: string) {
+export function readCookieValue(
+  cookieHeader: string | undefined,
+  name: string,
+) {
   if (!cookieHeader) {
     return null;
   }
@@ -103,7 +113,7 @@ export function readCookieValue(cookieHeader: string | undefined, name: string) 
 function verifySignedAccessCookie(
   cookieHeader: string | undefined,
   cookieName: string,
-  secret: string | undefined
+  secret: string | undefined,
 ) {
   const rawValue = readCookieValue(cookieHeader, cookieName);
 
@@ -122,12 +132,17 @@ function verifySignedAccessCookie(
 
   const expiresAtNumber = Number.parseInt(expiresAt, 10);
 
-  if (!Number.isFinite(expiresAtNumber) || expiresAtNumber < Math.floor(Date.now() / 1000)) {
+  if (
+    !Number.isFinite(expiresAtNumber) ||
+    expiresAtNumber < Math.floor(Date.now() / 1000)
+  ) {
     return null;
   }
 
   const payload = `${payloadParts.join(".")}.${expiresAt}`;
-  const expectedSignature = createHmac("sha256", secret).update(payload).digest("base64url");
+  const expectedSignature = createHmac("sha256", secret)
+    .update(payload)
+    .digest("base64url");
   const providedSignature = Buffer.from(signature);
   const expectedSignatureBuffer = Buffer.from(expectedSignature);
 
@@ -140,7 +155,7 @@ function verifySignedAccessCookie(
 
   return {
     expiresAt: expiresAtNumber,
-    payload: payloadParts.join(".")
+    payload: payloadParts.join("."),
   };
 }
 
@@ -149,12 +164,12 @@ export function verifyAccessProviderHint(
   options?: {
     expectedSubject?: string;
     secret?: string;
-  }
+  },
 ) {
   const verifiedCookie = verifySignedAccessCookie(
     cookieHeader,
     "PortalAccessProvider",
-    readAccessProviderStateSecret(options?.secret)
+    readAccessProviderStateSecret(options?.secret),
   );
   const parsedPayload = verifiedCookie?.payload
     ? parseVerifiedProviderHintPayload(verifiedCookie.payload)
@@ -179,12 +194,12 @@ export function verifyAccessLinkIntent(
   cookieHeader: string | undefined,
   options?: {
     secret?: string;
-  }
+  },
 ) {
   const verifiedCookie = verifySignedAccessCookie(
     cookieHeader,
     "PortalLinkIntent",
-    readAccessProviderStateSecret(options?.secret)
+    readAccessProviderStateSecret(options?.secret),
   );
 
   if (!verifiedCookie?.payload) {
@@ -193,7 +208,7 @@ export function verifyAccessLinkIntent(
 
   return {
     expiresAt: verifiedCookie.expiresAt,
-    intentId: verifiedCookie.payload
+    intentId: verifiedCookie.payload,
   } satisfies VerifiedAccessLinkIntent;
 }
 
@@ -202,21 +217,28 @@ function buildSignedCookie(
   value: string,
   secret: string,
   options?: {
+    cookieDomain?: string;
     maxAgeSeconds?: number;
     sameSite?: "Strict" | "Lax";
-  }
+    secure?: boolean;
+  },
 ) {
+  const defaultOriginRuntimeConfig = resolveApiOriginRuntimeConfig();
   const maxAgeSeconds = options?.maxAgeSeconds ?? 600;
   const sameSite = options?.sameSite ?? "Strict";
+  const cookieDomain =
+    options?.cookieDomain ?? defaultOriginRuntimeConfig.accessCookieDomain;
+  const secure =
+    options?.secure ?? defaultOriginRuntimeConfig.accessCookieSecure;
 
   return [
     `${name}=${createSignedAccessValue(value, secret, maxAgeSeconds)}`,
-    "Domain=.paretoproof.com",
+    ...(cookieDomain ? [`Domain=${cookieDomain}`] : []),
     "Path=/",
     `SameSite=${sameSite}`,
     `Max-Age=${maxAgeSeconds}`,
-    "Secure",
-    "HttpOnly"
+    ...(secure ? ["Secure"] : []),
+    "HttpOnly",
   ].join("; ");
 }
 
@@ -224,10 +246,12 @@ export function buildSignedAccessCookie(
   name: "PortalAccessProvider" | "PortalLinkIntent",
   value: string,
   options?: {
+    cookieDomain?: string;
     maxAgeSeconds?: number;
     sameSite?: "Strict" | "Lax";
     secret?: string;
-  }
+    secure?: boolean;
+  },
 ) {
   const secret = readAccessProviderStateSecret(options?.secret);
 
@@ -238,7 +262,7 @@ export function buildSignedAccessCookie(
   return buildSignedCookie(name, value, secret, options);
 }
 export function readAccessJwtAssertion(
-  request: Pick<FastifyRequest, "headers">
+  request: Pick<FastifyRequest, "headers">,
 ) {
   const assertion = request.headers["cf-access-jwt-assertion"];
 
@@ -246,7 +270,10 @@ export function readAccessJwtAssertion(
     return assertion;
   }
 
-  const cookieHeader = typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+  const cookieHeader =
+    typeof request.headers.cookie === "string"
+      ? request.headers.cookie
+      : undefined;
   const cookieAssertion = readCookieValue(cookieHeader, "CF_Authorization");
 
   return cookieAssertion && cookieAssertion.length > 0 ? cookieAssertion : null;
@@ -258,9 +285,7 @@ export function createCloudflareAccessVerifier(options: {
 }): CloudflareAccessVerifier {
   const normalizedTeamDomain = normalizeTeamDomain(options.teamDomain);
   const issuer = `https://${normalizedTeamDomain}`;
-  const jwks = createRemoteJWKSet(
-    new URL(`${issuer}/cdn-cgi/access/certs`)
-  );
+  const jwks = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
 
   return {
     audiences: [...options.audiences],
@@ -271,13 +296,13 @@ export function createCloudflareAccessVerifier(options: {
         jwks,
         {
           audience: options.audiences,
-          issuer
-        }
+          issuer,
+        },
       );
 
       if (!payload.sub) {
         throw new Error(
-          "Cf-Access-Jwt-Assertion is missing the subject claim."
+          "Cf-Access-Jwt-Assertion is missing the subject claim.",
         );
       }
 
@@ -285,15 +310,15 @@ export function createCloudflareAccessVerifier(options: {
         email: normalizeOptionalEmail(payload.email),
         issuer,
         provider: null,
-        subject: payload.sub
+        subject: payload.sub,
       };
-    }
+    },
   };
 }
 
 export function selectCloudflareAccessVerifier(
   request: Pick<FastifyRequest, "method" | "raw" | "routeOptions">,
-  verifiers: CloudflareAccessVerifierSet
+  verifiers: CloudflareAccessVerifierSet,
 ) {
   const routePath = request.routeOptions?.url ?? request.raw.url ?? "";
 
@@ -314,25 +339,25 @@ export function createCloudflareAccessVerifierSetFromEnv() {
 }
 
 export function createCloudflareAccessVerifierSet(
-  runtimeEnv: CloudflareAccessRuntimeConfig
+  runtimeEnv: CloudflareAccessRuntimeConfig,
 ) {
   const brandedRelayAudiences = [
     runtimeEnv.portalAccessAudience,
-    ...runtimeEnv.brandedAccessAudiences
+    ...runtimeEnv.brandedAccessAudiences,
   ];
 
   return {
     brandedRelay: createCloudflareAccessVerifier({
       audiences: [...new Set(brandedRelayAudiences)],
-      teamDomain: runtimeEnv.teamDomain
+      teamDomain: runtimeEnv.teamDomain,
     }),
     internal: createCloudflareAccessVerifier({
       audiences: [runtimeEnv.internalAccessAudience],
-      teamDomain: runtimeEnv.teamDomain
+      teamDomain: runtimeEnv.teamDomain,
     }),
     portal: createCloudflareAccessVerifier({
       audiences: [runtimeEnv.portalAccessAudience],
-      teamDomain: runtimeEnv.teamDomain
-    })
+      teamDomain: runtimeEnv.teamDomain,
+    }),
   };
 }

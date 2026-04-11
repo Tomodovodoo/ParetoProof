@@ -5,7 +5,7 @@ import Fastify from "fastify";
 import type { ApiRuntimeEnv } from "../config/runtime.js";
 import {
   createAccessGuard,
-  runtimeEnvToAccessResolverOptions
+  runtimeEnvToAccessResolverOptions,
 } from "../auth/require-access.js";
 import { createDbClient } from "../db/client.js";
 import { registerAdminRoutes } from "../routes/admin.js";
@@ -16,47 +16,59 @@ import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
   createInMemoryRateLimiter,
-  createRateLimitPreHandlers
+  createRateLimitPreHandlers,
 } from "../middleware/rate-limit.js";
 import {
   createTrustedMutationOriginHook,
   isAllowedLocalBrandedAuthOrigin,
   isAllowedLocalOrigin,
-  normalizeOrigin
+  normalizeOrigin,
 } from "./trusted-mutation-origin.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
-export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
-  const brandedAuthOrigins = new Set(readBrandedAuthOrigins());
-  const baselineOrigins = [
-    "https://portal.paretoproof.com"
+export function readBrandedAuthOrigins(runtimeEnv: ApiRuntimeEnv) {
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+
+  return [
+    ...new Set(
+      runtimeEnv.brandedAuthOrigins
+        .map(normalizeOrigin)
+        .filter((origin) => origin !== portalPublicOrigin),
+    ),
   ];
+}
+
+export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
+  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+  const baselineOrigins = [portalPublicOrigin];
 
   return [
     ...new Set(
       [...baselineOrigins, ...runtimeEnv.corsAllowedOrigins]
         .map(normalizeOrigin)
-        .filter((origin) => !brandedAuthOrigins.has(origin))
-    )
+        .filter(
+          (origin) =>
+            origin === portalPublicOrigin || !brandedAuthOrigins.has(origin),
+        ),
+    ),
   ];
 }
 
-function readBrandedAuthOrigins() {
-  return [
-    "https://auth.paretoproof.com",
-    "https://github.auth.paretoproof.com",
-    "https://google.auth.paretoproof.com"
-  ];
-}
-
-function usesBrandedFinalizeSubmitCorsBoundary(method: string, routePath: string) {
+function usesBrandedFinalizeSubmitCorsBoundary(
+  method: string,
+  routePath: string,
+) {
   return (
     routePath === "/portal/session/finalize/submit" &&
     (method === "POST" || method === "OPTIONS")
   );
 }
 
-export function readCorsRoutePath(routePath: string | undefined, rawUrl: string | undefined) {
+export function readCorsRoutePath(
+  routePath: string | undefined,
+  rawUrl: string | undefined,
+) {
   if (routePath && routePath !== "*") {
     return routePath;
   }
@@ -102,7 +114,10 @@ export function isAllowedCorsOrigin(options: {
 
   return (
     options.allowLocalhostCors &&
-    isAllowedLocalBrandedAuthOrigin(normalizedOrigin)
+    isAllowedLocalBrandedAuthOrigin(
+      normalizedOrigin,
+      options.brandedAuthOrigins,
+    )
   );
 }
 
@@ -119,25 +134,30 @@ function createDatabaseReadinessCheck(db: ReturnTypeOfCreateDbClient) {
 
 export async function buildServer(
   runtimeEnv: ApiRuntimeEnv,
-  options?: BuildServerOptions
+  options?: BuildServerOptions,
 ) {
   const app = Fastify({
-    logger: true
+    logger: true,
   });
-  const db = (options?.createDbClient ?? createDbClient)(runtimeEnv.databaseUrl);
+  const db = (options?.createDbClient ?? createDbClient)(
+    runtimeEnv.databaseUrl,
+  );
   const accessResolverOptions = runtimeEnvToAccessResolverOptions(runtimeEnv);
   const requireAccess = createAccessGuard(db, accessResolverOptions);
-  const rateLimitPreHandlers = createRateLimitPreHandlers(createInMemoryRateLimiter());
+  const rateLimitPreHandlers = createRateLimitPreHandlers(
+    createInMemoryRateLimiter(),
+  );
   const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
-  const brandedAuthOrigins = readBrandedAuthOrigins();
+  const brandedAuthOrigins = readBrandedAuthOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
-  const checkReadiness = options?.checkReadiness ?? createDatabaseReadinessCheck(db);
+  const checkReadiness =
+    options?.checkReadiness ?? createDatabaseReadinessCheck(db);
 
   await app.register(cors, {
     delegator(request, callback) {
       const routePath = readCorsRoutePath(
         request.routeOptions.url,
-        request.raw.url
+        request.raw.url,
       );
 
       callback(null, {
@@ -150,22 +170,22 @@ export async function buildServer(
 
           if (
             isAllowedCorsOrigin({
-            allowLocalhostCors,
-            allowedOrigins,
-            brandedAuthOrigins,
-            method: request.method,
-            origin,
-            routePath
-          })
+              allowLocalhostCors,
+              allowedOrigins,
+              brandedAuthOrigins,
+              method: request.method,
+              origin,
+              routePath,
+            })
           ) {
             originCallback(null, true);
             return;
           }
 
           originCallback(new Error("origin_not_allowed"), false);
-        }
+        },
       });
-    }
+    },
   });
   await app.register(formbody);
   app.addHook(
@@ -173,24 +193,30 @@ export async function buildServer(
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: allowLocalhostCors,
       allowedOrigins,
-      brandedAuthOrigins
-    })
+      brandedAuthOrigins,
+    }),
   );
 
   registerHealthRoute(app, {
     checkReadiness,
-    rateLimitPreHandlers
+    rateLimitPreHandlers,
   });
   registerPortalRoutes(app, db, requireAccess, {
+    accessCookieDomain: runtimeEnv.accessCookieDomain,
+    accessCookieSecure: runtimeEnv.accessCookieSecure,
     accessProviderStateSecret: runtimeEnv.accessProviderStateSecret,
     accessResolverOptions,
-    rateLimitPreHandlers
+    allowLocalhostOrigins: runtimeEnv.corsAllowLocalhost,
+    authPublicOrigin: runtimeEnv.authPublicOrigin,
+    brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
+    portalPublicOrigin: runtimeEnv.portalPublicOrigin,
+    rateLimitPreHandlers,
   });
   registerAdminRoutes(app, db, requireAccess, {
-    rateLimitPreHandlers
+    rateLimitPreHandlers,
   });
   registerBenchmarkWorkflowRoutes(app, db, requireAccess, {
-    rateLimitPreHandlers
+    rateLimitPreHandlers,
   });
   registerOfflineIngestRoutes(app, db, requireAccess);
   registerInternalWorkerRoutes(app, db, runtimeEnv);

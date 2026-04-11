@@ -14,9 +14,9 @@ test("trusted mutation origin hook rejects state-changing portal requests withou
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.paretoproof.com"],
-      brandedAuthOrigins: []
-    })
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
   );
 
   app.post("/portal/access-requests", async () => ({ ok: true }));
@@ -24,14 +24,14 @@ test("trusted mutation origin hook rejects state-changing portal requests withou
   const response = await app.inject({
     method: "POST",
     payload: {
-      rationale: "test"
+      rationale: "test",
     },
-    url: "/portal/access-requests"
+    url: "/portal/access-requests",
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_required"
+    error: "trusted_origin_required",
   });
 });
 
@@ -46,28 +46,30 @@ test("trusted mutation origin hook rejects state-changing portal requests from u
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.paretoproof.com"],
-      brandedAuthOrigins: []
-    })
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
   );
 
-  app.post("/portal/admin/access-requests/req_123/approve", async () => ({ ok: true }));
+  app.post("/portal/admin/access-requests/req_123/approve", async () => ({
+    ok: true,
+  }));
 
   const response = await app.inject({
     method: "POST",
     payload: {
       approvedRole: "helper",
-      decisionNote: "test"
+      decisionNote: "test",
     },
     url: "/portal/admin/access-requests/req_123/approve",
     headers: {
-      origin: "https://evil.example"
-    }
+      origin: "https://evil.example",
+    },
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
 });
 
@@ -82,27 +84,29 @@ test("trusted mutation origin hook also protects admin role revocation mutations
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.paretoproof.com"],
-      brandedAuthOrigins: []
-    })
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
   );
 
-  app.post("/portal/admin/users/user_123/revoke-role", async () => ({ ok: true }));
+  app.post("/portal/admin/users/user_123/revoke-role", async () => ({
+    ok: true,
+  }));
 
   const response = await app.inject({
     method: "POST",
     payload: {
-      reason: "test"
+      reason: "test",
     },
     url: "/portal/admin/users/user_123/revoke-role",
     headers: {
-      origin: "https://evil.example"
-    }
+      origin: "https://evil.example",
+    },
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
 });
 
@@ -117,27 +121,29 @@ test("trusted mutation origin hook also protects portal-admin offline ingest mut
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.paretoproof.com"],
-      brandedAuthOrigins: []
-    })
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
   );
 
-  app.post("/portal/admin/offline-ingest/problem9-run-bundles", async () => ({ ok: true }));
+  app.post("/portal/admin/offline-ingest/problem9-run-bundles", async () => ({
+    ok: true,
+  }));
 
   const response = await app.inject({
     method: "POST",
     payload: {
-      bundle: {}
+      bundle: {},
     },
     url: "/portal/admin/offline-ingest/problem9-run-bundles",
     headers: {
-      origin: "https://evil.example"
-    }
+      origin: "https://evil.example",
+    },
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
 });
 
@@ -152,9 +158,9 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.paretoproof.com"],
-      brandedAuthOrigins: []
-    })
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
   );
 
   app.post("/portal/profile", async () => ({ ok: true }));
@@ -163,26 +169,26 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
   const trustedPost = await app.inject({
     method: "POST",
     payload: {
-      displayName: "Ada"
+      displayName: "Ada",
     },
     url: "/portal/profile",
     headers: {
-      origin: "https://portal.paretoproof.com"
-    }
+      origin: "https://portal.preview.paretoproof.com",
+    },
   });
 
   const redirectGet = await app.inject({
     method: "GET",
-    url: "/portal/session/finalize/submit"
+    url: "/portal/session/finalize/submit",
   });
 
   assert.equal(trustedPost.statusCode, 200);
   assert.deepEqual(trustedPost.json(), {
-    ok: true
+    ok: true,
   });
   assert.equal(redirectGet.statusCode, 200);
   assert.deepEqual(redirectGet.json(), {
-    ok: true
+    ok: true,
   });
 });
 
@@ -198,17 +204,17 @@ test("trusted mutation origin hook only allows branded auth POSTs on the finaliz
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
       allowedOrigins: [
-        "https://auth.paretoproof.com",
-        "https://github.auth.paretoproof.com",
-        "https://google.auth.paretoproof.com",
-        "https://portal.paretoproof.com"
+        "https://auth.preview.paretoproof.com",
+        "https://github.auth.preview.paretoproof.com",
+        "https://google.auth.preview.paretoproof.com",
+        "https://portal.preview.paretoproof.com",
       ],
       brandedAuthOrigins: [
-        "https://auth.paretoproof.com",
-        "https://github.auth.paretoproof.com",
-        "https://google.auth.paretoproof.com"
-      ]
-    })
+        "https://auth.preview.paretoproof.com",
+        "https://github.auth.preview.paretoproof.com",
+        "https://google.auth.preview.paretoproof.com",
+      ],
+    }),
   );
 
   app.post("/portal/session/finalize", async () => ({ ok: true }));
@@ -218,47 +224,47 @@ test("trusted mutation origin hook only allows branded auth POSTs on the finaliz
   const finalizeResponse = await app.inject({
     method: "POST",
     payload: {
-      redirect: "/profile"
+      redirect: "/profile",
     },
     url: "/portal/session/finalize",
     headers: {
-      origin: "https://github.auth.paretoproof.com"
-    }
+      origin: "https://github.auth.preview.paretoproof.com",
+    },
   });
 
   const submitResponse = await app.inject({
     method: "POST",
     payload: {
-      redirect: "/profile"
+      redirect: "/profile",
     },
     url: "/portal/session/finalize/submit",
     headers: {
-      origin: "https://github.auth.paretoproof.com"
-    }
+      origin: "https://github.auth.preview.paretoproof.com",
+    },
   });
 
   const profileResponse = await app.inject({
     method: "POST",
     payload: {
-      displayName: "Ada"
+      displayName: "Ada",
     },
     url: "/portal/profile",
     headers: {
-      origin: "https://github.auth.paretoproof.com"
-    }
+      origin: "https://github.auth.preview.paretoproof.com",
+    },
   });
 
   assert.equal(finalizeResponse.statusCode, 403);
   assert.deepEqual(finalizeResponse.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
   assert.equal(submitResponse.statusCode, 200);
   assert.deepEqual(submitResponse.json(), {
-    ok: true
+    ok: true,
   });
   assert.equal(profileResponse.statusCode, 403);
   assert.deepEqual(profileResponse.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
 });
 
@@ -273,13 +279,13 @@ test("trusted mutation origin hook only allows loopback-mapped branded auth orig
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: true,
-      allowedOrigins: ["https://portal.paretoproof.com"],
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
       brandedAuthOrigins: [
-        "https://auth.paretoproof.com",
-        "https://github.auth.paretoproof.com",
-        "https://google.auth.paretoproof.com"
-      ]
-    })
+        "https://auth.preview.paretoproof.com",
+        "https://github.auth.preview.paretoproof.com",
+        "https://google.auth.preview.paretoproof.com",
+      ],
+    }),
   );
 
   app.post("/portal/session/finalize/submit", async () => ({ ok: true }));
@@ -288,31 +294,31 @@ test("trusted mutation origin hook only allows loopback-mapped branded auth orig
   const finalizeResponse = await app.inject({
     method: "POST",
     payload: {
-      redirect: "/profile"
+      redirect: "/profile",
     },
     url: "/portal/session/finalize/submit",
     headers: {
-      origin: "http://github.auth.paretoproof.com:4371"
-    }
+      origin: "http://github.auth.preview.paretoproof.com:4371",
+    },
   });
 
   const profileResponse = await app.inject({
     method: "POST",
     payload: {
-      displayName: "Ada"
+      displayName: "Ada",
     },
     url: "/portal/profile",
     headers: {
-      origin: "http://github.auth.paretoproof.com:4371"
-    }
+      origin: "http://github.auth.preview.paretoproof.com:4371",
+    },
   });
 
   assert.equal(finalizeResponse.statusCode, 200);
   assert.deepEqual(finalizeResponse.json(), {
-    ok: true
+    ok: true,
   });
   assert.equal(profileResponse.statusCode, 403);
   assert.deepEqual(profileResponse.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
 });

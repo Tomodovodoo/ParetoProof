@@ -12,6 +12,8 @@ const checks = [
       "# Owner-ops config. Only set these when you are intentionally running owner workflows.",
       "# App runtime config for local Cloudflare Access parity and internal worker auth.",
       "# Optional local runtime overrides. Expand only for deliberate local testing.",
+      "# Optional non-prod portal/auth origin overrides. Leave unset for the canonical",
+      "# Optional portal/auth coordination cookie overrides. When unset, the API",
       "# Reserved later-scope runtime placeholders. Keep commented unless a later slice explicitly uses them."
     ],
     variables: [
@@ -35,6 +37,11 @@ const checks = [
       { name: "CLOUDFLARE_ACCOUNT_ID", commented: false },
       { name: "CORS_ALLOWED_ORIGINS", commented: false },
       { name: "CORS_ALLOW_LOCALHOST", commented: false },
+      { name: "PORTAL_PUBLIC_ORIGIN", commented: true },
+      { name: "AUTH_PUBLIC_ORIGIN", commented: true },
+      { name: "BRANDED_AUTH_ORIGINS", commented: true },
+      { name: "ACCESS_COOKIE_DOMAIN", commented: true },
+      { name: "ACCESS_COOKIE_SECURE", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_ID", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_SECRET", commented: true },
       { name: "R2_ACCESS_KEY_ID", commented: true },

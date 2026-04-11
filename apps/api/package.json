@@ -21,6 +21,7 @@
     "fastify": "latest",
     "jose": "^6.2.0",
     "postgres": "latest",
+    "tldts": "^7.0.17",
     "zod": "^3.25.76"
   },
   "devDependencies": {
