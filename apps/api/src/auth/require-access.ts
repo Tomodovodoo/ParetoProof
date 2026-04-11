@@ -3,6 +3,7 @@ import type { HookHandlerDoneFunction } from "fastify/types/hooks";
 import type { AccessRbacContext } from "./resolve-access-rbac-context.js";
 import { resolveAccessRbacContext } from "./resolve-access-rbac-context.js";
 import {
+  createCloudflareAccessVerifierSet,
   createCloudflareAccessVerifierSetFromEnv,
   readAccessJwtAssertion,
   selectCloudflareAccessVerifier,
@@ -14,6 +15,7 @@ import {
   resolvePortalAccessSession,
   type ResolvedPortalAccessSession
 } from "./portal-access-session.js";
+import type { ApiRuntimeEnv } from "../config/runtime.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 type RouteAccessRequirement =
@@ -38,9 +40,15 @@ export function isAccessAssertionVerificationError(error: unknown) {
 
 export function resolveAccessIdentityProvider(
   identity: Pick<CloudflareAccessIdentity, "provider" | "subject">,
-  cookieHeader: string | undefined
+  cookieHeader: string | undefined,
+  options?: {
+    accessProviderStateSecret?: string;
+  }
 ) {
-  return verifyAccessProviderHint(cookieHeader, identity.subject) ?? identity.provider;
+  return verifyAccessProviderHint(cookieHeader, {
+    expectedSubject: identity.subject,
+    secret: options?.accessProviderStateSecret
+  }) ?? identity.provider;
 }
 
 declare module "fastify" {
@@ -82,7 +90,11 @@ function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequireme
 async function resolveRequestAccess(
   db: ReturnTypeOfCreateDbClient,
   verifiers: CloudflareAccessVerifierSet,
-  request: FastifyRequest
+  request: FastifyRequest,
+  options?: {
+    accessProviderStateSecret?: string;
+    teamDomain?: string;
+  }
 ) {
   if (request.accessRbacContext) {
     return request.accessRbacContext;
@@ -95,7 +107,9 @@ async function resolveRequestAccess(
 
   if (!assertion) {
     if (routePath.startsWith("/portal/")) {
-      const cachedSession = await resolvePortalAccessSession(db, cookieHeader);
+      const cachedSession = await resolvePortalAccessSession(db, cookieHeader, {
+        teamDomain: options?.teamDomain
+      });
 
       if (cachedSession) {
         request.accessIdentity = cachedSession.identity;
@@ -120,7 +134,9 @@ async function resolveRequestAccess(
 
   identity = {
     ...identity,
-    provider: resolveAccessIdentityProvider(identity, cookieHeader)
+    provider: resolveAccessIdentityProvider(identity, cookieHeader, {
+      accessProviderStateSecret: options?.accessProviderStateSecret
+    })
   };
 
   const context = await resolveAccessRbacContext(db, identity);
@@ -132,15 +148,28 @@ async function resolveRequestAccess(
   return context;
 }
 
-export function createAccessResolver(db: ReturnTypeOfCreateDbClient) {
-  const verifiers = createCloudflareAccessVerifierSetFromEnv();
+export type AccessResolverOptions = {
+  accessProviderStateSecret?: string;
+  teamDomain?: string;
+  verifiers?: CloudflareAccessVerifierSet;
+};
 
-  return (request: FastifyRequest) => resolveRequestAccess(db, verifiers, request);
+export function createAccessResolver(
+  db: ReturnTypeOfCreateDbClient,
+  options?: AccessResolverOptions
+) {
+  const verifiers = options?.verifiers ?? createCloudflareAccessVerifierSetFromEnv();
+
+  return (request: FastifyRequest) =>
+    resolveRequestAccess(db, verifiers, request, options);
 }
 
 // Access proves identity at the edge, but the backend still decides whether that caller may use its DB-backed routes.
-export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
-  const resolveAccess = createAccessResolver(db);
+export function createAccessGuard(
+  db: ReturnTypeOfCreateDbClient,
+  options?: AccessResolverOptions
+) {
+  const resolveAccess = createAccessResolver(db, options);
 
   return (requirement: RouteAccessRequirement) => {
     return (
@@ -180,5 +209,18 @@ export function createAccessGuard(db: ReturnTypeOfCreateDbClient) {
           done(error);
         });
     };
+  };
+}
+
+export function runtimeEnvToAccessResolverOptions(
+  runtimeEnv: Pick<
+    ApiRuntimeEnv,
+    "accessProviderStateSecret" | "brandedAccessAudiences" | "internalAccessAudience" | "portalAccessAudience" | "teamDomain"
+  >
+): Required<AccessResolverOptions> {
+  return {
+    accessProviderStateSecret: runtimeEnv.accessProviderStateSecret,
+    teamDomain: runtimeEnv.teamDomain,
+    verifiers: createCloudflareAccessVerifierSet(runtimeEnv)
   };
 }

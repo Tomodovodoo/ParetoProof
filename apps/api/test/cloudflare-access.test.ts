@@ -53,14 +53,18 @@ test("PortalAccessProvider verification continues to use ACCESS_PROVIDER_STATE_S
     );
 
     assert.equal(
-      verifyAccessProviderHint(providerCookie, "subject-1"),
+      verifyAccessProviderHint(providerCookie, {
+        expectedSubject: "subject-1"
+      }),
       "cloudflare_google"
     );
 
     process.env.PORTAL_SESSION_SECRET = "wrong-session-secret";
 
     assert.equal(
-      verifyAccessProviderHint(providerCookie, "subject-1"),
+      verifyAccessProviderHint(providerCookie, {
+        expectedSubject: "subject-1"
+      }),
       "cloudflare_google"
     );
   } finally {
@@ -69,22 +73,50 @@ test("PortalAccessProvider verification continues to use ACCESS_PROVIDER_STATE_S
   }
 });
 
+test("PortalAccessProvider verification can use a runtime-provided secret without reparsing process.env", () => {
+  const originalProviderSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "wrong-provider-secret";
+
+  try {
+    const providerCookie = buildSignedAccessCookie(
+      "PortalAccessProvider",
+      "cloudflare_google|subject-1",
+      {
+        secret: "runtime-provider-secret"
+      }
+    );
+
+    assert.equal(
+      verifyAccessProviderHint(providerCookie, {
+        expectedSubject: "subject-1",
+        secret: "runtime-provider-secret"
+      }),
+      "cloudflare_google"
+    );
+    assert.equal(
+      verifyAccessProviderHint(providerCookie, {
+        expectedSubject: "subject-1",
+        secret: "wrong-provider-secret"
+      }),
+      null
+    );
+  } finally {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = originalProviderSecret;
+  }
+});
+
 test("createAccessResolver accepts an opaque portal access session when the DB session lookup succeeds", async () => {
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
     CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
     CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
-    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
-    DATABASE_URL: process.env.DATABASE_URL,
-    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN
   };
 
-  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
-  process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
-  process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
-  process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
-  process.env.DATABASE_URL = "postgres://localhost:5432/paretoproof";
-  process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "wrong-env-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "wrong-branded-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "wrong-portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "wrong-team.example";
 
   try {
     let touchedSession = false;
@@ -140,7 +172,15 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
           }
         };
       }
-    } as never);
+    } as never, {
+      accessProviderStateSecret: "runtime-secret",
+      teamDomain: "paretoproof.cloudflareaccess.com",
+      verifiers: {
+        brandedRelay: { audiences: ["branded"] },
+        internal: { audiences: ["internal"] },
+        portal: { audiences: ["portal"] }
+      } as never
+    });
     const request = {
       accessIdentity: null,
       accessRbacContext: null,
@@ -167,6 +207,10 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
     });
     assert.equal(request.accessIdentity?.subject, "subject-1");
     assert.equal(request.accessIdentity?.provider, "cloudflare_google");
+    assert.equal(
+      request.accessIdentity?.issuer,
+      "https://paretoproof.cloudflareaccess.com"
+    );
     assert.equal(touchedSession, true);
   } finally {
     Object.assign(process.env, originalEnv);
@@ -197,7 +241,14 @@ test("createAccessResolver gracefully rejects legacy signed portal session cooki
           findFirst: async () => null
         }
       }
-    } as never);
+    } as never, {
+      teamDomain: "paretoproof.cloudflareaccess.com",
+      verifiers: {
+        brandedRelay: { audiences: ["branded"] },
+        internal: { audiences: ["internal"] },
+        portal: { audiences: ["portal"] }
+      } as never
+    });
     const request = {
       accessIdentity: null,
       accessRbacContext: null,
@@ -271,7 +322,14 @@ test("createAccessResolver rejects revoked opaque portal sessions", async () => 
           }
         };
       }
-    } as never);
+    } as never, {
+      teamDomain: "paretoproof.cloudflareaccess.com",
+      verifiers: {
+        brandedRelay: { audiences: ["branded"] },
+        internal: { audiences: ["internal"] },
+        portal: { audiences: ["portal"] }
+      } as never
+    });
     const request = {
       accessIdentity: null,
       accessRbacContext: null,

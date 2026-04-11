@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
-import { parseApiRuntimeEnv } from "../config/runtime.js";
+import { parseApiRuntimeEnv, type ApiRuntimeEnv } from "../config/runtime.js";
 import { sessions, userIdentities } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
@@ -26,8 +26,8 @@ function getPortalAccessSessionExpiry(now = Date.now()) {
   return new Date(now + portalAccessSessionMaxAgeSeconds * 1000);
 }
 
-function buildCloudflareAccessIssuer() {
-  return `https://${parseApiRuntimeEnv().teamDomain}`;
+function buildCloudflareAccessIssuer(teamDomain?: string) {
+  return `https://${teamDomain ?? parseApiRuntimeEnv().teamDomain}`;
 }
 
 export function buildPortalAccessSessionCookie(token: string) {
@@ -99,7 +99,10 @@ export async function createPortalAccessSession(
 
 export async function resolvePortalAccessSession(
   db: ReturnTypeOfCreateDbClient,
-  cookieHeader: string | undefined
+  cookieHeader: string | undefined,
+  options?: {
+    teamDomain?: ApiRuntimeEnv["teamDomain"];
+  }
 ): Promise<ResolvedPortalAccessSession | null> {
   const token = readPortalAccessSessionToken(cookieHeader);
 
@@ -130,7 +133,7 @@ export async function resolvePortalAccessSession(
 
   const identity: CloudflareAccessIdentity = {
     email: sessionRow.identity.providerEmail ?? sessionRow.identity.user.email,
-    issuer: buildCloudflareAccessIssuer(),
+    issuer: buildCloudflareAccessIssuer(options?.teamDomain),
     provider: sessionRow.identity.provider,
     subject: sessionRow.identity.providerSubject
   };

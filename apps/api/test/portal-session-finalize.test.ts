@@ -66,6 +66,58 @@ test("GET /portal/session/finalize/submit redirects back to the auth retry hando
   assert.equal(mutationAttempted, false);
 });
 
+test("GET /portal/session/finalize/submit honors a runtime-provided link-intent secret", async (t) => {
+  let mutationAttempted = false;
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      transaction: async () => {
+        mutationAttempted = true;
+        throw new Error("portal finalize GET should not reach the mutation path");
+      }
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      accessProviderStateSecret: "runtime-secret",
+      resolvePortalAccess: async () => ({
+        email: "person@example.com",
+        identityId: "identity-1",
+        roles: ["helper"],
+        status: "approved",
+        subject: "subject-1",
+        userId: "user-1"
+      })
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/session/finalize/submit?redirect=/profile",
+    headers: {
+      accept: "text/html",
+      cookie: buildSignedAccessCookie("PortalLinkIntent", "intent-1", {
+        secret: "runtime-secret"
+      }),
+      "cf-access-jwt-assertion": "test-assertion"
+    }
+  });
+
+  assert.equal(response.statusCode, 302);
+  assert.equal(
+    response.headers.location,
+    "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+  );
+  assert.equal(mutationAttempted, false);
+});
+
 test("GET /portal/session/finalize/submit creates an opaque DB-backed session for approved users", async (t) => {
   let mutationAttempted = false;
   const insertedSessions: Array<typeof sessions.$inferInsert> = [];
