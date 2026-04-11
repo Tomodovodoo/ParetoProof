@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseApiRuntimeEnv } from "./config/runtime.js";
 import { buildServer } from "./server/build-server.js";
 
@@ -22,6 +24,22 @@ export async function startApiServer(options?: {
   }
 }
 
-if (import.meta.main && process.env.NODE_ENV !== "test") {
+export function isExecutedAsMainModule(options?: {
+  entryPointPath?: string;
+  moduleUrl?: string;
+}) {
+  const entryPointPath = options?.entryPointPath ?? process.argv[1];
+
+  if (!entryPointPath) {
+    return false;
+  }
+
+  return (
+    resolve(fileURLToPath(options?.moduleUrl ?? import.meta.url)) ===
+    resolve(entryPointPath)
+  );
+}
+
+if (process.env.NODE_ENV !== "test" && isExecutedAsMainModule()) {
   void startApiServer();
 }

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startApiServer } from "../src/index.ts";
+import { isExecutedAsMainModule, startApiServer } from "../src/index.ts";
+
+test("isExecutedAsMainModule accepts relative entrypoint paths for normal CLI launches", () => {
+  assert.equal(
+    isExecutedAsMainModule({
+      entryPointPath: "src/index.ts",
+      moduleUrl: new URL("../src/index.ts", import.meta.url).toString()
+    }),
+    true
+  );
+});
 
 test("startApiServer exits when runtime parsing fails before the server is built", async () => {
   const originalConsoleError = console.error;
