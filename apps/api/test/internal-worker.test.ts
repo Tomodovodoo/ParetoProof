@@ -2206,6 +2206,10 @@ test("claim terminal-fails expired started work before polling for new candidate
     (updateCalls[1].failureClassification as Record<string, unknown>).evidenceArtifactRefs,
     ["worker-control/lease-expired-recovery"]
   );
+  assert.equal(
+    (updateCalls[1].failureClassification as Record<string, unknown>).phase,
+    "generate"
+  );
   assert.equal(updateCalls[2].state, "failed");
   assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
   assert.equal(updateCalls[3].state, "failed");

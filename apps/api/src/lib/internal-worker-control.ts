@@ -1312,7 +1312,7 @@ function buildLeaseLostFailureClassification() {
     evidenceArtifactRefs: ["worker-control/lease-expired-recovery"],
     failureCode: "worker_lease_lost" as const,
     failureFamily: "harness" as const,
-    phase: "execute" as const,
+    phase: "generate" as const,
     retryEligibility: "manual_retry_only" as const,
     summary: "The active worker lease expired before the attempt finished.",
     terminality: "terminal_attempt" as const,
