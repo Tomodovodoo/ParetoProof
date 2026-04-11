@@ -800,6 +800,13 @@ test("runWorkerClaimLoop treats late-finalize cancel-window loss as lease loss a
         `/internal/worker/jobs/${workerJob.jobId}/failure`
       ]
     );
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.deepEqual(failureBody.artifactIds, ["artifact-1", "artifact-2"]);
+    assert.equal(failureBody.artifactManifestDigest, artifactManifestDigest);
+    assert.equal(failureBody.bundleDigest, bundleDigest);
+    assert.equal(failureBody.candidateDigest, candidateDigest);
+    assert.deepEqual(failureBody.failure.evidenceArtifactRefs, ["verification/verdict.json"]);
+    assert.equal(failureBody.terminalState, "cancelled");
     assert.equal(calls.at(-1)?.token, "job-token-4");
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
@@ -1003,6 +1010,13 @@ test("runWorkerClaimLoop treats late-finalize cancel-window loss as lease loss a
         `/internal/worker/jobs/${workerJob.jobId}/failure`
       ]
     );
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.deepEqual(failureBody.artifactIds, ["artifact-1", "artifact-2"]);
+    assert.equal(failureBody.artifactManifestDigest, artifactManifestDigest);
+    assert.equal(failureBody.bundleDigest, bundleDigest);
+    assert.equal(failureBody.candidateDigest, candidateDigest);
+    assert.deepEqual(failureBody.failure.evidenceArtifactRefs, ["verification/verdict.json"]);
+    assert.equal(failureBody.terminalState, "cancelled");
     assert.equal(calls.at(-1)?.token, "job-token-4");
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));

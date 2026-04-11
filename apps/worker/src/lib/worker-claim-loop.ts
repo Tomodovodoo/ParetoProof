@@ -154,6 +154,14 @@ type PreparedBundleSubmission = {
   verdictDigest: string;
 };
 
+type CancellationTerminalContext = {
+  artifactIds: string[];
+  artifactManifestDigest: string;
+  artifacts: Pick<WorkerArtifactManifestResponse["artifacts"][number], "artifactRole" | "relativePath">[];
+  bundleDigest: string;
+  candidateDigest: string;
+};
+
 type LeaseFilesystemRoots = {
   attemptOutputRoot: string;
   attemptWorkspaceRoot: string;
@@ -557,6 +565,13 @@ async function processClaimedJob(
         recordedAt: dependencies.now().toISOString()
       }
     );
+    const cancellationTerminalContext: CancellationTerminalContext = {
+      artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
+      artifactManifestDigest: bundleSubmission.artifactManifestDigest,
+      artifacts: manifestResponse.artifacts,
+      bundleDigest: bundleSubmission.bundleDigest,
+      candidateDigest: bundleSubmission.candidateDigest
+    };
 
     await appendWorkerEvent(
       leaseState,
@@ -576,7 +591,8 @@ async function processClaimedJob(
         leaseState,
         apiBaseUrl,
         dependencies,
-        "Worker received a control-plane cancellation request after artifact registration."
+        "Worker received a control-plane cancellation request after artifact registration.",
+        cancellationTerminalContext
       )
     ) {
       return "completed";
@@ -604,7 +620,8 @@ async function processClaimedJob(
         leaseState,
         apiBaseUrl,
         dependencies,
-        "Worker received a control-plane cancellation request after bundle finalization."
+        "Worker received a control-plane cancellation request after bundle finalization.",
+        cancellationTerminalContext
       )
     ) {
       return "completed";
@@ -947,24 +964,47 @@ async function submitCancellationIfRequested(
   leaseState: ActiveLeaseState,
   apiBaseUrl: string,
   dependencies: WorkerClaimLoopResolvedDependencies,
-  summary = "Worker received a control-plane cancellation request."
+  summary = "Worker received a control-plane cancellation request.",
+  terminalContext: CancellationTerminalContext | null = null
 ): Promise<boolean> {
   if (!leaseState.cancelRequested || leaseState.leaseLost) {
     return false;
   }
 
-  try {
-    await submitHarnessFailure(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      buildStaticFailure({
+  leaseState.currentPhase = "cancel";
+  leaseState.progressMessage = summary;
+  const failure = terminalContext
+    ? buildSelectedArtifactFallbackFailure(terminalContext.artifacts, {
         summary,
         failureCode: "manual_cancelled",
         phase: "cancel"
-      }),
+      })
+    : buildStaticFailure({
+        summary,
+        failureCode: "manual_cancelled",
+        phase: "cancel"
+      });
+
+  try {
+    await submitWorkerFailure(
+      leaseState,
+      apiBaseUrl,
+      dependencies,
       {
-        allowCancelRequested: true
+        artifactIds: terminalContext?.artifactIds ?? [],
+        artifactManifestDigest: terminalContext?.artifactManifestDigest ?? null,
+        attemptId: leaseState.job.attemptId,
+        bundleDigest: terminalContext?.bundleDigest ?? null,
+        candidateDigest: terminalContext?.candidateDigest ?? null,
+        failedAt: dependencies.now().toISOString(),
+        failure,
+        jobId: leaseState.job.jobId,
+        leaseId: leaseState.job.leaseId,
+        runId: leaseState.job.runId,
+        summary,
+        terminalState: "cancelled",
+        verifierVerdict: null,
+        verdictDigest: null
       }
     );
   } catch (error) {
