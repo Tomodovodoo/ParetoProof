@@ -11,14 +11,14 @@ import {
   portalRunsListQuerySchema,
   type PortalBenchmarkDatasetResponse,
   type PortalProfile,
-  type PortalProfileLinkIntent
+  type PortalProfileLinkIntent,
 } from "@paretoproof/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type {
   FastifyInstance,
   FastifyReply,
   FastifyRequest,
-  preHandlerHookHandler
+  preHandlerHookHandler,
 } from "fastify";
 import {
   accessRequests,
@@ -26,7 +26,7 @@ import {
   identityLinkIntents,
   roleGrants,
   userIdentities,
-  users
+  users,
 } from "../db/schema.js";
 import { toAccessRequestSummary } from "../lib/access-request-summary.js";
 import { normalizeOptionalEmail } from "../lib/email.js";
@@ -34,32 +34,40 @@ import {
   buildRequestedIdentityProviderSubjectMatch,
   buildUserIdentityProviderSubjectMatch,
   filterUserIdentityProviderSubjectMatch,
-  matchesUserIdentityProviderSubject
+  matchesUserIdentityProviderSubject,
 } from "../lib/identity-binding.js";
 import {
   createPortalBenchmarkOpsReadModelService,
-  type PortalBenchmarkOpsReadModelService
+  type PortalBenchmarkOpsReadModelService,
 } from "../lib/portal-benchmark-ops.js";
 import { createHarnessRegistryService } from "../lib/harness-registry.js";
 import {
   buildSignedAccessCookie,
   verifyAccessProviderHint,
-  verifyAccessLinkIntent
+  verifyAccessLinkIntent,
 } from "../auth/cloudflare-access.js";
 import {
   buildPortalAccessSessionCookie,
   createPortalAccessSession,
-  revokePortalAccessSession
+  revokePortalAccessSession,
 } from "../auth/portal-access-session.js";
 import {
   createAccessResolver,
   isAccessAssertionVerificationError,
-  type AccessResolverOptions
+  type AccessResolverOptions,
 } from "../auth/require-access.js";
 import { resolveAccessRbacContext } from "../auth/resolve-access-rbac-context.js";
+import {
+  resolveApiOriginRuntimeConfig,
+  type ApiRuntimeEnv,
+} from "../config/runtime.js";
 import type { createRateLimitPreHandlers } from "../middleware/rate-limit.js";
 import type { ReturnTypeOfCreateAccessGuard } from "../types/access-guard.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
+import {
+  isAllowedBrandedAuthOrigin,
+  normalizeOrigin,
+} from "../server/trusted-mutation-origin.js";
 
 class PortalAccessRequestConflictError extends Error {
   constructor(message: string) {
@@ -99,42 +107,73 @@ function createSubmittedAuditPayload(options: {
     actorUserId: options.actorUserId,
     requestKind: options.requestKind,
     requestedRole: options.requestedRole,
-    targetEmail: options.targetEmail
+    targetEmail: options.targetEmail,
   };
 }
 
-function sanitizePortalRedirectPath(rawRedirectPath: string | null) {
+type PortalRouteRuntimeConfig = Pick<
+  ApiRuntimeEnv,
+  | "accessCookieDomain"
+  | "accessCookieSecure"
+  | "authPublicOrigin"
+  | "brandedAuthOrigins"
+  | "corsAllowLocalhost"
+  | "portalPublicOrigin"
+>;
+
+function sanitizePortalRedirectPath(
+  rawRedirectPath: string | null,
+  portalPublicOrigin: string,
+) {
   if (!rawRedirectPath || rawRedirectPath === "/") {
     return "/";
   }
 
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) || rawRedirectPath.startsWith("//")) {
+  if (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) ||
+    rawRedirectPath.startsWith("//")
+  ) {
     return "/";
   }
 
   try {
     const candidateUrl = new URL(
       rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      "https://portal.paretoproof.com"
+      portalPublicOrigin,
     );
 
-    if (candidateUrl.origin !== "https://portal.paretoproof.com") {
+    if (candidateUrl.origin !== portalPublicOrigin) {
       return "/";
     }
 
-    return `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/";
+    return (
+      `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` ||
+      "/"
+    );
   } catch {
     return "/";
   }
 }
 
 function clearSignedAccessCookie(
-  name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession"
+  name: "PortalAccessProvider" | "PortalLinkIntent" | "PortalAccessSession",
+  runtimeConfig: PortalRouteRuntimeConfig,
 ) {
-  return `${name}=; Domain=.paretoproof.com; Path=/; SameSite=Strict; Max-Age=0; Secure; HttpOnly`;
+  return [
+    `${name}=`,
+    ...(runtimeConfig.accessCookieDomain
+      ? [`Domain=${runtimeConfig.accessCookieDomain}`]
+      : []),
+    "Path=/",
+    "SameSite=Strict",
+    "Max-Age=0",
+    ...(runtimeConfig.accessCookieSecure ? ["Secure"] : []),
+    "HttpOnly",
+  ].join("; ");
 }
 
 function buildPortalAuthStartUrl(options: {
+  authPublicOrigin: string;
   provider: "cloudflare_github" | "cloudflare_google";
   redirectPath: string;
 }) {
@@ -142,7 +181,7 @@ function buildPortalAuthStartUrl(options: {
     options.provider === "cloudflare_github"
       ? "/api/access/start/github"
       : "/api/access/start/google",
-    "https://auth.paretoproof.com"
+    options.authPublicOrigin,
   );
 
   if (options.redirectPath !== "/") {
@@ -154,8 +193,11 @@ function buildPortalAuthStartUrl(options: {
   return authUrl.toString();
 }
 
-function buildPortalAuthRetryUrl(redirectPath: string) {
-  const authUrl = new URL("https://auth.paretoproof.com");
+function buildPortalAuthRetryUrl(
+  redirectPath: string,
+  authPublicOrigin: string,
+) {
+  const authUrl = new URL(authPublicOrigin);
 
   if (redirectPath !== "/") {
     authUrl.searchParams.set("redirect", redirectPath);
@@ -166,13 +208,10 @@ function buildPortalAuthRetryUrl(redirectPath: string) {
   return authUrl.toString();
 }
 
-const brandedAuthHosts = new Set([
-  "auth.paretoproof.com",
-  "github.auth.paretoproof.com",
-  "google.auth.paretoproof.com"
-]);
-
-function readTrustedBrandedAuthOrigin(request: FastifyRequest) {
+function readTrustedBrandedAuthOrigin(
+  request: FastifyRequest,
+  runtimeConfig: PortalRouteRuntimeConfig,
+) {
   const originHeader =
     typeof request.headers.origin === "string" ? request.headers.origin : null;
 
@@ -180,8 +219,14 @@ function readTrustedBrandedAuthOrigin(request: FastifyRequest) {
     try {
       const originUrl = new URL(originHeader);
 
-      if (originUrl.protocol === "https:" && brandedAuthHosts.has(originUrl.hostname)) {
-        return originUrl.origin;
+      if (
+        isAllowedBrandedAuthOrigin({
+          allowLocalhostOrigins: runtimeConfig.corsAllowLocalhost,
+          brandedAuthOrigins: runtimeConfig.brandedAuthOrigins,
+          origin: originUrl.origin,
+        })
+      ) {
+        return normalizeOrigin(originUrl.origin);
       }
     } catch {
       return null;
@@ -189,7 +234,9 @@ function readTrustedBrandedAuthOrigin(request: FastifyRequest) {
   }
 
   const refererHeader =
-    typeof request.headers.referer === "string" ? request.headers.referer : null;
+    typeof request.headers.referer === "string"
+      ? request.headers.referer
+      : null;
 
   if (!refererHeader) {
     return null;
@@ -198,8 +245,14 @@ function readTrustedBrandedAuthOrigin(request: FastifyRequest) {
   try {
     const refererUrl = new URL(refererHeader);
 
-    if (refererUrl.protocol === "https:" && brandedAuthHosts.has(refererUrl.hostname)) {
-      return refererUrl.origin;
+    if (
+      isAllowedBrandedAuthOrigin({
+        allowLocalhostOrigins: runtimeConfig.corsAllowLocalhost,
+        brandedAuthOrigins: runtimeConfig.brandedAuthOrigins,
+        origin: refererUrl.origin,
+      })
+    ) {
+      return normalizeOrigin(refererUrl.origin);
     }
   } catch {
     return null;
@@ -228,9 +281,12 @@ function toPortalProfile(options: {
   return {
     createdAt: options.userRow?.createdAt.toISOString() ?? null,
     displayName: options.userRow?.displayName ?? null,
-    email: options.userRow?.email ?? normalizeOptionalEmail(options.fallbackEmail),
+    email:
+      options.userRow?.email ?? normalizeOptionalEmail(options.fallbackEmail),
     identities: [...options.linkedIdentityRows]
-      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      )
       .map((identityRow) => ({
         createdAt: identityRow.createdAt.toISOString(),
         current:
@@ -238,15 +294,15 @@ function toPortalProfile(options: {
           matchesUserIdentityProviderSubject(
             identityRow,
             options.currentProvider,
-            options.currentSubject
+            options.currentSubject,
           ),
         id: identityRow.id,
         lastSeenAt: identityRow.lastSeenAt.toISOString(),
         provider: identityRow.provider,
-        providerEmail: identityRow.providerEmail
+        providerEmail: identityRow.providerEmail,
       })),
     linkedUserId: options.userRow?.id ?? null,
-    updatedAt: options.userRow?.updatedAt.toISOString() ?? null
+    updatedAt: options.userRow?.updatedAt.toISOString() ?? null,
   };
 }
 
@@ -261,7 +317,10 @@ function escapeCsvValue(value: string) {
 }
 
 function sanitizeExportFilenameSegment(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "benchmark";
+  return (
+    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") ||
+    "benchmark"
+  );
 }
 
 function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
@@ -297,7 +356,7 @@ function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
     "verifierResult",
     "failureFamily",
     "failureCode",
-    "failureSummary"
+    "failureSummary",
   ];
   const rows = dataset.runs.flatMap((run) => {
     const attempts = attemptsByRunId.get(run.runId) ?? [null];
@@ -320,7 +379,7 @@ function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
       attempt?.verifierResult ?? "",
       attempt?.failure.family ?? run.failure.family ?? "",
       attempt?.failure.code ?? run.failure.code ?? "",
-      attempt?.failure.summary ?? run.failure.summary ?? ""
+      attempt?.failure.summary ?? run.failure.summary ?? "",
     ]);
   });
 
@@ -337,11 +396,14 @@ function buildBenchmarkDatasetCsv(dataset: PortalBenchmarkDatasetResponse) {
     .join("\n");
 }
 
-async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
-  fallbackEmail: string | null;
-  identityProvider: (typeof userIdentities.$inferSelect)["provider"] | null;
-  identitySubject: string;
-}) {
+async function loadPortalProfile(
+  db: ReturnTypeOfCreateDbClient,
+  options: {
+    fallbackEmail: string | null;
+    identityProvider: (typeof userIdentities.$inferSelect)["provider"] | null;
+    identitySubject: string;
+  },
+) {
   const linkedIdentity =
     options.identityProvider === null
       ? null
@@ -349,18 +411,18 @@ async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
           await db.query.userIdentities.findFirst({
             where: buildUserIdentityProviderSubjectMatch(
               options.identityProvider,
-              options.identitySubject
+              options.identitySubject,
             ),
             with: {
               user: {
                 with: {
-                  identities: true
-                }
-              }
-            }
+                  identities: true,
+                },
+              },
+            },
           }),
           options.identityProvider,
-          options.identitySubject
+          options.identitySubject,
         );
 
   return toPortalProfile({
@@ -368,7 +430,7 @@ async function loadPortalProfile(db: ReturnTypeOfCreateDbClient, options: {
     currentSubject: options.identitySubject,
     fallbackEmail: options.fallbackEmail,
     linkedIdentityRows: linkedIdentity?.user.identities ?? [],
-    userRow: linkedIdentity?.user ?? null
+    userRow: linkedIdentity?.user ?? null,
   });
 }
 
@@ -377,23 +439,39 @@ export function registerPortalRoutes(
   db: ReturnTypeOfCreateDbClient,
   requireAccess: ReturnTypeOfCreateAccessGuard,
   options?: {
+    accessCookieDomain?: ApiRuntimeEnv["accessCookieDomain"];
+    accessCookieSecure?: ApiRuntimeEnv["accessCookieSecure"];
     accessProviderStateSecret?: string;
     accessResolverOptions?: AccessResolverOptions;
+    allowLocalhostOrigins?: ApiRuntimeEnv["corsAllowLocalhost"];
+    authPublicOrigin?: ApiRuntimeEnv["authPublicOrigin"];
+    brandedAuthOrigins?: ApiRuntimeEnv["brandedAuthOrigins"];
     portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
+    portalPublicOrigin?: ApiRuntimeEnv["portalPublicOrigin"];
     rateLimitPreHandlers?: ReturnType<typeof createRateLimitPreHandlers>;
     resolvePortalAccess?: ReturnType<typeof createAccessResolver>;
-  }
+  },
 ) {
   const accessResolverOptions = options?.accessResolverOptions;
   const accessProviderStateSecret =
     options?.accessProviderStateSecret ??
     accessResolverOptions?.accessProviderStateSecret;
   const resolvePortalAccess =
-    options?.resolvePortalAccess ?? createAccessResolver(db, accessResolverOptions);
+    options?.resolvePortalAccess ??
+    createAccessResolver(db, accessResolverOptions);
   const portalBenchmarkOpsReadModels =
-    options?.portalBenchmarkOpsReadModels ?? createPortalBenchmarkOpsReadModelService(db);
+    options?.portalBenchmarkOpsReadModels ??
+    createPortalBenchmarkOpsReadModelService(db);
   const harnessRegistry = createHarnessRegistryService();
   const rateLimitPreHandlers = options?.rateLimitPreHandlers;
+  const runtimeConfig = resolveApiOriginRuntimeConfig({
+    accessCookieDomain: options?.accessCookieDomain,
+    accessCookieSecure: options?.accessCookieSecure,
+    authPublicOrigin: options?.authPublicOrigin,
+    brandedAuthOrigins: options?.brandedAuthOrigins,
+    corsAllowLocalhost: options?.allowLocalhostOrigins,
+    portalPublicOrigin: options?.portalPublicOrigin,
+  });
   const withAuthenticatedRateLimit = (guard: preHandlerHookHandler) =>
     rateLimitPreHandlers?.authenticated
       ? [guard, rateLimitPreHandlers.authenticated]
@@ -401,22 +479,30 @@ export function registerPortalRoutes(
 
   const handlePortalSessionRetryRedirect = (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ) => {
     const redirectPath = sanitizePortalRedirectPath(
-      (request.query as { redirect?: string } | undefined)?.redirect ?? null
+      (request.query as { redirect?: string } | undefined)?.redirect ?? null,
+      runtimeConfig.portalPublicOrigin,
     );
 
-    reply.header("set-cookie", clearSignedAccessCookie("PortalAccessSession"));
-    reply.redirect(buildPortalAuthRetryUrl(redirectPath));
+    reply.header(
+      "set-cookie",
+      clearSignedAccessCookie("PortalAccessSession", runtimeConfig),
+    );
+    reply.redirect(
+      buildPortalAuthRetryUrl(redirectPath, runtimeConfig.authPublicOrigin),
+    );
   };
 
   const handlePortalSessionCompletion = async (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ) => {
     const cookieHeader =
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+      typeof request.headers.cookie === "string"
+        ? request.headers.cookie
+        : undefined;
     const identity = request.accessIdentity;
     const accessContext = request.accessRbacContext;
     const parsedBody =
@@ -426,25 +512,30 @@ export function registerPortalRoutes(
     const redirectPath = sanitizePortalRedirectPath(
       parsedBody?.redirect ??
         (request.query as { redirect?: string } | undefined)?.redirect ??
-        null
+        null,
+      runtimeConfig.portalPublicOrigin,
     );
-    const portalUrl = new URL(redirectPath, "https://portal.paretoproof.com");
+    const portalUrl = new URL(redirectPath, runtimeConfig.portalPublicOrigin);
     const linkIntent = verifyAccessLinkIntent(cookieHeader, {
-      secret: accessProviderStateSecret
+      secret: accessProviderStateSecret,
     });
     const providerHint = verifyAccessProviderHint(cookieHeader, {
       expectedSubject: identity?.subject,
-      secret: accessProviderStateSecret
+      secret: accessProviderStateSecret,
     });
     let resolvedAccessContext = accessContext;
 
     if (identity && linkIntent) {
       const linkStatus = await db.transaction(async (tx) => {
         const intentRow = await tx.query.identityLinkIntents.findFirst({
-          where: eq(identityLinkIntents.id, linkIntent.intentId)
+          where: eq(identityLinkIntents.id, linkIntent.intentId),
         });
 
-        if (!intentRow || intentRow.usedAt || intentRow.expiresAt.getTime() <= Date.now()) {
+        if (
+          !intentRow ||
+          intentRow.usedAt ||
+          intentRow.expiresAt.getTime() <= Date.now()
+        ) {
           return "invalid";
         }
 
@@ -456,14 +547,17 @@ export function registerPortalRoutes(
           await tx.query.userIdentities.findFirst({
             where: buildUserIdentityProviderSubjectMatch(
               intentRow.targetProvider,
-              identity.subject
-            )
+              identity.subject,
+            ),
           }),
           intentRow.targetProvider,
-          identity.subject
+          identity.subject,
         );
 
-        if (existingSubjectOwner && existingSubjectOwner.userId !== intentRow.userId) {
+        if (
+          existingSubjectOwner &&
+          existingSubjectOwner.userId !== intentRow.userId
+        ) {
           return "conflict";
         }
 
@@ -474,14 +568,14 @@ export function registerPortalRoutes(
             provider: intentRow.targetProvider,
             providerEmail: normalizeOptionalEmail(identity.email),
             providerSubject: identity.subject,
-            userId: intentRow.userId
+            userId: intentRow.userId,
           });
         } else {
           await tx
             .update(userIdentities)
             .set({
               lastSeenAt: now,
-              providerEmail: normalizeOptionalEmail(identity.email)
+              providerEmail: normalizeOptionalEmail(identity.email),
             })
             .where(eq(userIdentities.id, existingSubjectOwner.id));
         }
@@ -489,7 +583,7 @@ export function registerPortalRoutes(
         await tx
           .update(identityLinkIntents)
           .set({
-            usedAt: now
+            usedAt: now,
           })
           .where(eq(identityLinkIntents.id, intentRow.id));
 
@@ -500,11 +594,11 @@ export function registerPortalRoutes(
           payload: {
             identityProvider: intentRow.targetProvider,
             identitySubject: identity.subject,
-            targetUserId: intentRow.userId
+            targetUserId: intentRow.userId,
           },
           severity: "critical",
           subjectKind: "user_identity",
-          targetUserId: intentRow.userId
+          targetUserId: intentRow.userId,
         });
 
         return "linked";
@@ -525,21 +619,27 @@ export function registerPortalRoutes(
               db,
               request,
               identity,
-              resolvedAccessContext
-            )
+              resolvedAccessContext,
+            ),
+            {
+              cookieDomain: runtimeConfig.accessCookieDomain,
+              secure: runtimeConfig.accessCookieSecure,
+            },
           )
-        : clearSignedAccessCookie("PortalAccessSession"),
+        : clearSignedAccessCookie("PortalAccessSession", runtimeConfig),
       identity && providerHint
         ? buildSignedAccessCookie(
             "PortalAccessProvider",
             `${providerHint}|${identity.subject}`,
             {
+              cookieDomain: runtimeConfig.accessCookieDomain,
               maxAgeSeconds: 24 * 60 * 60,
-              secret: accessProviderStateSecret
-            }
+              secret: accessProviderStateSecret,
+              secure: runtimeConfig.accessCookieSecure,
+            },
           )
-        : clearSignedAccessCookie("PortalAccessProvider"),
-      clearSignedAccessCookie("PortalLinkIntent")
+        : clearSignedAccessCookie("PortalAccessProvider", runtimeConfig),
+      clearSignedAccessCookie("PortalLinkIntent", runtimeConfig),
     ];
 
     reply.header("set-cookie", responseCookies);
@@ -549,7 +649,7 @@ export function registerPortalRoutes(
       request.headers.accept.includes("application/json")
     ) {
       return reply.send({
-        redirectTo: portalUrl.toString()
+        redirectTo: portalUrl.toString(),
       });
     }
 
@@ -558,13 +658,19 @@ export function registerPortalRoutes(
 
   const handlePortalSessionFinalizeGet = async (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ) => {
     const cookieHeader =
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+      typeof request.headers.cookie === "string"
+        ? request.headers.cookie
+        : undefined;
 
     // Cross-site GETs must not be enough to consume a pending identity-link intent.
-    if (verifyAccessLinkIntent(cookieHeader, { secret: accessProviderStateSecret })) {
+    if (
+      verifyAccessLinkIntent(cookieHeader, {
+        secret: accessProviderStateSecret,
+      })
+    ) {
       handlePortalSessionRetryRedirect(request, reply);
       return;
     }
@@ -590,7 +696,7 @@ export function registerPortalRoutes(
 
   const handlePortalSessionFinalizeSubmit = async (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ) => {
     const parsedBody =
       typeof request.body === "object" && request.body !== null
@@ -599,42 +705,53 @@ export function registerPortalRoutes(
     const redirectPath = sanitizePortalRedirectPath(
       parsedBody?.redirect ??
         (request.query as { redirect?: string } | undefined)?.redirect ??
-        null
+        null,
+      runtimeConfig.portalPublicOrigin,
     );
 
     try {
       const accessContext = await resolvePortalAccess(request);
 
       if (!accessContext) {
-        const brandedOrigin = readTrustedBrandedAuthOrigin(request);
+        const brandedOrigin = readTrustedBrandedAuthOrigin(
+          request,
+          runtimeConfig,
+        );
 
         if (brandedOrigin) {
-          reply.code(307).header(
-            "location",
-            buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath)
-          );
+          reply
+            .code(307)
+            .header(
+              "location",
+              buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath),
+            );
           return reply.send();
         }
 
         reply.code(401).send({
-          error: "access_assertion_required"
+          error: "access_assertion_required",
         });
         return;
       }
     } catch (error) {
       if (isAccessAssertionVerificationError(error)) {
-        const brandedOrigin = readTrustedBrandedAuthOrigin(request);
+        const brandedOrigin = readTrustedBrandedAuthOrigin(
+          request,
+          runtimeConfig,
+        );
 
         if (brandedOrigin) {
-          reply.code(307).header(
-            "location",
-            buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath)
-          );
+          reply
+            .code(307)
+            .header(
+              "location",
+              buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath),
+            );
           return reply.send();
         }
 
         reply.code(401).send({
-          error: "invalid_access_assertion"
+          error: "invalid_access_assertion",
         });
         return;
       }
@@ -649,76 +766,104 @@ export function registerPortalRoutes(
     "/portal/me",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
     async (request) => {
       return {
         identity: request.accessIdentity,
-        access: request.accessRbacContext
+        access: request.accessRbacContext,
       };
-    }
+    },
   );
 
-  app.get("/portal/session/complete", {
-    preHandler: rateLimitPreHandlers?.public
-  }, handlePortalSessionRetryRedirect);
-  app.get("/portal/session/finalize", {
-    preHandler: rateLimitPreHandlers?.public
-  }, handlePortalSessionRetryRedirect);
-  app.get("/portal/session/finalize/submit", {
-    preHandler: rateLimitPreHandlers?.public
-  }, handlePortalSessionFinalizeGet);
+  app.get(
+    "/portal/session/complete",
+    {
+      preHandler: rateLimitPreHandlers?.public,
+    },
+    handlePortalSessionRetryRedirect,
+  );
+  app.get(
+    "/portal/session/finalize",
+    {
+      preHandler: rateLimitPreHandlers?.public,
+    },
+    handlePortalSessionRetryRedirect,
+  );
+  app.get(
+    "/portal/session/finalize/submit",
+    {
+      preHandler: rateLimitPreHandlers?.public,
+    },
+    handlePortalSessionFinalizeGet,
+  );
 
   app.post(
     "/portal/session/complete",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
-    handlePortalSessionCompletion
+    handlePortalSessionCompletion,
   );
 
   app.post(
     "/portal/session/finalize",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
-    handlePortalSessionCompletion
+    handlePortalSessionCompletion,
   );
 
   app.post(
     "/portal/session/finalize/submit",
     {
-      preHandler: rateLimitPreHandlers?.public
+      preHandler: rateLimitPreHandlers?.public,
     },
-    handlePortalSessionFinalizeSubmit
+    handlePortalSessionFinalizeSubmit,
   );
 
-  app.post("/portal/session/sign-out", {
-    preHandler: rateLimitPreHandlers?.public
-  }, async (request, reply) => {
-    const cookieHeader =
-      typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
+  app.post(
+    "/portal/session/sign-out",
+    {
+      preHandler: rateLimitPreHandlers?.public,
+    },
+    async (request, reply) => {
+      const cookieHeader =
+        typeof request.headers.cookie === "string"
+          ? request.headers.cookie
+          : undefined;
 
-    await revokePortalAccessSession(db, cookieHeader);
-    reply.code(204).header("set-cookie", [
-      clearSignedAccessCookie("PortalAccessSession"),
-      clearSignedAccessCookie("PortalAccessProvider"),
-      clearSignedAccessCookie("PortalLinkIntent")
-    ]);
-    return reply.send();
-  });
+      await revokePortalAccessSession(db, cookieHeader);
+      reply
+        .code(204)
+        .header("set-cookie", [
+          clearSignedAccessCookie("PortalAccessSession", runtimeConfig),
+          clearSignedAccessCookie("PortalAccessProvider", runtimeConfig),
+          clearSignedAccessCookie("PortalLinkIntent", runtimeConfig),
+        ]);
+      return reply.send();
+    },
+  );
 
   app.get(
     "/portal/access-requests/me",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
     async (request) => {
       const identity = request.accessIdentity;
@@ -729,7 +874,9 @@ export function registerPortalRoutes(
       const accessEmail = normalizeOptionalEmail(identity?.email);
 
       if (!identity) {
-        throw new Error("Authenticated Access identity was not attached to the request.");
+        throw new Error(
+          "Authenticated Access identity was not attached to the request.",
+        );
       }
 
       const linkedIdentity =
@@ -739,24 +886,27 @@ export function registerPortalRoutes(
               await db.query.userIdentities.findFirst({
                 where: buildUserIdentityProviderSubjectMatch(
                   identity.provider,
-                  identity.subject
-                )
+                  identity.subject,
+                ),
               }),
               identity.provider,
-              identity.subject
+              identity.subject,
             );
 
       const latestRequest =
         (linkedIdentity
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.requestedByUserId, linkedIdentity.userId)
+              where: eq(
+                accessRequests.requestedByUserId,
+                linkedIdentity.userId,
+              ),
             })
           : null) ??
         (pendingUserId
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.requestedByUserId, pendingUserId)
+              where: eq(accessRequests.requestedByUserId, pendingUserId),
             })
           : null) ??
         (canUsePendingFallback && accessEmail
@@ -764,259 +914,301 @@ export function registerPortalRoutes(
               orderBy: [desc(accessRequests.createdAt)],
               where: and(
                 eq(accessRequests.email, accessEmail),
-                eq(accessRequests.status, "pending")
-              )
+                eq(accessRequests.status, "pending"),
+              ),
             })
           : null) ??
         (accessEmail
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.email, accessEmail)
+              where: eq(accessRequests.email, accessEmail),
             })
           : null);
 
       return {
-        item: latestRequest ? toAccessRequestSummary(latestRequest) : null
+        item: latestRequest ? toAccessRequestSummary(latestRequest) : null,
       };
-    }
+    },
   );
 
   app.get(
     "/portal/profile",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request) => {
       const identity = request.accessIdentity;
 
       if (!identity) {
-        throw new Error("Authenticated Access identity was not attached to the request.");
+        throw new Error(
+          "Authenticated Access identity was not attached to the request.",
+        );
       }
 
       return {
         profile: await loadPortalProfile(db, {
           fallbackEmail: normalizeOptionalEmail(identity.email),
           identityProvider: identity.provider,
-          identitySubject: identity.subject
-        })
+          identitySubject: identity.subject,
+        }),
       };
-    }
+    },
   );
 
   app.get(
     "/portal/benchmarks",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.benchmarksListResponse
+        contract: portalBenchmarkOpsReadModelsContract.benchmarksListResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
-    async () => portalBenchmarkOpsReadModels.getBenchmarksList()
+    async () => portalBenchmarkOpsReadModels.getBenchmarksList(),
   );
 
   app.get(
     "/portal/benchmarks/:packageId/dataset",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.benchmarkDatasetResponse
+        contract: portalBenchmarkOpsReadModelsContract.benchmarkDatasetResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(request.params ?? {});
+      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(
+        request.params ?? {},
+      );
 
       if (!parsedParams.success) {
         reply.code(400).send({
           error: "invalid_portal_benchmark_dataset_params",
-          issues: parsedParams.error.issues
+          issues: parsedParams.error.issues,
         });
         return;
       }
 
       const dataset = await portalBenchmarkOpsReadModels.getBenchmarkDataset(
-        parsedParams.data.packageId
+        parsedParams.data.packageId,
       );
 
       if (!dataset) {
         reply.code(404).send({
-          error: "portal_benchmark_dataset_not_found"
+          error: "portal_benchmark_dataset_not_found",
         });
         return;
       }
 
       return dataset;
-    }
+    },
   );
 
   app.get(
     "/portal/benchmarks/:packageId/export",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(request.params ?? {});
+      const parsedParams = portalBenchmarkDatasetParamsSchema.safeParse(
+        request.params ?? {},
+      );
 
       if (!parsedParams.success) {
         reply.code(400).send({
           error: "invalid_portal_benchmark_export_params",
-          issues: parsedParams.error.issues
+          issues: parsedParams.error.issues,
         });
         return;
       }
 
-      const parsedQuery = portalBenchmarkExportQuerySchema.safeParse(request.query ?? {});
+      const parsedQuery = portalBenchmarkExportQuerySchema.safeParse(
+        request.query ?? {},
+      );
 
       if (!parsedQuery.success) {
         reply.code(400).send({
           error: "invalid_portal_benchmark_export_query",
-          issues: parsedQuery.error.issues
+          issues: parsedQuery.error.issues,
         });
         return;
       }
 
       const dataset = await portalBenchmarkOpsReadModels.getBenchmarkDataset(
-        parsedParams.data.packageId
+        parsedParams.data.packageId,
       );
 
       if (!dataset) {
         reply.code(404).send({
-          error: "portal_benchmark_dataset_not_found"
+          error: "portal_benchmark_dataset_not_found",
         });
         return;
       }
 
-      const filenameRoot = sanitizeExportFilenameSegment(parsedParams.data.packageId);
+      const filenameRoot = sanitizeExportFilenameSegment(
+        parsedParams.data.packageId,
+      );
 
       if (parsedQuery.data.format === "csv") {
         reply
-          .header("content-disposition", `attachment; filename="${filenameRoot}-dataset.csv"`)
+          .header(
+            "content-disposition",
+            `attachment; filename="${filenameRoot}-dataset.csv"`,
+          )
           .type("text/csv; charset=utf-8");
         return reply.send(buildBenchmarkDatasetCsv(dataset));
       }
 
       reply
-        .header("content-disposition", `attachment; filename="${filenameRoot}-dataset.json"`)
+        .header(
+          "content-disposition",
+          `attachment; filename="${filenameRoot}-dataset.json"`,
+        )
         .type("application/json; charset=utf-8");
       return reply.send(dataset);
-    }
+    },
   );
 
   app.get(
     "/portal/runs",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.runsListResponse
+        contract: portalBenchmarkOpsReadModelsContract.runsListResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedQuery = portalRunsListQuerySchema.safeParse(request.query ?? {});
+      const parsedQuery = portalRunsListQuerySchema.safeParse(
+        request.query ?? {},
+      );
 
       if (!parsedQuery.success) {
         reply.code(400).send({
           error: "invalid_portal_runs_query",
-          issues: parsedQuery.error.issues
+          issues: parsedQuery.error.issues,
         });
         return;
       }
 
       return portalBenchmarkOpsReadModels.getRunsList(parsedQuery.data);
-    }
+    },
   );
 
   app.get(
     "/portal/runs/:runId",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.runDetailResponse
+        contract: portalBenchmarkOpsReadModelsContract.runDetailResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedParams = portalRunDetailParamsSchema.safeParse(request.params ?? {});
+      const parsedParams = portalRunDetailParamsSchema.safeParse(
+        request.params ?? {},
+      );
 
       if (!parsedParams.success) {
         reply.code(400).send({
           error: "invalid_portal_run_detail_params",
-          issues: parsedParams.error.issues
+          issues: parsedParams.error.issues,
         });
         return;
       }
 
-      const detail = await portalBenchmarkOpsReadModels.getRunDetail(parsedParams.data.runId);
+      const detail = await portalBenchmarkOpsReadModels.getRunDetail(
+        parsedParams.data.runId,
+      );
 
       if (!detail) {
         reply.code(404).send({
-          error: "portal_run_not_found"
+          error: "portal_run_not_found",
         });
         return;
       }
 
       return detail;
-    }
+    },
   );
 
   app.get(
     "/portal/harnesses",
     {
       config: {
-        contract: portalHarnessRegistryReadContract.catalogResponse
+        contract: portalHarnessRegistryReadContract.catalogResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
-    async () => harnessRegistry.getCatalog()
+    async () => harnessRegistry.getCatalog(),
   );
 
   app.get(
     "/portal/launch",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.launchViewResponse
+        contract: portalBenchmarkOpsReadModelsContract.launchViewResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_collaborator_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_collaborator_or_higher"),
+        ),
+      ],
     },
-    async () => portalBenchmarkOpsReadModels.getLaunchView()
+    async () => portalBenchmarkOpsReadModels.getLaunchView(),
   );
 
   app.get(
     "/portal/workers",
     {
       config: {
-        contract: portalBenchmarkOpsReadModelsContract.workersViewResponse
+        contract: portalBenchmarkOpsReadModelsContract.workersViewResponse,
       },
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_collaborator_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_collaborator_or_higher"),
+        ),
+      ],
     },
-    async () => portalBenchmarkOpsReadModels.getWorkersView()
+    async () => portalBenchmarkOpsReadModels.getWorkersView(),
   );
 
   const handlePortalProfileUpdate = async (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ) => {
-    const parsedBody = portalProfileUpdateInputSchema.safeParse(request.body ?? {});
+    const parsedBody = portalProfileUpdateInputSchema.safeParse(
+      request.body ?? {},
+    );
 
     if (!parsedBody.success) {
       reply.code(400).send({
         error: "invalid_profile_payload",
-        issues: parsedBody.error.issues
+        issues: parsedBody.error.issues,
       });
       return;
     }
@@ -1024,7 +1216,9 @@ export function registerPortalRoutes(
     const identity = request.accessIdentity;
 
     if (!identity) {
-      throw new Error("Authenticated Access identity was not attached to the request.");
+      throw new Error(
+        "Authenticated Access identity was not attached to the request.",
+      );
     }
 
     const linkedIdentity =
@@ -1034,19 +1228,19 @@ export function registerPortalRoutes(
             await db.query.userIdentities.findFirst({
               where: buildUserIdentityProviderSubjectMatch(
                 identity.provider,
-                identity.subject
+                identity.subject,
               ),
               with: {
-                user: true
-              }
+                user: true,
+              },
             }),
             identity.provider,
-            identity.subject
+            identity.subject,
           );
 
     if (!linkedIdentity) {
       reply.code(409).send({
-        error: "profile_not_initialized"
+        error: "profile_not_initialized",
       });
       return;
     }
@@ -1055,7 +1249,7 @@ export function registerPortalRoutes(
       .update(users)
       .set({
         displayName: parsedBody.data.displayName,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(users.id, linkedIdentity.user.id));
 
@@ -1063,8 +1257,8 @@ export function registerPortalRoutes(
       profile: await loadPortalProfile(db, {
         fallbackEmail: normalizeOptionalEmail(identity.email),
         identityProvider: identity.provider,
-        identitySubject: identity.subject
-      })
+        identitySubject: identity.subject,
+      }),
     };
   };
 
@@ -1072,36 +1266,44 @@ export function registerPortalRoutes(
     "/portal/profile",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
-    handlePortalProfileUpdate
+    handlePortalProfileUpdate,
   );
 
   app.post(
     "/portal/profile",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
-    handlePortalProfileUpdate
+    handlePortalProfileUpdate,
   );
 
   app.post(
     "/portal/profile/link-intents",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("approved_helper_or_higher"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedBody = portalProfileLinkIntentInputSchema.safeParse(request.body ?? {});
+      const parsedBody = portalProfileLinkIntentInputSchema.safeParse(
+        request.body ?? {},
+      );
 
       if (!parsedBody.success) {
         reply.code(400).send({
           error: "invalid_profile_link_intent_payload",
-          issues: parsedBody.error.issues
+          issues: parsedBody.error.issues,
         });
         return;
       }
@@ -1110,7 +1312,9 @@ export function registerPortalRoutes(
       const accessContext = request.accessRbacContext;
 
       if (!identity || accessContext?.status !== "approved") {
-        throw new Error("Approved Access identity was not attached to the request.");
+        throw new Error(
+          "Approved Access identity was not attached to the request.",
+        );
       }
 
       const linkedIdentity =
@@ -1120,35 +1324,40 @@ export function registerPortalRoutes(
               await db.query.userIdentities.findFirst({
                 where: buildUserIdentityProviderSubjectMatch(
                   identity.provider,
-                  identity.subject
+                  identity.subject,
                 ),
                 with: {
                   user: {
                     with: {
-                      identities: true
-                    }
-                  }
-                }
+                      identities: true,
+                    },
+                  },
+                },
               }),
               identity.provider,
-              identity.subject
+              identity.subject,
             );
 
       if (!linkedIdentity) {
         reply.code(409).send({
-          error: "profile_not_initialized"
+          error: "profile_not_initialized",
         });
         return;
       }
 
       const targetProvider = parsedBody.data.provider;
       const redirectPath = sanitizePortalRedirectPath(
-        parsedBody.data.redirectPath ?? "/profile"
+        parsedBody.data.redirectPath ?? "/profile",
+        runtimeConfig.portalPublicOrigin,
       );
 
-      if (linkedIdentity.user.identities.some((candidate) => candidate.provider === targetProvider)) {
+      if (
+        linkedIdentity.user.identities.some(
+          (candidate) => candidate.provider === targetProvider,
+        )
+      ) {
         reply.code(409).send({
-          error: "identity_provider_already_linked"
+          error: "identity_provider_already_linked",
         });
         return;
       }
@@ -1159,14 +1368,14 @@ export function registerPortalRoutes(
         await tx
           .update(identityLinkIntents)
           .set({
-            usedAt: new Date()
+            usedAt: new Date(),
           })
           .where(
             and(
               eq(identityLinkIntents.userId, linkedIdentity.user.id),
               eq(identityLinkIntents.targetProvider, targetProvider),
-              isNull(identityLinkIntents.usedAt)
-            )
+              isNull(identityLinkIntents.usedAt),
+            ),
           );
 
         const [createdIntent] = await tx
@@ -1175,7 +1384,7 @@ export function registerPortalRoutes(
             expiresAt,
             redirectPath,
             targetProvider,
-            userId: linkedIdentity.user.id
+            userId: linkedIdentity.user.id,
           })
           .returning();
 
@@ -1191,11 +1400,11 @@ export function registerPortalRoutes(
             expiresAt: createdIntent.expiresAt.toISOString(),
             intentId: createdIntent.id,
             targetProvider,
-            targetUserId: linkedIdentity.user.id
+            targetUserId: linkedIdentity.user.id,
           },
           severity: "info",
           subjectKind: "user_identity",
-          targetUserId: linkedIdentity.user.id
+          targetUserId: linkedIdentity.user.id,
         });
 
         return createdIntent;
@@ -1205,38 +1414,45 @@ export function registerPortalRoutes(
         expiresAt: intent.expiresAt.toISOString(),
         provider: targetProvider,
         startUrl: buildPortalAuthStartUrl({
+          authPublicOrigin: runtimeConfig.authPublicOrigin,
           provider: targetProvider,
-          redirectPath: intent.redirectPath
-        })
+          redirectPath: intent.redirectPath,
+        }),
       };
 
       reply.header(
         "set-cookie",
         buildSignedAccessCookie("PortalLinkIntent", intent.id, {
-          secret: accessProviderStateSecret
-        })
+          cookieDomain: runtimeConfig.accessCookieDomain,
+          secret: accessProviderStateSecret,
+          secure: runtimeConfig.accessCookieSecure,
+        }),
       );
 
       return {
-        intent: responseBody
+        intent: responseBody,
       };
-    }
+    },
   );
 
   app.post(
     "/portal/access-requests",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedBody = portalAccessRequestInputSchema.safeParse(request.body ?? {});
+      const parsedBody = portalAccessRequestInputSchema.safeParse(
+        request.body ?? {},
+      );
 
       if (!parsedBody.success) {
         reply.code(400).send({
           error: "invalid_access_request_payload",
-          issues: parsedBody.error.issues
+          issues: parsedBody.error.issues,
         });
         return;
       }
@@ -1245,7 +1461,7 @@ export function registerPortalRoutes(
 
       if (!identity?.email) {
         reply.code(400).send({
-          error: "access_email_required"
+          error: "access_email_required",
         });
         return;
       }
@@ -1254,14 +1470,14 @@ export function registerPortalRoutes(
 
       if (!accessEmail) {
         reply.code(400).send({
-          error: "access_email_required"
+          error: "access_email_required",
         });
         return;
       }
 
       if (!identity.provider) {
         reply.code(409).send({
-          error: "identity_provider_required"
+          error: "identity_provider_required",
         });
         return;
       }
@@ -1276,27 +1492,27 @@ export function registerPortalRoutes(
             await tx.query.userIdentities.findFirst({
               where: buildUserIdentityProviderSubjectMatch(
                 accessProvider,
-                identity.subject
-              )
+                identity.subject,
+              ),
             }),
             accessProvider,
-            identity.subject
+            identity.subject,
           );
 
           const linkedUser = existingIdentity
             ? await tx.query.users.findFirst({
                 where: eq(users.id, existingIdentity.userId),
                 with: {
-                  identities: true
-                }
+                  identities: true,
+                },
               })
             : null;
 
           const matchingUser = await tx.query.users.findFirst({
             where: eq(users.email, accessEmail),
             with: {
-              identities: true
-            }
+              identities: true,
+            },
           });
 
           if (
@@ -1304,7 +1520,9 @@ export function registerPortalRoutes(
             matchingUser &&
             existingIdentity.userId !== matchingUser.id
           ) {
-            throw new PortalAccessRequestConflictError("access_identity_already_linked");
+            throw new PortalAccessRequestConflictError(
+              "access_identity_already_linked",
+            );
           }
 
           if (
@@ -1312,7 +1530,9 @@ export function registerPortalRoutes(
             matchingUser &&
             matchingUser.identities.length > 0
           ) {
-            throw new PortalAccessRequestConflictError("identity_link_required");
+            throw new PortalAccessRequestConflictError(
+              "identity_link_required",
+            );
           }
 
           const user =
@@ -1322,16 +1542,18 @@ export function registerPortalRoutes(
               await tx
                 .insert(users)
                 .values({
-                  email: accessEmail
+                  email: accessEmail,
                 })
                 .returning({
                   email: users.email,
-                  id: users.id
+                  id: users.id,
                 })
             )[0];
 
           if (!user) {
-            throw new Error("Failed to persist the access-request user record.");
+            throw new Error(
+              "Failed to persist the access-request user record.",
+            );
           }
 
           if (existingIdentity) {
@@ -1340,7 +1562,7 @@ export function registerPortalRoutes(
                 .update(users)
                 .set({
                   email: accessEmail,
-                  updatedAt: new Date()
+                  updatedAt: new Date(),
                 })
                 .where(eq(users.id, user.id));
             }
@@ -1349,7 +1571,7 @@ export function registerPortalRoutes(
               .update(userIdentities)
               .set({
                 lastSeenAt: new Date(),
-                providerEmail: accessEmail
+                providerEmail: accessEmail,
               })
               .where(eq(userIdentities.id, existingIdentity.id));
           } else {
@@ -1359,16 +1581,18 @@ export function registerPortalRoutes(
               provider: accessProvider,
               providerEmail: accessEmail,
               providerSubject: identity.subject,
-              userId: user.id
+              userId: user.id,
             });
           }
 
           const activeRoleRows = await tx
             .select({
-              role: roleGrants.role
+              role: roleGrants.role,
             })
             .from(roleGrants)
-            .where(and(eq(roleGrants.userId, user.id), isNull(roleGrants.revokedAt)));
+            .where(
+              and(eq(roleGrants.userId, user.id), isNull(roleGrants.revokedAt)),
+            );
 
           if (activeRoleRows.length > 0) {
             throw new PortalAccessRequestConflictError("already_approved");
@@ -1376,7 +1600,7 @@ export function registerPortalRoutes(
 
           const existingRequest = await tx.query.accessRequests.findFirst({
             orderBy: [desc(accessRequests.createdAt)],
-            where: eq(accessRequests.email, accessEmail)
+            where: eq(accessRequests.email, accessEmail),
           });
 
           if (
@@ -1384,7 +1608,9 @@ export function registerPortalRoutes(
             (existingRequest.status === "rejected" ||
               existingRequest.status === "withdrawn")
           ) {
-            throw new PortalAccessRequestConflictError("access_request_reentry_not_allowed");
+            throw new PortalAccessRequestConflictError(
+              "access_request_reentry_not_allowed",
+            );
           }
 
           if (existingRequest?.status === "pending") {
@@ -1401,7 +1627,7 @@ export function registerPortalRoutes(
               .update(accessRequests)
               .set({
                 rationale: parsedBody.data.rationale,
-                requestedRole: parsedBody.data.requestedRole
+                requestedRole: parsedBody.data.requestedRole,
               })
               .where(eq(accessRequests.id, existingRequest.id))
               .returning();
@@ -1415,11 +1641,11 @@ export function registerPortalRoutes(
                 actorUserId: user.id,
                 requestKind: "access_request",
                 requestedRole: parsedBody.data.requestedRole,
-                targetEmail: accessEmail
+                targetEmail: accessEmail,
               }),
               severity: "info",
               subjectKind: "access_request",
-              targetUserId: user.id
+              targetUserId: user.id,
             });
 
             return updatedRequest ?? existingRequest;
@@ -1432,7 +1658,7 @@ export function registerPortalRoutes(
               rationale: parsedBody.data.rationale,
               requestKind: "access_request",
               requestedByUserId: user.id,
-              requestedRole: parsedBody.data.requestedRole
+              requestedRole: parsedBody.data.requestedRole,
             })
             .returning();
 
@@ -1449,11 +1675,11 @@ export function registerPortalRoutes(
               actorUserId: user.id,
               requestKind: "access_request",
               requestedRole: parsedBody.data.requestedRole,
-              targetEmail: accessEmail
+              targetEmail: accessEmail,
             }),
             severity: "info",
             subjectKind: "access_request",
-            targetUserId: user.id
+            targetUserId: user.id,
           });
 
           return createdRequest;
@@ -1464,8 +1690,8 @@ export function registerPortalRoutes(
             orderBy: [desc(accessRequests.createdAt)],
             where: and(
               eq(accessRequests.email, accessEmail),
-              eq(accessRequests.status, "pending")
-            )
+              eq(accessRequests.status, "pending"),
+            ),
           });
 
           if (!latestRequest) {
@@ -1473,7 +1699,7 @@ export function registerPortalRoutes(
           }
         } else if (error instanceof PortalAccessRequestConflictError) {
           reply.code(409).send({
-            error: error.message
+            error: error.message,
           });
           return;
         }
@@ -1482,29 +1708,35 @@ export function registerPortalRoutes(
       }
 
       if (!latestRequest) {
-        throw new Error("The access-request flow completed without returning a request.");
+        throw new Error(
+          "The access-request flow completed without returning a request.",
+        );
       }
 
       return {
-        item: toAccessRequestSummary(latestRequest)
+        item: toAccessRequestSummary(latestRequest),
       };
-    }
+    },
   );
 
   app.post(
     "/portal/access-recovery",
     {
       preHandler: [
-        ...withAuthenticatedRateLimit(requireAccess("authenticated_access_identity"))
-      ]
+        ...withAuthenticatedRateLimit(
+          requireAccess("authenticated_access_identity"),
+        ),
+      ],
     },
     async (request, reply) => {
-      const parsedBody = portalAccessRecoveryInputSchema.safeParse(request.body ?? {});
+      const parsedBody = portalAccessRecoveryInputSchema.safeParse(
+        request.body ?? {},
+      );
 
       if (!parsedBody.success) {
         reply.code(400).send({
           error: "invalid_access_recovery_payload",
-          issues: parsedBody.error.issues
+          issues: parsedBody.error.issues,
         });
         return;
       }
@@ -1513,7 +1745,7 @@ export function registerPortalRoutes(
 
       if (!identity?.email) {
         reply.code(400).send({
-          error: "access_email_required"
+          error: "access_email_required",
         });
         return;
       }
@@ -1522,14 +1754,14 @@ export function registerPortalRoutes(
 
       if (!accessEmail) {
         reply.code(400).send({
-          error: "access_email_required"
+          error: "access_email_required",
         });
         return;
       }
 
       if (!identity.provider) {
         reply.code(409).send({
-          error: "identity_provider_required"
+          error: "identity_provider_required",
         });
         return;
       }
@@ -1544,40 +1776,51 @@ export function registerPortalRoutes(
             await tx.query.userIdentities.findFirst({
               where: buildUserIdentityProviderSubjectMatch(
                 accessProvider,
-                identity.subject
-              )
+                identity.subject,
+              ),
             }),
             accessProvider,
-            identity.subject
+            identity.subject,
           );
 
           if (existingIdentity) {
-            throw new PortalAccessRequestConflictError("identity_already_linked");
+            throw new PortalAccessRequestConflictError(
+              "identity_already_linked",
+            );
           }
 
           const matchingUser = await tx.query.users.findFirst({
-            where: eq(users.email, accessEmail)
+            where: eq(users.email, accessEmail),
           });
 
           if (!matchingUser) {
-            throw new PortalAccessRequestConflictError("identity_recovery_not_available");
+            throw new PortalAccessRequestConflictError(
+              "identity_recovery_not_available",
+            );
           }
 
           const activeRoleRows = await tx
             .select({
-              role: roleGrants.role
+              role: roleGrants.role,
             })
             .from(roleGrants)
-            .where(and(eq(roleGrants.userId, matchingUser.id), isNull(roleGrants.revokedAt)));
+            .where(
+              and(
+                eq(roleGrants.userId, matchingUser.id),
+                isNull(roleGrants.revokedAt),
+              ),
+            );
 
           if (activeRoleRows.length === 0) {
-            throw new PortalAccessRequestConflictError("identity_recovery_not_available");
+            throw new PortalAccessRequestConflictError(
+              "identity_recovery_not_available",
+            );
           }
 
           const recoveryRole = activeRoleRows[0]?.role ?? "helper";
           const existingRequest = await tx.query.accessRequests.findFirst({
             orderBy: [desc(accessRequests.createdAt)],
-            where: eq(accessRequests.email, accessEmail)
+            where: eq(accessRequests.email, accessEmail),
           });
 
           if (
@@ -1586,7 +1829,7 @@ export function registerPortalRoutes(
               existingRequest.status === "withdrawn")
           ) {
             throw new PortalAccessRequestConflictError(
-              "identity_recovery_reentry_not_allowed"
+              "identity_recovery_reentry_not_allowed",
             );
           }
 
@@ -1610,7 +1853,7 @@ export function registerPortalRoutes(
                 requestedIdentityProvider: accessProvider,
                 requestedIdentitySubject: identity.subject,
                 requestedByUserId: matchingUser.id,
-                requestedRole: recoveryRole
+                requestedRole: recoveryRole,
               })
               .where(eq(accessRequests.id, existingRequest.id))
               .returning();
@@ -1624,11 +1867,11 @@ export function registerPortalRoutes(
                 actorUserId: matchingUser.id,
                 requestKind: "identity_recovery",
                 requestedRole: recoveryRole,
-                targetEmail: accessEmail
+                targetEmail: accessEmail,
               }),
               severity: "info",
               subjectKind: "access_request",
-              targetUserId: matchingUser.id
+              targetUserId: matchingUser.id,
             });
 
             return updatedRequest ?? existingRequest;
@@ -1643,7 +1886,7 @@ export function registerPortalRoutes(
               requestedIdentityProvider: accessProvider,
               requestedIdentitySubject: identity.subject,
               requestedByUserId: matchingUser.id,
-              requestedRole: recoveryRole
+              requestedRole: recoveryRole,
             })
             .returning();
 
@@ -1660,11 +1903,11 @@ export function registerPortalRoutes(
               actorUserId: matchingUser.id,
               requestKind: "identity_recovery",
               requestedRole: recoveryRole,
-              targetEmail: accessEmail
+              targetEmail: accessEmail,
             }),
             severity: "info",
             subjectKind: "access_request",
-            targetUserId: matchingUser.id
+            targetUserId: matchingUser.id,
           });
 
           return createdRequest;
@@ -1675,8 +1918,8 @@ export function registerPortalRoutes(
             orderBy: [desc(accessRequests.createdAt)],
             where: and(
               eq(accessRequests.email, accessEmail),
-              eq(accessRequests.status, "pending")
-            )
+              eq(accessRequests.status, "pending"),
+            ),
           });
 
           if (!latestRequest) {
@@ -1684,7 +1927,7 @@ export function registerPortalRoutes(
           }
         } else if (error instanceof PortalAccessRequestConflictError) {
           reply.code(409).send({
-            error: error.message
+            error: error.message,
           });
           return;
         }
@@ -1693,12 +1936,14 @@ export function registerPortalRoutes(
       }
 
       if (!latestRequest) {
-        throw new Error("The access-recovery flow completed without returning a request.");
+        throw new Error(
+          "The access-recovery flow completed without returning a request.",
+        );
       }
 
       return {
-        item: toAccessRequestSummary(latestRequest)
+        item: toAccessRequestSummary(latestRequest),
       };
-    }
+    },
   );
 }

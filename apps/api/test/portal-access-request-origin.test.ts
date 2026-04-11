@@ -5,24 +5,25 @@ import { registerPortalRoutes } from "../src/routes/portal.ts";
 import { createTrustedMutationOriginHook } from "../src/server/trusted-mutation-origin.ts";
 
 function createAuthenticatedAccessGuard() {
-  return () => (
-    request: {
-      accessIdentity?: {
-        email: string;
-        provider: "cloudflare_google";
-        subject: string;
+  return () =>
+    (
+      request: {
+        accessIdentity?: {
+          email: string;
+          provider: "cloudflare_google";
+          subject: string;
+        };
+      },
+      _reply: unknown,
+      done: () => void,
+    ) => {
+      request.accessIdentity = {
+        email: "person@example.com",
+        provider: "cloudflare_google",
+        subject: "subject-1",
       };
-    },
-    _reply: unknown,
-    done: () => void
-  ) => {
-    request.accessIdentity = {
-      email: "person@example.com",
-      provider: "cloudflare_google",
-      subject: "subject-1"
+      done();
     };
-    done();
-  };
 }
 
 function createMutationTrackingDb(onMutationAttempt: () => void) {
@@ -30,7 +31,7 @@ function createMutationTrackingDb(onMutationAttempt: () => void) {
     transaction: async () => {
       onMutationAttempt();
       throw new Error("expected test database failure");
-    }
+    },
   } as never;
 }
 
@@ -45,8 +46,10 @@ function registerPortalAccessRequestTestApp(options: {
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: options.allowLocalhostOrigins ?? false,
-      allowedOrigins: options.allowedOrigins ?? ["https://portal.paretoproof.com"]
-    })
+      allowedOrigins: options.allowedOrigins ?? [
+        "https://portal.preview.paretoproof.com",
+      ],
+    }),
   );
 
   registerPortalRoutes(
@@ -54,8 +57,8 @@ function registerPortalAccessRequestTestApp(options: {
     createMutationTrackingDb(options.onMutationAttempt),
     createAuthenticatedAccessGuard(),
     {
-      resolvePortalAccess: async () => null
-    }
+      resolvePortalAccess: async () => null,
+    },
   );
 
   return app;
@@ -66,7 +69,7 @@ test("POST /portal/access-requests rejects requests without an Origin header bef
   const app = registerPortalAccessRequestTestApp({
     onMutationAttempt: () => {
       mutationAttempted = true;
-    }
+    },
   });
 
   t.after(async () => {
@@ -77,14 +80,14 @@ test("POST /portal/access-requests rejects requests without an Origin header bef
     method: "POST",
     payload: {
       rationale: "Need contributor access",
-      requestedRole: "helper"
+      requestedRole: "helper",
     },
-    url: "/portal/access-requests"
+    url: "/portal/access-requests",
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_required"
+    error: "trusted_origin_required",
   });
   assert.equal(mutationAttempted, false);
 });
@@ -94,7 +97,7 @@ test("POST /portal/access-requests rejects untrusted origins before mutation wor
   const app = registerPortalAccessRequestTestApp({
     onMutationAttempt: () => {
       mutationAttempted = true;
-    }
+    },
   });
 
   t.after(async () => {
@@ -105,17 +108,17 @@ test("POST /portal/access-requests rejects untrusted origins before mutation wor
     method: "POST",
     payload: {
       rationale: "Need contributor access",
-      requestedRole: "helper"
+      requestedRole: "helper",
     },
     url: "/portal/access-requests",
     headers: {
-      origin: "https://evil.example"
-    }
+      origin: "https://evil.example",
+    },
   });
 
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.json(), {
-    error: "trusted_origin_not_allowed"
+    error: "trusted_origin_not_allowed",
   });
   assert.equal(mutationAttempted, false);
 });
@@ -125,7 +128,7 @@ test("POST /portal/access-requests allows the trusted portal origin to reach mut
   const app = registerPortalAccessRequestTestApp({
     onMutationAttempt: () => {
       mutationAttempted = true;
-    }
+    },
   });
 
   t.after(async () => {
@@ -136,12 +139,12 @@ test("POST /portal/access-requests allows the trusted portal origin to reach mut
     method: "POST",
     payload: {
       rationale: "Need contributor access",
-      requestedRole: "helper"
+      requestedRole: "helper",
     },
     url: "/portal/access-requests",
     headers: {
-      origin: "https://portal.paretoproof.com"
-    }
+      origin: "https://portal.preview.paretoproof.com",
+    },
   });
 
   assert.equal(response.statusCode, 500);

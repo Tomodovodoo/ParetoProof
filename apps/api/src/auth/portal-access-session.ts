@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
-import { parseApiRuntimeEnv, type ApiRuntimeEnv } from "../config/runtime.js";
+import {
+  resolveApiOriginRuntimeConfig,
+  parseApiRuntimeEnv,
+  type ApiRuntimeEnv,
+} from "../config/runtime.js";
 import { sessions, userIdentities } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 import type { CloudflareAccessIdentity } from "./cloudflare-access.js";
@@ -9,7 +13,7 @@ import { matchesUserIdentityProviderSubject } from "../lib/identity-binding.js";
 import { readCookieValue } from "./cloudflare-access.js";
 import {
   resolveAccessRbacContext,
-  type AccessRbacContext
+  type AccessRbacContext,
 } from "./resolve-access-rbac-context.js";
 
 export const portalAccessSessionCookieName = "PortalAccessSession";
@@ -30,15 +34,27 @@ function buildCloudflareAccessIssuer(teamDomain?: string) {
   return `https://${teamDomain ?? parseApiRuntimeEnv().teamDomain}`;
 }
 
-export function buildPortalAccessSessionCookie(token: string) {
+export function buildPortalAccessSessionCookie(
+  token: string,
+  options?: {
+    cookieDomain?: string;
+    secure?: boolean;
+  },
+) {
+  const defaultOriginRuntimeConfig = resolveApiOriginRuntimeConfig();
+  const cookieDomain =
+    options?.cookieDomain ?? defaultOriginRuntimeConfig.accessCookieDomain;
+  const secure =
+    options?.secure ?? defaultOriginRuntimeConfig.accessCookieSecure;
+
   return [
     `${portalAccessSessionCookieName}=${token}`,
-    "Domain=.paretoproof.com",
+    ...(cookieDomain ? [`Domain=${cookieDomain}`] : []),
     "Path=/",
     "SameSite=Lax",
     `Max-Age=${portalAccessSessionMaxAgeSeconds}`,
-    "Secure",
-    "HttpOnly"
+    ...(secure ? ["Secure"] : []),
+    "HttpOnly",
   ].join("; ");
 }
 
@@ -58,13 +74,13 @@ export async function createPortalAccessSession(
   db: ReturnTypeOfCreateDbClient,
   request: Pick<FastifyRequest, "headers" | "ip">,
   identity: CloudflareAccessIdentity,
-  context: Extract<AccessRbacContext, { status: "approved" }>
+  context: Extract<AccessRbacContext, { status: "approved" }>,
 ) {
   const linkedIdentity = await db.query.userIdentities.findFirst({
     where: and(
       eq(userIdentities.id, context.identityId),
-      eq(userIdentities.userId, context.userId)
-    )
+      eq(userIdentities.userId, context.userId),
+    ),
   });
 
   if (
@@ -73,7 +89,7 @@ export async function createPortalAccessSession(
     !matchesUserIdentityProviderSubject(
       linkedIdentity,
       identity.provider,
-      identity.subject
+      identity.subject,
     )
   ) {
     throw new Error("Approved portal session identity could not be resolved.");
@@ -91,7 +107,7 @@ export async function createPortalAccessSession(
       typeof request.headers["user-agent"] === "string"
         ? request.headers["user-agent"]
         : null,
-    userId: context.userId
+    userId: context.userId,
   });
 
   return token;
@@ -102,7 +118,7 @@ export async function resolvePortalAccessSession(
   cookieHeader: string | undefined,
   options?: {
     teamDomain?: ApiRuntimeEnv["teamDomain"];
-  }
+  },
 ): Promise<ResolvedPortalAccessSession | null> {
   const token = readPortalAccessSessionToken(cookieHeader);
 
@@ -115,10 +131,10 @@ export async function resolvePortalAccessSession(
     with: {
       identity: {
         with: {
-          user: true
-        }
-      }
-    }
+          user: true,
+        },
+      },
+    },
   });
 
   if (!sessionRow || !sessionRow.identity) {
@@ -135,34 +151,34 @@ export async function resolvePortalAccessSession(
     email: sessionRow.identity.providerEmail ?? sessionRow.identity.user.email,
     issuer: buildCloudflareAccessIssuer(options?.teamDomain),
     provider: sessionRow.identity.provider,
-    subject: sessionRow.identity.providerSubject
+    subject: sessionRow.identity.providerSubject,
   };
   const context = await resolveAccessRbacContext(db, identity);
 
   await db
     .update(sessions)
     .set({
-      lastSeenAt: now
+      lastSeenAt: now,
     })
     .where(
       and(
         eq(sessions.id, sessionRow.id),
         gt(sessions.expiresAt, now),
-        isNull(sessions.revokedAt)
-      )
+        isNull(sessions.revokedAt),
+      ),
     );
 
   return {
     context,
     identity,
     sessionId: sessionRow.id,
-    token
+    token,
   };
 }
 
 export async function revokePortalAccessSession(
   db: ReturnTypeOfCreateDbClient,
-  cookieHeader: string | undefined
+  cookieHeader: string | undefined,
 ) {
   const token = readPortalAccessSessionToken(cookieHeader);
 
@@ -174,17 +190,17 @@ export async function revokePortalAccessSession(
   const [revokedSession] = await db
     .update(sessions)
     .set({
-      revokedAt: now
+      revokedAt: now,
     })
     .where(
       and(
         eq(sessions.tokenHash, hashPortalAccessSessionToken(token)),
         gt(sessions.expiresAt, now),
-        isNull(sessions.revokedAt)
-      )
+        isNull(sessions.revokedAt),
+      ),
     )
     .returning({
-      id: sessions.id
+      id: sessions.id,
     });
 
   return Boolean(revokedSession);
