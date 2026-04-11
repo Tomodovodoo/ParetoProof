@@ -106,10 +106,12 @@ type LeaseStateRow = {
   candidateDigest: string;
   heartbeatTimeoutSeconds: number;
   jobState: typeof jobs.$inferSelect.state;
+  jobUpdatedAt: Date;
   lastEventSequence: number;
   leaseExpiresAt: Date;
   revokedAt: Date | null;
   runState: typeof runs.$inferSelect.state;
+  runUpdatedAt: Date;
   verifierVerdict: Record<string, unknown>;
   workerInstanceId: string | null;
   verdictDigest: string;
@@ -305,6 +307,27 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
 
 function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
+}
+
+function resolveCancelRequestedLeaseExpiry(lease: LeaseStateRow) {
+  const cancelRequestedAtCandidates = [];
+
+  if (lease.jobState === "cancel_requested") {
+    cancelRequestedAtCandidates.push(lease.jobUpdatedAt);
+  }
+
+  if (lease.runState === "cancel_requested") {
+    cancelRequestedAtCandidates.push(lease.runUpdatedAt);
+  }
+
+  const cancelRequestedAt =
+    cancelRequestedAtCandidates.sort((left, right) => left.getTime() - right.getTime())[0] ??
+    lease.leaseExpiresAt;
+  const cancelWindowExpiresAt = addSeconds(cancelRequestedAt, lease.heartbeatTimeoutSeconds);
+
+  return cancelWindowExpiresAt.getTime() > lease.leaseExpiresAt.getTime()
+    ? cancelWindowExpiresAt
+    : lease.leaseExpiresAt;
 }
 
 async function upsertWorkerPoolDefinition(
@@ -789,10 +812,12 @@ async function loadLeaseState(
       candidateDigest: attempts.candidateDigest,
       heartbeatTimeoutSeconds: workerJobLeases.heartbeatTimeoutSeconds,
       jobState: jobs.state,
+      jobUpdatedAt: jobs.updatedAt,
       lastEventSequence: workerJobLeases.lastEventSequence,
       leaseExpiresAt: workerJobLeases.leaseExpiresAt,
       revokedAt: workerJobLeases.revokedAt,
       runState: runs.state,
+      runUpdatedAt: runs.updatedAt,
       verifierVerdict: attempts.verifierVerdict,
       workerInstanceId: workerJobLeases.workerInstanceId,
       verdictDigest: attempts.verdictDigest
@@ -882,6 +907,25 @@ function ensureSubmissionState(
       "attemptState"
     );
   }
+}
+
+function ensureManualCancellationWasRequested(
+  request: WorkerTerminalFailureRequest,
+  leaseState: LeaseStateRow
+) {
+  if (request.failure.failureCode !== "manual_cancelled") {
+    return;
+  }
+
+  if (leaseState.jobState === "cancel_requested" || leaseState.runState === "cancel_requested") {
+    return;
+  }
+
+  throw createConflictError(
+    "worker_cancel_not_requested",
+    "manual_cancelled terminal submissions require a control-plane cancellation request first.",
+    "failure.failureCode"
+  );
 }
 
 async function promoteExecutionToRunning(
@@ -1643,8 +1687,8 @@ export function createInternalWorkerControlService(db: DbClient) {
         }
 
         if (lease.jobState === "cancel_requested") {
-          const nextLeaseExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
-          const nextJobTokenExpiresAt = createJobTokenExpiry(now);
+          const nextLeaseExpiresAt = resolveCancelRequestedLeaseExpiry(lease);
+          const nextJobTokenExpiresAt = nextLeaseExpiresAt;
           const nextJobToken = issueJobToken();
           const continuedLeases = await tx
             .update(workerJobLeases)
@@ -2124,6 +2168,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           allowCancelRequested: true,
           path: "failure submission"
         });
+        ensureManualCancellationWasRequested(request, lease);
 
         const artifactIds = request.artifactIds ?? [];
         const artifactRows = await loadArtifactsByIds(tx, authContext.attemptRowId, artifactIds);

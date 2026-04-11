@@ -239,10 +239,12 @@ function buildLeaseStateRow(overrides: Partial<Record<string, unknown>> = {}) {
     candidateDigest: null,
     heartbeatTimeoutSeconds: 180,
     jobState: "running",
+    jobUpdatedAt: new Date("2099-03-13T15:00:00.000Z"),
     lastEventSequence: 3,
     leaseExpiresAt: new Date("2099-03-13T15:03:00.000Z"),
     revokedAt: null,
     runState: "running",
+    runUpdatedAt: new Date("2099-03-13T15:00:00.000Z"),
     verifierVerdict: null,
     workerInstanceId: null,
     verdictDigest: null,
@@ -1681,6 +1683,158 @@ test("submitFailure accepts bounded manual cancellation after artifact registrat
   assert.equal(updateCalls[1]!.values.state, "cancelled");
   assert.equal(updateCalls[2]!.values.state, "cancelled");
   assert.equal(updateCalls[3]!.values.revokedAt instanceof Date, true);
+});
+
+test("submitFailure rejects manual cancellation when cancel was not requested", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([buildLeaseStateRow()]);
+                  }
+                };
+              }
+            };
+          }
+
+          throw new Error("manual cancellation without cancel_requested should reject early");
+        },
+        update() {
+          throw new Error("manual cancellation without cancel_requested should reject early");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+  const request: WorkerTerminalFailureRequest = {
+    ...buildFailureRequest(),
+    artifactIds: [],
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "manual_cancelled",
+      failureFamily: "harness",
+      phase: "cancel",
+      retryEligibility: "manual_retry_only",
+      summary: "Worker received a control-plane cancellation request.",
+      terminality: "cancelled",
+      userVisibility: "user_visible"
+    },
+    summary: "Worker received a control-plane cancellation request.",
+    terminalState: "cancelled",
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  await assert.rejects(
+    () => control.submitFailure(request, buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError && error.code === "worker_cancel_not_requested"
+  );
+});
+
+test("submitFailure accepts manual cancellation when the job is cancel_requested before run state catches up", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    buildLeaseStateRow({
+                      attemptState: "active",
+                      jobState: "cancel_requested",
+                      runState: "running"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const request: WorkerTerminalFailureRequest = {
+    ...buildFailureRequest(),
+    artifactIds: [],
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "manual_cancelled",
+      failureFamily: "harness",
+      phase: "cancel",
+      retryEligibility: "manual_retry_only",
+      summary: "Worker received a control-plane cancellation request.",
+      terminality: "cancelled",
+      userVisibility: "user_visible"
+    },
+    summary: "Worker received a control-plane cancellation request.",
+    terminalState: "cancelled",
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  const response = await control.submitFailure(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "cancelled",
+    jobState: "cancelled",
+    runState: "cancelled"
+  });
+  assert.equal(selectCount, 1);
+  assert.equal(updateCalls.length, 4);
 });
 
 test("submitFailure rejects synthetic pre-bundle refs for non-pre-bundle failure codes", async () => {
@@ -3232,6 +3386,9 @@ test("heartbeat rotates the job token while extending the lease", async () => {
 
 test("heartbeat preserves the active lease when cancellation is requested", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
+  const beforeHeartbeatAt = Date.now();
+  const jobCancelRequestedAt = new Date(beforeHeartbeatAt - 120_000);
+  const runCancelRequestedAt = new Date(beforeHeartbeatAt - 30_000);
   const fakeDb = {
     transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
       const tx = {
@@ -3254,10 +3411,12 @@ test("heartbeat preserves the active lease when cancellation is requested", asyn
                       candidateDigest: "c".repeat(64),
                       heartbeatTimeoutSeconds: 180,
                       jobState: "cancel_requested",
+                      jobUpdatedAt: jobCancelRequestedAt,
                       lastEventSequence: 2,
-                      leaseExpiresAt: new Date(Date.now() + 60_000),
+                      leaseExpiresAt: new Date(beforeHeartbeatAt + 10_000),
                       revokedAt: null,
                       runState: "cancel_requested",
+                      runUpdatedAt: runCancelRequestedAt,
                       verifierVerdict: {},
                       workerInstanceId: "worker-instance-1",
                       verdictDigest: "d".repeat(64)
@@ -3304,6 +3463,24 @@ test("heartbeat preserves the active lease when cancellation is requested", asyn
   assert.equal(updateCalls[0].lastEventSequence, 3);
   assert.equal(updateCalls[0].lastHeartbeatAt instanceof Date, true);
   assert.equal(updateCalls[0].leaseExpiresAt instanceof Date, true);
+  assert.equal(
+    updateCalls[0].leaseExpiresAt.getTime(),
+    jobCancelRequestedAt.getTime() + 180_000,
+    "cancel_requested heartbeat should stay anchored to the original cancellation request"
+  );
+  assert.ok(
+    updateCalls[0].leaseExpiresAt.getTime() < beforeHeartbeatAt + 90_000,
+    "cancel_requested heartbeat should keep a bounded finalization deadline"
+  );
+  assert.equal(
+    new Date(response.leaseExpiresAt!).getTime(),
+    jobCancelRequestedAt.getTime() + 180_000,
+    "returned lease expiry should stay anchored to the original cancellation request"
+  );
+  assert.ok(
+    new Date(response.leaseExpiresAt!).getTime() < beforeHeartbeatAt + 90_000,
+    "returned lease expiry should stay bounded to the cancellation window"
+  );
   assert.equal("revokedAt" in updateCalls[0], false);
   assert.equal(updateCalls[1].currentLifecycleState, "running");
   assert.equal(updateCalls[1].lastHeartbeatAt instanceof Date, true);
