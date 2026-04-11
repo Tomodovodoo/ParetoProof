@@ -29,6 +29,26 @@ const recordValueSchema: z.ZodType<unknown> = z.lazy(() =>
   ])
 );
 
+const problem9SourceMetadataSchema = z.object({
+  laneEvidence: z.object({
+    lean422_exact: z.literal("lean-toolchain")
+  }),
+  license: z.object({
+    file: z.literal("LICENSE"),
+    spdxId: z.literal("Apache-2.0")
+  }),
+  provenance: z.object({
+    goldModule: z.literal("FirstProof/Problem9/Gold.lean"),
+    humanStatement: z.literal("statements/problem.md"),
+    statementModule: z.literal("FirstProof/Problem9/Statement.lean"),
+    supportModule: z.literal("FirstProof/Problem9/Support.lean")
+  }),
+  regressionEvidence: z.object({
+    cohesionCheck: z.literal("bun run check:problem9-package-cohesion"),
+    integrityTest: z.literal("node --import tsx --test test/problem9-integrity.test.ts")
+  })
+});
+
 export const problem9BenchmarkPackageManifestSchema = z.object({
   benchmarkFamily: z.literal("firstproof"),
   benchmarkItemId: z.literal("Problem9"),
@@ -49,6 +69,7 @@ export const problem9BenchmarkPackageManifestSchema = z.object({
   packageId: z.literal("firstproof/Problem9"),
   packageRoot: z.literal("firstproof/Problem9"),
   packageVersion: z.string().min(1),
+  sourceMetadata: problem9SourceMetadataSchema.optional(),
   sourceManifestDigest: sha256Schema
 });
 

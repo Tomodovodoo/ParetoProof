@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  hasApacheTwoLicenseText,
   hasExpectedAxiomSafetyNarrative,
-  hasExpectedCanonicalModules
+  hasExpectedCanonicalModules,
+  hasExpectedLanePolicy,
+  hasExpectedProblem9SourceMetadata,
 } from "./lib/problem9-package-cohesion.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
@@ -11,6 +14,7 @@ const benchmarkRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9"
 const benchmarkPackagePath = path.join(benchmarkRoot, "benchmark-package.json");
 const lakefilePath = path.join(benchmarkRoot, "lakefile.toml");
 const benchmarkReadmePath = path.join(benchmarkRoot, "README.md");
+const licensePath = path.join(benchmarkRoot, "LICENSE");
 const statementPath = path.join(benchmarkRoot, "FirstProof", "Problem9", "Statement.lean");
 const goldPath = path.join(benchmarkRoot, "FirstProof", "Problem9", "Gold.lean");
 const targetBaselinePath = path.join(repoRoot, "docs", "problem9-benchmark-target-baseline.md");
@@ -32,6 +36,7 @@ function fail(message) {
 const benchmarkPackage = JSON.parse(readText(benchmarkPackagePath));
 const lakefile = readText(lakefilePath);
 const benchmarkReadme = readText(benchmarkReadmePath);
+const licenseText = readText(licensePath);
 const statementSource = readText(statementPath);
 const goldSource = readText(goldPath);
 const targetBaseline = readText(targetBaselinePath);
@@ -40,6 +45,14 @@ if (!hasExpectedCanonicalModules(benchmarkPackage.canonicalModules, expectedCano
   fail(
     `canonicalModules must stay aligned with ${JSON.stringify(expectedCanonicalModules)}`
   );
+}
+
+if (!hasExpectedLanePolicy(benchmarkPackage.lanePolicy)) {
+  fail("benchmark-package.json lanePolicy must keep lean422_exact as the only primary and supported lane");
+}
+
+if (!hasExpectedProblem9SourceMetadata(benchmarkPackage.sourceMetadata)) {
+  fail("benchmark-package.json sourceMetadata must match the canonical Problem 9 provenance block");
 }
 
 const defaultTargetsMatch = lakefile.match(/defaultTargets\s*=\s*\[(?<targets>[^\]]+)\]/);
@@ -90,4 +103,8 @@ if (!hasExpectedAxiomSafetyNarrative(benchmarkReadme, "## Axiom safety model")) 
 
 if (!hasExpectedAxiomSafetyNarrative(targetBaseline, "## Axiom safety contract")) {
   fail("docs/problem9-benchmark-target-baseline.md must explain the Problem 9 axiom safety model");
+}
+
+if (!hasApacheTwoLicenseText(licenseText)) {
+  fail("LICENSE must carry the full Apache 2.0 text");
 }

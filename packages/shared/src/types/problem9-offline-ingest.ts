@@ -97,6 +97,25 @@ export type Problem9BenchmarkPackageManifest = {
   packageId: "firstproof/Problem9";
   packageRoot: "firstproof/Problem9";
   packageVersion: string;
+  sourceMetadata?: {
+    laneEvidence: {
+      lean422_exact: "lean-toolchain";
+    };
+    license: {
+      file: "LICENSE";
+      spdxId: "Apache-2.0";
+    };
+    provenance: {
+      goldModule: "FirstProof/Problem9/Gold.lean";
+      humanStatement: "statements/problem.md";
+      statementModule: "FirstProof/Problem9/Statement.lean";
+      supportModule: "FirstProof/Problem9/Support.lean";
+    };
+    regressionEvidence: {
+      cohesionCheck: "bun run check:problem9-package-cohesion";
+      integrityTest: "node --import tsx --test test/problem9-integrity.test.ts";
+    };
+  };
   sourceManifestDigest: string;
 };
 
