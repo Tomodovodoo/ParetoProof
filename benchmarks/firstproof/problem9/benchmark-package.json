@@ -12,9 +12,27 @@
   "lanePolicy": {
     "primaryLane": "lean422_exact",
     "supportedLanes": [
-      "lean422_exact",
-      "lean424_interop"
+      "lean422_exact"
     ]
+  },
+  "sourceMetadata": {
+    "license": {
+      "file": "LICENSE",
+      "spdxId": "Apache-2.0"
+    },
+    "provenance": {
+      "statementModule": "FirstProof/Problem9/Statement.lean",
+      "supportModule": "FirstProof/Problem9/Support.lean",
+      "goldModule": "FirstProof/Problem9/Gold.lean",
+      "humanStatement": "statements/problem.md"
+    },
+    "laneEvidence": {
+      "lean422_exact": "lean-toolchain"
+    },
+    "regressionEvidence": {
+      "cohesionCheck": "bun run check:problem9-package-cohesion",
+      "integrityTest": "node --import tsx --test test/problem9-integrity.test.ts"
+    }
   },
   "materialization": {
     "generatedManifestPath": "benchmark-package.json",

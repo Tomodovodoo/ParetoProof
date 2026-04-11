@@ -13,9 +13,29 @@ import {
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
 
 const expectedIntegrityDigests = {
-  benchmarkPackage: "ca378023961740adbef777501d689757c1a38070399e686a8e3d4354caf520ac",
-  promptPackage: "ddebfb1bfdddd88b6b273c9770b4e97c78bb4ccc9a35cf64248dd1aa7238d1fb",
-  runBundle: "7fa0ac8d5e332ec018333aab54ce89008fe29f08f902371485e46e60abbd3cfb"
+  benchmarkPackage: "2a613fe5717c5df32fc3c95b0cf4cbbc9a99312c0cac44948b0cd641acac8dcb",
+  promptPackage: "f0fe26f4c426b6b51d524a6bcf23331556a590d0b621f5ccc74fe416c1f7f329",
+  runBundle: "3dea5638b16d0ee293ffdf5508f66beea74a7da776149f689f599e9c5f7cb821"
+} as const;
+
+const expectedBenchmarkSourceMetadata = {
+  laneEvidence: {
+    lean422_exact: "lean-toolchain"
+  },
+  license: {
+    file: "LICENSE",
+    spdxId: "Apache-2.0"
+  },
+  provenance: {
+    goldModule: "FirstProof/Problem9/Gold.lean",
+    humanStatement: "statements/problem.md",
+    statementModule: "FirstProof/Problem9/Statement.lean",
+    supportModule: "FirstProof/Problem9/Support.lean"
+  },
+  regressionEvidence: {
+    cohesionCheck: "bun run check:problem9-package-cohesion",
+    integrityTest: "node --import tsx --test test/problem9-integrity.test.ts"
+  }
 } as const;
 
 // Update these only when the checked-in canonical Problem 9 fixtures intentionally change.
@@ -48,8 +68,20 @@ test("Problem 9 benchmark package materialization stays deterministic", async ()
 
     assert.equal(firstPackage.packageDigest, expectedIntegrityDigests.benchmarkPackage);
     assert.equal(secondPackage.packageDigest, expectedIntegrityDigests.benchmarkPackage);
+
+    const firstManifestText = await readNormalizedText(
+      path.join(firstPackage.outputRoot, "benchmark-package.json")
+    );
+    const firstManifest = JSON.parse(firstManifestText) as Record<string, unknown>;
+
+    assert.deepEqual(firstManifest.sourceMetadata, expectedBenchmarkSourceMetadata);
+    assert.deepEqual(firstManifest.lanePolicy, {
+      primaryLane: "lean422_exact",
+      supportedLanes: ["lean422_exact"]
+    });
+
     assert.equal(
-      await readNormalizedText(path.join(firstPackage.outputRoot, "benchmark-package.json")),
+      firstManifestText,
       await readNormalizedText(path.join(secondPackage.outputRoot, "benchmark-package.json"))
     );
   } finally {

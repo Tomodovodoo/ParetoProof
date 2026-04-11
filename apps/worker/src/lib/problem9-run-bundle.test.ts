@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -122,11 +123,40 @@ test("materialize-problem9-run-bundle rejects output roots that contain fixture 
   }
 });
 
-async function createFixtureInputs(root: string): Promise<FixturePaths> {
+test("materialize-problem9-run-bundle accepts legacy v1 benchmark manifests without sourceMetadata", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot, {
+      legacyBenchmarkManifest: true
+    });
+    const result = runRunBundleCli({
+      fixturePaths,
+      outputRoot: path.join(tempRoot, "outputs", "legacy"),
+      result: "pass"
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+async function createFixtureInputs(
+  root: string,
+  options: {
+    legacyBenchmarkManifest?: boolean;
+  } = {}
+): Promise<FixturePaths> {
   const benchmarkOutputRoot = path.join(root, "benchmark-output");
   const benchmarkPackage = await materializeProblem9Package({
     outputRoot: benchmarkOutputRoot
   });
+
+  if (options.legacyBenchmarkManifest) {
+    await rewriteBenchmarkManifestForLegacyCompatibility(benchmarkPackage.outputRoot);
+  }
+
   const promptOutputRoot = path.join(root, "prompt-output");
   const promptDefaults = getDefaultProblem9PromptPackageOptions();
   const promptPackage = await materializeProblem9PromptPackage({
@@ -323,7 +353,7 @@ function runRunBundleCli(options: {
     args.push("--failure-classification", options.fixturePaths.failureClassificationPath);
   }
 
-  const result = spawnSync(process.execPath, args, {
+  const result = spawnSync(resolveNodeBinary(), args, {
     cwd: workerRoot,
     encoding: "utf8"
   });
@@ -350,4 +380,66 @@ async function writeNormalizedText(filePath: string, value: string): Promise<voi
 
 function normalizeText(value: string): string {
   return value.replace(/^\uFEFF/u, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+async function rewriteBenchmarkManifestForLegacyCompatibility(
+  benchmarkPackageRoot: string
+): Promise<void> {
+  const manifestPath = path.join(benchmarkPackageRoot, "benchmark-package.json");
+  const manifest = JSON.parse(await readNormalizedText(manifestPath)) as Record<string, unknown>;
+
+  delete manifest.sourceMetadata;
+  manifest.lanePolicy = {
+    primaryLane: "lean422_exact",
+    supportedLanes: ["lean422_exact", "lean424_interop"]
+  };
+  manifest.packageDigest = computeLegacyBenchmarkPackageDigest(manifest);
+
+  await writeJsonFile(manifestPath, manifest);
+}
+
+function computeLegacyBenchmarkPackageDigest(manifest: Record<string, unknown>): string {
+  return sha256Text(
+    JSON.stringify(
+      sortJsonValue({
+        benchmarkFamily: manifest.benchmarkFamily,
+        benchmarkItemId: manifest.benchmarkItemId,
+        canonicalModules: manifest.canonicalModules,
+        fileHashes: manifest.hashes,
+        lanePolicy: manifest.lanePolicy,
+        packageId: manifest.packageId,
+        packageRoot: manifest.packageRoot,
+        packageVersion: manifest.packageVersion,
+        sourceManifestDigest: manifest.sourceManifestDigest,
+        sourceSchemaVersion: "1"
+      }),
+      null,
+      2
+    )
+  );
+}
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(Buffer.from(normalizeText(text), "utf8")).digest("hex");
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
+    );
+  }
+
+  return value;
+}
+
+function resolveNodeBinary(): string {
+  const bunRuntime = (globalThis as { Bun?: { which(command: string): string | null } }).Bun;
+  return bunRuntime?.which("node") ?? process.execPath;
 }

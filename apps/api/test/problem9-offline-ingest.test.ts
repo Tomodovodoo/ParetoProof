@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +24,7 @@ async function readJsonFile<TValue>(filePath: string): Promise<TValue> {
 }
 
 async function buildOfflineIngestRequest(options: {
+  legacyBenchmarkManifest?: boolean;
   result: "pass" | "fail";
 }): Promise<{
   request: Problem9OfflineIngestRequest;
@@ -34,6 +36,11 @@ async function buildOfflineIngestRequest(options: {
       outputRoot: path.join(tempRoot, "benchmark-package")
     })
   ).outputRoot;
+
+  if (options.legacyBenchmarkManifest) {
+    await rewriteBenchmarkManifestForLegacyCompatibility(benchmarkPackageRoot);
+  }
+
   const promptPackageRoot = path.join(tempRoot, "prompt-package");
   const candidateSourcePath = path.join(tempRoot, "candidate.lean");
   const compilerDiagnosticsPath = path.join(tempRoot, "compiler-diagnostics.json");
@@ -245,6 +252,24 @@ test("buildProblem9OfflineIngestPlan preserves failure metadata for canonical fa
   assert.equal(plan.attempt.failureClassification?.failureFamily, "compile");
 });
 
+test("buildProblem9OfflineIngestPlan accepts legacy v1 bundles without sourceMetadata", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    legacyBenchmarkManifest: true,
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.state, "succeeded");
+  assert.equal(plan.job.state, "completed");
+  assert.equal(plan.attempt.state, "succeeded");
+  assert.equal(request.bundle.benchmarkPackage.sourceMetadata, undefined);
+});
+
 test("buildProblem9OfflineIngestPlan rejects digest mismatches", async (t) => {
   const { request, tempRoot } = await buildOfflineIngestRequest({
     result: "pass"
@@ -427,3 +452,60 @@ test("POST /portal/admin/offline-ingest/problem9-run-bundles maps duplicate run 
     error: "offline_ingest_duplicate_run"
   });
 });
+
+async function rewriteBenchmarkManifestForLegacyCompatibility(
+  benchmarkPackageRoot: string
+): Promise<void> {
+  const manifestPath = path.join(benchmarkPackageRoot, "benchmark-package.json");
+  const manifest = await readJsonFile<Record<string, unknown>>(manifestPath);
+
+  delete manifest.sourceMetadata;
+  manifest.lanePolicy = {
+    primaryLane: "lean422_exact",
+    supportedLanes: ["lean422_exact", "lean424_interop"]
+  };
+  manifest.packageDigest = computeLegacyBenchmarkPackageDigest(manifest);
+
+  await writeFile(manifestPath, `${JSON.stringify(sortJsonValue(manifest), null, 2)}\n`, "utf8");
+}
+
+function computeLegacyBenchmarkPackageDigest(manifest: Record<string, unknown>): string {
+  return sha256Text(
+    JSON.stringify(
+      sortJsonValue({
+        benchmarkFamily: manifest.benchmarkFamily,
+        benchmarkItemId: manifest.benchmarkItemId,
+        canonicalModules: manifest.canonicalModules,
+        fileHashes: manifest.hashes,
+        lanePolicy: manifest.lanePolicy,
+        packageId: manifest.packageId,
+        packageRoot: manifest.packageRoot,
+        packageVersion: manifest.packageVersion,
+        sourceManifestDigest: manifest.sourceManifestDigest,
+        sourceSchemaVersion: "1"
+      }),
+      null,
+      2
+    )
+  );
+}
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
+    );
+  }
+
+  return value;
+}

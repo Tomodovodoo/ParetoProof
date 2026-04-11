@@ -22,8 +22,8 @@ const sourceManifestSchema = z.object({
     support: z.string().min(1)
   }),
   lanePolicy: z.object({
-    primaryLane: z.string().min(1),
-    supportedLanes: z.array(z.string().min(1)).min(1)
+    primaryLane: z.literal("lean422_exact"),
+    supportedLanes: z.tuple([z.literal("lean422_exact")])
   }),
   materialization: z.object({
     generatedManifestPath: z.literal("benchmark-package.json"),
@@ -31,6 +31,25 @@ const sourceManifestSchema = z.object({
   }),
   packageId: z.literal("firstproof/Problem9"),
   packageVersion: z.string().min(1),
+  sourceMetadata: z.object({
+    laneEvidence: z.object({
+      lean422_exact: z.literal("lean-toolchain")
+    }),
+    license: z.object({
+      file: z.literal("LICENSE"),
+      spdxId: z.literal("Apache-2.0")
+    }),
+    provenance: z.object({
+      goldModule: z.literal("FirstProof/Problem9/Gold.lean"),
+      humanStatement: z.literal("statements/problem.md"),
+      statementModule: z.literal("FirstProof/Problem9/Statement.lean"),
+      supportModule: z.literal("FirstProof/Problem9/Support.lean")
+    }),
+    regressionEvidence: z.object({
+      cohesionCheck: z.literal("bun run check:problem9-package-cohesion"),
+      integrityTest: z.literal("node --import tsx --test test/problem9-integrity.test.ts")
+    })
+  }),
   sourceSchemaVersion: z.string().min(1)
 });
 
@@ -118,6 +137,7 @@ export async function materializeProblem9Package(
       packageId: sourceManifest.packageId,
       packageRoot: sourceManifest.materialization.packageRoot,
       packageVersion: sourceManifest.packageVersion,
+      sourceMetadata: sourceManifest.sourceMetadata,
       sourceManifestDigest,
       sourceSchemaVersion: sourceManifest.sourceSchemaVersion
     })
@@ -132,6 +152,7 @@ export async function materializeProblem9Package(
     packageRoot: sourceManifest.materialization.packageRoot,
     canonicalModules: sourceManifest.canonicalModules,
     lanePolicy: sourceManifest.lanePolicy,
+    sourceMetadata: sourceManifest.sourceMetadata,
     sourceManifestDigest,
     hashAlgorithm: "sha256",
     packageDigestMode: "metadata_plus_file_inventory_v1",

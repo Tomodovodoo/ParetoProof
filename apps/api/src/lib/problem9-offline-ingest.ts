@@ -751,6 +751,7 @@ function computeBenchmarkPackageDigest(manifest: Problem9BenchmarkPackageManifes
       packageId: manifest.packageId,
       packageRoot: manifest.packageRoot,
       packageVersion: manifest.packageVersion,
+      ...(manifest.sourceMetadata ? { sourceMetadata: manifest.sourceMetadata } : {}),
       sourceManifestDigest: manifest.sourceManifestDigest,
       sourceSchemaVersion: "1"
     })
