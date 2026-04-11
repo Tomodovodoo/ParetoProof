@@ -1047,6 +1047,7 @@ function assertFailureEvidenceArtifactRefs(
   const allowedSyntheticPreBundleFailureCodes: ReadonlySet<
     WorkerTerminalFailureRequest["failure"]["failureCode"]
   > = new Set([
+    "manual_cancelled",
     "benchmark_input_digest_mismatch",
     "benchmark_input_missing",
     "prompt_package_missing",
@@ -1642,24 +1643,51 @@ export function createInternalWorkerControlService(db: DbClient) {
         }
 
         if (lease.jobState === "cancel_requested") {
-          await tx
+          const nextLeaseExpiresAt = addSeconds(now, lease.heartbeatTimeoutSeconds);
+          const nextJobTokenExpiresAt = createJobTokenExpiry(now);
+          const nextJobToken = issueJobToken();
+          const continuedLeases = await tx
             .update(workerJobLeases)
             .set({
+              jobTokenExpiresAt: nextJobTokenExpiresAt,
+              jobTokenHash: nextJobToken.tokenHash,
               lastEventSequence: acknowledgedEventSequence,
               lastHeartbeatAt: now,
-              revokedAt: now,
+              leaseExpiresAt: nextLeaseExpiresAt,
               updatedAt: now
             })
-            .where(eq(workerJobLeases.id, authContext.leaseRowId));
+            .where(
+              and(
+                eq(workerJobLeases.id, authContext.leaseRowId),
+                isNull(workerJobLeases.revokedAt),
+                gt(workerJobLeases.leaseExpiresAt, now)
+              )
+            )
+            .returning({
+              id: workerJobLeases.id
+            });
 
-          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+          if (continuedLeases.length === 0) {
+            await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
+            return {
+              acknowledgedEventSequence,
+              cancelRequested: false,
+              jobToken: null,
+              jobTokenExpiresAt: null,
+              leaseExpiresAt: null,
+              leaseStatus: "expired"
+            } satisfies WorkerHeartbeatResponse;
+          }
+
+          await touchWorkerInstanceHeartbeat(tx, lease.workerInstanceId, now);
 
           return {
             acknowledgedEventSequence,
             cancelRequested: true,
-            jobToken: null,
-            jobTokenExpiresAt: null,
-            leaseExpiresAt: null,
+            jobToken: nextJobToken.token,
+            jobTokenExpiresAt: nextJobTokenExpiresAt.toISOString(),
+            leaseExpiresAt: nextLeaseExpiresAt.toISOString(),
             leaseStatus: "cancel_requested"
           } satisfies WorkerHeartbeatResponse;
         }
