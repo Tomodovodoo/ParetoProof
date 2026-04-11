@@ -522,10 +522,17 @@ async function reconcileWorkerInstanceLifecycles(
   }
 }
 
-async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
+async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
   const staleLeases = await tx
     .select({
-      leaseRowId: workerJobLeases.id
+      attemptRowId: attempts.id,
+      attemptState: attempts.state,
+      jobRowId: jobs.id,
+      jobState: jobs.state,
+      leaseRowId: workerJobLeases.id,
+      runRowId: runs.id,
+      runState: runs.state,
+      workerInstanceId: workerJobLeases.workerInstanceId
     })
     .from(workerJobLeases)
     .innerJoin(jobs, eq(workerJobLeases.jobId, jobs.id))
@@ -533,9 +540,18 @@ async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
     .innerJoin(attempts, eq(workerJobLeases.attemptId, attempts.id))
     .where(
       and(
-        eq(jobs.state, "claimed"),
-        eq(attempts.state, "prepared"),
-        or(eq(runs.state, "queued"), eq(runs.state, "running")),
+        or(
+          and(
+            eq(jobs.state, "claimed"),
+            eq(attempts.state, "prepared"),
+            or(eq(runs.state, "queued"), eq(runs.state, "running"))
+          ),
+          and(
+            eq(jobs.state, "running"),
+            eq(attempts.state, "active"),
+            eq(runs.state, "running")
+          )
+        ),
         lte(workerJobLeases.leaseExpiresAt, now),
         isNull(workerJobLeases.revokedAt)
       )
@@ -546,6 +562,7 @@ async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
   }
 
   const leaseRowIds = staleLeases.map((lease) => lease.leaseRowId);
+  const staleLeasesById = new Map(staleLeases.map((lease) => [lease.leaseRowId, lease]));
   const revokedLeases = await tx
     .update(workerJobLeases)
     .set({
@@ -560,11 +577,74 @@ async function revokeExpiredUnstartedLeases(tx: ReadWriteExecutor, now: Date) {
       )
     )
     .returning({
+      leaseRowId: workerJobLeases.id,
       workerInstanceId: workerJobLeases.workerInstanceId
     });
 
   if (revokedLeases.length === 0) {
     return;
+  }
+
+  const startedLeaseRows = revokedLeases
+    .map((lease) => staleLeasesById.get(lease.leaseRowId))
+    .filter(
+      (lease): lease is NonNullable<typeof lease> =>
+        !!lease &&
+        lease.jobState === "running" &&
+        lease.attemptState === "active" &&
+        lease.runState === "running"
+    );
+
+  if (startedLeaseRows.length > 0) {
+    const completedAt = now;
+    const failure = buildLeaseLostFailureClassification();
+    const attemptRowIds = [...new Set(startedLeaseRows.map((lease) => lease.attemptRowId))];
+    const jobRowIds = [...new Set(startedLeaseRows.map((lease) => lease.jobRowId))];
+    const runRowIds = [...new Set(startedLeaseRows.map((lease) => lease.runRowId))];
+
+    await tx
+      .update(attempts)
+      .set({
+        completedAt,
+        failureClassification: failure,
+        primaryFailureCode: failure.failureCode,
+        primaryFailureFamily: failure.failureFamily,
+        primaryFailureSummary: failure.summary,
+        state: "failed",
+        stopReason: failure.failureCode,
+        updatedAt: now,
+        verifierResult: "invalid_result",
+        verdictClass: "invalid_result"
+      })
+      .where(and(inArray(attempts.id, attemptRowIds), eq(attempts.state, "active")));
+
+    await tx
+      .update(jobs)
+      .set({
+        completedAt,
+        primaryFailureCode: failure.failureCode,
+        primaryFailureFamily: failure.failureFamily,
+        primaryFailureSummary: failure.summary,
+        state: "failed",
+        stopReason: failure.failureCode,
+        updatedAt: now,
+        verdictClass: "invalid_result"
+      })
+      .where(and(inArray(jobs.id, jobRowIds), eq(jobs.state, "running")));
+
+    await tx
+      .update(runs)
+      .set({
+        completedAt,
+        primaryFailureCode: failure.failureCode,
+        primaryFailureFamily: failure.failureFamily,
+        primaryFailureSummary: failure.summary,
+        state: "failed",
+        stopReason: failure.failureCode,
+        updatedAt: now,
+        verdictClass: "invalid_result"
+      })
+      .where(and(inArray(runs.id, runRowIds), eq(runs.state, "running")));
   }
 
   await reconcileWorkerInstanceLifecycles(
@@ -1227,6 +1307,19 @@ function selectFailureVerdictClass(request: WorkerTerminalFailureRequest) {
     : ("invalid_result" as const);
 }
 
+function buildLeaseLostFailureClassification() {
+  return {
+    evidenceArtifactRefs: ["worker-control/lease-expired-recovery"],
+    failureCode: "worker_lease_lost" as const,
+    failureFamily: "harness" as const,
+    phase: "execute" as const,
+    retryEligibility: "manual_retry_only" as const,
+    summary: "The active worker lease expired before the attempt finished.",
+    terminality: "terminal_attempt" as const,
+    userVisibility: "user_visible" as const
+  };
+}
+
 function isWorkerAttemptEventDuplicateError(error: unknown) {
   if (!error || typeof error !== "object") {
     return false;
@@ -1243,6 +1336,26 @@ function isWorkerAttemptEventDuplicateError(error: unknown) {
   return (
     databaseCode === "23505" &&
     constraintName === "worker_attempt_events_attempt_sequence_unique"
+  );
+}
+
+function isWorkerLeaseClaimConflictError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const databaseCode = "code" in error ? String(error.code) : null;
+  const constraintName =
+    "constraint_name" in error
+      ? String(error.constraint_name)
+      : "constraint" in error
+        ? String(error.constraint)
+        : null;
+
+  return (
+    databaseCode === "23505" &&
+    (constraintName === "worker_job_leases_active_job_unique" ||
+      constraintName === "worker_job_leases_active_attempt_unique")
   );
 }
 
@@ -1325,118 +1438,134 @@ export function createInternalWorkerControlService(db: DbClient) {
         return buildIdleClaimResponse();
       }
 
-      return db.transaction(async (tx) => {
-        await revokeExpiredUnstartedLeases(tx, new Date());
-        const candidate = await selectNextClaimCandidate(tx);
-        const now = new Date();
-        const workerPoolDefinitionId = await upsertWorkerPoolDefinition(tx, request, now);
-        const workerInstanceId = await upsertWorkerInstance(tx, {
-          currentLifecycleState:
-            candidate || request.activeJobCount > 0 ? "running" : "ready",
-          lastClaimAt: candidate ? now : undefined,
-          lastLeaseActivityAt: candidate ? now : undefined,
-          now,
-          workerId: request.workerId,
-          workerPoolDefinitionId,
-          workerRuntime: request.workerRuntime,
-          workerVersion: request.workerVersion
-        });
+      let provisionalWorkerInstanceId: string | null = null;
 
-        if (!candidate) {
-          return buildIdleClaimResponse();
-        }
-
-        const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
-        const jobTokenExpiresAt = createJobTokenExpiry(now);
-        const { token, tokenHash } = issueJobToken();
-
-        const [lease] = await tx
-          .insert(workerJobLeases)
-          .values({
-            attemptId: candidate.attemptRowId,
-            heartbeatIntervalSeconds,
-            heartbeatTimeoutSeconds,
-            jobId: candidate.jobRowId,
-            jobTokenExpiresAt,
-            jobTokenHash: tokenHash,
-            jobTokenScopes: [...issuedJobTokenScopes],
-            leaseExpiresAt,
-            runId: candidate.runRowId,
-            workerInstanceId,
+      try {
+        return await db.transaction(async (tx) => {
+          await recoverExpiredClaimLeases(tx, new Date());
+          const candidate = await selectNextClaimCandidate(tx);
+          const now = new Date();
+          const workerPoolDefinitionId = await upsertWorkerPoolDefinition(tx, request, now);
+          provisionalWorkerInstanceId = await upsertWorkerInstance(tx, {
+            currentLifecycleState:
+              candidate || request.activeJobCount > 0 ? "running" : "ready",
+            lastClaimAt: candidate ? now : undefined,
+            lastLeaseActivityAt: candidate ? now : undefined,
+            now,
             workerId: request.workerId,
-            workerPool: request.workerPool,
+            workerPoolDefinitionId,
             workerRuntime: request.workerRuntime,
             workerVersion: request.workerVersion
-          })
-          .returning({
-            id: workerJobLeases.id
           });
 
-        if (!lease) {
-          throw new Error("Failed to persist the worker job lease.");
-        }
+          if (!candidate) {
+            return buildIdleClaimResponse();
+          }
 
-        await tx
-          .update(jobs)
-          .set({
-            state: "claimed",
-            updatedAt: now
-          })
-          .where(eq(jobs.id, candidate.jobRowId));
+          const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
+          const jobTokenExpiresAt = createJobTokenExpiry(now);
+          const { token, tokenHash } = issueJobToken();
 
-        if (candidate.runState === "queued") {
+          const [lease] = await tx
+            .insert(workerJobLeases)
+            .values({
+              attemptId: candidate.attemptRowId,
+              heartbeatIntervalSeconds,
+              heartbeatTimeoutSeconds,
+              jobId: candidate.jobRowId,
+              jobTokenExpiresAt,
+              jobTokenHash: tokenHash,
+              jobTokenScopes: [...issuedJobTokenScopes],
+              leaseExpiresAt,
+              runId: candidate.runRowId,
+              workerInstanceId: provisionalWorkerInstanceId,
+              workerId: request.workerId,
+              workerPool: request.workerPool,
+              workerRuntime: request.workerRuntime,
+              workerVersion: request.workerVersion
+            })
+            .returning({
+              id: workerJobLeases.id
+            });
+
+          if (!lease) {
+            throw new Error("Failed to persist the worker job lease.");
+          }
+
           await tx
-            .update(runs)
+            .update(jobs)
             .set({
-              state: "running",
+              state: "claimed",
               updatedAt: now
             })
-            .where(eq(runs.id, candidate.runRowId));
+            .where(eq(jobs.id, candidate.jobRowId));
+
+          if (candidate.runState === "queued") {
+            await tx
+              .update(runs)
+              .set({
+                state: "running",
+                updatedAt: now
+              })
+              .where(eq(runs.id, candidate.runRowId));
+          }
+
+          return {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob: {
+              attemptId: candidate.attemptId,
+              heartbeatIntervalSeconds,
+              heartbeatTimeoutSeconds,
+              jobId: candidate.jobId,
+              jobToken: token,
+              jobTokenExpiresAt: jobTokenExpiresAt.toISOString(),
+              jobTokenScopes: [...issuedJobTokenScopes],
+              leaseExpiresAt: leaseExpiresAt.toISOString(),
+              leaseId: lease.id,
+              offlineBundleCompatible: true,
+              requiredArtifactRoles: [...requiredProblem9ArtifactRoles],
+              runBundleSchemaVersion,
+              runId: candidate.runId,
+              target: {
+                authMode: candidate.authMode,
+                benchmarkItemId: candidate.benchmarkItemId,
+                benchmarkPackageDigest: candidate.benchmarkPackageDigest,
+                benchmarkPackageId: candidate.benchmarkPackageId,
+                benchmarkPackageVersion: candidate.benchmarkPackageVersion,
+                harnessRevision: candidate.harnessRevision,
+                laneId: candidate.laneId,
+                modelConfigId: candidate.modelConfigId,
+                modelSnapshotId: candidate.modelSnapshotId,
+                promptPackageDigest: candidate.promptPackageDigest,
+                promptProtocolVersion: candidate.promptProtocolVersion,
+                providerFamily: candidate.providerFamily,
+                runKind: "single_run",
+                runMode: candidate.runMode as
+                  | "single_pass_probe"
+                  | "pass_k_probe"
+                  | "bounded_agentic_attempt",
+                toolProfile: candidate.toolProfile as
+                  | "no_tools"
+                  | "lean_mcp_readonly"
+                  | "workspace_edit_limited"
+              }
+            }
+          } satisfies WorkerClaimResponse;
+        });
+      } catch (error) {
+        if (!isWorkerLeaseClaimConflictError(error)) {
+          throw error;
         }
 
-        return {
-          leaseStatus: "active",
-          pollAfterSeconds: 0,
-          workerJob: {
-            attemptId: candidate.attemptId,
-            heartbeatIntervalSeconds,
-            heartbeatTimeoutSeconds,
-            jobId: candidate.jobId,
-            jobToken: token,
-            jobTokenExpiresAt: jobTokenExpiresAt.toISOString(),
-            jobTokenScopes: [...issuedJobTokenScopes],
-            leaseExpiresAt: leaseExpiresAt.toISOString(),
-            leaseId: lease.id,
-            offlineBundleCompatible: true,
-            requiredArtifactRoles: [...requiredProblem9ArtifactRoles],
-            runBundleSchemaVersion,
-            runId: candidate.runId,
-            target: {
-              authMode: candidate.authMode,
-              benchmarkItemId: candidate.benchmarkItemId,
-              benchmarkPackageDigest: candidate.benchmarkPackageDigest,
-              benchmarkPackageId: candidate.benchmarkPackageId,
-              benchmarkPackageVersion: candidate.benchmarkPackageVersion,
-              harnessRevision: candidate.harnessRevision,
-              laneId: candidate.laneId,
-              modelConfigId: candidate.modelConfigId,
-              modelSnapshotId: candidate.modelSnapshotId,
-              promptPackageDigest: candidate.promptPackageDigest,
-              promptProtocolVersion: candidate.promptProtocolVersion,
-              providerFamily: candidate.providerFamily,
-              runKind: "single_run",
-              runMode: candidate.runMode as
-                | "single_pass_probe"
-                | "pass_k_probe"
-                | "bounded_agentic_attempt",
-              toolProfile: candidate.toolProfile as
-                | "no_tools"
-                | "lean_mcp_readonly"
-                | "workspace_edit_limited"
-            }
-          }
-        } satisfies WorkerClaimResponse;
-      });
+        if (provisionalWorkerInstanceId) {
+          await db.transaction(async (tx) => {
+            await reconcileWorkerInstanceLifecycle(tx, provisionalWorkerInstanceId, new Date());
+          });
+        }
+
+        return buildIdleClaimResponse();
+      }
     },
 
     async heartbeat(
