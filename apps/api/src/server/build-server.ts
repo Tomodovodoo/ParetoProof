@@ -26,15 +26,31 @@ import {
 } from "./trusted-mutation-origin.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
+export function readBrandedAuthOrigins(runtimeEnv: ApiRuntimeEnv) {
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+
+  return [
+    ...new Set(
+      runtimeEnv.brandedAuthOrigins
+        .map(normalizeOrigin)
+        .filter((origin) => origin !== portalPublicOrigin),
+    ),
+  ];
+}
+
 export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
-  const brandedAuthOrigins = new Set(runtimeEnv.brandedAuthOrigins);
-  const baselineOrigins = [runtimeEnv.portalPublicOrigin];
+  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+  const baselineOrigins = [portalPublicOrigin];
 
   return [
     ...new Set(
       [...baselineOrigins, ...runtimeEnv.corsAllowedOrigins]
         .map(normalizeOrigin)
-        .filter((origin) => !brandedAuthOrigins.has(origin)),
+        .filter(
+          (origin) =>
+            origin === portalPublicOrigin || !brandedAuthOrigins.has(origin),
+        ),
     ),
   ];
 }
@@ -132,7 +148,7 @@ export async function buildServer(
     createInMemoryRateLimiter(),
   );
   const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
-  const brandedAuthOrigins = runtimeEnv.brandedAuthOrigins;
+  const brandedAuthOrigins = readBrandedAuthOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
   const checkReadiness =
     options?.checkReadiness ?? createDatabaseReadinessCheck(db);
@@ -192,7 +208,7 @@ export async function buildServer(
     accessResolverOptions,
     allowLocalhostOrigins: runtimeEnv.corsAllowLocalhost,
     authPublicOrigin: runtimeEnv.authPublicOrigin,
-    brandedAuthOrigins,
+    brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
     rateLimitPreHandlers,
   });

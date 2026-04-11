@@ -165,6 +165,38 @@ test("parseApiRuntimeEnv avoids deriving cookie domains that are private PSL suf
   assert.equal(runtimeEnv.accessCookieDomain, undefined);
 });
 
+test("parseApiRuntimeEnv rejects explicit cookie domains that are only public suffixes", () => {
+  assert.throws(
+    () =>
+      parseApiRuntimeEnv({
+        ACCESS_COOKIE_DOMAIN: ".co.uk",
+        ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+        CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+        CF_ACCESS_PORTAL_AUD: "portal-audience",
+        CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+        DATABASE_URL: "postgres://localhost:5432/paretoproof",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+      }),
+    /ACCESS_COOKIE_DOMAIN: must not be a public suffix cookie domain/,
+  );
+});
+
+test("parseApiRuntimeEnv rejects explicit cookie domains that are private PSL suffixes", () => {
+  assert.throws(
+    () =>
+      parseApiRuntimeEnv({
+        ACCESS_COOKIE_DOMAIN: ".github.io",
+        ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+        CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+        CF_ACCESS_PORTAL_AUD: "portal-audience",
+        CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+        DATABASE_URL: "postgres://localhost:5432/paretoproof",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+      }),
+    /ACCESS_COOKIE_DOMAIN: must not be a public suffix cookie domain/,
+  );
+});
+
 test("parseApiRuntimeEnv rejects runtimes without a portal access audience", () => {
   assert.throws(
     () =>

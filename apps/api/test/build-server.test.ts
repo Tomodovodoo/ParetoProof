@@ -4,6 +4,7 @@ import { parseApiRuntimeEnv } from "../src/config/runtime.ts";
 import {
   buildServer,
   isAllowedCorsOrigin,
+  readBrandedAuthOrigins,
   readCorsRoutePath,
   readAllowedCorsOrigins,
 } from "../src/server/build-server.ts";
@@ -32,6 +33,28 @@ test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allow
     origins.includes("https://google.auth.preview.paretoproof.com"),
     false,
   );
+});
+
+test("readAllowedCorsOrigins keeps the portal origin when auth and portal share one origin", () => {
+  const origins = readAllowedCorsOrigins({
+    brandedAuthOrigins: ["https://portal.preview.paretoproof.com"],
+    corsAllowedOrigins: [],
+    portalPublicOrigin: "https://portal.preview.paretoproof.com",
+  } as never);
+
+  assert.deepEqual(origins, ["https://portal.preview.paretoproof.com"]);
+});
+
+test("readBrandedAuthOrigins excludes the portal origin when auth and portal share one origin", () => {
+  const origins = readBrandedAuthOrigins({
+    brandedAuthOrigins: [
+      "https://portal.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+    ],
+    portalPublicOrigin: "https://portal.preview.paretoproof.com",
+  } as never);
+
+  assert.deepEqual(origins, ["https://github.auth.preview.paretoproof.com"]);
 });
 
 test("readCorsRoutePath falls back to the raw request URL for Fastify preflights", () => {

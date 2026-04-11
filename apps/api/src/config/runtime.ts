@@ -143,6 +143,17 @@ function normalizeConfiguredCookieDomain(
     return z.NEVER;
   }
 
+  if (
+    getPublicSuffix(normalizedDomain, { allowPrivateDomains: true }) ===
+    normalizedDomain
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "must not be a public suffix cookie domain",
+    });
+    return z.NEVER;
+  }
+
   return `.${normalizedDomain}`;
 }
 
@@ -217,11 +228,8 @@ function deriveAccessCookieDomain(origins: string[]) {
   const candidateDomain = sharedLabels.join(".");
 
   if (
-    hostnames.some(
-      (hostname) =>
-        getPublicSuffix(hostname, { allowPrivateDomains: true }) ===
-        candidateDomain,
-    )
+    getPublicSuffix(candidateDomain, { allowPrivateDomains: true }) ===
+    candidateDomain
   ) {
     return undefined;
   }

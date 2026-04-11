@@ -445,6 +445,44 @@ test("POST /portal/session/finalize/submit bounces stale direct browser handoffs
   );
 });
 
+test("POST /portal/session/finalize/submit keeps the shared auth origin relay when auth and portal share one origin", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      authPublicOrigin: "https://portal.preview.paretoproof.com",
+      brandedAuthOrigins: ["https://portal.preview.paretoproof.com"],
+      portalPublicOrigin: "https://portal.preview.paretoproof.com",
+      resolvePortalAccess: async () => null,
+    },
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?redirect=/profile",
+    headers: {
+      accept: "text/html",
+      origin: "https://portal.preview.paretoproof.com",
+      referer: "https://portal.preview.paretoproof.com/",
+    },
+  });
+
+  assert.equal(response.statusCode, 307);
+  assert.equal(
+    response.headers.location,
+    "https://portal.preview.paretoproof.com/api/access/finalize?redirect=%2Fprofile",
+  );
+});
+
 test("POST /portal/session/finalize/submit still returns JSON auth errors for non-branded callers without access", async (t) => {
   const app = Fastify();
 
