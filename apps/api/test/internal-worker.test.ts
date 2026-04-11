@@ -270,6 +270,168 @@ function buildStoredArtifactRow(overrides: Partial<Record<string, unknown>> = {}
   };
 }
 
+function createLostClaimRaceDb() {
+  const updateCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
+  const insertCalls: Array<{
+    target: unknown;
+    values: Record<string, unknown>;
+  }> = [];
+  let selectCount = 0;
+  const leaseConflict = {
+    code: "23505",
+    constraint_name: "worker_job_leases_active_job_unique"
+  };
+
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  leftJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  orderBy() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      {
+                        authMode: "machine_api_key",
+                        attemptId: "attempt-1",
+                        attemptRowId: "attempt-row-1",
+                        benchmarkItemId: "Problem9",
+                        benchmarkPackageDigest: "a".repeat(64),
+                        benchmarkPackageId: "firstproof/Problem9",
+                        benchmarkPackageVersion: "2026.03.13",
+                        harnessRevision: "worker-harness.v1",
+                        jobId: "job-1",
+                        jobRowId: "job-row-1",
+                        laneId: "problem9-default",
+                        modelConfigId: "openai/gpt-5",
+                        modelSnapshotId: "openai/gpt-5.2026-03-13",
+                        promptPackageDigest: "b".repeat(64),
+                        promptProtocolVersion: "problem9-prompt-protocol.v1",
+                        providerFamily: "openai",
+                        runId: "run-1",
+                        runKind: "single_run",
+                        runMode: "bounded_agentic_attempt",
+                        runRowId: "run-row-1",
+                        runState: "queued",
+                        toolProfile: "workspace_edit_limited"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                }
+              };
+            }
+          };
+        },
+        insert(target: unknown) {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push({ target, values });
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              if (insertCalls.length === 2) {
+                return {
+                  onConflictDoUpdate() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "worker-instance-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                returning() {
+                  throw leaseConflict;
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+
+  return {
+    fakeDb,
+    getSelectCount: () => selectCount,
+    insertCalls,
+    updateCalls
+  };
+}
+
 function createScopeError(scope: WorkerJobTokenScope) {
   return new InternalWorkerControlError({
     code: "worker_job_token_scope_missing",
@@ -345,6 +507,33 @@ test("POST /internal/worker/claims returns an active lease when work is availabl
   assert.equal(response.statusCode, 200);
   assert.equal(receivedRequest?.workerId, "worker-1");
   assert.equal(response.json().workerJob?.jobId, "job-1");
+});
+
+test("POST /internal/worker/claims returns idle when another claimer wins the lease insert race", async (t) => {
+  const app = Fastify();
+  const { fakeDb } = createLostClaimRaceDb();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerInternalWorkerRoutes(app, fakeDb as never, buildRuntimeEnv());
+
+  const response = await app.inject({
+    method: "POST",
+    headers: {
+      authorization: "Bearer worker-bootstrap-token"
+    },
+    payload: buildClaimRequest(),
+    url: "/internal/worker/claims"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
 });
 
 test("POST /internal/worker/claims reclaims stale unstarted work without queued rewinds", async (t) => {
@@ -1861,6 +2050,176 @@ test("stale-lease recovery does not rewind durable job or run state", async () =
   assert.equal(updateCalls.some((call) => call.state === "queued"), false);
 });
 
+test("claim terminal-fails expired started work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "active",
+                        jobRowId: "job-row-1",
+                        jobState: "running",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "running",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].verdictClass, "invalid_result");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[1].primaryFailureFamily, "harness");
+  assert.equal(updateCalls[1].primaryFailureSummary, "The active worker lease expired before the attempt finished.");
+  assert.equal(
+    (updateCalls[1].failureClassification as Record<string, unknown>).failureCode,
+    "worker_lease_lost"
+  );
+  assert.deepEqual(
+    (updateCalls[1].failureClassification as Record<string, unknown>).evidenceArtifactRefs,
+    ["worker-control/lease-expired-recovery"]
+  );
+  assert.equal(
+    (updateCalls[1].failureClassification as Record<string, unknown>).phase,
+    "generate"
+  );
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(Object.hasOwn(updateCalls[4], "lastSeenAt"), false);
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+  assert.equal(updateCalls.some((call) => call.state === "claimed"), false);
+});
+
 test("claim keeps any still-unrevoked lease row blocking candidate selection", async () => {
   let capturedLeaseJoin: SQL | null = null;
   const insertCalls: Array<Record<string, unknown>> = [];
@@ -1962,6 +2321,28 @@ test("claim keeps any still-unrevoked lease row blocking candidate selection", a
   assert.match(query.sql, /"worker_job_leases"\."revoked_at" is null/i);
   assert.doesNotMatch(query.sql, /"worker_job_leases"\."lease_expires_at"/i);
   assert.equal(query.params.length, 0);
+});
+
+test("claim returns idle when another claimer wins the active lease uniqueness race", async () => {
+  const { fakeDb, getSelectCount, insertCalls, updateCalls } = createLostClaimRaceDb();
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(getSelectCount(), 3);
+  assert.equal(insertCalls.length, 3);
+  assert.equal(insertCalls[1]?.values.currentLifecycleState, "running");
+  assert.equal(insertCalls[2]?.values.workerInstanceId, "worker-instance-1");
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0]?.values.currentLifecycleState, "ready");
+  assert.equal(updateCalls[0]?.values.lastSeenAt instanceof Date, true);
+  assert.equal(updateCalls[0]?.values.updatedAt instanceof Date, true);
+  assert.equal("state" in updateCalls[0]!.values, false);
 });
 
 test("claim reuses existing worker pool definitions without hot-row updates", async () => {
