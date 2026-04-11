@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { getPublicSuffix } from "tldts";
 import { z } from "zod";
 
 function normalizeOptionalEnvValue(value: unknown) {
@@ -209,7 +210,23 @@ function deriveAccessCookieDomain(origins: string[]) {
     sharedLabels.unshift(label);
   }
 
-  return sharedLabels.length >= 2 ? `.${sharedLabels.join(".")}` : undefined;
+  if (sharedLabels.length < 2) {
+    return undefined;
+  }
+
+  const candidateDomain = sharedLabels.join(".");
+
+  if (
+    hostnames.some(
+      (hostname) =>
+        getPublicSuffix(hostname, { allowPrivateDomains: true }) ===
+        candidateDomain,
+    )
+  ) {
+    return undefined;
+  }
+
+  return `.${candidateDomain}`;
 }
 
 function deriveAccessCookieSecure(origins: string[]) {

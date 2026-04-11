@@ -135,6 +135,36 @@ test("parseApiRuntimeEnv always includes the configured auth origin in branded a
   assert.equal(runtimeEnv.accessCookieSecure, false);
 });
 
+test("parseApiRuntimeEnv avoids deriving cookie domains that are only public suffixes", () => {
+  const runtimeEnv = parseApiRuntimeEnv({
+    ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    AUTH_PUBLIC_ORIGIN: "https://auth.co.uk",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+    CF_ACCESS_PORTAL_AUD: "portal-audience",
+    CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+    DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    PORTAL_PUBLIC_ORIGIN: "https://portal.co.uk",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+  });
+
+  assert.equal(runtimeEnv.accessCookieDomain, undefined);
+});
+
+test("parseApiRuntimeEnv avoids deriving cookie domains that are private PSL suffixes", () => {
+  const runtimeEnv = parseApiRuntimeEnv({
+    ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    AUTH_PUBLIC_ORIGIN: "https://auth.github.io",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+    CF_ACCESS_PORTAL_AUD: "portal-audience",
+    CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+    DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    PORTAL_PUBLIC_ORIGIN: "https://portal.github.io",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+  });
+
+  assert.equal(runtimeEnv.accessCookieDomain, undefined);
+});
+
 test("parseApiRuntimeEnv rejects runtimes without a portal access audience", () => {
   assert.throws(
     () =>
