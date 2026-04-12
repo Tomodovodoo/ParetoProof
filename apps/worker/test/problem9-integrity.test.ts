@@ -15,7 +15,7 @@ import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts"
 const expectedIntegrityDigests = {
   benchmarkPackage: "2a613fe5717c5df32fc3c95b0cf4cbbc9a99312c0cac44948b0cd641acac8dcb",
   promptPackage: "f0fe26f4c426b6b51d524a6bcf23331556a590d0b621f5ccc74fe416c1f7f329",
-  runBundle: "5222dbac0acdcdbe3dbfbdb4bfcc2f483101cf8f3847a9fb21c6dc259a4a21cc"
+  runBundle: "2dd7fae8adf2d9e9559dc0e1148dc3095f5668f15a4e6aa80394ec82c6139059"
 } as const;
 
 const expectedBenchmarkSourceMetadata = {

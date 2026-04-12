@@ -37,6 +37,10 @@ async function readOptionalJsonFile<TValue>(filePath: string): Promise<TValue | 
   }
 }
 
+async function readTextFile(filePath: string): Promise<string> {
+  return await readFile(filePath, "utf8");
+}
+
 async function buildOfflineIngestRequest(options: {
   failureClassificationOverride?: Partial<{
     evidenceArtifactRefs: string[];
@@ -236,6 +240,27 @@ async function buildOfflineIngestRequest(options: {
       benchmarkPackage: await readJsonFile(
         path.join(bundleRoot, "package", "benchmark-package.json")
       ),
+      benchmarkSources: {
+        "FirstProof/Problem9/Gold.lean": await readTextFile(
+          path.join(bundleRoot, "package", "FirstProof", "Problem9", "Gold.lean")
+        ),
+        "FirstProof/Problem9/Statement.lean": await readTextFile(
+          path.join(bundleRoot, "package", "FirstProof", "Problem9", "Statement.lean")
+        ),
+        "FirstProof/Problem9/Support.lean": await readTextFile(
+          path.join(bundleRoot, "package", "FirstProof", "Problem9", "Support.lean")
+        ),
+        LICENSE: await readTextFile(path.join(bundleRoot, "package", "LICENSE")),
+        "README.md": await readTextFile(path.join(bundleRoot, "package", "README.md")),
+        "lake-manifest.json": await readTextFile(
+          path.join(bundleRoot, "package", "lake-manifest.json")
+        ),
+        "lakefile.toml": await readTextFile(path.join(bundleRoot, "package", "lakefile.toml")),
+        "lean-toolchain": await readTextFile(path.join(bundleRoot, "package", "lean-toolchain")),
+        "statements/problem.md": await readTextFile(
+          path.join(bundleRoot, "package", "statements", "problem.md")
+        )
+      },
       candidateSource: await readFile(
         path.join(bundleRoot, "candidate", "Candidate.lean"),
         "utf8"
@@ -257,6 +282,14 @@ async function buildOfflineIngestRequest(options: {
       promptPackage: await readJsonFile(
         path.join(bundleRoot, "prompt", "prompt-package.json")
       ),
+      promptLayers: {
+        "benchmark.md": await readTextFile(path.join(bundleRoot, "prompt", "benchmark.md")),
+        "item.md": await readTextFile(path.join(bundleRoot, "prompt", "item.md")),
+        "run-envelope.json": await readTextFile(
+          path.join(bundleRoot, "prompt", "run-envelope.json")
+        ),
+        "system.md": await readTextFile(path.join(bundleRoot, "prompt", "system.md"))
+      },
       runBundle: await readJsonFile<Record<string, unknown>>(path.join(bundleRoot, "run-bundle.json")),
       usage: null,
       verifierOutput: await readJsonFile(
@@ -300,7 +333,7 @@ test("buildProblem9OfflineIngestPlan maps canonical passing bundles to terminal 
   assert.equal(plan.run.stopReason, "verifier_passed");
   assert.equal(plan.job.stopReason, "verifier_passed");
   assert.equal(plan.attempt.stopReason, "verifier_passed");
-  assert.equal(plan.artifacts.length, 11);
+  assert.equal(plan.artifacts.length, 24);
   const rootArtifacts = plan.artifacts.filter(
     (artifact) =>
       artifact.relativePath === "artifact-manifest.json" || artifact.relativePath === "run-bundle.json"
@@ -560,6 +593,95 @@ test("buildProblem9OfflineIngestPlan rejects digest mismatches", async (t) => {
   );
 });
 
+test("buildProblem9OfflineIngestPlan rejects canonical provenance metadata drift", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const readmeEntry = request.bundle.artifactManifest.artifacts.find(
+    (artifact) => artifact.relativePath === "package/README.md"
+  );
+  assert.ok(readmeEntry);
+  readmeEntry.artifactRole = "candidate_source";
+  readmeEntry.requiredForIngest = false;
+  request.bundle.runBundle.artifactManifestDigest = sha256Text(
+    `${stableStringify(request.bundle.artifactManifest)}\n`
+  );
+  request.bundle.runBundle.bundleDigest = computeRunBundleDigest(
+    request.bundle.artifactManifest.artifacts,
+    request.bundle.runBundle
+  );
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "unexpected_artifact_manifest_entry"
+  );
+});
+
+test("buildProblem9OfflineIngestPlan rejects run-envelope semantic drift", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const runEnvelope = JSON.parse(request.bundle.promptLayers["run-envelope.json"]) as Record<
+    string,
+    unknown
+  >;
+  runEnvelope.runId = "run-tampered";
+  request.bundle.promptLayers["run-envelope.json"] = `${stableStringify(runEnvelope)}\n`;
+  request.bundle.promptPackage.layerDigests["run-envelope.json"] = sha256Text(
+    request.bundle.promptLayers["run-envelope.json"]
+  );
+  request.bundle.promptPackage.promptPackageDigest = computePromptPackageDigest(
+    request.bundle.promptPackage
+  );
+  request.bundle.runBundle.promptPackageDigest = request.bundle.promptPackage.promptPackageDigest;
+  request.bundle.runBundle.runConfigDigest = computeOfflineIngestRunConfigDigest(request.bundle);
+
+  const promptPackageEntry = request.bundle.artifactManifest.artifacts.find(
+    (artifact) => artifact.relativePath === "prompt/prompt-package.json"
+  );
+  assert.ok(promptPackageEntry);
+  const promptPackageText = `${stableStringify(request.bundle.promptPackage)}\n`;
+  promptPackageEntry.sha256 = sha256Text(promptPackageText);
+  promptPackageEntry.byteSize = Buffer.byteLength(promptPackageText, "utf8");
+
+  const runEnvelopeEntry = request.bundle.artifactManifest.artifacts.find(
+    (artifact) => artifact.relativePath === "prompt/run-envelope.json"
+  );
+  assert.ok(runEnvelopeEntry);
+  runEnvelopeEntry.sha256 = sha256Text(request.bundle.promptLayers["run-envelope.json"]);
+  runEnvelopeEntry.byteSize = Buffer.byteLength(
+    request.bundle.promptLayers["run-envelope.json"],
+    "utf8"
+  );
+
+  request.bundle.runBundle.artifactManifestDigest = sha256Text(
+    `${stableStringify(request.bundle.artifactManifest)}\n`
+  );
+  request.bundle.runBundle.bundleDigest = computeRunBundleDigest(
+    request.bundle.artifactManifest.artifacts,
+    request.bundle.runBundle
+  );
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "identity_inconsistent"
+  );
+});
+
 test("buildProblem9OfflineIngestPlan rejects path traversal in identifiers", async (t) => {
   const { request, tempRoot } = await buildOfflineIngestRequest({
     result: "pass"
@@ -701,7 +823,7 @@ test("createProblem9OfflineIngestService persists audit provenance and live-equi
   const response = await service(request, "user-1");
 
   assert.deepEqual(response, {
-    artifactCount: 11,
+    artifactCount: 24,
     attempt: {
       id: "attempt-row-1",
       sourceAttemptId: "attempt-pass-1",
@@ -726,7 +848,7 @@ test("createProblem9OfflineIngestService persists audit provenance and live-equi
     insertedAttempt?.artifactManifestDigest,
     request.bundle.runBundle.artifactManifestDigest
   );
-  assert.equal(insertedArtifacts.length, 11);
+  assert.equal(insertedArtifacts.length, 24);
   const insertedRootArtifacts = insertedArtifacts.filter(
     (artifact) =>
       artifact.relativePath === "artifact-manifest.json" || artifact.relativePath === "run-bundle.json"
@@ -752,7 +874,7 @@ test("createProblem9OfflineIngestService persists audit provenance and live-equi
   assert.equal(insertedAuditEvents[0]?.severity, "critical");
   assert.deepEqual(insertedAuditEvents[0]?.payload, {
     actorUserId: "user-1",
-    artifactCount: 11,
+    artifactCount: 24,
     attemptId: "attempt-row-1",
     jobId: "job-row-1",
     runId: "run-row-1",
@@ -1000,7 +1122,7 @@ test("createProblem9OfflineIngestService preserves source failure stop reasons w
   const response = await service(request, "user-1");
 
   assert.deepEqual(response, {
-    artifactCount: 12,
+    artifactCount: 25,
     attempt: {
       id: "attempt-row-1",
       sourceAttemptId: "attempt-fail-1",
@@ -1021,10 +1143,10 @@ test("createProblem9OfflineIngestService preserves source failure stop reasons w
   assert.equal(insertedRun?.stopReason, "provider_timeout");
   assert.equal(insertedJob?.stopReason, "provider_timeout");
   assert.equal(insertedAttempt?.stopReason, "provider_timeout");
-  assert.equal(insertedArtifacts.length, 12);
+  assert.equal(insertedArtifacts.length, 25);
   assert.deepEqual(insertedAuditEvents[0]?.payload, {
     actorUserId: "user-1",
-    artifactCount: 12,
+    artifactCount: 25,
     attemptId: "attempt-row-1",
     jobId: "job-row-1",
     runId: "run-row-1",
@@ -1066,7 +1188,7 @@ test("POST /portal/admin/offline-ingest/problem9-run-bundles returns created res
         receivedPayload = rawRequest;
 
         return {
-          artifactCount: 11,
+          artifactCount: 24,
           attempt: {
             id: "attempt-row-1",
             sourceAttemptId: "attempt-pass-1",
@@ -1099,7 +1221,7 @@ test("POST /portal/admin/offline-ingest/problem9-run-bundles returns created res
 
   assert.equal(response.statusCode, 201);
   assert.deepEqual(response.json(), {
-    artifactCount: 11,
+    artifactCount: 24,
     attempt: {
       id: "attempt-row-1",
       sourceAttemptId: "attempt-pass-1",
@@ -1197,6 +1319,88 @@ function computeLegacyBenchmarkPackageDigest(manifest: Record<string, unknown>):
       null,
       2
     )
+  );
+}
+
+function computePromptPackageDigest(promptPackage: {
+  authMode: string;
+  benchmarkPackageDigest: string;
+  benchmarkPackageId: string;
+  benchmarkPackageVersion: string;
+  harnessRevision: string;
+  laneId: string;
+  layerDigests: Record<string, string>;
+  layerVersions: Record<string, string>;
+  modelConfigId: string;
+  promptProtocolVersion: string;
+  providerFamily: string;
+  runMode: string;
+  toolProfile: string;
+}) {
+  return sha256Text(
+    stableStringify({
+      authMode: promptPackage.authMode,
+      benchmarkPackageDigest: promptPackage.benchmarkPackageDigest,
+      benchmarkPackageId: promptPackage.benchmarkPackageId,
+      benchmarkPackageVersion: promptPackage.benchmarkPackageVersion,
+      harnessRevision: promptPackage.harnessRevision,
+      laneId: promptPackage.laneId,
+      layerDigests: promptPackage.layerDigests,
+      layerVersions: promptPackage.layerVersions,
+      modelConfigId: promptPackage.modelConfigId,
+      promptProtocolVersion: promptPackage.promptProtocolVersion,
+      providerFamily: promptPackage.providerFamily,
+      runMode: promptPackage.runMode,
+      toolProfile: promptPackage.toolProfile
+    })
+  );
+}
+
+function computeOfflineIngestRunConfigDigest(bundle: {
+  benchmarkPackage: {
+    benchmarkItemId: string;
+    packageDigest: string;
+    packageId: string;
+    packageVersion: string;
+  };
+  environment: {
+    modelSnapshotId: string;
+    verifierVersion: string;
+  };
+  promptPackage: {
+    authMode: string;
+    harnessRevision: string;
+    laneId: string;
+    modelConfigId: string;
+    promptPackageDigest: string;
+    promptProtocolVersion: string;
+    providerFamily: string;
+    runMode: string;
+    toolProfile: string;
+  };
+  runBundle: {
+    environmentDigest: string;
+  };
+}) {
+  return sha256Text(
+    stableStringify({
+      authMode: bundle.promptPackage.authMode,
+      benchmarkItemId: bundle.benchmarkPackage.benchmarkItemId,
+      benchmarkPackageDigest: bundle.benchmarkPackage.packageDigest,
+      benchmarkPackageId: bundle.benchmarkPackage.packageId,
+      benchmarkPackageVersion: bundle.benchmarkPackage.packageVersion,
+      environmentDigest: bundle.runBundle.environmentDigest,
+      harnessRevision: bundle.promptPackage.harnessRevision,
+      laneId: bundle.promptPackage.laneId,
+      modelConfigId: bundle.promptPackage.modelConfigId,
+      modelSnapshotId: bundle.environment.modelSnapshotId,
+      promptPackageDigest: bundle.promptPackage.promptPackageDigest,
+      promptProtocolVersion: bundle.promptPackage.promptProtocolVersion,
+      providerFamily: bundle.promptPackage.providerFamily,
+      runMode: bundle.promptPackage.runMode,
+      toolProfile: bundle.promptPackage.toolProfile,
+      verifierVersion: bundle.environment.verifierVersion
+    })
   );
 }
 

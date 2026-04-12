@@ -291,13 +291,21 @@ const requiredBenchmarkPackagePaths = [
 const promptLayerFilenames = ["benchmark.md", "item.md", "run-envelope.json", "system.md"] as const;
 const promptPackageManifestFilename = "prompt-package.json";
 const requiredPromptPackagePaths = [promptPackageManifestFilename, ...promptLayerFilenames] as const;
+const benchmarkBundleRelativePaths = expectedBenchmarkHashPaths.map(
+  (relativePath) => `package/${relativePath}`
+);
+const promptLayerBundleRelativePaths = promptLayerFilenames.map(
+  (filename) => `prompt/${filename}`
+);
 
 const requiredBundleBaseFiles = [
   "candidate/Candidate.lean",
   "environment/environment.json",
   "package/benchmark-package.json",
+  ...benchmarkBundleRelativePaths,
   "package/package-ref.json",
   "prompt/prompt-package.json",
+  ...promptLayerBundleRelativePaths,
   "verification/compiler-diagnostics.json",
   "verification/compiler-output.txt",
   "verification/verdict.json",
@@ -471,9 +479,25 @@ export async function materializeProblem9RunBundle(
     path.join(benchmarkPackageRoot, benchmarkPackageManifestRelativePath),
     path.join(bundleRoot, "package", "benchmark-package.json")
   );
+  await Promise.all(
+    expectedBenchmarkHashPaths.map((relativePath) =>
+      copyNormalizedTextFile(
+        path.join(benchmarkPackageRoot, relativePath),
+        path.join(bundleRoot, "package", relativePath)
+      )
+    )
+  );
   await copyNormalizedTextFile(
     path.join(promptPackageRoot, promptPackageManifestFilename),
     path.join(bundleRoot, "prompt", "prompt-package.json")
+  );
+  await Promise.all(
+    promptLayerFilenames.map((filename) =>
+      copyNormalizedTextFile(
+        path.join(promptPackageRoot, filename),
+        path.join(bundleRoot, "prompt", filename)
+      )
+    )
   );
   await writeNormalizedText(path.join(bundleRoot, "candidate", "Candidate.lean"), candidateContents);
   await writeJsonFile(
@@ -1016,12 +1040,15 @@ async function collectArtifactManifestEntries(
 }
 
 function artifactRoleForPath(relativePath: string): string {
+  if (relativePath.startsWith("package/")) {
+    return "package_reference";
+  }
+
+  if (relativePath.startsWith("prompt/")) {
+    return "prompt_package";
+  }
+
   switch (relativePath) {
-    case "package/package-ref.json":
-    case "package/benchmark-package.json":
-      return "package_reference";
-    case "prompt/prompt-package.json":
-      return "prompt_package";
     case "candidate/Candidate.lean":
       return "candidate_source";
     case "verification/verdict.json":
@@ -1046,14 +1073,28 @@ function mediaTypeForPath(relativePath: string): string | null {
     return "application/json";
   }
 
-  if (relativePath.endsWith(".txt") || relativePath.endsWith(".lean")) {
+  if (isNormalizedTextBundlePath(relativePath)) {
     return "text/plain";
   }
 
   return null;
 }
 
+function isNormalizedTextBundlePath(relativePath: string): boolean {
+  const baseName = path.posix.basename(relativePath);
+
+  return (
+    relativePath.endsWith(".txt") ||
+    relativePath.endsWith(".lean") ||
+    relativePath.endsWith(".md") ||
+    relativePath.endsWith(".toml") ||
+    baseName === "LICENSE" ||
+    baseName === "lean-toolchain"
+  );
+}
+
 async function copyNormalizedTextFile(sourcePath: string, destinationPath: string): Promise<void> {
+  await mkdir(path.dirname(destinationPath), { recursive: true });
   await writeNormalizedText(destinationPath, await loadNormalizedText(sourcePath));
 }
 

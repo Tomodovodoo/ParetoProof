@@ -260,23 +260,37 @@ test("materialize-problem9-run-bundle bundles failure classification artifacts f
       status: string;
       stopReason: string;
     };
+    const expectedArtifactPaths = [
+      "candidate/Candidate.lean",
+      "environment/environment.json",
+      "package/benchmark-package.json",
+      "package/FirstProof/Problem9/Gold.lean",
+      "package/FirstProof/Problem9/Statement.lean",
+      "package/FirstProof/Problem9/Support.lean",
+      "package/LICENSE",
+      "package/README.md",
+      "package/lake-manifest.json",
+      "package/lakefile.toml",
+      "package/lean-toolchain",
+      "package/package-ref.json",
+      "package/statements/problem.md",
+      "prompt/benchmark.md",
+      "prompt/item.md",
+      "prompt/prompt-package.json",
+      "prompt/run-envelope.json",
+      "prompt/system.md",
+      "verification/compiler-diagnostics.json",
+      "verification/compiler-output.txt",
+      "verification/failure-classification.json",
+      "verification/verdict.json",
+      "verification/verifier-output.json"
+    ].sort((left, right) => left.localeCompare(right));
 
     assert.equal(runBundle.status, "failure");
     assert.equal(runBundle.stopReason, "compile_failed");
     assert.deepEqual(
       artifactManifest.artifacts.map((artifact) => artifact.relativePath),
-      [
-        "candidate/Candidate.lean",
-        "environment/environment.json",
-        "package/benchmark-package.json",
-        "package/package-ref.json",
-        "prompt/prompt-package.json",
-        "verification/compiler-diagnostics.json",
-        "verification/compiler-output.txt",
-        "verification/failure-classification.json",
-        "verification/verdict.json",
-        "verification/verifier-output.json"
-      ]
+      expectedArtifactPaths
     );
     assert.equal(
       await readNormalizedText(
