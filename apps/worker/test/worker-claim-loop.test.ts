@@ -239,6 +239,153 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
   }
 });
 
+test("runWorkerClaimLoop accepts uppercase verdict benchmarkPackageDigest hex", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-uppercase-verdict-digest-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const workerJob = buildWorkerJob();
+    const artifactEntries = buildArtifactEntries();
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 0,
+            jobToken: "job-token-2"
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 1
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            artifactManifestDigest,
+            artifacts: artifactEntries.map((artifact, index) => ({
+              artifactId: `artifact-${index + 1}`,
+              artifactRole: artifact.artifactRole,
+              relativePath: artifact.relativePath
+            }))
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/artifacts`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 2
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 3
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "succeeded",
+            jobState: "completed",
+            runState: "succeeded"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/result`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async (options) => {
+          await writeBundleOutputsWithVerdict(options.outputRoot, artifactEntries, {
+            benchmarkPackageDigest: benchmarkDigest.toUpperCase()
+          });
+
+          return {
+            artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            authMode: "machine_api_key",
+            bundleDigest,
+            compileRepairCount: 0,
+            outputRoot: options.outputRoot,
+            promptPackageDigest: promptDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 1,
+            result: "pass",
+            runConfigDigest: "2".repeat(64),
+            runId: workerJob.runId,
+            stopReason: "verification_passed",
+            verifierRepairCount: 0,
+            verdictDigest
+          };
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+    assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/result`);
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
 test("runWorkerClaimLoop terminalizes cancellation after the first cancel-requested heartbeat", async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-cancel-"));
 

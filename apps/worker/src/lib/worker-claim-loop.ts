@@ -1346,7 +1346,7 @@ function assertBundleSubmissionMatchesJobTarget(
     ["runId", bundleSubmission.verifierVerdict.runId, expected.runId]
   ];
   const mismatchedVerdictField = verdictChecks.find(
-    ([, actual, expectedValue]) => actual !== expectedValue
+    ([field, actual, expectedValue]) => !isBundleFieldMatch(field, actual, expectedValue)
   );
 
   if (mismatchedVerdictField) {
