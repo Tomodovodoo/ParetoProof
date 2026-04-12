@@ -61,6 +61,13 @@ type AuditEventWithActor = DbAuditEventRow & {
   actorUser: DbUserRow | null;
 };
 
+class AccessRequestApprovalConflictError extends Error {
+  constructor(readonly requestRow: DbAccessRequestRow | null) {
+    super("Access request approval lost the pending-state race.");
+    this.name = "AccessRequestApprovalConflictError";
+  }
+}
+
 type AdminUserRelations = DbUserRow & {
   accessRequests: AccessRequestWithReviewer[];
   auditEventsAsTarget: AuditEventWithActor[];
@@ -814,222 +821,234 @@ export function registerAdminRoutes(
       const actorUserId = getAdminActorUserId(request);
       const accessRequestId = (request.params as { accessRequestId?: string }).accessRequestId;
 
-      const result = await db.transaction(async (tx) => {
-        const requestRow = await tx.query.accessRequests.findFirst({
-          where: eq(accessRequests.id, accessRequestId ?? "")
-        });
+      const result = await (async () => {
+        try {
+          return await db.transaction(async (tx) => {
+            const requestRow = await tx.query.accessRequests.findFirst({
+              where: eq(accessRequests.id, accessRequestId ?? "")
+            });
 
-        if (!requestRow) {
-          return {
-            kind: "not_found" as const
-          };
-        }
+            if (!requestRow) {
+              return {
+                kind: "not_found" as const
+              };
+            }
 
-        if (requestRow.status !== "pending") {
-          return {
-            kind: "conflict" as const,
-            requestRow
-          };
-        }
+            if (requestRow.status !== "pending") {
+              return {
+                kind: "conflict" as const,
+                requestRow
+              };
+            }
 
-        const targetUser =
-          requestRow.requestedByUserId
-            ? await tx.query.users.findFirst({
-                where: eq(users.id, requestRow.requestedByUserId)
-              })
-            : await tx.query.users.findFirst({
-                where: eq(users.email, requestRow.email)
-              });
+            const targetUser =
+              requestRow.requestedByUserId
+                ? await tx.query.users.findFirst({
+                    where: eq(users.id, requestRow.requestedByUserId)
+                  })
+                : await tx.query.users.findFirst({
+                    where: eq(users.email, requestRow.email)
+                  });
 
-        if (!targetUser) {
-          return {
-            kind: "target_user_missing" as const,
-            requestRow
-          };
-        }
+            if (!targetUser) {
+              return {
+                kind: "target_user_missing" as const,
+                requestRow
+              };
+            }
 
-        const now = new Date();
-        let linkedIdentityAuditEvent: typeof auditEvents.$inferInsert | null = null;
+            const now = new Date();
+            let linkedIdentityAuditEvent: typeof auditEvents.$inferInsert | null = null;
 
-        if (requestRow.requestKind === "identity_recovery") {
-          const requestedIdentitySubject = requestRow.requestedIdentitySubject;
-          const requestedIdentityProvider = requestRow.requestedIdentityProvider;
+            if (requestRow.requestKind === "identity_recovery") {
+              const requestedIdentitySubject = requestRow.requestedIdentitySubject;
+              const requestedIdentityProvider = requestRow.requestedIdentityProvider;
 
-          if (!requestedIdentitySubject || !requestedIdentityProvider) {
-            return {
-              kind: "recovery_identity_missing" as const,
-              requestRow
-            };
-          }
+              if (!requestedIdentitySubject || !requestedIdentityProvider) {
+                return {
+                  kind: "recovery_identity_missing" as const,
+                  requestRow
+                };
+              }
 
-          const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
-            await tx.query.userIdentities.findFirst({
-              where: buildUserIdentityProviderSubjectMatch(
+              const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
+                await tx.query.userIdentities.findFirst({
+                  where: buildUserIdentityProviderSubjectMatch(
+                    requestedIdentityProvider,
+                    requestedIdentitySubject
+                  )
+                }),
                 requestedIdentityProvider,
                 requestedIdentitySubject
-              )
-            }),
-            requestedIdentityProvider,
-            requestedIdentitySubject
-          );
+              );
 
-          if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
-            return {
-              conflictUserId: existingSubjectOwner.userId,
-              kind: "recovery_identity_conflict" as const,
-              requestRow
-            };
-          }
-        } else {
-          const linkedIdentity = await tx.query.userIdentities.findFirst({
-            where: eq(userIdentities.userId, targetUser.id)
-          });
+              if (existingSubjectOwner && existingSubjectOwner.userId !== targetUser.id) {
+                return {
+                  conflictUserId: existingSubjectOwner.userId,
+                  kind: "recovery_identity_conflict" as const,
+                  requestRow
+                };
+              }
+            } else {
+              const linkedIdentity = await tx.query.userIdentities.findFirst({
+                where: eq(userIdentities.userId, targetUser.id)
+              });
 
-          if (!linkedIdentity) {
-            return {
-              kind: "identity_link_required" as const,
-              requestRow
-            };
-          }
-        }
+              if (!linkedIdentity) {
+                return {
+                  kind: "identity_link_required" as const,
+                  requestRow
+                };
+              }
+            }
 
-        const activeRoleRows = await tx
-          .select({
-            id: roleGrants.id,
-            role: roleGrants.role
-          })
-          .from(roleGrants)
-          .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
+            const activeRoleRows = await tx
+              .select({
+                id: roleGrants.id,
+                role: roleGrants.role
+              })
+              .from(roleGrants)
+              .where(and(eq(roleGrants.userId, targetUser.id), isNull(roleGrants.revokedAt)));
 
-        if (requestRow.requestKind === "identity_recovery") {
-          const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
-            await tx.query.userIdentities.findFirst({
-              where: buildUserIdentityProviderSubjectMatch(
+            if (requestRow.requestKind === "identity_recovery") {
+              const existingSubjectOwner = filterUserIdentityProviderSubjectMatch(
+                await tx.query.userIdentities.findFirst({
+                  where: buildUserIdentityProviderSubjectMatch(
+                    requestRow.requestedIdentityProvider!,
+                    requestRow.requestedIdentitySubject!
+                  )
+                }),
                 requestRow.requestedIdentityProvider!,
                 requestRow.requestedIdentitySubject!
-              )
-            }),
-            requestRow.requestedIdentityProvider!,
-            requestRow.requestedIdentitySubject!
-          );
+              );
 
-          if (!existingSubjectOwner) {
-            await tx.insert(userIdentities).values({
-              provider: requestRow.requestedIdentityProvider!,
-              providerEmail: requestRow.email,
-              providerSubject: requestRow.requestedIdentitySubject!,
-              userId: targetUser.id
-            });
-            linkedIdentityAuditEvent = {
-              actorKind: "portal_user" as const,
-              actorUserId,
-              eventId: "user_identity.linked",
-              payload: {
-                actorUserId,
-                identityProvider: requestRow.requestedIdentityProvider!,
-                identitySubject: requestRow.requestedIdentitySubject!,
-                targetUserId: targetUser.id
-              },
-              severity: "critical" as const,
-              subjectKind: "user_identity" as const,
-              targetUserId: targetUser.id
-            };
-          } else {
-            await tx
-              .update(userIdentities)
-              .set({
-                lastSeenAt: now,
-                providerEmail: requestRow.email
-              })
-              .where(eq(userIdentities.id, existingSubjectOwner.id));
-          }
-        } else {
-          if (activeRoleRows.length > 0) {
-            return {
-              kind: "already_approved" as const,
-              requestRow
-            };
-          }
-
-          await tx.insert(roleGrants).values({
-            grantedByUserId: actorUserId,
-            role: parsedBody.data.approvedRole,
-            userId: targetUser.id
-          });
-        }
-
-        const [reviewedRequest] = await tx
-          .update(accessRequests)
-          .set({
-            decisionNote: parsedBody.data.decisionNote,
-            reviewedAt: now,
-            reviewedByUserId: actorUserId,
-            status: "approved"
-          })
-          .where(
-            and(
-              eq(accessRequests.id, requestRow.id),
-              eq(accessRequests.status, "pending")
-            )
-          )
-          .returning();
-
-        if (!reviewedRequest) {
-          return {
-            kind: "conflict" as const,
-            requestRow: await tx.query.accessRequests.findFirst({
-              where: eq(accessRequests.id, requestRow.id)
-            })
-          };
-        }
-
-        const auditEventRows: Array<typeof auditEvents.$inferInsert> = [
-          {
-            actorKind: "portal_user" as const,
-            actorUserId,
-            eventId: "access_request.approved",
-            payload: {
-              accessRequestId: reviewedRequest.id,
-              actorUserId,
-              approvedRole:
-                requestRow.requestKind === "identity_recovery"
-                  ? requestRow.requestedRole
-                  : parsedBody.data.approvedRole,
-              requestKind: requestRow.requestKind,
-              targetUserId: targetUser.id
-            },
-            severity: "critical" as const,
-            subjectKind: "access_request" as const,
-            targetUserId: targetUser.id
-          },
-          ...(requestRow.requestKind === "identity_recovery"
-            ? linkedIdentityAuditEvent
-              ? [linkedIdentityAuditEvent]
-              : []
-            : [
-                {
+              if (!existingSubjectOwner) {
+                await tx.insert(userIdentities).values({
+                  provider: requestRow.requestedIdentityProvider!,
+                  providerEmail: requestRow.email,
+                  providerSubject: requestRow.requestedIdentitySubject!,
+                  userId: targetUser.id
+                });
+                linkedIdentityAuditEvent = {
                   actorKind: "portal_user" as const,
                   actorUserId,
-                  eventId: "role_grant.granted",
+                  eventId: "user_identity.linked",
                   payload: {
                     actorUserId,
-                    grantedRole: parsedBody.data.approvedRole,
+                    identityProvider: requestRow.requestedIdentityProvider!,
+                    identitySubject: requestRow.requestedIdentitySubject!,
                     targetUserId: targetUser.id
                   },
                   severity: "critical" as const,
-                  subjectKind: "role_grant" as const,
+                  subjectKind: "user_identity" as const,
                   targetUserId: targetUser.id
-                }
-              ])
-        ];
+                };
+              } else {
+                await tx
+                  .update(userIdentities)
+                  .set({
+                    lastSeenAt: now,
+                    providerEmail: requestRow.email
+                  })
+                  .where(eq(userIdentities.id, existingSubjectOwner.id));
+              }
+            } else {
+              if (activeRoleRows.length > 0) {
+                return {
+                  kind: "already_approved" as const,
+                  requestRow
+                };
+              }
 
-        await tx.insert(auditEvents).values(auditEventRows);
+              await tx.insert(roleGrants).values({
+                grantedByUserId: actorUserId,
+                role: parsedBody.data.approvedRole,
+                userId: targetUser.id
+              });
+            }
 
-        return {
-          item: reviewedRequest,
-          kind: "approved" as const
-        };
-      });
+            const [reviewedRequest] = await tx
+              .update(accessRequests)
+              .set({
+                decisionNote: parsedBody.data.decisionNote,
+                reviewedAt: now,
+                reviewedByUserId: actorUserId,
+                status: "approved"
+              })
+              .where(
+                and(
+                  eq(accessRequests.id, requestRow.id),
+                  eq(accessRequests.status, "pending")
+                )
+              )
+              .returning();
+
+            if (!reviewedRequest) {
+              throw new AccessRequestApprovalConflictError(
+                (await tx.query.accessRequests.findFirst({
+                  where: eq(accessRequests.id, requestRow.id)
+                })) ?? null
+              );
+            }
+
+            const auditEventRows: Array<typeof auditEvents.$inferInsert> = [
+              {
+                actorKind: "portal_user" as const,
+                actorUserId,
+                eventId: "access_request.approved",
+                payload: {
+                  accessRequestId: reviewedRequest.id,
+                  actorUserId,
+                  approvedRole:
+                    requestRow.requestKind === "identity_recovery"
+                      ? requestRow.requestedRole
+                      : parsedBody.data.approvedRole,
+                  requestKind: requestRow.requestKind,
+                  targetUserId: targetUser.id
+                },
+                severity: "critical" as const,
+                subjectKind: "access_request" as const,
+                targetUserId: targetUser.id
+              },
+              ...(requestRow.requestKind === "identity_recovery"
+                ? linkedIdentityAuditEvent
+                  ? [linkedIdentityAuditEvent]
+                  : []
+                : [
+                    {
+                      actorKind: "portal_user" as const,
+                      actorUserId,
+                      eventId: "role_grant.granted",
+                      payload: {
+                        actorUserId,
+                        grantedRole: parsedBody.data.approvedRole,
+                        targetUserId: targetUser.id
+                      },
+                      severity: "critical" as const,
+                      subjectKind: "role_grant" as const,
+                      targetUserId: targetUser.id
+                    }
+                  ])
+            ];
+
+            await tx.insert(auditEvents).values(auditEventRows);
+
+            return {
+              item: reviewedRequest,
+              kind: "approved" as const
+            };
+          });
+        } catch (error) {
+          if (error instanceof AccessRequestApprovalConflictError) {
+            return {
+              kind: "conflict" as const,
+              requestRow: error.requestRow
+            };
+          }
+
+          throw error;
+        }
+      })();
 
       if (result.kind === "not_found") {
         reply.code(404).send({
