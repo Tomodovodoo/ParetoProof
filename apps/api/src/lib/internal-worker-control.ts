@@ -1706,7 +1706,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           } satisfies WorkerHeartbeatResponse;
         }
 
-        if (lease.jobState === "cancel_requested") {
+        if (lease.jobState === "cancel_requested" || lease.runState === "cancel_requested") {
           const nextLeaseExpiresAt = resolveCancelRequestedLeaseExpiry(lease);
           const nextJobTokenExpiresAt = nextLeaseExpiresAt;
           const nextJobToken = issueJobToken();

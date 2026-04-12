@@ -4410,6 +4410,179 @@ test("heartbeat preserves the active lease when cancellation is requested", asyn
   assert.equal(updateCalls[1].lastHeartbeatAt instanceof Date, true);
 });
 
+test("heartbeat returns cancel_requested when only the run state has caught the cancellation", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const beforeHeartbeatAt = Date.now();
+  const runCancelRequestedAt = new Date(beforeHeartbeatAt - 120_000);
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
+      const tx = {
+        select() {
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      artifactManifestDigest: "a".repeat(64),
+                      attemptState: "active",
+                      bundleDigest: "b".repeat(64),
+                      candidateDigest: "c".repeat(64),
+                      heartbeatTimeoutSeconds: 180,
+                      jobState: "running",
+                      jobUpdatedAt: new Date(beforeHeartbeatAt - 30_000),
+                      lastEventSequence: 2,
+                      leaseExpiresAt: new Date(beforeHeartbeatAt + 10_000),
+                      revokedAt: null,
+                      runState: "cancel_requested",
+                      runUpdatedAt: runCancelRequestedAt,
+                      verifierVerdict: {},
+                      workerInstanceId: "worker-instance-1",
+                      verdictDigest: "d".repeat(64)
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.heartbeat(buildHeartbeatRequest(), buildJobAuthContext());
+
+  assert.equal(response.cancelRequested, true);
+  assert.ok(typeof response.jobToken === "string" && response.jobToken.length > 0);
+  assert.ok(response.jobTokenExpiresAt);
+  assert.equal(response.leaseStatus, "cancel_requested");
+  assert.equal(updateCalls.length, 2);
+  assert.equal(
+    updateCalls[0].leaseExpiresAt.getTime(),
+    runCancelRequestedAt.getTime() + 180_000,
+    "run-side cancel_requested heartbeat should stay anchored to the cancel window"
+  );
+  assert.equal(
+    new Date(response.leaseExpiresAt!).getTime(),
+    runCancelRequestedAt.getTime() + 180_000,
+    "run-side cancel_requested response should stay anchored to the cancel window"
+  );
+  assert.equal(
+    new Date(response.jobTokenExpiresAt!).getTime(),
+    runCancelRequestedAt.getTime() + 180_000,
+    "run-side cancel_requested token expiry should stay bounded to the cancel window"
+  );
+  assert.equal(updateCalls[1].currentLifecycleState, "running");
+});
+
+test("heartbeat returns cancel_requested before start when only the run state has caught the cancellation", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const beforeHeartbeatAt = Date.now();
+  const runCancelRequestedAt = new Date(beforeHeartbeatAt - 120_000);
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerHeartbeatResponse>) => {
+      const tx = {
+        select() {
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    {
+                      artifactManifestDigest: "a".repeat(64),
+                      attemptState: "prepared",
+                      bundleDigest: "b".repeat(64),
+                      candidateDigest: "c".repeat(64),
+                      heartbeatTimeoutSeconds: 180,
+                      jobState: "claimed",
+                      jobUpdatedAt: new Date(beforeHeartbeatAt - 30_000),
+                      lastEventSequence: 2,
+                      leaseExpiresAt: new Date(beforeHeartbeatAt + 10_000),
+                      revokedAt: null,
+                      runState: "cancel_requested",
+                      runUpdatedAt: runCancelRequestedAt,
+                      verifierVerdict: {},
+                      workerInstanceId: "worker-instance-1",
+                      verdictDigest: "d".repeat(64)
+                    }
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.heartbeat(buildHeartbeatRequest(), buildJobAuthContext());
+
+  assert.equal(response.cancelRequested, true);
+  assert.equal(response.leaseStatus, "cancel_requested");
+  assert.equal(updateCalls.length, 2);
+  assert.equal(
+    updateCalls[0].leaseExpiresAt.getTime(),
+    runCancelRequestedAt.getTime() + 180_000,
+    "pre-start run-side cancel_requested heartbeat should stay anchored to the cancel window"
+  );
+  assert.equal(
+    new Date(response.leaseExpiresAt!).getTime(),
+    runCancelRequestedAt.getTime() + 180_000,
+    "pre-start run-side cancel_requested response should stay anchored to the cancel window"
+  );
+  assert.equal(updateCalls[1].currentLifecycleState, "running");
+});
+
 test("heartbeat returns expired when lease renewal loses the race with recovery revocation", async () => {
   const updateCalls: Array<Record<string, unknown>> = [];
   let selectCount = 0;
