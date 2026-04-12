@@ -1,4 +1,5 @@
 import path from "node:path";
+import { WorkerCliError } from "./cli-contract.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
@@ -28,7 +29,8 @@ export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
   const usedDeprecatedTruthFlags = [...new Set(args.filter((argument) => deprecatedTruthFlags.includes(argument as (typeof deprecatedTruthFlags)[number])))];
 
   if (usedDeprecatedTruthFlags.length > 0) {
-    throw new Error(
+    throw new WorkerCliError(
+      "validation",
       `Canonical run-bundle truth is now derived from bundled verifier artifacts; remove ${usedDeprecatedTruthFlags.join(", ")}.`
     );
   }

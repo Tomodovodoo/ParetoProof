@@ -149,7 +149,7 @@ test("materialize-problem9-run-bundle rejects deprecated truth-bearing CLI flags
       outputRoot: path.join(tempRoot, "outputs", "deprecated-flags")
     });
 
-    assert.notEqual(result.status, 0);
+    assert.equal(result.status, 2);
     assert.match(
       result.stderr,
       /Canonical run-bundle truth is now derived from bundled verifier artifacts; remove --result, --stop-reason\./u
