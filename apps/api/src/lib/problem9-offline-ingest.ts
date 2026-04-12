@@ -20,6 +20,7 @@ import {
   artifactLifecycleStateEnum,
   artifactPrefixFamilyEnum,
   artifactStorageProviderEnum,
+  auditEvents,
   jobs,
   runs,
 } from "../db/schema.js";
@@ -101,6 +102,7 @@ type Problem9OfflineIngestPlan = {
   artifacts: Problem9OfflineIngestArtifactDraft[];
   attempt: Problem9OfflineAttemptInsert;
   job: Problem9OfflineJobInsert;
+  sourceStopReason: string;
   run: Problem9OfflineRunInsert;
 };
 
@@ -140,7 +142,7 @@ export class Problem9OfflineIngestDuplicateError extends Error {
 export function createProblem9OfflineIngestService(
   db: ReturnTypeOfCreateDbClient
 ): Problem9OfflineIngestService {
-  return async (rawRequest, _actorUserId) => {
+  return async (rawRequest, actorUserId) => {
     const plan = buildProblem9OfflineIngestPlan(rawRequest);
 
     try {
@@ -208,6 +210,22 @@ export function createProblem9OfflineIngestService(
             ownerScope: "run_attempt" as const,
             runId: persistedRun.id
           }))
+        );
+
+        await tx.insert(auditEvents).values(
+          createOfflineIngestAuditEvent({
+            actorUserId,
+            artifactCount: plan.artifacts.length,
+            attemptId: persistedAttempt.id,
+            jobId: persistedJob.id,
+            runId: persistedRun.id,
+            sourceAttemptId: persistedAttempt.sourceAttemptId,
+            sourceJobId: persistedJob.sourceJobId,
+            sourceRunId: persistedRun.sourceRunId,
+            sourceStopReason: plan.sourceStopReason,
+            stopReason: plan.run.stopReason,
+            verdictClass: plan.run.verdictClass
+          })
         );
 
         return {
@@ -381,15 +399,24 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
   const attemptState: Problem9ImportedAttemptState =
     bundle.verdict.result === "pass" ? "succeeded" : "failed";
   const verdictClass: Problem9ImportedVerdictClass = bundle.verdict.result;
+  const primaryFailure = bundle.verdict.result === "fail" ? bundle.verdict.primaryFailure : null;
+  // Imported rows follow the live worker-control terminal contract while the
+  // stored root bundle artifacts preserve the original submitted bundle.
+  const stopReason = normalizeImportedStopReason(bundle, primaryFailure);
   const bucketName = resolveArtifactBucketName();
   const rootArtifactDrafts = buildRootArtifactDrafts(bundle, bucketName);
   const manifestArtifactDrafts = bundle.artifactManifest.artifacts.map((entry) =>
-    buildManifestArtifactDraft(entry, bucketName, bundle.runBundle.runId, bundle.runBundle.attemptId)
+    buildManifestArtifactDraft(
+      entry,
+      bucketName,
+      bundle.runBundle.runId,
+      bundle.runBundle.attemptId,
+      bundle.runBundle.artifactManifestDigest
+    )
   );
   const artifactDrafts = [...rootArtifactDrafts, ...manifestArtifactDrafts].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath)
   );
-  const primaryFailure = bundle.verdict.result === "fail" ? bundle.verdict.primaryFailure : null;
   const completedAt = new Date();
 
   return {
@@ -417,7 +444,7 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
       runMode: bundle.runBundle.runMode,
       sourceAttemptId: bundle.runBundle.attemptId,
       state: attemptState,
-      stopReason: bundle.runBundle.stopReason,
+      stopReason,
       toolProfile: bundle.runBundle.toolProfile,
       usageSummary: toJsonRecordOrNull(bundle.usage),
       verifierResult: bundle.verdict.result,
@@ -434,9 +461,10 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
       primaryFailureSummary: primaryFailure?.summary ?? null,
       sourceJobId: bundle.runBundle.jobId,
       state: jobState,
-      stopReason: bundle.runBundle.stopReason,
+      stopReason,
       verdictClass
     },
+    sourceStopReason: bundle.runBundle.stopReason,
     run: {
       authMode: bundle.runBundle.authMode,
       benchmarkItemId: bundle.runBundle.benchmarkItemId,
@@ -462,7 +490,7 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
       runMode: bundle.runBundle.runMode,
       sourceRunId: bundle.runBundle.runId,
       state: runState,
-      stopReason: bundle.runBundle.stopReason,
+      stopReason,
       toolProfile: bundle.runBundle.toolProfile,
       verifierVersion: bundle.runBundle.verifierVersion,
       verdictClass
@@ -669,6 +697,17 @@ function assertConsistency(bundle: Problem9OfflineIngestBundle) {
       );
     }
 
+    if (
+      bundle.runBundle.stopReason !== "verification_passed" &&
+      bundle.runBundle.stopReason !== "verification_complete"
+    ) {
+      throw validationError(
+        "verdict_inconsistent",
+        "run-bundle.json stopReason must be verification_passed or verification_complete when verification/verdict.json result is pass.",
+        "run-bundle.json"
+      );
+    }
+
     if (bundle.verdict.semanticEquality !== "matched") {
       throw validationError(
         "verdict_inconsistent",
@@ -724,6 +763,19 @@ function assertConsistency(bundle: Problem9OfflineIngestBundle) {
         "verdict_inconsistent",
         "verification/verdict.json failureCode must match primaryFailure.failureCode.",
         "verification/verdict.json"
+      );
+    }
+
+    const expectedStopReason = resolveExpectedFailureStopReason(primaryFailure);
+
+    if (
+      bundle.runBundle.stopReason !== expectedStopReason &&
+      bundle.runBundle.stopReason !== primaryFailure.failureCode
+    ) {
+      throw validationError(
+        "verdict_inconsistent",
+        `run-bundle.json stopReason must be ${expectedStopReason} or ${primaryFailure.failureCode} when verification/verdict.json primaryFailure is ${primaryFailure.failureCode}.`,
+        "run-bundle.json"
       );
     }
   }
@@ -874,13 +926,14 @@ function buildManifestArtifactDraft(
   manifestEntry: Problem9OfflineArtifactManifestEntry,
   bucketName: string,
   runId: string,
-  attemptId: string
+  attemptId: string,
+  artifactManifestDigest: string
 ): Problem9OfflineIngestArtifactDraft {
   const prefixFamily = mapPrefixFamily(manifestEntry.artifactRole);
 
   return {
     artifactClassId: manifestEntry.artifactRole,
-    artifactManifestDigest: null,
+    artifactManifestDigest,
     bucketName,
     byteSize: manifestEntry.byteSize,
     contentEncoding: manifestEntry.contentEncoding,
@@ -937,6 +990,74 @@ function resolveArtifactBucketName() {
   return process.env.NODE_ENV === "production"
     ? "paretoproof-production-artifacts"
     : "paretoproof-dev-artifacts";
+}
+
+function resolveExpectedFailureStopReason(primaryFailure: Problem9FailureClassification): string {
+  switch (primaryFailure.failureFamily) {
+    case "budget":
+      return "budget_exhausted";
+    case "compile":
+      return "compile_failed";
+    case "provider":
+    case "tooling":
+      return "provider_failed";
+    case "harness":
+    case "input_contract":
+      return primaryFailure.failureCode;
+    case "verification":
+      return "verifier_failed";
+    default:
+      throw validationError(
+        "verdict_inconsistent",
+        `verification/verdict.json primaryFailure.failureFamily ${primaryFailure.failureFamily} is not supported for offline run-bundle ingest.`,
+        "verification/verdict.json"
+      );
+  }
+}
+
+function normalizeImportedStopReason(
+  bundle: Problem9OfflineIngestBundle,
+  primaryFailure: Problem9FailureClassification | null
+): string {
+  return bundle.verdict.result === "pass"
+    ? "verifier_passed"
+    : primaryFailure?.failureCode ?? bundle.runBundle.stopReason;
+}
+
+function createOfflineIngestAuditEvent(options: {
+  actorUserId: string;
+  artifactCount: number;
+  attemptId: string;
+  jobId: string;
+  runId: string;
+  sourceAttemptId: string;
+  sourceJobId: string | null;
+  sourceRunId: string;
+  sourceStopReason: string;
+  stopReason: string;
+  verdictClass: Problem9ImportedVerdictClass;
+}) {
+  return {
+    actorKind: "portal_user" as const,
+    actorUserId: options.actorUserId,
+    eventId: "run.offline_ingested",
+    payload: {
+      actorUserId: options.actorUserId,
+      artifactCount: options.artifactCount,
+      attemptId: options.attemptId,
+      jobId: options.jobId,
+      runId: options.runId,
+      sourceAttemptId: options.sourceAttemptId,
+      sourceJobId: options.sourceJobId,
+      sourceRunId: options.sourceRunId,
+      sourceStopReason: options.sourceStopReason,
+      stopReason: options.stopReason,
+      verdictClass: options.verdictClass
+    },
+    severity: "critical" as const,
+    subjectKind: "run" as const,
+    targetUserId: null
+  };
 }
 
 function toJsonRecordOrNull(value: unknown): Record<string, unknown> | null {
