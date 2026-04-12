@@ -28,7 +28,6 @@ import {
 import { registerInternalWorkerRoutes } from "../src/routes/internal-worker.ts";
 
 const supportedArtifactRoles = [
-  "run_manifest",
   "package_reference",
   "prompt_package",
   "candidate_source",

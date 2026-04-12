@@ -49,7 +49,6 @@ const heartbeatIntervalSeconds = 60;
 const heartbeatTimeoutSeconds = 180;
 const runBundleSchemaVersion = "1";
 const requiredProblem9ArtifactRoles = [
-  "run_manifest",
   "package_reference",
   "prompt_package",
   "candidate_source",
