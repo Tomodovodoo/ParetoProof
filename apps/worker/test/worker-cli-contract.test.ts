@@ -17,13 +17,15 @@ const workerEntryPoint = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../src/index.ts"
 );
-const bunCommand = process.platform === "win32" ? "bun.exe" : "bun";
+const bunInvocation = process.versions.bun
+  ? { command: process.execPath, prelude: [] as string[] }
+  : process.platform === "win32"
+    ? { command: process.env.ComSpec ?? "cmd.exe", prelude: ["/d", "/s", "/c", "bun"] }
+    : { command: "bun", prelude: [] as string[] };
 
 test("worker entrypoint exits 2 and prefixes validation errors for unsupported auth-mode input", () => {
-  const result = spawnSync(
-    bunCommand,
+  const result = spawnWorkerCli(
     [
-      workerEntryPoint,
       "run-problem9-attempt",
       "--benchmark-package-root",
       "ignored-benchmark",
@@ -42,28 +44,26 @@ test("worker entrypoint exits 2 and prefixes validation errors for unsupported a
     }
   );
 
-  assert.equal(result.status, 2);
+  assert.equal(readSpawnStatus(result), 2);
   assert.match(result.stderr, /^Validation error: Unsupported --auth-mode value /u);
   assert.equal(result.stdout, "");
 });
 
 test("worker entrypoint exits 2 for unknown commands and prints usage", () => {
-  const result = spawnSync(bunCommand, [workerEntryPoint, "totally-unknown-command"], {
+  const result = spawnWorkerCli(["totally-unknown-command"], {
     cwd: workerRoot,
     encoding: "utf8"
   });
 
-  assert.equal(result.status, 2);
+  assert.equal(readSpawnStatus(result), 2);
   assert.match(result.stderr, /^Validation error: Unknown worker command: totally-unknown-command/u);
   assert.match(result.stderr, /\nUsage:\n/u);
   assert.equal(result.stdout, "");
 });
 
 test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-local mount markers", () => {
-  const result = spawnSync(
-    bunCommand,
+  const result = spawnWorkerCli(
     [
-      workerEntryPoint,
       "run-worker-claim-loop",
       "--worker-id",
       "worker-contract-test",
@@ -90,7 +90,7 @@ test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-loca
     }
   );
 
-  assert.equal(result.status, 2);
+  assert.equal(readSpawnStatus(result), 2);
   assert.match(
     result.stderr,
     /^Validation error: Invalid worker runtime environment: PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: trusted-local auth mounts are not allowed for worker_claim_loop\./u
@@ -99,10 +99,8 @@ test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-loca
 });
 
 test("worker entrypoint exits 2 for unsupported hosted auth-mode input", () => {
-  const result = spawnSync(
-    bunCommand,
+  const result = spawnWorkerCli(
     [
-      workerEntryPoint,
       "run-worker-claim-loop",
       "--worker-id",
       "worker-contract-test",
@@ -124,7 +122,7 @@ test("worker entrypoint exits 2 for unsupported hosted auth-mode input", () => {
     }
   );
 
-  assert.equal(result.status, 2);
+  assert.equal(readSpawnStatus(result), 2);
   assert.match(
     result.stderr,
     /^Validation error: \[[\s\S]*"received": "machine_oauth"[\s\S]*"machine_api_key"[\s\S]*\]\r?\n$/u
@@ -143,8 +141,9 @@ test(
     });
 
     const result = spawnSync(
-      bunCommand,
+      bunInvocation.command,
       [
+        ...bunInvocation.prelude,
         workerEntryPoint,
         "ingest-problem9-run-bundle",
         "--bundle-root",
@@ -162,7 +161,7 @@ test(
       }
     );
 
-    assert.equal(result.status, 3);
+    assert.equal(readSpawnStatus(result), 3);
     assert.equal(result.stdout, "");
 
     const parsed = JSON.parse(result.stderr) as {
@@ -234,11 +233,53 @@ async function buildOfflineIngestBundleRoot(): Promise<{
     ].join("\n"),
     "utf8"
   );
-  await writeFile(compilerDiagnosticsPath, JSON.stringify({ diagnostics: [] }, null, 2), "utf8");
+  await writeFile(
+    compilerDiagnosticsPath,
+    JSON.stringify(
+      {
+        compilerDiagnosticsSchemaVersion: "1",
+        diagnostics: [],
+        success: true
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
   await writeFile(compilerOutputPath, "No compiler output\n", "utf8");
   await writeFile(
     verifierOutputPath,
-    JSON.stringify({ checked: true, result: "pass" }, null, 2),
+    JSON.stringify(
+      {
+        axiomCheck: {
+          output: "No axioms detected.",
+          result: "passed"
+        },
+        diagnosticGate: {
+          result: "passed"
+        },
+        forbiddenTokens: {
+          containsAdmit: false,
+          containsSorry: false
+        },
+        result: "pass",
+        semanticCheck: {
+          output: "",
+          result: "matched"
+        },
+        surfaceEquality: "matched",
+        surface_drift: false,
+        theoremHeaders: {
+          canonical:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n",
+          candidate:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n"
+        },
+        verifierOutputSchemaVersion: "1"
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(
@@ -276,25 +317,25 @@ async function buildOfflineIngestBundleRoot(): Promise<{
   return {
     bundleRoot: (
       await materializeProblem9RunBundle({
-        axiomCheck: "passed",
         benchmarkPackageRoot,
         candidateSourcePath,
         compilerDiagnosticsPath,
         compilerOutputPath,
-        containsAdmit: false,
-        containsSorry: false,
-        diagnosticGate: "passed",
         environmentInputPath,
         failureClassificationPath: null,
         outputRoot: path.join(tempRoot, "run-bundle"),
         promptPackageRoot,
-        result: "pass",
-        semanticEquality: "matched",
-        stopReason: "verification_complete",
-        surfaceEquality: "matched",
         verifierOutputPath
       })
     ).outputRoot,
     tempRoot
   };
+}
+
+function readSpawnStatus(result: { exitCode?: number | null; status?: number | null }) {
+  return result.status ?? result.exitCode ?? null;
+}
+
+function spawnWorkerCli(args: string[], options: Parameters<typeof spawnSync>[2]) {
+  return spawnSync(bunInvocation.command, [...bunInvocation.prelude, workerEntryPoint, ...args], options);
 }

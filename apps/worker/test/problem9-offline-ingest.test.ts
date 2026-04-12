@@ -47,13 +47,51 @@ async function buildOfflineIngestBundleRoot(options: {
   );
   await writeFile(
     compilerDiagnosticsPath,
-    JSON.stringify({ diagnostics: [] }, null, 2),
+    JSON.stringify(
+      {
+        compilerDiagnosticsSchemaVersion: "1",
+        diagnostics: options.result === "pass" ? [] : [{ severity: "error" }],
+        success: options.result === "pass"
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(compilerOutputPath, "No compiler output\n", "utf8");
   await writeFile(
     verifierOutputPath,
-    JSON.stringify({ checked: true, result: options.result }, null, 2),
+    JSON.stringify(
+      {
+        axiomCheck: {
+          output: options.result === "pass" ? "No axioms detected." : "",
+          result: options.result === "pass" ? "passed" : "not_evaluated"
+        },
+        diagnosticGate: {
+          result: options.result === "pass" ? "passed" : "failed"
+        },
+        forbiddenTokens: {
+          containsAdmit: false,
+          containsSorry: false
+        },
+        result: options.result,
+        semanticCheck: {
+          output: options.result === "pass" ? "" : "Compile gate failed before semantic verification.",
+          result: options.result === "pass" ? "matched" : "not_evaluated"
+        },
+        surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
+        surface_drift: false,
+        theoremHeaders: {
+          canonical:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n",
+          candidate:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n"
+        },
+        verifierOutputSchemaVersion: "1"
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(
@@ -131,24 +169,15 @@ async function buildOfflineIngestBundleRoot(options: {
   return {
     bundleRoot: (
       await materializeProblem9RunBundle({
-        axiomCheck: options.result === "pass" ? "passed" : "not_evaluated",
         benchmarkPackageRoot,
         candidateSourcePath,
         compilerDiagnosticsPath,
         compilerOutputPath,
-        containsAdmit: false,
-        containsSorry: false,
-        diagnosticGate: options.result === "pass" ? "passed" : "failed",
         environmentInputPath,
         failureClassificationPath:
           options.result === "fail" ? failureClassificationPath : null,
         outputRoot: path.join(tempRoot, "run-bundle"),
         promptPackageRoot,
-        result: options.result,
-        semanticEquality: options.result === "pass" ? "matched" : "not_evaluated",
-        stopReason:
-          options.result === "pass" ? "verification_passed" : "compile_failed",
-        surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
         verifierOutputPath
       })
     ).outputRoot,
@@ -247,6 +276,45 @@ test("runProblem9OfflineIngest posts canonical bundle requests with Access auth"
       state: "succeeded"
     },
     status: "accepted"
+  });
+});
+
+test("runProblem9OfflineIngest rejects failing bundles that omit failure-classification artifacts", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    result: "fail"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  await unlink(path.join(bundleRoot, "verification", "failure-classification.json"));
+
+  const result = await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      runtimeEnv: {
+        API_BASE_URL: "https://api.paretoproof.com"
+      }
+    }
+  );
+
+  assert.deepEqual(result, {
+    bundleRoot,
+    endpoint: "https://api.paretoproof.com/portal/admin/offline-ingest/problem9-run-bundles",
+    error: "invalid_problem9_offline_ingest_bundle_root",
+    issues: [
+      {
+        message:
+          "Missing required offline ingest bundle file verification/failure-classification.json.",
+        path: "verification/failure-classification.json"
+      }
+    ],
+    stage: "local_validation",
+    status: "rejected"
   });
 });
 

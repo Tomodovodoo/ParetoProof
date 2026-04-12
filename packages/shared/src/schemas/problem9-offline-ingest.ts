@@ -233,7 +233,7 @@ export const problem9OfflineArtifactManifestSchema = z.object({
   hashAlgorithm: z.literal("sha256")
 });
 
-export const problem9OfflineIngestBundleSchema = z.object({
+const problem9OfflineIngestBundleBaseSchema = z.object({
   artifactManifest: problem9OfflineArtifactManifestSchema,
   benchmarkPackage: problem9BenchmarkPackageManifestSchema,
   candidateSource: z.string().min(1),
@@ -244,9 +244,23 @@ export const problem9OfflineIngestBundleSchema = z.object({
   promptPackage: problem9PromptPackageManifestSchema,
   runBundle: problem9RunBundleManifestSchema,
   usage: recordValueSchema.nullable(),
-  verifierOutput: recordValueSchema,
-  verdict: problem9VerifierVerdictSchema
+  verifierOutput: recordValueSchema
 });
+
+const problem9PassingOfflineIngestBundleSchema = problem9OfflineIngestBundleBaseSchema.extend({
+  failureClassification: z.null().optional().transform(() => null),
+  verdict: problem9PassingVerifierVerdictSchema
+});
+
+const problem9FailingOfflineIngestBundleSchema = problem9OfflineIngestBundleBaseSchema.extend({
+  failureClassification: workerFailureClassificationSchema,
+  verdict: problem9FailingVerifierVerdictSchema
+});
+
+export const problem9OfflineIngestBundleSchema = z.union([
+  problem9PassingOfflineIngestBundleSchema,
+  problem9FailingOfflineIngestBundleSchema
+]);
 
 export const problem9OfflineIngestRequestSchema = z.object({
   bundle: problem9OfflineIngestBundleSchema,

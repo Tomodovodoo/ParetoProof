@@ -173,48 +173,65 @@ async function loadProblem9OfflineIngestRequest(
 ): Promise<Problem9OfflineIngestRequest> {
   await ensureBundleRoot(bundleRoot);
   const bundleRootRealPath = await realpath(bundleRoot);
+  const artifactManifest = await loadJsonFile<Problem9OfflineArtifactManifest>(
+    bundleRootRealPath,
+    "artifact-manifest.json"
+  );
+  const benchmarkPackage = await loadJsonFile<Problem9BenchmarkPackageManifest>(
+    bundleRootRealPath,
+    "package/benchmark-package.json"
+  );
+  const candidateSource = await loadTextFile(bundleRootRealPath, "candidate/Candidate.lean");
+  const compilerDiagnostics = await loadJsonFile(
+    bundleRootRealPath,
+    "verification/compiler-diagnostics.json"
+  );
+  const compilerOutput = await loadTextFile(bundleRootRealPath, "verification/compiler-output.txt");
+  const environment = await loadJsonFile<Problem9EnvironmentManifest>(
+    bundleRootRealPath,
+    "environment/environment.json"
+  );
+  const packageRef = await loadJsonFile<Problem9PackageRef>(
+    bundleRootRealPath,
+    "package/package-ref.json"
+  );
+  const promptPackage = await loadJsonFile<Problem9PromptPackageManifest>(
+    bundleRootRealPath,
+    "prompt/prompt-package.json"
+  );
+  const runBundle = await loadJsonFile<Problem9RunBundleManifest>(
+    bundleRootRealPath,
+    "run-bundle.json"
+  );
+  const usage = await loadOptionalJsonFile(bundleRootRealPath, "execution/usage.json");
+  const verifierOutput = await loadJsonFile<unknown>(
+    bundleRootRealPath,
+    "verification/verifier-output.json"
+  );
+  const verdict = await loadJsonFile<Problem9VerifierVerdict>(
+    bundleRootRealPath,
+    "verification/verdict.json"
+  );
+  const failureClassification =
+    verdict.result === "fail"
+      ? await loadJsonFile(bundleRootRealPath, "verification/failure-classification.json")
+      : null;
 
   const request: unknown = {
     bundle: {
-      artifactManifest: await loadJsonFile<Problem9OfflineArtifactManifest>(
-        bundleRootRealPath,
-        "artifact-manifest.json"
-      ),
-      benchmarkPackage: await loadJsonFile<Problem9BenchmarkPackageManifest>(
-        bundleRootRealPath,
-        "package/benchmark-package.json"
-      ),
-      candidateSource: await loadTextFile(bundleRootRealPath, "candidate/Candidate.lean"),
-      compilerDiagnostics: await loadJsonFile(
-        bundleRootRealPath,
-        "verification/compiler-diagnostics.json"
-      ),
-      compilerOutput: await loadTextFile(bundleRootRealPath, "verification/compiler-output.txt"),
-      environment: await loadJsonFile<Problem9EnvironmentManifest>(
-        bundleRootRealPath,
-        "environment/environment.json"
-      ),
-      packageRef: await loadJsonFile<Problem9PackageRef>(
-        bundleRootRealPath,
-        "package/package-ref.json"
-      ),
-      promptPackage: await loadJsonFile<Problem9PromptPackageManifest>(
-        bundleRootRealPath,
-        "prompt/prompt-package.json"
-      ),
-      runBundle: await loadJsonFile<Problem9RunBundleManifest>(
-        bundleRootRealPath,
-        "run-bundle.json"
-      ),
-      usage: await loadOptionalJsonFile(bundleRootRealPath, "execution/usage.json"),
-      verifierOutput: await loadJsonFile<unknown>(
-        bundleRootRealPath,
-        "verification/verifier-output.json"
-      ),
-      verdict: await loadJsonFile<Problem9VerifierVerdict>(
-        bundleRootRealPath,
-        "verification/verdict.json"
-      )
+      artifactManifest,
+      benchmarkPackage,
+      candidateSource,
+      compilerDiagnostics,
+      compilerOutput,
+      environment,
+      failureClassification,
+      packageRef,
+      promptPackage,
+      runBundle,
+      usage,
+      verifierOutput,
+      verdict
     },
     ingestRequestSchemaVersion: "1"
   };

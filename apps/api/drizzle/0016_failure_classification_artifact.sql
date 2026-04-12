@@ -1,0 +1,1 @@
+ALTER TYPE "public"."artifact_class" ADD VALUE 'failure_classification' BEFORE 'environment_snapshot';

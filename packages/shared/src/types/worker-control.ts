@@ -54,6 +54,7 @@ export type WorkerBundleArtifactRole =
   | "compiler_output"
   | "compiler_diagnostics"
   | "verifier_output"
+  | "failure_classification"
   | "environment_snapshot"
   | "usage_summary"
   | "execution_trace";
