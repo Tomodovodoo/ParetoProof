@@ -1837,6 +1837,207 @@ test("submitFailure accepts manual cancellation when the job is cancel_requested
   assert.equal(updateCalls.length, 4);
 });
 
+test("submitFailure accepts manual cancellation when only the run is cancel_requested before job state catches up", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([
+                    buildLeaseStateRow({
+                      attemptState: "active",
+                      jobState: "running",
+                      runState: "cancel_requested"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const request: WorkerTerminalFailureRequest = {
+    ...buildFailureRequest(),
+    artifactIds: [],
+    artifactManifestDigest: null,
+    bundleDigest: null,
+    candidateDigest: null,
+    failure: {
+      evidenceArtifactRefs: ["worker-control/pre-bundle-failure"],
+      failureCode: "manual_cancelled",
+      failureFamily: "harness",
+      phase: "cancel",
+      retryEligibility: "manual_retry_only",
+      summary: "Worker received a control-plane cancellation request.",
+      terminality: "cancelled",
+      userVisibility: "user_visible"
+    },
+    summary: "Worker received a control-plane cancellation request.",
+    terminalState: "cancelled",
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  const response = await control.submitFailure(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "cancelled",
+    jobState: "cancelled",
+    runState: "cancelled"
+  });
+  assert.equal(selectCount, 1);
+  assert.equal(updateCalls.length, 4);
+});
+
+test("submitFailure accepts bounded manual cancellation after artifact registration when only the run is cancel_requested", async () => {
+  const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        attemptState: "active",
+                        jobState: "running",
+                        runState: "cancel_requested"
+                      })
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return Promise.resolve([
+                    buildStoredArtifactRow({
+                      id: "artifact-1",
+                      lifecycleState: "registered",
+                      relativePath: "run-bundle.json"
+                    }),
+                    buildStoredArtifactRow({
+                      artifactClassId: "verdict_record",
+                      id: "artifact-2",
+                      lifecycleState: "registered",
+                      objectKey: "runs/run-1/artifacts/attempt-1/verification/verdict.json",
+                      relativePath: "verification/verdict.json"
+                    })
+                  ]);
+                }
+              };
+            }
+          };
+        },
+        update(target: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push({ target, values });
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  return Promise.resolve([{ id: "lease-row-1" }]);
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+  const request: WorkerTerminalFailureRequest = {
+    ...buildFailureRequest(),
+    artifactIds: ["artifact-1", "artifact-2"],
+    failure: {
+      evidenceArtifactRefs: ["verification/verdict.json"],
+      failureCode: "manual_cancelled",
+      failureFamily: "harness",
+      phase: "cancel",
+      retryEligibility: "manual_retry_only",
+      summary: "Worker received a control-plane cancellation request after artifact registration.",
+      terminality: "cancelled",
+      userVisibility: "user_visible"
+    },
+    summary: "Worker received a control-plane cancellation request after artifact registration.",
+    terminalState: "cancelled",
+    verifierVerdict: null,
+    verdictDigest: null
+  };
+
+  const response = await control.submitFailure(request, buildJobAuthContext());
+
+  assert.deepEqual(response, {
+    acceptedAt: updateCalls[0]!.values.updatedAt.toISOString(),
+    attemptState: "cancelled",
+    jobState: "cancelled",
+    runState: "cancelled"
+  });
+  assert.equal(selectCount, 2);
+  assert.equal(updateCalls.length, 4);
+  assert.equal(updateCalls[0]!.values.state, "cancelled");
+  assert.equal(updateCalls[0]!.values.stopReason, "manual_cancelled");
+  assert.equal(updateCalls[1]!.values.state, "cancelled");
+  assert.equal(updateCalls[2]!.values.state, "cancelled");
+  assert.equal(updateCalls[3]!.values.revokedAt instanceof Date, true);
+});
+
 test("submitFailure rejects synthetic pre-bundle refs for non-pre-bundle failure codes", async () => {
   const control = createInternalWorkerControlService({
     transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
