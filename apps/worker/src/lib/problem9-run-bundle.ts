@@ -851,15 +851,6 @@ function deriveBundleTruthFromArtifacts(options: {
   }
 
   if (
-    options.compilerDiagnostics.success === false &&
-    options.failureClassification.failureFamily !== "compile"
-  ) {
-    throw new Error(
-      "compiler-diagnostics.json success=false requires a compile failure classification."
-    );
-  }
-
-  if (
     options.compilerDiagnostics.success !== false &&
     options.failureClassification.failureFamily === "compile"
   ) {
