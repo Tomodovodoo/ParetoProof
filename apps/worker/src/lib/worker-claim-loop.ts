@@ -1,6 +1,11 @@
-import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
+  problem9BenchmarkPackageManifestSchema,
+  problem9EnvironmentManifestSchema,
+  problem9PackageRefSchema,
+  problem9PromptPackageManifestSchema,
   assertProblem9HostedCapability,
   problem9HostedAuthModes,
   type WorkerArtifactManifestEntry,
@@ -23,6 +28,7 @@ import {
   workerArtifactManifestResponseSchema,
   workerClaimResponseSchema,
   workerExecutionEventResponseSchema,
+  workerFailureCodeSchema,
   workerHeartbeatResponseSchema,
   workerResultMessageResponseSchema,
   workerTerminalFailureResponseSchema,
@@ -56,28 +62,53 @@ const workerClaimLoopOptionsSchema = z.object({
   workspaceRoot: z.string().min(1)
 });
 
-const artifactManifestFileSchema = z.object({
-  artifacts: z.array(
-    z.object({
-      artifactRole: z.string().min(1),
-      byteSize: z.number().int().nonnegative(),
-      contentEncoding: z.string().min(1).nullable(),
-      mediaType: z.string().min(1).nullable(),
-      relativePath: z.string().min(1),
-      requiredForIngest: z.boolean(),
-      sha256: z.string().regex(/^[a-f0-9]{64}$/i)
-    })
-  )
-});
+const artifactManifestFileSchema = z
+  .object({
+    artifacts: z.array(
+      z.object({
+        artifactRole: z.string().min(1),
+        byteSize: z.number().int().nonnegative(),
+        contentEncoding: z.string().min(1).nullable(),
+        mediaType: z.string().min(1).nullable(),
+        relativePath: z.string().min(1),
+        requiredForIngest: z.boolean(),
+        sha256: z.string().regex(/^[a-f0-9]{64}$/i)
+      })
+    )
+  })
+  .passthrough();
 
-const runBundleFileSchema = z.object({
-  artifactManifestDigest: z.string().regex(/^[a-f0-9]{64}$/i),
-  bundleDigest: z.string().regex(/^[a-f0-9]{64}$/i),
-  candidateDigest: z.string().regex(/^[a-f0-9]{64}$/i),
-  environmentDigest: z.string().regex(/^[a-f0-9]{64}$/i),
-  runId: z.string().min(1),
-  verdictDigest: z.string().regex(/^[a-f0-9]{64}$/i)
-});
+const runBundleFileSchema = z
+  .object({
+    artifactManifestDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    attemptId: z.string().min(1),
+    authMode: z.string().min(1),
+    benchmarkItemId: z.string().min(1),
+    benchmarkPackageDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    benchmarkPackageId: z.string().min(1),
+    benchmarkPackageVersion: z.string().min(1),
+    bundleDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    bundleSchemaVersion: z.string().min(1),
+    candidateDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    environmentDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    harnessRevision: z.string().min(1),
+    jobId: z.string().min(1).nullable(),
+    laneId: z.string().min(1),
+    modelConfigId: z.string().min(1),
+    modelSnapshotId: z.string().min(1),
+    promptPackageDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    promptProtocolVersion: z.string().min(1),
+    providerFamily: z.string().min(1),
+    runConfigDigest: z.string().regex(/^[a-f0-9]{64}$/i),
+    runId: z.string().min(1),
+    runMode: z.string().min(1),
+    status: z.string().min(1),
+    stopReason: z.string().min(1),
+    toolProfile: z.string().min(1),
+    verifierVersion: z.string().min(1),
+    verdictDigest: z.string().regex(/^[a-f0-9]{64}$/i)
+  })
+  .passthrough();
 
 const supportedArtifactRoles = [
   "run_manifest",
@@ -92,6 +123,20 @@ const supportedArtifactRoles = [
   "usage_summary",
   "execution_trace"
 ] satisfies WorkerBundleArtifactRole[];
+
+const optionalArtifactRoles = new Set(["usage_summary", "execution_trace"] as const);
+
+const canonicalArtifactRoleByPath = {
+  "candidate/Candidate.lean": "candidate_source",
+  "environment/environment.json": "environment_snapshot",
+  "package/benchmark-package.json": "package_reference",
+  "package/package-ref.json": "package_reference",
+  "prompt/prompt-package.json": "prompt_package",
+  "verification/compiler-diagnostics.json": "compiler_diagnostics",
+  "verification/compiler-output.txt": "compiler_output",
+  "verification/verdict.json": "verdict_record",
+  "verification/verifier-output.json": "verifier_output"
+} as const satisfies Record<string, WorkerBundleArtifactRole>;
 
 type WorkerClaimLoopOptions = z.input<typeof workerClaimLoopOptionsSchema>;
 type WorkerClaimLoopResolvedOptions = z.output<typeof workerClaimLoopOptionsSchema>;
@@ -150,7 +195,8 @@ type PreparedBundleSubmission = {
   bundleDigest: string;
   candidateDigest: string;
   environmentDigest: string;
-  verifierVerdict: WorkerVerifierVerdict;
+  runBundle: z.output<typeof runBundleFileSchema>;
+  verifierVerdict: WorkerVerifierVerdict & { runId: string };
   verdictDigest: string;
 };
 
@@ -161,6 +207,20 @@ type CancellationTerminalContext = {
   bundleDigest: string;
   candidateDigest: string;
 };
+
+class BundleSubmissionIntegrityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BundleSubmissionIntegrityError";
+  }
+}
+
+const bundleVerifierVerdictFileSchema = workerVerifierVerdictSchema
+  .extend({
+    failureCode: workerFailureCodeSchema.optional(),
+    runId: z.string().min(1)
+  })
+  .passthrough();
 
 type LeaseFilesystemRoots = {
   attemptOutputRoot: string;
@@ -549,8 +609,61 @@ async function processClaimedJob(
       return "lease_lost";
     }
 
-    const bundleSubmission = await readBundleSubmission(attemptResult.outputRoot);
-    assertRequiredArtifactRoles(bundleSubmission.artifactManifest, workerJob.requiredArtifactRoles);
+    let bundleSubmission: PreparedBundleSubmission;
+
+    try {
+      bundleSubmission = await readBundleSubmission(attemptResult.outputRoot);
+      assertBundleSubmissionMatchesJobTarget(bundleSubmission, {
+        attemptId: workerJob.attemptId,
+        authMode: workerJob.target.authMode,
+        benchmarkItemId: workerJob.target.benchmarkItemId,
+        benchmarkPackageDigest: workerJob.target.benchmarkPackageDigest,
+        benchmarkPackageId: workerJob.target.benchmarkPackageId,
+        benchmarkPackageVersion: workerJob.target.benchmarkPackageVersion,
+        bundleSchemaVersion: workerJob.runBundleSchemaVersion,
+        harnessRevision: workerJob.target.harnessRevision,
+        jobId: workerJob.jobId,
+        laneId: workerJob.target.laneId,
+        modelConfigId: workerJob.target.modelConfigId,
+        modelSnapshotId: workerJob.target.modelSnapshotId,
+        promptPackageDigest: workerJob.target.promptPackageDigest,
+        promptProtocolVersion: workerJob.target.promptProtocolVersion,
+        providerFamily: workerJob.target.providerFamily,
+        runId: workerJob.runId,
+        runMode: workerJob.target.runMode,
+        status: attemptResult.result === "pass" ? "success" : "failure",
+        stopReason: attemptResult.stopReason,
+        toolProfile: workerJob.target.toolProfile
+      });
+      assertRequiredArtifactRoles(bundleSubmission.artifactManifest, workerJob.requiredArtifactRoles);
+    } catch (error) {
+      if (error instanceof Error) {
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          buildStaticFailure({
+            summary: error.message,
+            failureCode: "harness_crashed",
+            phase: "finalize"
+          })
+        );
+        if (
+          await submitCancellationIfRequested(
+            leaseState,
+            apiBaseUrl,
+            dependencies,
+            "Worker received a control-plane cancellation request while validating the terminal bundle."
+          )
+        ) {
+          return "completed";
+        }
+
+        return leaseState.leaseLost ? "lease_lost" : "completed";
+      }
+
+      throw error;
+    }
 
     const manifestResponse = await submitArtifactManifest(
       leaseState,
@@ -1049,14 +1162,104 @@ function assertExpectedBenchmarkIdentity(
 }
 
 async function readBundleSubmission(bundleRoot: string): Promise<PreparedBundleSubmission> {
-  const manifestFile = artifactManifestFileSchema.parse(
-    JSON.parse(await readFile(path.join(bundleRoot, "artifact-manifest.json"), "utf8"))
+  const bundleRootRealPath = await realpath(bundleRoot);
+  const artifactManifestText = await loadBundleTextFile(bundleRootRealPath, "artifact-manifest.json");
+  const runBundleText = await loadBundleTextFile(bundleRootRealPath, "run-bundle.json");
+  const verdictText = await loadBundleTextFile(bundleRootRealPath, "verification/verdict.json");
+  const candidateText = await loadBundleTextFile(bundleRootRealPath, "candidate/Candidate.lean");
+  const environmentText = await loadBundleTextFile(bundleRootRealPath, "environment/environment.json");
+  const benchmarkPackageText = await loadBundleTextFile(
+    bundleRootRealPath,
+    "package/benchmark-package.json"
   );
-  const runBundle = runBundleFileSchema.parse(
-    JSON.parse(await readFile(path.join(bundleRoot, "run-bundle.json"), "utf8"))
+  const promptPackageText = await loadBundleTextFile(
+    bundleRootRealPath,
+    "prompt/prompt-package.json"
   );
-  const verifierVerdict = workerVerifierVerdictSchema.parse(
-    JSON.parse(await readFile(path.join(bundleRoot, "verification", "verdict.json"), "utf8"))
+  const packageRefText = await loadBundleTextFile(bundleRootRealPath, "package/package-ref.json");
+  const manifestValue = JSON.parse(artifactManifestText);
+  const environmentValue = JSON.parse(environmentText);
+  const verdictValue = JSON.parse(verdictText);
+  const benchmarkPackageValue = JSON.parse(benchmarkPackageText);
+  const promptPackageValue = JSON.parse(promptPackageText);
+  const packageRefValue = JSON.parse(packageRefText);
+  const manifestFile = artifactManifestFileSchema.parse(manifestValue);
+  const runBundle = runBundleFileSchema.parse(JSON.parse(runBundleText));
+  const verifierVerdict = bundleVerifierVerdictFileSchema.parse(verdictValue);
+  const benchmarkPackage = problem9BenchmarkPackageManifestSchema.parse(benchmarkPackageValue);
+  const promptPackage = problem9PromptPackageManifestSchema.parse(promptPackageValue);
+  const packageRef = problem9PackageRefSchema.parse(packageRefValue);
+  const environment = problem9EnvironmentManifestSchema.parse(environmentValue);
+  const artifactManifestDigest = sha256Text(artifactManifestText);
+  const candidateDigest = sha256Text(candidateText);
+  const environmentDigest = sha256Text(stableStringify(environment));
+  const verdictDigest = sha256Text(stableStringify(verdictValue));
+  const bundleDigest = computeBundleDigest(runBundle, manifestFile);
+
+  assertCanonicalDigest(
+    artifactManifestDigest,
+    runBundle.artifactManifestDigest,
+    "run-bundle.json artifactManifestDigest does not match artifact-manifest.json."
+  );
+  assertCanonicalDigest(
+    candidateDigest,
+    runBundle.candidateDigest,
+    "run-bundle.json candidateDigest does not match candidate/Candidate.lean."
+  );
+  assertCanonicalDigest(
+    environmentDigest,
+    runBundle.environmentDigest,
+    "run-bundle.json environmentDigest does not match environment/environment.json."
+  );
+  assertCanonicalDigest(
+    verdictDigest,
+    runBundle.verdictDigest,
+    "run-bundle.json verdictDigest does not match verification/verdict.json."
+  );
+  assertCanonicalDigest(
+    bundleDigest,
+    runBundle.bundleDigest,
+    "run-bundle.json bundleDigest does not match the canonical bundle digest."
+  );
+
+  await assertManifestEntriesMatchFiles(bundleRootRealPath, manifestFile);
+
+  if (normalizeDigest(verifierVerdict.candidateDigest) !== normalizeDigest(candidateDigest)) {
+    throw new BundleSubmissionIntegrityError(
+      "verification/verdict.json candidateDigest does not match candidate/Candidate.lean."
+    );
+  }
+
+  if (
+    (verifierVerdict.result === "pass" && runBundle.status !== "success") ||
+    (verifierVerdict.result === "fail" && runBundle.status !== "failure")
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      "run-bundle.json status does not match verification/verdict.json result."
+    );
+  }
+
+  assertBundleSubmissionFileConsistency({
+    benchmarkPackage,
+    environment,
+    environmentDigest,
+    packageRef,
+    promptPackage,
+    runBundle,
+    verifierVerdict
+  });
+
+  assertVerifierVerdictSemantics(verifierVerdict);
+
+  assertCanonicalDigest(
+    computeRunConfigDigest({
+      benchmarkPackage,
+      environment,
+      environmentDigest,
+      promptPackage
+    }),
+    runBundle.runConfigDigest,
+    "run-bundle.json runConfigDigest does not match the canonical run configuration digest."
   );
 
   return {
@@ -1065,17 +1268,461 @@ async function readBundleSubmission(bundleRoot: string): Promise<PreparedBundleS
       byteSize: artifact.byteSize,
       contentEncoding: artifact.contentEncoding,
       mediaType: artifact.mediaType,
-      relativePath: artifact.relativePath,
+      relativePath: normalizeManifestRelativePath(artifact.relativePath),
       requiredForIngest: artifact.requiredForIngest,
       sha256: artifact.sha256
     })),
-    artifactManifestDigest: runBundle.artifactManifestDigest,
-    bundleDigest: runBundle.bundleDigest,
-    candidateDigest: runBundle.candidateDigest,
-    environmentDigest: runBundle.environmentDigest,
+    artifactManifestDigest,
+    bundleDigest,
+    candidateDigest,
+    environmentDigest,
+    runBundle,
     verifierVerdict,
-    verdictDigest: runBundle.verdictDigest
+    verdictDigest
   };
+}
+
+function assertBundleSubmissionMatchesJobTarget(
+  bundleSubmission: PreparedBundleSubmission,
+  expected: {
+    attemptId: string;
+    authMode: string;
+    benchmarkItemId: string;
+    benchmarkPackageDigest: string;
+    benchmarkPackageId: string;
+    benchmarkPackageVersion: string;
+    bundleSchemaVersion: string;
+    harnessRevision: string;
+    jobId: string;
+    laneId: string;
+    modelConfigId: string;
+    modelSnapshotId: string;
+    promptPackageDigest: string;
+    promptProtocolVersion: string;
+    providerFamily: string;
+    runId: string;
+    runMode: string;
+    status: string;
+    stopReason: string;
+    toolProfile: string;
+  }
+): void {
+  const runBundleChecks: Array<[field: string, actual: string | null, expectedValue: string]> = [
+    ["attemptId", bundleSubmission.runBundle.attemptId, expected.attemptId],
+    ["authMode", bundleSubmission.runBundle.authMode, expected.authMode],
+    ["benchmarkItemId", bundleSubmission.runBundle.benchmarkItemId, expected.benchmarkItemId],
+    ["benchmarkPackageDigest", bundleSubmission.runBundle.benchmarkPackageDigest, expected.benchmarkPackageDigest],
+    ["benchmarkPackageId", bundleSubmission.runBundle.benchmarkPackageId, expected.benchmarkPackageId],
+    ["benchmarkPackageVersion", bundleSubmission.runBundle.benchmarkPackageVersion, expected.benchmarkPackageVersion],
+    ["bundleSchemaVersion", bundleSubmission.runBundle.bundleSchemaVersion, expected.bundleSchemaVersion],
+    ["harnessRevision", bundleSubmission.runBundle.harnessRevision, expected.harnessRevision],
+    ["jobId", bundleSubmission.runBundle.jobId, expected.jobId],
+    ["laneId", bundleSubmission.runBundle.laneId, expected.laneId],
+    ["modelConfigId", bundleSubmission.runBundle.modelConfigId, expected.modelConfigId],
+    ["modelSnapshotId", bundleSubmission.runBundle.modelSnapshotId, expected.modelSnapshotId],
+    ["promptPackageDigest", bundleSubmission.runBundle.promptPackageDigest, expected.promptPackageDigest],
+    ["promptProtocolVersion", bundleSubmission.runBundle.promptProtocolVersion, expected.promptProtocolVersion],
+    ["providerFamily", bundleSubmission.runBundle.providerFamily, expected.providerFamily],
+    ["runId", bundleSubmission.runBundle.runId, expected.runId],
+    ["runMode", bundleSubmission.runBundle.runMode, expected.runMode],
+    ["status", bundleSubmission.runBundle.status, expected.status],
+    ["stopReason", bundleSubmission.runBundle.stopReason, expected.stopReason],
+    ["toolProfile", bundleSubmission.runBundle.toolProfile, expected.toolProfile]
+  ];
+  const mismatchedRunBundleField = runBundleChecks.find(
+    ([field, actual, expectedValue]) => !isBundleFieldMatch(field, actual, expectedValue)
+  );
+
+  if (mismatchedRunBundleField) {
+    throw new BundleSubmissionIntegrityError(
+      `run-bundle.json ${mismatchedRunBundleField[0]} does not match the claimed job target.`
+    );
+  }
+
+  const verdictChecks: Array<[field: string, actual: string, expectedValue: string]> = [
+    ["attemptId", bundleSubmission.verifierVerdict.attemptId, expected.attemptId],
+    ["benchmarkPackageDigest", bundleSubmission.verifierVerdict.benchmarkPackageDigest, expected.benchmarkPackageDigest],
+    ["laneId", bundleSubmission.verifierVerdict.laneId, expected.laneId],
+    ["runId", bundleSubmission.verifierVerdict.runId, expected.runId]
+  ];
+  const mismatchedVerdictField = verdictChecks.find(
+    ([, actual, expectedValue]) => actual !== expectedValue
+  );
+
+  if (mismatchedVerdictField) {
+    throw new BundleSubmissionIntegrityError(
+      `verification/verdict.json ${mismatchedVerdictField[0]} does not match the claimed job target.`
+    );
+  }
+}
+
+async function assertManifestEntriesMatchFiles(
+  bundleRootRealPath: string,
+  artifactManifest: z.output<typeof artifactManifestFileSchema>
+): Promise<void> {
+  const seenRelativePaths = new Set<string>();
+
+  for (const artifact of artifactManifest.artifacts) {
+    const canonicalRelativePath = normalizeManifestRelativePath(artifact.relativePath);
+
+    if (seenRelativePaths.has(canonicalRelativePath)) {
+      throw new BundleSubmissionIntegrityError(
+        `artifact-manifest.json contains a duplicate relativePath: ${canonicalRelativePath}.`
+      );
+    }
+
+    seenRelativePaths.add(canonicalRelativePath);
+
+    const expectedArtifactRole =
+      canonicalArtifactRoleByPath[canonicalRelativePath as keyof typeof canonicalArtifactRoleByPath];
+
+    if (expectedArtifactRole && artifact.artifactRole !== expectedArtifactRole) {
+      throw new BundleSubmissionIntegrityError(
+        `artifact-manifest.json ${canonicalRelativePath} must use artifactRole ${expectedArtifactRole}.`
+      );
+    }
+
+    if (!expectedArtifactRole && !isOptionalArtifactRole(artifact.artifactRole)) {
+      throw new BundleSubmissionIntegrityError(
+        `artifact-manifest.json ${canonicalRelativePath} uses unsupported artifactRole ${artifact.artifactRole}.`
+      );
+    }
+
+    if (artifact.relativePath === "run-bundle.json" || artifact.artifactRole === "run_manifest") {
+      throw new BundleSubmissionIntegrityError(
+        "artifact-manifest.json must not declare run-bundle.json as a manifest artifact."
+      );
+    }
+
+    const filePath = await resolveBundleFilePath(bundleRootRealPath, canonicalRelativePath);
+    const fileStats = await stat(filePath);
+
+    assertCanonicalDigest(
+      await computeArtifactDigest(filePath, artifact),
+      artifact.sha256,
+      `${canonicalRelativePath} sha256 does not match artifact-manifest.json.`
+    );
+
+    if (fileStats.size !== artifact.byteSize) {
+      throw new BundleSubmissionIntegrityError(
+        `${canonicalRelativePath} byteSize does not match artifact-manifest.json.`
+      );
+    }
+
+    if (!expectedArtifactRole) {
+      continue;
+    }
+
+    const expectedManifestMetadata = expectedManifestMetadataForPath(canonicalRelativePath);
+
+    if (artifact.contentEncoding !== expectedManifestMetadata.contentEncoding) {
+      throw new BundleSubmissionIntegrityError(
+        `${canonicalRelativePath} contentEncoding does not match the canonical bundle contract.`
+      );
+    }
+
+    if (artifact.mediaType !== expectedManifestMetadata.mediaType) {
+      throw new BundleSubmissionIntegrityError(
+        `${canonicalRelativePath} mediaType does not match the canonical bundle contract.`
+      );
+    }
+
+    if (artifact.requiredForIngest !== expectedManifestMetadata.requiredForIngest) {
+      throw new BundleSubmissionIntegrityError(
+        `${canonicalRelativePath} requiredForIngest does not match the canonical bundle contract.`
+      );
+    }
+  }
+}
+
+async function resolveBundleFilePath(
+  bundleRootRealPath: string,
+  relativePath: string
+): Promise<string> {
+  const fullPath = path.join(bundleRootRealPath, relativePath);
+  const fileStats = await lstat(fullPath).catch(() => null);
+
+  if (!fileStats?.isFile() || fileStats.isSymbolicLink()) {
+    throw new BundleSubmissionIntegrityError(
+      `artifact-manifest.json references a missing or unsupported bundle file: ${relativePath}.`
+    );
+  }
+
+  const resolvedFilePath = await realpath(fullPath);
+  const relativeResolvedPath = path.relative(bundleRootRealPath, resolvedFilePath);
+
+  if (
+    relativeResolvedPath.startsWith("..") ||
+    path.isAbsolute(relativeResolvedPath) ||
+    relativeResolvedPath.length === 0
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      `artifact-manifest.json path escapes the bundle root: ${relativePath}.`
+    );
+  }
+
+  return resolvedFilePath;
+}
+
+async function loadBundleTextFile(
+  bundleRootRealPath: string,
+  relativePath: string
+): Promise<string> {
+  const filePath = await resolveBundleFilePath(bundleRootRealPath, relativePath);
+  return loadNormalizedText(filePath);
+}
+
+async function computeArtifactDigest(
+  filePath: string,
+  artifact: Pick<WorkerArtifactManifestEntry, "contentEncoding" | "mediaType">
+): Promise<string> {
+  const fileBytes = await readFile(filePath);
+
+  if (shouldHashNormalizedTextArtifact(artifact)) {
+    return sha256Text(fileBytes.toString("utf8"));
+  }
+
+  return sha256Bytes(fileBytes);
+}
+
+function shouldHashNormalizedTextArtifact(
+  artifact: Pick<WorkerArtifactManifestEntry, "contentEncoding" | "mediaType">
+): boolean {
+  if (artifact.contentEncoding !== null) {
+    return false;
+  }
+
+  return artifact.mediaType === "application/json" || artifact.mediaType?.startsWith("text/") === true;
+}
+
+function assertBundleSubmissionFileConsistency(options: {
+  benchmarkPackage: z.output<typeof problem9BenchmarkPackageManifestSchema>;
+  environment: z.output<typeof problem9EnvironmentManifestSchema>;
+  environmentDigest: string;
+  packageRef: z.output<typeof problem9PackageRefSchema>;
+  promptPackage: z.output<typeof problem9PromptPackageManifestSchema>;
+  runBundle: z.output<typeof runBundleFileSchema>;
+  verifierVerdict: z.output<typeof bundleVerifierVerdictFileSchema>;
+}): void {
+  if (normalizeDigest(options.packageRef.benchmarkPackageDigest) !== normalizeDigest(options.benchmarkPackage.packageDigest)) {
+    throw new BundleSubmissionIntegrityError(
+      "package/package-ref.json benchmarkPackageDigest does not match package/benchmark-package.json."
+    );
+  }
+
+  if (options.packageRef.benchmarkPackageVersion !== options.benchmarkPackage.packageVersion) {
+    throw new BundleSubmissionIntegrityError(
+      "package/package-ref.json benchmarkPackageVersion does not match package/benchmark-package.json."
+    );
+  }
+
+  if (options.packageRef.benchmarkItemId !== options.benchmarkPackage.benchmarkItemId) {
+    throw new BundleSubmissionIntegrityError(
+      "package/package-ref.json benchmarkItemId does not match package/benchmark-package.json."
+    );
+  }
+
+  if (
+    normalizeDigest(options.promptPackage.benchmarkPackageDigest) !==
+    normalizeDigest(options.benchmarkPackage.packageDigest)
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      "prompt/prompt-package.json benchmarkPackageDigest does not match package/benchmark-package.json."
+    );
+  }
+
+  if (options.promptPackage.benchmarkPackageVersion !== options.benchmarkPackage.packageVersion) {
+    throw new BundleSubmissionIntegrityError(
+      "prompt/prompt-package.json benchmarkPackageVersion does not match package/benchmark-package.json."
+    );
+  }
+
+  if (options.promptPackage.benchmarkItemId !== options.benchmarkPackage.benchmarkItemId) {
+    throw new BundleSubmissionIntegrityError(
+      "prompt/prompt-package.json benchmarkItemId does not match package/benchmark-package.json."
+    );
+  }
+
+  const runBundlePromptChecks: Array<[field: string, actual: string, expectedValue: string]> = [
+    ["authMode", options.runBundle.authMode, options.promptPackage.authMode],
+    ["benchmarkItemId", options.runBundle.benchmarkItemId, options.promptPackage.benchmarkItemId],
+    ["benchmarkPackageId", options.runBundle.benchmarkPackageId, options.promptPackage.benchmarkPackageId],
+    ["benchmarkPackageVersion", options.runBundle.benchmarkPackageVersion, options.promptPackage.benchmarkPackageVersion],
+    ["harnessRevision", options.runBundle.harnessRevision, options.promptPackage.harnessRevision],
+    ["laneId", options.runBundle.laneId, options.promptPackage.laneId],
+    ["modelConfigId", options.runBundle.modelConfigId, options.promptPackage.modelConfigId],
+    ["promptProtocolVersion", options.runBundle.promptProtocolVersion, options.promptPackage.promptProtocolVersion],
+    ["providerFamily", options.runBundle.providerFamily, options.promptPackage.providerFamily],
+    ["runMode", options.runBundle.runMode, options.promptPackage.runMode],
+    ["toolProfile", options.runBundle.toolProfile, options.promptPackage.toolProfile]
+  ];
+  const mismatchedRunBundlePromptField = runBundlePromptChecks.find(
+    ([, actual, expectedValue]) => actual !== expectedValue
+  );
+
+  if (mismatchedRunBundlePromptField) {
+    throw new BundleSubmissionIntegrityError(
+      `run-bundle.json ${mismatchedRunBundlePromptField[0]} does not match prompt/prompt-package.json.`
+    );
+  }
+
+  if (normalizeDigest(options.runBundle.benchmarkPackageDigest) !== normalizeDigest(options.benchmarkPackage.packageDigest)) {
+    throw new BundleSubmissionIntegrityError(
+      "run-bundle.json benchmarkPackageDigest does not match package/benchmark-package.json."
+    );
+  }
+
+  if (normalizeDigest(options.runBundle.promptPackageDigest) !== normalizeDigest(options.promptPackage.promptPackageDigest)) {
+    throw new BundleSubmissionIntegrityError(
+      "run-bundle.json promptPackageDigest does not match prompt/prompt-package.json."
+    );
+  }
+
+  if (normalizeDigest(options.runBundle.environmentDigest) !== normalizeDigest(options.environmentDigest)) {
+    throw new BundleSubmissionIntegrityError(
+      "run-bundle.json environmentDigest does not match environment/environment.json."
+    );
+  }
+
+  if (options.environment.harnessRevision !== options.runBundle.harnessRevision) {
+    throw new BundleSubmissionIntegrityError(
+      "environment/environment.json harnessRevision does not match run-bundle.json."
+    );
+  }
+
+  const environmentRunBundleChecks: Array<[field: string, actual: string, expectedValue: string]> = [
+    ["authMode", options.environment.authMode, options.runBundle.authMode],
+    ["laneId", options.environment.laneId, options.runBundle.laneId],
+    ["modelConfigId", options.environment.modelConfigId, options.runBundle.modelConfigId],
+    ["promptProtocolVersion", options.environment.promptProtocolVersion, options.runBundle.promptProtocolVersion],
+    ["providerFamily", options.environment.providerFamily, options.runBundle.providerFamily],
+    ["runMode", options.environment.runMode, options.runBundle.runMode],
+    ["toolProfile", options.environment.toolProfile, options.runBundle.toolProfile],
+    ["verifierVersion", options.environment.verifierVersion, options.runBundle.verifierVersion]
+  ];
+  const mismatchedEnvironmentField = environmentRunBundleChecks.find(
+    ([, actual, expectedValue]) => actual !== expectedValue
+  );
+
+  if (mismatchedEnvironmentField) {
+    throw new BundleSubmissionIntegrityError(
+      `environment/environment.json ${mismatchedEnvironmentField[0]} does not match run-bundle.json.`
+    );
+  }
+
+  if (options.environment.modelSnapshotId !== options.runBundle.modelSnapshotId) {
+    throw new BundleSubmissionIntegrityError(
+      "environment/environment.json modelSnapshotId does not match run-bundle.json."
+    );
+  }
+
+  if (options.verifierVerdict.runId !== options.runBundle.runId) {
+    throw new BundleSubmissionIntegrityError(
+      "verification/verdict.json runId does not match run-bundle.json."
+    );
+  }
+
+  if (options.verifierVerdict.attemptId !== options.runBundle.attemptId) {
+    throw new BundleSubmissionIntegrityError(
+      "verification/verdict.json attemptId does not match run-bundle.json."
+    );
+  }
+
+  if (
+    normalizeDigest(options.verifierVerdict.benchmarkPackageDigest) !==
+    normalizeDigest(options.runBundle.benchmarkPackageDigest)
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      "verification/verdict.json benchmarkPackageDigest does not match run-bundle.json."
+    );
+  }
+
+  if (options.verifierVerdict.laneId !== options.runBundle.laneId) {
+    throw new BundleSubmissionIntegrityError(
+      "verification/verdict.json laneId does not match run-bundle.json."
+    );
+  }
+}
+
+function assertVerifierVerdictSemantics(
+  verifierVerdict: z.output<typeof bundleVerifierVerdictFileSchema>
+): void {
+  if (verifierVerdict.result === "pass") {
+    if (verifierVerdict.primaryFailure !== null) {
+      throw new BundleSubmissionIntegrityError(
+        "Passing verifier verdicts may not include a primaryFailure classification."
+      );
+    }
+
+    if (verifierVerdict.semanticEquality !== "matched") {
+      throw new BundleSubmissionIntegrityError(
+        "Passing verifier verdicts require semanticEquality=matched."
+      );
+    }
+
+    if (verifierVerdict.containsAdmit || verifierVerdict.containsSorry) {
+      throw new BundleSubmissionIntegrityError(
+        "Passing verifier verdicts may not contain sorry or admit."
+      );
+    }
+
+    if (verifierVerdict.axiomCheck !== "passed") {
+      throw new BundleSubmissionIntegrityError(
+        "Passing verifier verdicts require axiomCheck=passed."
+      );
+    }
+
+    if (verifierVerdict.diagnosticGate !== "passed") {
+      throw new BundleSubmissionIntegrityError(
+        "Passing verifier verdicts require diagnosticGate=passed."
+      );
+    }
+
+    return;
+  }
+
+  if (verifierVerdict.primaryFailure === null) {
+    throw new BundleSubmissionIntegrityError(
+      "Failing verifier verdicts require a primaryFailure classification."
+    );
+  }
+
+  if (
+    verifierVerdict.failureCode !== undefined &&
+    verifierVerdict.failureCode !== verifierVerdict.primaryFailure.failureCode
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      "Failing verifier verdicts require failureCode to match primaryFailure.failureCode."
+    );
+  }
+}
+
+function computeRunConfigDigest(options: {
+  benchmarkPackage: z.output<typeof problem9BenchmarkPackageManifestSchema>;
+  environment: z.output<typeof problem9EnvironmentManifestSchema>;
+  environmentDigest: string;
+  promptPackage: z.output<typeof problem9PromptPackageManifestSchema>;
+}): string {
+  return sha256Text(
+    stableStringify({
+      authMode: options.promptPackage.authMode,
+      benchmarkItemId: options.benchmarkPackage.benchmarkItemId,
+      benchmarkPackageDigest: options.benchmarkPackage.packageDigest,
+      benchmarkPackageId: options.benchmarkPackage.packageId,
+      benchmarkPackageVersion: options.benchmarkPackage.packageVersion,
+      environmentDigest: options.environmentDigest,
+      harnessRevision: options.promptPackage.harnessRevision,
+      laneId: options.promptPackage.laneId,
+      modelConfigId: options.promptPackage.modelConfigId,
+      modelSnapshotId: options.environment.modelSnapshotId,
+      promptPackageDigest: options.promptPackage.promptPackageDigest,
+      promptProtocolVersion: options.promptPackage.promptProtocolVersion,
+      providerFamily: options.promptPackage.providerFamily,
+      runMode: options.promptPackage.runMode,
+      toolProfile: options.promptPackage.toolProfile,
+      verifierVersion: options.environment.verifierVersion
+    })
+  );
 }
 
 function assertRequiredArtifactRoles(
@@ -1083,13 +1730,52 @@ function assertRequiredArtifactRoles(
   requiredArtifactRoles: WorkerBundleArtifactRole[]
 ): void {
   const presentRoles = new Set(artifacts.map((artifact) => artifact.artifactRole));
-  const missingRoles = requiredArtifactRoles.filter((role) => !presentRoles.has(role));
+  const missingRoles = requiredArtifactRoles.filter(
+    (role) => role !== "run_manifest" && !presentRoles.has(role)
+  );
 
   if (missingRoles.length > 0) {
     throw new Error(
       `Artifact manifest is missing required roles: ${missingRoles.sort().join(", ")}.`
     );
   }
+}
+
+function normalizeManifestRelativePath(value: string): string {
+  const slashNormalized = value.replace(/\\/g, "/");
+  const canonicalPath = path.posix.normalize(slashNormalized);
+
+  if (
+    slashNormalized.length === 0 ||
+    slashNormalized !== canonicalPath ||
+    canonicalPath.startsWith("../") ||
+    canonicalPath === ".." ||
+    canonicalPath.startsWith("/") ||
+    canonicalPath.endsWith("/") ||
+    canonicalPath === "."
+  ) {
+    throw new BundleSubmissionIntegrityError(
+      `artifact-manifest.json relativePath must be canonical and traversal-free: ${value}.`
+    );
+  }
+
+  return canonicalPath;
+}
+
+function expectedManifestMetadataForPath(relativePath: string) {
+  return {
+    contentEncoding: null,
+    mediaType: relativePath.endsWith(".json")
+      ? "application/json"
+      : relativePath.endsWith(".txt") || relativePath.endsWith(".lean")
+        ? "text/plain"
+        : null,
+    requiredForIngest: true
+  };
+}
+
+function isOptionalArtifactRole(role: string): role is "usage_summary" | "execution_trace" {
+  return optionalArtifactRoles.has(role as "usage_summary" | "execution_trace");
 }
 
 function resolveProviderModel(options: {
@@ -1121,6 +1807,84 @@ function sanitizePathSegment(value: string): string {
   }
 
   return sanitized;
+}
+
+function assertCanonicalDigest(actual: string, declared: string, message: string): void {
+  if (normalizeDigest(actual) !== normalizeDigest(declared)) {
+    throw new BundleSubmissionIntegrityError(message);
+  }
+}
+
+function normalizeDigest(digest: string): string {
+  return digest.trim().toLowerCase();
+}
+
+function computeBundleDigest(
+  runBundle: z.output<typeof runBundleFileSchema>,
+  artifactManifest: z.output<typeof artifactManifestFileSchema>
+): string {
+  return sha256Text(
+    stableStringify({
+      artifactInventory: [...artifactManifest.artifacts].sort((left, right) =>
+        left.relativePath.localeCompare(right.relativePath)
+      ),
+      runBundle: omitDigestFields(runBundle)
+    })
+  );
+}
+
+function omitDigestFields<TValue extends Record<string, unknown>>(value: TValue) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !key.toLowerCase().endsWith("digest"))
+  );
+}
+
+function loadNormalizedText(filePath: string): Promise<string> {
+  return readFile(filePath, "utf8").then(normalizeText);
+}
+
+function normalizeText(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(Buffer.from(normalizeText(text), "utf8")).digest("hex");
+}
+
+function sha256Bytes(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value), null, 2);
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
+    );
+  }
+
+  return value;
+}
+
+function isBundleFieldMatch(field: string, actual: string | null, expectedValue: string): boolean {
+  if (actual === null) {
+    return false;
+  }
+
+  if (field.toLowerCase().endsWith("digest")) {
+    return normalizeDigest(actual) === normalizeDigest(expectedValue);
+  }
+
+  return actual === expectedValue;
 }
 
 function buildLeaseFilesystemRoots(options: {
