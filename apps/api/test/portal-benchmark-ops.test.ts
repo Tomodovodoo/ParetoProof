@@ -14,13 +14,21 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { portalBenchmarkOpsReadModelsContract } from "@paretoproof/shared";
 import type { PortalBenchmarkOpsReadModelService } from "../src/lib/portal-benchmark-ops.ts";
-import { portalBenchmarkOpsReadModelTestUtils } from "../src/lib/portal-benchmark-ops.ts";
+import {
+  createPortalBenchmarkOpsReadModelService,
+  portalBenchmarkOpsReadModelTestUtils
+} from "../src/lib/portal-benchmark-ops.ts";
 import { registerPortalRoutes } from "../src/routes/portal.ts";
+import { attempts, jobs, runs } from "../src/db/schema.ts";
 
 const pgDialect = new PgDialect();
 
 function renderOrderBySql(orderBy: ReadonlyArray<unknown>) {
   return pgDialect.sqlToQuery(sql.join(orderBy as never[], sql`, `)).sql;
+}
+
+function renderSqlFragment(fragment: unknown) {
+  return pgDialect.sqlToQuery(fragment as never).sql;
 }
 
 function createRequireAccessStub(roles: Array<"admin" | "collaborator" | "helper">) {
@@ -449,6 +457,214 @@ function buildWorkersViewResponse(): PortalWorkersViewResponse {
     workerPools: []
   };
 }
+
+function buildRunRow(overrides: Record<string, unknown> = {}) {
+  return {
+    authMode: "machine_api_key",
+    benchmarkItemId: "item-1",
+    benchmarkPackageDigest: "a".repeat(64),
+    benchmarkPackageId: "problem9",
+    benchmarkPackageVersion: "2026.03",
+    createdAt: new Date("2026-03-13T19:58:00.000Z"),
+    completedAt: new Date("2026-03-13T20:00:00.000Z"),
+    id: "run-row-1",
+    laneId: "problem9-default",
+    modelConfigId: "gpt-oss",
+    modelSnapshotId: "gpt-oss-2026-03-13",
+    primaryFailureCode: null,
+    primaryFailureFamily: null,
+    primaryFailureSummary: null,
+    providerFamily: "openai",
+    runKind: "single_run",
+    runMode: "bounded_agentic_attempt",
+    sourceRunId: "PP-318",
+    state: "succeeded",
+    toolProfile: "workspace_edit_limited",
+    updatedAt: new Date("2026-03-13T20:00:00.000Z"),
+    verdictClass: "pass",
+    ...overrides
+  };
+}
+
+function createRunsListDbStub(options: {
+  modelConfigRows: Array<{ count: number; modelConfigId: string; providerFamily: string }>;
+  pageRunRows: Array<Record<string, unknown>>;
+  providerRows: Array<{ count: number; providerFamily: string }>;
+  summaryRow: {
+    activeRuns: number;
+    failedRuns: number;
+    totalMatches: number;
+    verdictFailCount: number;
+    verdictInvalidResultCount: number;
+    verdictPassCount: number;
+  };
+}) {
+  return {
+    select(selection?: Record<string, unknown>) {
+      return {
+        from(table: unknown) {
+          if (
+            selection &&
+            "activeRuns" in selection &&
+            "failedRuns" in selection &&
+            "totalMatches" in selection
+          ) {
+            return {
+              where: async () => [options.summaryRow]
+            };
+          }
+
+          if (
+            table === runs &&
+            selection &&
+            "count" in selection &&
+            "providerFamily" in selection &&
+            !("modelConfigId" in selection)
+          ) {
+            return {
+              where() {
+                return {
+                  groupBy() {
+                    return {
+                      orderBy: async () => options.providerRows
+                    };
+                  }
+                };
+              }
+            };
+          }
+
+          if (
+            table === runs &&
+            selection &&
+            "count" in selection &&
+            "modelConfigId" in selection
+          ) {
+            return {
+              where() {
+                return {
+                  groupBy() {
+                    return {
+                      orderBy: async () => options.modelConfigRows
+                    };
+                  }
+                };
+              }
+            };
+          }
+
+          if (table === runs) {
+            return {
+              where() {
+                return {
+                  orderBy() {
+                    return {
+                      limit: async () => options.pageRunRows
+                    };
+                  }
+                };
+              }
+            };
+          }
+
+          if (table === jobs || table === attempts) {
+            return {
+              where: async () => []
+            };
+          }
+
+          throw new Error("Unexpected select source in runs-list test stub.");
+        }
+      };
+    }
+  };
+}
+
+test("getRunsList summary counts stay aggregate when the returned page is limited", async () => {
+  const query: PortalRunsListQuery = {
+    attemptId: null,
+    authMode: null,
+    benchmarkPackageDigest: null,
+    benchmarkPackageId: null,
+    benchmarkPackageVersion: null,
+    failureCode: null,
+    failureFamily: null,
+    jobId: null,
+    lifecycleBucket: null,
+    limit: 1,
+    modelConfigId: null,
+    providerFamily: null,
+    q: null,
+    runId: null,
+    runLifecycle: [],
+    runMode: null,
+    runKind: null,
+    sort: "started_at_desc",
+    toolProfile: null,
+    verdict: []
+  };
+  const readModels = createPortalBenchmarkOpsReadModelService(
+    createRunsListDbStub({
+      modelConfigRows: [
+        {
+          count: 2,
+          modelConfigId: "gpt-oss",
+          providerFamily: "openai"
+        }
+      ],
+      pageRunRows: [
+        buildRunRow({
+          completedAt: null,
+          sourceRunId: "PP-400",
+          state: "running",
+          updatedAt: new Date("2026-03-13T20:00:00.000Z"),
+          verdictClass: null
+        })
+      ],
+      providerRows: [
+        {
+          count: 2,
+          providerFamily: "openai"
+        }
+      ],
+      summaryRow: {
+        activeRuns: 1,
+        failedRuns: 1,
+        totalMatches: 2,
+        verdictFailCount: 1,
+        verdictInvalidResultCount: 0,
+        verdictPassCount: 0
+      }
+    }) as never
+  );
+
+  const payload = await readModels.getRunsList(query);
+
+  assert.equal(payload.items.length, 1);
+  assert.equal(payload.summary.returnedCount, 1);
+  assert.equal(payload.summary.totalMatches, 2);
+  assert.equal(payload.summary.activeRuns, 1);
+  assert.equal(payload.summary.failedRuns, 1);
+  assert.deepEqual(payload.summary.verdictCounts, {
+    fail: 1,
+    invalid_result: 0,
+    pass: 0
+  });
+});
+
+test("portal benchmark ops runs summary verdict aggregation only counts terminal run states", () => {
+  const summarySelect = portalBenchmarkOpsReadModelTestUtils.buildRunsSummarySelect();
+  const verdictSql = [
+    renderSqlFragment(summarySelect.verdictFailCount),
+    renderSqlFragment(summarySelect.verdictInvalidResultCount),
+    renderSqlFragment(summarySelect.verdictPassCount)
+  ];
+
+  for (const statement of verdictSql) {
+    assert.match(statement, /"runs"\."state" in \('succeeded', 'failed', 'cancelled'\)/);
+    assert.match(statement, /"runs"\."verdict_class"/);
+  }
+});
 
 function createReadModelService(overrides?: {
   getBenchmarkDataset?: (packageId: string) => Promise<PortalBenchmarkDatasetResponse | null>;
