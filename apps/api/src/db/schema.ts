@@ -314,8 +314,10 @@ export const accessRequests = pgTable(
       table.requestedIdentitySubject
     ),
     statusIndex: index("access_requests_status_idx").on(table.status),
-    activePendingEmailUnique: uniqueIndex("access_requests_active_pending_email_unique")
-      .on(table.email)
+    activePendingEmailKindUnique: uniqueIndex(
+      "access_requests_active_pending_email_kind_unique"
+    )
+      .on(table.email, table.requestKind)
       .where(sql`${table.status} = 'pending'`)
   })
 );

@@ -91,7 +91,7 @@ function isPendingAccessRequestConflict(error: unknown) {
 
   return (
     databaseCode === "23505" &&
-    constraintName === "access_requests_active_pending_email_unique"
+    constraintName === "access_requests_active_pending_email_kind_unique"
   );
 }
 
@@ -868,6 +868,8 @@ export function registerPortalRoutes(
     async (request) => {
       const identity = request.accessIdentity;
       const accessContext = request.accessRbacContext;
+      const pendingRequestId =
+        accessContext?.status === "pending" ? accessContext.requestId : null;
       const pendingUserId =
         accessContext?.status === "pending" ? accessContext.userId : null;
       const canUsePendingFallback = accessContext?.status === "pending";
@@ -892,21 +894,33 @@ export function registerPortalRoutes(
               identity.provider,
               identity.subject,
             );
+      const currentPendingRequest =
+        pendingRequestId
+          ? await db.query.accessRequests.findFirst({
+              where: eq(accessRequests.id, pendingRequestId),
+            })
+          : null;
 
       const latestRequest =
+        (currentPendingRequest?.requestKind === "access_request"
+          ? currentPendingRequest
+          : null) ??
         (linkedIdentity
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(
-                accessRequests.requestedByUserId,
-                linkedIdentity.userId,
+              where: and(
+                eq(accessRequests.requestedByUserId, linkedIdentity.userId),
+                eq(accessRequests.requestKind, "access_request"),
               ),
             })
           : null) ??
         (pendingUserId
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.requestedByUserId, pendingUserId),
+              where: and(
+                eq(accessRequests.requestedByUserId, pendingUserId),
+                eq(accessRequests.requestKind, "access_request"),
+              ),
             })
           : null) ??
         (canUsePendingFallback && accessEmail
@@ -914,6 +928,7 @@ export function registerPortalRoutes(
               orderBy: [desc(accessRequests.createdAt)],
               where: and(
                 eq(accessRequests.email, accessEmail),
+                eq(accessRequests.requestKind, "access_request"),
                 eq(accessRequests.status, "pending"),
               ),
             })
@@ -921,7 +936,10 @@ export function registerPortalRoutes(
         (accessEmail
           ? await db.query.accessRequests.findFirst({
               orderBy: [desc(accessRequests.createdAt)],
-              where: eq(accessRequests.email, accessEmail),
+              where: and(
+                eq(accessRequests.email, accessEmail),
+                eq(accessRequests.requestKind, "access_request"),
+              ),
             })
           : null);
 
@@ -1600,7 +1618,10 @@ export function registerPortalRoutes(
 
           const existingRequest = await tx.query.accessRequests.findFirst({
             orderBy: [desc(accessRequests.createdAt)],
-            where: eq(accessRequests.email, accessEmail),
+            where: and(
+              eq(accessRequests.email, accessEmail),
+              eq(accessRequests.requestKind, "access_request"),
+            ),
           });
 
           if (
@@ -1690,6 +1711,7 @@ export function registerPortalRoutes(
             orderBy: [desc(accessRequests.createdAt)],
             where: and(
               eq(accessRequests.email, accessEmail),
+              eq(accessRequests.requestKind, "access_request"),
               eq(accessRequests.status, "pending"),
             ),
           });
@@ -1820,7 +1842,10 @@ export function registerPortalRoutes(
           const recoveryRole = activeRoleRows[0]?.role ?? "helper";
           const existingRequest = await tx.query.accessRequests.findFirst({
             orderBy: [desc(accessRequests.createdAt)],
-            where: eq(accessRequests.email, accessEmail),
+            where: and(
+              eq(accessRequests.email, accessEmail),
+              eq(accessRequests.requestKind, "identity_recovery"),
+            ),
           });
 
           if (
@@ -1918,6 +1943,7 @@ export function registerPortalRoutes(
             orderBy: [desc(accessRequests.createdAt)],
             where: and(
               eq(accessRequests.email, accessEmail),
+              eq(accessRequests.requestKind, "identity_recovery"),
               eq(accessRequests.status, "pending"),
             ),
           });
