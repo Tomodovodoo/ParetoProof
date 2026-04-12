@@ -573,6 +573,12 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
             eq(jobs.state, "running"),
             eq(attempts.state, "active"),
             eq(runs.state, "running")
+          ),
+          and(
+            or(eq(jobs.state, "cancel_requested"), eq(runs.state, "cancel_requested")),
+            inArray(attempts.state, ["prepared", "active"]),
+            inArray(jobs.state, ["claimed", "running", "cancel_requested"]),
+            inArray(runs.state, ["queued", "running", "cancel_requested"])
           )
         ),
         lte(workerJobLeases.leaseExpiresAt, now),
@@ -608,22 +614,30 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
     return;
   }
 
-  const startedLeaseRows = revokedLeases
+  const terminalizedLeaseRows = revokedLeases
     .map((lease) => staleLeasesById.get(lease.leaseRowId))
     .filter(
       (lease): lease is NonNullable<typeof lease> =>
         !!lease &&
-        lease.jobState === "running" &&
-        lease.attemptState === "active" &&
-        lease.runState === "running"
+        ((lease.jobState === "running" &&
+          lease.attemptState === "active" &&
+          lease.runState === "running") ||
+          ((lease.jobState === "cancel_requested" || lease.runState === "cancel_requested") &&
+            (lease.attemptState === "prepared" || lease.attemptState === "active") &&
+            (lease.jobState === "claimed" ||
+              lease.jobState === "running" ||
+              lease.jobState === "cancel_requested") &&
+            (lease.runState === "queued" ||
+              lease.runState === "running" ||
+              lease.runState === "cancel_requested")))
     );
 
-  if (startedLeaseRows.length > 0) {
+  if (terminalizedLeaseRows.length > 0) {
     const completedAt = now;
     const failure = buildLeaseLostFailureClassification();
-    const attemptRowIds = [...new Set(startedLeaseRows.map((lease) => lease.attemptRowId))];
-    const jobRowIds = [...new Set(startedLeaseRows.map((lease) => lease.jobRowId))];
-    const runRowIds = [...new Set(startedLeaseRows.map((lease) => lease.runRowId))];
+    const attemptRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.attemptRowId))];
+    const jobRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.jobRowId))];
+    const runRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.runRowId))];
 
     await tx
       .update(attempts)
@@ -639,7 +653,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         verifierResult: "invalid_result",
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(attempts.id, attemptRowIds), eq(attempts.state, "active")));
+      .where(
+        and(inArray(attempts.id, attemptRowIds), inArray(attempts.state, ["prepared", "active"]))
+      );
 
     await tx
       .update(jobs)
@@ -653,7 +669,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         updatedAt: now,
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(jobs.id, jobRowIds), eq(jobs.state, "running")));
+      .where(
+        and(inArray(jobs.id, jobRowIds), inArray(jobs.state, ["claimed", "running", "cancel_requested"]))
+      );
 
     await tx
       .update(runs)
@@ -667,7 +685,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         updatedAt: now,
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(runs.id, runRowIds), eq(runs.state, "running")));
+      .where(
+        and(inArray(runs.id, runRowIds), inArray(runs.state, ["queued", "running", "cancel_requested"]))
+      );
   }
 
   await reconcileWorkerInstanceLifecycles(

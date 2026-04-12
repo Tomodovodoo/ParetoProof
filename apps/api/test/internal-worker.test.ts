@@ -2580,6 +2580,930 @@ test("claim terminal-fails expired started work before polling for new candidate
   assert.equal(updateCalls.some((call) => call.state === "claimed"), false);
 });
 
+test("claim terminal-fails expired cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "active",
+                        jobRowId: "job-row-1",
+                        jobState: "cancel_requested",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "cancel_requested",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+});
+
+test("claim terminal-fails expired active job-side cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "active",
+                        jobRowId: "job-row-1",
+                        jobState: "cancel_requested",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "running",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+});
+
+test("claim terminal-fails expired run-only cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "active",
+                        jobRowId: "job-row-1",
+                        jobState: "running",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "cancel_requested",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+});
+
+test("claim terminal-fails expired pre-start run-only cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "prepared",
+                        jobRowId: "job-row-1",
+                        jobState: "claimed",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "cancel_requested",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+  assert.equal(updateCalls.some((call) => call.state === "claimed"), false);
+});
+
+test("claim terminal-fails expired pre-start fully cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "prepared",
+                        jobRowId: "job-row-1",
+                        jobState: "cancel_requested",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "cancel_requested",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+  assert.equal(updateCalls.some((call) => call.state === "claimed"), false);
+});
+
+test("claim terminal-fails expired pre-start cancel_requested work before polling for new candidates", async () => {
+  const updateCalls: Array<Record<string, unknown>> = [];
+  const insertCalls: Array<Record<string, unknown>> = [];
+  let selectCount = 0;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([
+                      {
+                        attemptRowId: "attempt-row-1",
+                        attemptState: "prepared",
+                        jobRowId: "job-row-1",
+                        jobState: "cancel_requested",
+                        leaseRowId: "lease-row-1",
+                        runRowId: "run-row-1",
+                        runState: "running",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                innerJoin() {
+                  return this;
+                },
+                leftJoin() {
+                  return this;
+                },
+                where() {
+                  return this;
+                },
+                orderBy() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          return {
+            set(values: Record<string, unknown>) {
+              updateCalls.push(values);
+
+              return {
+                where() {
+                  return this;
+                },
+                returning() {
+                  if (updateCalls.length === 1) {
+                    return Promise.resolve([
+                      {
+                        leaseRowId: "lease-row-1",
+                        workerInstanceId: "stale-worker-instance-3"
+                      }
+                    ]);
+                  }
+
+                  return Promise.resolve([{ id: "updated-row-1" }]);
+                }
+              };
+            }
+          };
+        },
+        insert() {
+          return {
+            values(values: Record<string, unknown>) {
+              insertCalls.push(values);
+
+              if (insertCalls.length === 1) {
+                return {
+                  onConflictDoNothing() {
+                    return {
+                      returning() {
+                        return Promise.resolve([{ id: "pool-def-1" }]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(fakeDb as never);
+
+  const response = await control.claim(buildClaimRequest());
+
+  assert.deepEqual(response, {
+    leaseStatus: "idle",
+    pollAfterSeconds: 30,
+    workerJob: null
+  });
+  assert.equal(selectCount, 3);
+  assert.equal(insertCalls.length, 2);
+  assert.equal(insertCalls[1]?.currentLifecycleState, "ready");
+  assert.equal(updateCalls.length, 5);
+  assert.equal(updateCalls[0].revokedAt instanceof Date, true);
+  assert.equal(updateCalls[1].state, "failed");
+  assert.equal(updateCalls[1].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[2].state, "failed");
+  assert.equal(updateCalls[2].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[3].state, "failed");
+  assert.equal(updateCalls[3].primaryFailureCode, "worker_lease_lost");
+  assert.equal(updateCalls[4].currentLifecycleState, "ready");
+  assert.equal(updateCalls.some((call) => call.state === "cancelled"), false);
+  assert.equal(updateCalls.some((call) => call.state === "queued"), false);
+  assert.equal(updateCalls.some((call) => call.state === "claimed"), false);
+});
+
 test("claim keeps any still-unrevoked lease row blocking candidate selection", async () => {
   let capturedLeaseJoin: SQL | null = null;
   const insertCalls: Array<Record<string, unknown>> = [];
