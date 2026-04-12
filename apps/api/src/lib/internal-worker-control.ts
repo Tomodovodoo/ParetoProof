@@ -106,10 +106,12 @@ type LeaseStateRow = {
   candidateDigest: string;
   heartbeatTimeoutSeconds: number;
   jobState: typeof jobs.$inferSelect.state;
+  jobUpdatedAt: Date;
   lastEventSequence: number;
   leaseExpiresAt: Date;
   revokedAt: Date | null;
   runState: typeof runs.$inferSelect.state;
+  runUpdatedAt: Date;
   verifierVerdict: Record<string, unknown>;
   workerInstanceId: string | null;
   verdictDigest: string;
@@ -305,6 +307,27 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
 
 function createJobTokenExpiry(now: Date) {
   return addSeconds(now, heartbeatTimeoutSeconds);
+}
+
+function resolveCancelRequestedLeaseExpiry(lease: LeaseStateRow) {
+  const cancelRequestedAtCandidates = [];
+
+  if (lease.jobState === "cancel_requested") {
+    cancelRequestedAtCandidates.push(lease.jobUpdatedAt);
+  }
+
+  if (lease.runState === "cancel_requested") {
+    cancelRequestedAtCandidates.push(lease.runUpdatedAt);
+  }
+
+  const cancelRequestedAt =
+    cancelRequestedAtCandidates.sort((left, right) => left.getTime() - right.getTime())[0] ??
+    lease.leaseExpiresAt;
+  const cancelWindowExpiresAt = addSeconds(cancelRequestedAt, lease.heartbeatTimeoutSeconds);
+
+  return cancelWindowExpiresAt.getTime() > lease.leaseExpiresAt.getTime()
+    ? cancelWindowExpiresAt
+    : lease.leaseExpiresAt;
 }
 
 async function upsertWorkerPoolDefinition(
@@ -550,6 +573,12 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
             eq(jobs.state, "running"),
             eq(attempts.state, "active"),
             eq(runs.state, "running")
+          ),
+          and(
+            or(eq(jobs.state, "cancel_requested"), eq(runs.state, "cancel_requested")),
+            inArray(attempts.state, ["prepared", "active"]),
+            inArray(jobs.state, ["claimed", "running", "cancel_requested"]),
+            inArray(runs.state, ["queued", "running", "cancel_requested"])
           )
         ),
         lte(workerJobLeases.leaseExpiresAt, now),
@@ -585,22 +614,30 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
     return;
   }
 
-  const startedLeaseRows = revokedLeases
+  const terminalizedLeaseRows = revokedLeases
     .map((lease) => staleLeasesById.get(lease.leaseRowId))
     .filter(
       (lease): lease is NonNullable<typeof lease> =>
         !!lease &&
-        lease.jobState === "running" &&
-        lease.attemptState === "active" &&
-        lease.runState === "running"
+        ((lease.jobState === "running" &&
+          lease.attemptState === "active" &&
+          lease.runState === "running") ||
+          ((lease.jobState === "cancel_requested" || lease.runState === "cancel_requested") &&
+            (lease.attemptState === "prepared" || lease.attemptState === "active") &&
+            (lease.jobState === "claimed" ||
+              lease.jobState === "running" ||
+              lease.jobState === "cancel_requested") &&
+            (lease.runState === "queued" ||
+              lease.runState === "running" ||
+              lease.runState === "cancel_requested")))
     );
 
-  if (startedLeaseRows.length > 0) {
+  if (terminalizedLeaseRows.length > 0) {
     const completedAt = now;
     const failure = buildLeaseLostFailureClassification();
-    const attemptRowIds = [...new Set(startedLeaseRows.map((lease) => lease.attemptRowId))];
-    const jobRowIds = [...new Set(startedLeaseRows.map((lease) => lease.jobRowId))];
-    const runRowIds = [...new Set(startedLeaseRows.map((lease) => lease.runRowId))];
+    const attemptRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.attemptRowId))];
+    const jobRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.jobRowId))];
+    const runRowIds = [...new Set(terminalizedLeaseRows.map((lease) => lease.runRowId))];
 
     await tx
       .update(attempts)
@@ -616,7 +653,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         verifierResult: "invalid_result",
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(attempts.id, attemptRowIds), eq(attempts.state, "active")));
+      .where(
+        and(inArray(attempts.id, attemptRowIds), inArray(attempts.state, ["prepared", "active"]))
+      );
 
     await tx
       .update(jobs)
@@ -630,7 +669,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         updatedAt: now,
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(jobs.id, jobRowIds), eq(jobs.state, "running")));
+      .where(
+        and(inArray(jobs.id, jobRowIds), inArray(jobs.state, ["claimed", "running", "cancel_requested"]))
+      );
 
     await tx
       .update(runs)
@@ -644,7 +685,9 @@ async function recoverExpiredClaimLeases(tx: ReadWriteExecutor, now: Date) {
         updatedAt: now,
         verdictClass: "invalid_result"
       })
-      .where(and(inArray(runs.id, runRowIds), eq(runs.state, "running")));
+      .where(
+        and(inArray(runs.id, runRowIds), inArray(runs.state, ["queued", "running", "cancel_requested"]))
+      );
   }
 
   await reconcileWorkerInstanceLifecycles(
@@ -789,10 +832,12 @@ async function loadLeaseState(
       candidateDigest: attempts.candidateDigest,
       heartbeatTimeoutSeconds: workerJobLeases.heartbeatTimeoutSeconds,
       jobState: jobs.state,
+      jobUpdatedAt: jobs.updatedAt,
       lastEventSequence: workerJobLeases.lastEventSequence,
       leaseExpiresAt: workerJobLeases.leaseExpiresAt,
       revokedAt: workerJobLeases.revokedAt,
       runState: runs.state,
+      runUpdatedAt: runs.updatedAt,
       verifierVerdict: attempts.verifierVerdict,
       workerInstanceId: workerJobLeases.workerInstanceId,
       verdictDigest: attempts.verdictDigest
@@ -882,6 +927,25 @@ function ensureSubmissionState(
       "attemptState"
     );
   }
+}
+
+function ensureManualCancellationWasRequested(
+  request: WorkerTerminalFailureRequest,
+  leaseState: LeaseStateRow
+) {
+  if (request.failure.failureCode !== "manual_cancelled") {
+    return;
+  }
+
+  if (leaseState.jobState === "cancel_requested" || leaseState.runState === "cancel_requested") {
+    return;
+  }
+
+  throw createConflictError(
+    "worker_cancel_not_requested",
+    "manual_cancelled terminal submissions require a control-plane cancellation request first.",
+    "failure.failureCode"
+  );
 }
 
 async function promoteExecutionToRunning(
@@ -1047,6 +1111,7 @@ function assertFailureEvidenceArtifactRefs(
   const allowedSyntheticPreBundleFailureCodes: ReadonlySet<
     WorkerTerminalFailureRequest["failure"]["failureCode"]
   > = new Set([
+    "manual_cancelled",
     "benchmark_input_digest_mismatch",
     "benchmark_input_missing",
     "prompt_package_missing",
@@ -1641,25 +1706,52 @@ export function createInternalWorkerControlService(db: DbClient) {
           } satisfies WorkerHeartbeatResponse;
         }
 
-        if (lease.jobState === "cancel_requested") {
-          await tx
+        if (lease.jobState === "cancel_requested" || lease.runState === "cancel_requested") {
+          const nextLeaseExpiresAt = resolveCancelRequestedLeaseExpiry(lease);
+          const nextJobTokenExpiresAt = nextLeaseExpiresAt;
+          const nextJobToken = issueJobToken();
+          const continuedLeases = await tx
             .update(workerJobLeases)
             .set({
+              jobTokenExpiresAt: nextJobTokenExpiresAt,
+              jobTokenHash: nextJobToken.tokenHash,
               lastEventSequence: acknowledgedEventSequence,
               lastHeartbeatAt: now,
-              revokedAt: now,
+              leaseExpiresAt: nextLeaseExpiresAt,
               updatedAt: now
             })
-            .where(eq(workerJobLeases.id, authContext.leaseRowId));
+            .where(
+              and(
+                eq(workerJobLeases.id, authContext.leaseRowId),
+                isNull(workerJobLeases.revokedAt),
+                gt(workerJobLeases.leaseExpiresAt, now)
+              )
+            )
+            .returning({
+              id: workerJobLeases.id
+            });
 
-          await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+          if (continuedLeases.length === 0) {
+            await reconcileWorkerInstanceLifecycle(tx, lease.workerInstanceId, now);
+
+            return {
+              acknowledgedEventSequence,
+              cancelRequested: false,
+              jobToken: null,
+              jobTokenExpiresAt: null,
+              leaseExpiresAt: null,
+              leaseStatus: "expired"
+            } satisfies WorkerHeartbeatResponse;
+          }
+
+          await touchWorkerInstanceHeartbeat(tx, lease.workerInstanceId, now);
 
           return {
             acknowledgedEventSequence,
             cancelRequested: true,
-            jobToken: null,
-            jobTokenExpiresAt: null,
-            leaseExpiresAt: null,
+            jobToken: nextJobToken.token,
+            jobTokenExpiresAt: nextJobTokenExpiresAt.toISOString(),
+            leaseExpiresAt: nextLeaseExpiresAt.toISOString(),
             leaseStatus: "cancel_requested"
           } satisfies WorkerHeartbeatResponse;
         }
@@ -2096,6 +2188,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           allowCancelRequested: true,
           path: "failure submission"
         });
+        ensureManualCancellationWasRequested(request, lease);
 
         const artifactIds = request.artifactIds ?? [];
         const artifactRows = await loadArtifactsByIds(tx, authContext.attemptRowId, artifactIds);

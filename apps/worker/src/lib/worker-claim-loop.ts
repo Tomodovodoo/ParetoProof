@@ -154,6 +154,14 @@ type PreparedBundleSubmission = {
   verdictDigest: string;
 };
 
+type CancellationTerminalContext = {
+  artifactIds: string[];
+  artifactManifestDigest: string;
+  artifacts: Pick<WorkerArtifactManifestResponse["artifacts"][number], "artifactRole" | "relativePath">[];
+  bundleDigest: string;
+  candidateDigest: string;
+};
+
 type LeaseFilesystemRoots = {
   attemptOutputRoot: string;
   attemptWorkspaceRoot: string;
@@ -320,8 +328,15 @@ async function processClaimedJob(
 
     await refreshLease(leaseState, apiBaseUrl, dependencies);
 
-    if (leaseState.cancelRequested) {
-      return "cancelled";
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request before execution started."
+      )
+    ) {
+      return "completed";
     }
 
     if (leaseState.leaseLost) {
@@ -436,8 +451,15 @@ async function processClaimedJob(
       }
     );
 
-    if (leaseState.cancelRequested) {
-      return "cancelled";
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request before the attempt entered execution."
+      )
+    ) {
+      return "completed";
     }
 
     if (leaseState.leaseLost) {
@@ -468,8 +490,15 @@ async function processClaimedJob(
         workspaceRoot: leaseRoots.attemptWorkspaceRoot
       });
     } catch (error) {
-      if (leaseState.cancelRequested) {
-        return "cancelled";
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker stopped after a control-plane cancellation request during attempt execution."
+        )
+      ) {
+        return "completed";
       }
 
       if (leaseState.leaseLost) {
@@ -488,8 +517,15 @@ async function processClaimedJob(
     leaseState.currentPhase = "finalize";
     leaseState.progressMessage = "Preparing terminal worker submission.";
 
-    if (leaseState.cancelRequested) {
-      return "cancelled";
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request before terminal submission."
+      )
+    ) {
+      return "completed";
     }
 
     if (leaseState.leaseLost) {
@@ -498,8 +534,15 @@ async function processClaimedJob(
 
     await refreshLease(leaseState, apiBaseUrl, dependencies);
 
-    if (leaseState.cancelRequested) {
-      return "cancelled";
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request while preparing terminal submission."
+      )
+    ) {
+      return "completed";
     }
 
     if (leaseState.leaseLost) {
@@ -522,6 +565,13 @@ async function processClaimedJob(
         recordedAt: dependencies.now().toISOString()
       }
     );
+    const cancellationTerminalContext: CancellationTerminalContext = {
+      artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
+      artifactManifestDigest: bundleSubmission.artifactManifestDigest,
+      artifacts: manifestResponse.artifacts,
+      bundleDigest: bundleSubmission.bundleDigest,
+      candidateDigest: bundleSubmission.candidateDigest
+    };
 
     await appendWorkerEvent(
       leaseState,
@@ -536,6 +586,22 @@ async function processClaimedJob(
       }
     );
 
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request after artifact registration.",
+        cancellationTerminalContext
+      )
+    ) {
+      return "completed";
+    }
+
+    if (leaseState.leaseLost) {
+      return "lease_lost";
+    }
+
     await appendWorkerEvent(
       leaseState,
       apiBaseUrl,
@@ -548,6 +614,22 @@ async function processClaimedJob(
         verdictDigest: bundleSubmission.verdictDigest
       }
     );
+
+    if (
+      await submitCancellationIfRequested(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "Worker received a control-plane cancellation request after bundle finalization.",
+        cancellationTerminalContext
+      )
+    ) {
+      return "completed";
+    }
+
+    if (leaseState.leaseLost) {
+      return "lease_lost";
+    }
 
     if (bundleSubmission.verifierVerdict.result === "pass") {
       const resultResponse = await submitWorkerResult(
@@ -849,9 +931,12 @@ async function submitHarnessFailure(
   leaseState: ActiveLeaseState,
   apiBaseUrl: string,
   dependencies: WorkerClaimLoopResolvedDependencies,
-  failure: WorkerFailureClassification
+  failure: WorkerFailureClassification,
+  options: {
+    allowCancelRequested?: boolean;
+  } = {}
 ): Promise<void> {
-  if (leaseState.cancelRequested || leaseState.leaseLost) {
+  if (leaseState.leaseLost || (leaseState.cancelRequested && !options.allowCancelRequested)) {
     return;
   }
 
@@ -873,6 +958,76 @@ async function submitHarnessFailure(
     verifierVerdict: null,
     verdictDigest: null
   });
+}
+
+async function submitCancellationIfRequested(
+  leaseState: ActiveLeaseState,
+  apiBaseUrl: string,
+  dependencies: WorkerClaimLoopResolvedDependencies,
+  summary = "Worker received a control-plane cancellation request.",
+  terminalContext: CancellationTerminalContext | null = null
+): Promise<boolean> {
+  if (!leaseState.cancelRequested || leaseState.leaseLost) {
+    return false;
+  }
+
+  leaseState.currentPhase = "cancel";
+  leaseState.progressMessage = summary;
+  const failure = terminalContext
+    ? buildSelectedArtifactFallbackFailure(terminalContext.artifacts, {
+        summary,
+        failureCode: "manual_cancelled",
+        phase: "cancel"
+      })
+    : buildStaticFailure({
+        summary,
+        failureCode: "manual_cancelled",
+        phase: "cancel"
+      });
+
+  try {
+    await submitWorkerFailure(
+      leaseState,
+      apiBaseUrl,
+      dependencies,
+      {
+        artifactIds: terminalContext?.artifactIds ?? [],
+        artifactManifestDigest: terminalContext?.artifactManifestDigest ?? null,
+        attemptId: leaseState.job.attemptId,
+        bundleDigest: terminalContext?.bundleDigest ?? null,
+        candidateDigest: terminalContext?.candidateDigest ?? null,
+        failedAt: dependencies.now().toISOString(),
+        failure,
+        jobId: leaseState.job.jobId,
+        leaseId: leaseState.job.leaseId,
+        runId: leaseState.job.runId,
+        summary,
+        terminalState: "cancelled",
+        verifierVerdict: null,
+        verdictDigest: null
+      }
+    );
+  } catch (error) {
+    if (isLeaseLossControlError(error)) {
+      leaseState.heartbeatErrorMessage = error instanceof Error ? error.message : String(error);
+      leaseState.leaseLost = true;
+      return false;
+    }
+
+    throw error;
+  }
+
+  return true;
+}
+
+function isLeaseLossControlError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /invalid_worker_job_token|worker_lease_not_active|worker_lease_not_found/u.test(
+    error.message
+  );
 }
 
 function assertExpectedBenchmarkIdentity(
