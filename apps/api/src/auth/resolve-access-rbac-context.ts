@@ -56,10 +56,13 @@ async function getActiveRoles(db: DbClient, userId: string) {
   return grants.map(({ role }) => role);
 }
 
-async function getLatestAccessRequestByEmail(db: DbClient, email: string) {
+async function getLatestStandardAccessRequestByEmail(db: DbClient, email: string) {
   return db.query.accessRequests.findFirst({
     orderBy: [desc(accessRequests.createdAt)],
-    where: eq(accessRequests.email, email)
+    where: and(
+      eq(accessRequests.email, email),
+      eq(accessRequests.requestKind, "access_request")
+    )
   });
 }
 
@@ -131,7 +134,7 @@ export async function resolveAccessRbacContext(
       };
     }
 
-    const latestRequest = await getLatestAccessRequestByEmail(
+    const latestRequest = await getLatestStandardAccessRequestByEmail(
       db,
       linkedIdentity.user.email
     );
@@ -181,7 +184,10 @@ export async function resolveAccessRbacContext(
   const activeMatchingUserRoles = matchingUser
     ? await getActiveRoles(db, matchingUser.id)
     : [];
-  const latestRequest = await getLatestAccessRequestByEmail(db, normalizedIdentityEmail);
+  const latestRequest = await getLatestStandardAccessRequestByEmail(
+    db,
+    normalizedIdentityEmail
+  );
 
   if (matchingUser && activeMatchingUserRoles.length > 0) {
     const pendingRecoveryRequest = identity.provider

@@ -1,0 +1,2 @@
+DROP INDEX "access_requests_active_pending_email_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "access_requests_active_pending_email_kind_unique" ON "access_requests" USING btree ("email","request_kind") WHERE "access_requests"."status" = 'pending';
