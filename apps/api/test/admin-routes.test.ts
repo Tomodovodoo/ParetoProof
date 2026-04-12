@@ -974,6 +974,135 @@ test("POST /portal/admin/access-requests/:id/approve returns a stale-request con
   assert.equal(touchedWritePath, false);
 });
 
+test("POST /portal/admin/access-requests/:id/approve rolls back a late standard approval conflict", async (t) => {
+  const requestRow = buildAccessRequest();
+  const reviewedRequest = buildAccessRequest({
+    decisionNote: "Already handled elsewhere",
+    reviewedAt: new Date("2026-03-13T19:22:00.000Z"),
+    reviewedByUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    status: "approved"
+  });
+  const targetUser = buildUser();
+  const committedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const committedRoleGrants: Array<typeof roleGrants.$inferInsert> = [];
+  let accessRequestReads = 0;
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow | typeof reviewedRequest> };
+          userIdentities: { findFirst: () => Promise<typeof userIdentities.$inferSelect> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        select: () => {
+          from: () => {
+            where: () => Promise<[]>;
+          };
+        };
+        update: (table: unknown) => {
+          set: (_value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      const pendingAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+      const pendingRoleGrants: Array<typeof roleGrants.$inferInsert> = [];
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                pendingAuditEvents.push(...(value as Array<typeof auditEvents.$inferInsert>));
+              }
+
+              if (table === roleGrants) {
+                pendingRoleGrants.push(value as typeof roleGrants.$inferInsert);
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => {
+              accessRequestReads += 1;
+              return accessRequestReads === 1 ? requestRow : reviewedRequest;
+            }
+          },
+          userIdentities: {
+            findFirst: async () => buildIdentity()
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => []
+              };
+            }
+          };
+        },
+        update(table: unknown) {
+          return {
+            set(_value: unknown) {
+              return {
+                where() {
+                  if (table === accessRequests) {
+                    return {
+                      returning: async () => []
+                    };
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      try {
+        const result = await callback(tx as never);
+        committedAuditEvents.push(...pendingAuditEvents);
+        committedRoleGrants.push(...pendingRoleGrants);
+        return result;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "collaborator",
+      decisionNote: "Looks good"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_request_not_pending");
+  assert.equal(response.json().item.status, "approved");
+  assert.equal(committedRoleGrants.length, 0);
+  assert.equal(committedAuditEvents.length, 0);
+});
+
 test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific conflict payload", async (t) => {
   const requestRow = buildAccessRequest({
     email: "recover@paretoproof.com",
@@ -1046,6 +1175,146 @@ test("POST /portal/admin/access-requests/:id/approve returns a recovery-specific
       status: requestRow.status
     }
   });
+});
+
+test("POST /portal/admin/access-requests/:id/approve rolls back a late recovery approval conflict", async (t) => {
+  const requestRow = buildAccessRequest({
+    email: "recover@paretoproof.com",
+    requestKind: "identity_recovery",
+    requestedIdentityProvider: "cloudflare_google",
+    requestedIdentitySubject: "recovery-subject",
+    requestedRole: "helper"
+  });
+  const reviewedRequest = buildAccessRequest({
+    decisionNote: "Recovered elsewhere",
+    email: "recover@paretoproof.com",
+    requestKind: "identity_recovery",
+    requestedIdentityProvider: "cloudflare_google",
+    requestedIdentitySubject: "recovery-subject",
+    requestedRole: "helper",
+    reviewedAt: new Date("2026-03-13T19:22:00.000Z"),
+    reviewedByUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    status: "approved"
+  });
+  const targetUser = buildUser();
+  const committedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const committedUserIdentities: Array<typeof userIdentities.$inferInsert> = [];
+  let accessRequestReads = 0;
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        insert: (table: unknown) => { values: (value: unknown) => Promise<unknown> };
+        query: {
+          accessRequests: { findFirst: () => Promise<typeof requestRow | typeof reviewedRequest> };
+          userIdentities: { findFirst: () => Promise<null> };
+          users: { findFirst: () => Promise<typeof targetUser> };
+        };
+        select: () => {
+          from: () => {
+            where: () => Promise<Array<{ id: string; role: string }>>;
+          };
+        };
+        update: (table: unknown) => {
+          set: (_value: unknown) => {
+            where: () => {
+              returning?: () => Promise<unknown[]>;
+            };
+          };
+        };
+      }) => Promise<unknown>
+    ) => {
+      const pendingAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+      const pendingUserIdentities: Array<typeof userIdentities.$inferInsert> = [];
+      const tx = {
+        insert(table: unknown) {
+          return {
+            values: async (value: unknown) => {
+              if (table === auditEvents) {
+                pendingAuditEvents.push(...(value as Array<typeof auditEvents.$inferInsert>));
+              }
+
+              if (table === userIdentities) {
+                pendingUserIdentities.push(value as typeof userIdentities.$inferInsert);
+              }
+
+              return value;
+            }
+          };
+        },
+        query: {
+          accessRequests: {
+            findFirst: async () => {
+              accessRequestReads += 1;
+              return accessRequestReads === 1 ? requestRow : reviewedRequest;
+            }
+          },
+          userIdentities: {
+            findFirst: async () => null
+          },
+          users: {
+            findFirst: async () => targetUser
+          }
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => [{ id: "existing-role-grant", role: "helper" }]
+              };
+            }
+          };
+        },
+        update(table: unknown) {
+          return {
+            set(_value: unknown) {
+              return {
+                where() {
+                  if (table === accessRequests) {
+                    return {
+                      returning: async () => []
+                    };
+                  }
+
+                  return {};
+                }
+              };
+            }
+          };
+        }
+      };
+
+      try {
+        const result = await callback(tx as never);
+        committedAuditEvents.push(...pendingAuditEvents);
+        committedUserIdentities.push(...pendingUserIdentities);
+        return result;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  };
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerAdminRoutes(app, db as never, createAdminAccessGuard() as never);
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      approvedRole: "helper",
+      decisionNote: "Recovered Google identity"
+    } satisfies PortalAdminAccessRequestApproveInput,
+    url: `/portal/admin/access-requests/${requestRow.id}/approve`
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "access_request_not_pending");
+  assert.equal(response.json().item.status, "approved");
+  assert.equal(committedUserIdentities.length, 0);
+  assert.equal(committedAuditEvents.length, 0);
 });
 
 test("POST /portal/admin/access-requests/:id/approve does not duplicate a recovery identity that is already linked", async (t) => {
