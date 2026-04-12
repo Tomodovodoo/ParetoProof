@@ -147,7 +147,7 @@ async function buildOfflineIngestBundleRoot(options: {
         result: options.result,
         semanticEquality: options.result === "pass" ? "matched" : "not_evaluated",
         stopReason:
-          options.result === "pass" ? "verification_complete" : "compile_failed",
+          options.result === "pass" ? "verification_passed" : "compile_failed",
         surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
         verifierOutputPath
       })

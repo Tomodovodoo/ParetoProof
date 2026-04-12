@@ -9,8 +9,10 @@ import type { Problem9OfflineIngestRequest } from "@paretoproof/shared";
 import {
   Problem9OfflineIngestDuplicateError,
   Problem9OfflineIngestValidationError,
-  buildProblem9OfflineIngestPlan
+  buildProblem9OfflineIngestPlan,
+  createProblem9OfflineIngestService
 } from "../src/lib/problem9-offline-ingest.ts";
+import { artifacts, attempts, auditEvents, jobs, runs } from "../src/db/schema.ts";
 import { registerOfflineIngestRoutes } from "../src/routes/offline-ingest.ts";
 import { materializeProblem9Package } from "../../worker/src/lib/problem9-package.ts";
 import {
@@ -24,8 +26,26 @@ async function readJsonFile<TValue>(filePath: string): Promise<TValue> {
 }
 
 async function buildOfflineIngestRequest(options: {
+  failureClassificationOverride?: Partial<{
+    evidenceArtifactRefs: string[];
+    failureCode: string;
+    failureFamily:
+      | "provider"
+      | "harness"
+      | "tooling"
+      | "budget"
+      | "compile"
+      | "verification"
+      | "input_contract";
+    phase: "prepare" | "generate" | "tool" | "compile" | "verify" | "finalize" | "cancel";
+    retryEligibility: "never" | "outer_retry_allowed" | "manual_retry_only";
+    summary: string;
+    terminality: "terminal_attempt" | "retryable_outer" | "cancelled";
+    userVisibility: "user_visible" | "user_visible_sanitized" | "internal_only";
+  }>;
   legacyBenchmarkManifest?: boolean;
   result: "pass" | "fail";
+  stopReason?: string;
 }): Promise<{
   request: Problem9OfflineIngestRequest;
   tempRoot: string;
@@ -106,22 +126,20 @@ async function buildOfflineIngestRequest(options: {
   );
 
   if (options.result === "fail") {
+    const failureClassification = {
+      evidenceArtifactRefs: ["verification/compiler-diagnostics.json"],
+      failureCode: "compile_failed",
+      failureFamily: "compile",
+      phase: "compile",
+      retryEligibility: "manual_retry_only",
+      summary: "Compiler diagnostics reported a blocking error.",
+      terminality: "terminal_attempt",
+      userVisibility: "user_visible",
+      ...options.failureClassificationOverride
+    };
     await writeFile(
       failureClassificationPath,
-      JSON.stringify(
-        {
-          evidenceArtifactRefs: ["verification/compiler-diagnostics.json"],
-          failureCode: "compile_failed",
-          failureFamily: "compile",
-          phase: "compile",
-          retryEligibility: "manual_retry_only",
-          summary: "Compiler diagnostics reported a blocking error.",
-          terminality: "terminal_attempt",
-          userVisibility: "user_visible"
-        },
-        null,
-        2
-      ),
+      JSON.stringify(failureClassification, null, 2),
       "utf8"
     );
   }
@@ -163,7 +181,8 @@ async function buildOfflineIngestRequest(options: {
       result: options.result,
       semanticEquality: options.result === "pass" ? "matched" : "not_evaluated",
       stopReason:
-        options.result === "pass" ? "verification_complete" : "compile_failed",
+        options.stopReason ??
+        (options.result === "pass" ? "verification_passed" : "compile_failed"),
       surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
       verifierOutputPath
     })
@@ -222,7 +241,29 @@ test("buildProblem9OfflineIngestPlan maps canonical passing bundles to terminal 
   assert.equal(plan.job.state, "completed");
   assert.equal(plan.attempt.state, "succeeded");
   assert.equal(plan.attempt.verdictClass, "pass");
+  assert.equal(plan.sourceStopReason, "verification_passed");
+  assert.equal(plan.run.stopReason, "verifier_passed");
+  assert.equal(plan.job.stopReason, "verifier_passed");
+  assert.equal(plan.attempt.stopReason, "verifier_passed");
   assert.equal(plan.artifacts.length, 11);
+  const rootArtifacts = plan.artifacts.filter(
+    (artifact) =>
+      artifact.relativePath === "artifact-manifest.json" || artifact.relativePath === "run-bundle.json"
+  );
+  const manifestArtifacts = plan.artifacts.filter(
+    (artifact) =>
+      artifact.relativePath !== "artifact-manifest.json" && artifact.relativePath !== "run-bundle.json"
+  );
+  assert.equal(
+    rootArtifacts.every((artifact) => artifact.artifactManifestDigest === null),
+    true
+  );
+  assert.equal(
+    manifestArtifacts.every(
+      (artifact) => artifact.artifactManifestDigest === request.bundle.runBundle.artifactManifestDigest
+    ),
+    true
+  );
   assert.equal(
     plan.artifacts.find((artifact) => artifact.relativePath === "artifact-manifest.json")?.objectKey,
     "runs/run-pass-1/artifacts/attempt-pass-1/artifact-manifest.json"
@@ -252,10 +293,127 @@ test("buildProblem9OfflineIngestPlan preserves failure metadata for canonical fa
   assert.equal(plan.attempt.failureClassification?.failureFamily, "compile");
 });
 
+test("buildProblem9OfflineIngestPlan accepts input-contract failure bundles when stopReason matches the failure code", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "benchmark_input_missing",
+      failureFamily: "input_contract",
+      phase: "prepare",
+      summary: "Benchmark input was unavailable."
+    },
+    result: "fail",
+    stopReason: "benchmark_input_missing"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.stopReason, "benchmark_input_missing");
+  assert.equal(plan.attempt.primaryFailureCode, "benchmark_input_missing");
+  assert.equal(plan.attempt.failureClassification?.failureFamily, "input_contract");
+});
+
+test("buildProblem9OfflineIngestPlan accepts provider failure bundles when stopReason matches the failure code", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "provider_timeout",
+      failureFamily: "provider",
+      phase: "generate",
+      retryEligibility: "outer_retry_allowed",
+      summary: "Provider request timed out."
+    },
+    result: "fail",
+    stopReason: "provider_timeout"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.stopReason, "provider_timeout");
+  assert.equal(plan.attempt.primaryFailureCode, "provider_timeout");
+  assert.equal(plan.attempt.failureClassification?.failureFamily, "provider");
+});
+
+test("buildProblem9OfflineIngestPlan accepts provider failure bundles with legacy family stop reasons", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "provider_timeout",
+      failureFamily: "provider",
+      phase: "generate",
+      retryEligibility: "outer_retry_allowed",
+      summary: "Provider request timed out."
+    },
+    result: "fail",
+    stopReason: "provider_failed"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.stopReason, "provider_timeout");
+  assert.equal(plan.sourceStopReason, "provider_failed");
+});
+
+test("buildProblem9OfflineIngestPlan accepts budget failure bundles with legacy family stop reasons", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "turn_budget_exhausted",
+      failureFamily: "budget",
+      phase: "generate",
+      retryEligibility: "manual_retry_only",
+      summary: "Turn budget exhausted."
+    },
+    result: "fail",
+    stopReason: "budget_exhausted"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.stopReason, "turn_budget_exhausted");
+  assert.equal(plan.sourceStopReason, "budget_exhausted");
+});
+
+test("buildProblem9OfflineIngestPlan accepts verification failure bundles with legacy family stop reasons", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "proof_policy_failed",
+      failureFamily: "verification",
+      phase: "verify",
+      retryEligibility: "manual_retry_only",
+      summary: "Proof policy gate failed."
+    },
+    result: "fail",
+    stopReason: "verifier_failed"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+
+  assert.equal(plan.run.stopReason, "proof_policy_failed");
+  assert.equal(plan.sourceStopReason, "verifier_failed");
+});
+
 test("buildProblem9OfflineIngestPlan accepts legacy v1 bundles without sourceMetadata", async (t) => {
   const { request, tempRoot } = await buildOfflineIngestRequest({
     legacyBenchmarkManifest: true,
-    result: "pass"
+    result: "pass",
+    stopReason: "verification_complete"
   });
 
   t.after(async () => {
@@ -267,7 +425,45 @@ test("buildProblem9OfflineIngestPlan accepts legacy v1 bundles without sourceMet
   assert.equal(plan.run.state, "succeeded");
   assert.equal(plan.job.state, "completed");
   assert.equal(plan.attempt.state, "succeeded");
+  assert.equal(plan.sourceStopReason, "verification_complete");
+  assert.equal(plan.run.stopReason, "verifier_passed");
   assert.equal(request.bundle.benchmarkPackage.sourceMetadata, undefined);
+});
+
+test("buildProblem9OfflineIngestPlan rejects passing bundles with non-success stop reasons", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass",
+    stopReason: "compile_failed"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "verdict_inconsistent"
+  );
+});
+
+test("buildProblem9OfflineIngestPlan rejects failing bundles with inconsistent stop reasons", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "fail",
+    stopReason: "provider_failed"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "verdict_inconsistent"
+  );
 });
 
 test("buildProblem9OfflineIngestPlan rejects digest mismatches", async (t) => {
@@ -325,6 +521,445 @@ test("buildProblem9OfflineIngestPlan rejects path traversal in artifact relative
       error instanceof Problem9OfflineIngestValidationError &&
       error.code === "invalid_problem9_offline_ingest_payload"
   );
+});
+
+test("createProblem9OfflineIngestService persists audit provenance and live-equivalent imported fields", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  let insertedRun: typeof runs.$inferInsert | null = null;
+  let insertedJob: typeof jobs.$inferInsert | null = null;
+  let insertedAttempt: typeof attempts.$inferInsert | null = null;
+  let insertedArtifacts: Array<typeof artifacts.$inferInsert> = [];
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          runs: {
+            findFirst: () => Promise<null>;
+          };
+        };
+        insert: (
+          table: unknown
+        ) => {
+          values: (
+            value: unknown
+          ) => {
+            returning?: () => Promise<unknown[]>;
+          } | Promise<unknown>;
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          runs: {
+            findFirst: async () => null
+          }
+        },
+        insert(table: unknown) {
+          return {
+            values(value: unknown) {
+              if (table === runs) {
+                insertedRun = value as typeof runs.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "run-row-1",
+                      sourceRunId: insertedRun.sourceRunId,
+                      state: insertedRun.state
+                    }
+                  ]
+                };
+              }
+
+              if (table === jobs) {
+                insertedJob = value as typeof jobs.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "job-row-1",
+                      sourceJobId: insertedJob.sourceJobId,
+                      state: insertedJob.state
+                    }
+                  ]
+                };
+              }
+
+              if (table === attempts) {
+                insertedAttempt = value as typeof attempts.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "attempt-row-1",
+                      sourceAttemptId: insertedAttempt.sourceAttemptId,
+                      state: insertedAttempt.state,
+                      verdictClass: insertedAttempt.verdictClass
+                    }
+                  ]
+                };
+              }
+
+              if (table === artifacts) {
+                insertedArtifacts = value as Array<typeof artifacts.$inferInsert>;
+                return Promise.resolve(insertedArtifacts);
+              }
+
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+                return Promise.resolve(value);
+              }
+
+              return Promise.resolve(value);
+            }
+          };
+        }
+      } as never)
+  };
+
+  const service = createProblem9OfflineIngestService(db as never);
+  const response = await service(request, "user-1");
+
+  assert.deepEqual(response, {
+    artifactCount: 11,
+    attempt: {
+      id: "attempt-row-1",
+      sourceAttemptId: "attempt-pass-1",
+      state: "succeeded",
+      verdictClass: "pass"
+    },
+    job: {
+      id: "job-row-1",
+      sourceJobId: "job-pass-1",
+      state: "completed"
+    },
+    run: {
+      id: "run-row-1",
+      sourceRunId: "run-pass-1",
+      state: "succeeded"
+    }
+  });
+  assert.equal(insertedRun?.stopReason, "verifier_passed");
+  assert.equal(insertedJob?.stopReason, "verifier_passed");
+  assert.equal(insertedAttempt?.stopReason, "verifier_passed");
+  assert.equal(
+    insertedAttempt?.artifactManifestDigest,
+    request.bundle.runBundle.artifactManifestDigest
+  );
+  assert.equal(insertedArtifacts.length, 11);
+  const insertedRootArtifacts = insertedArtifacts.filter(
+    (artifact) =>
+      artifact.relativePath === "artifact-manifest.json" || artifact.relativePath === "run-bundle.json"
+  );
+  const insertedManifestArtifacts = insertedArtifacts.filter(
+    (artifact) =>
+      artifact.relativePath !== "artifact-manifest.json" && artifact.relativePath !== "run-bundle.json"
+  );
+  assert.equal(
+    insertedRootArtifacts.every((artifact) => artifact.artifactManifestDigest === null),
+    true
+  );
+  assert.equal(
+    insertedManifestArtifacts.every(
+      (artifact) =>
+        artifact.artifactManifestDigest === request.bundle.runBundle.artifactManifestDigest
+    ),
+    true
+  );
+  assert.equal(insertedAuditEvents[0]?.eventId, "run.offline_ingested");
+  assert.equal(insertedAuditEvents[0]?.actorUserId, "user-1");
+  assert.equal(insertedAuditEvents[0]?.subjectKind, "run");
+  assert.equal(insertedAuditEvents[0]?.severity, "critical");
+  assert.deepEqual(insertedAuditEvents[0]?.payload, {
+    actorUserId: "user-1",
+    artifactCount: 11,
+    attemptId: "attempt-row-1",
+    jobId: "job-row-1",
+    runId: "run-row-1",
+    sourceAttemptId: "attempt-pass-1",
+    sourceJobId: "job-pass-1",
+    sourceRunId: "run-pass-1",
+    sourceStopReason: "verification_passed",
+    stopReason: "verifier_passed",
+    verdictClass: "pass"
+  });
+});
+
+test("createProblem9OfflineIngestService surfaces audit insert failures", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  let committedRun: typeof runs.$inferInsert | null = null;
+  let committedJob: typeof jobs.$inferInsert | null = null;
+  let committedAttempt: typeof attempts.$inferInsert | null = null;
+  let committedArtifacts: Array<typeof artifacts.$inferInsert> = [];
+  let committedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          runs: {
+            findFirst: () => Promise<null>;
+          };
+        };
+        insert: (
+          table: unknown
+        ) => {
+          values: (
+            value: unknown
+          ) => {
+            returning?: () => Promise<unknown[]>;
+          } | Promise<unknown>;
+        };
+      }) => Promise<unknown>
+    ) =>
+      (async () => {
+        let stagedRun: typeof runs.$inferInsert | null = null;
+        let stagedJob: typeof jobs.$inferInsert | null = null;
+        let stagedAttempt: typeof attempts.$inferInsert | null = null;
+        let stagedArtifacts: Array<typeof artifacts.$inferInsert> = [];
+        let stagedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+
+        const result = await callback({
+          query: {
+            runs: {
+              findFirst: async () => null
+            }
+          },
+          insert(table: unknown) {
+            return {
+              values(value: unknown) {
+                if (table === runs) {
+                  stagedRun = value as typeof runs.$inferInsert;
+                  return {
+                    returning: async () => [
+                      {
+                        id: "run-row-1",
+                        sourceRunId: "run-pass-1",
+                        state: "succeeded"
+                      }
+                    ]
+                  };
+                }
+
+                if (table === jobs) {
+                  stagedJob = value as typeof jobs.$inferInsert;
+                  return {
+                    returning: async () => [
+                      {
+                        id: "job-row-1",
+                        sourceJobId: "job-pass-1",
+                        state: "completed"
+                      }
+                    ]
+                  };
+                }
+
+                if (table === attempts) {
+                  stagedAttempt = value as typeof attempts.$inferInsert;
+                  return {
+                    returning: async () => [
+                      {
+                        id: "attempt-row-1",
+                        sourceAttemptId: "attempt-pass-1",
+                        state: "succeeded",
+                        verdictClass: "pass"
+                      }
+                    ]
+                  };
+                }
+
+                if (table === artifacts) {
+                  stagedArtifacts = value as Array<typeof artifacts.$inferInsert>;
+                  return Promise.resolve(value);
+                }
+
+                if (table === auditEvents) {
+                  stagedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+                  return Promise.reject(new Error("audit_insert_failed"));
+                }
+
+                return Promise.resolve(value);
+              }
+            };
+          }
+        } as never);
+
+        committedRun = stagedRun;
+        committedJob = stagedJob;
+        committedAttempt = stagedAttempt;
+        committedArtifacts = stagedArtifacts;
+        committedAuditEvents = stagedAuditEvents;
+        return result;
+      })()
+  };
+
+  const service = createProblem9OfflineIngestService(db as never);
+
+  await assert.rejects(() => service(request, "user-1"), /audit_insert_failed/);
+  assert.equal(committedRun, null);
+  assert.equal(committedJob, null);
+  assert.equal(committedAttempt, null);
+  assert.equal(committedArtifacts.length, 0);
+  assert.equal(committedAuditEvents.length, 0);
+});
+
+test("createProblem9OfflineIngestService preserves source failure stop reasons while persisting live-equivalent failure rows", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    failureClassificationOverride: {
+      failureCode: "provider_timeout",
+      failureFamily: "provider",
+      phase: "generate",
+      retryEligibility: "outer_retry_allowed",
+      summary: "Provider request timed out."
+    },
+    result: "fail",
+    stopReason: "provider_failed"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  let insertedRun: typeof runs.$inferInsert | null = null;
+  let insertedJob: typeof jobs.$inferInsert | null = null;
+  let insertedAttempt: typeof attempts.$inferInsert | null = null;
+  let insertedArtifacts: Array<typeof artifacts.$inferInsert> = [];
+  const insertedAuditEvents: Array<typeof auditEvents.$inferInsert> = [];
+  const db = {
+    transaction: async (
+      callback: (tx: {
+        query: {
+          runs: {
+            findFirst: () => Promise<null>;
+          };
+        };
+        insert: (
+          table: unknown
+        ) => {
+          values: (
+            value: unknown
+          ) => {
+            returning?: () => Promise<unknown[]>;
+          } | Promise<unknown>;
+        };
+      }) => Promise<unknown>
+    ) =>
+      callback({
+        query: {
+          runs: {
+            findFirst: async () => null
+          }
+        },
+        insert(table: unknown) {
+          return {
+            values(value: unknown) {
+              if (table === runs) {
+                insertedRun = value as typeof runs.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "run-row-1",
+                      sourceRunId: "run-fail-1",
+                      state: "failed"
+                    }
+                  ]
+                };
+              }
+
+              if (table === jobs) {
+                insertedJob = value as typeof jobs.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "job-row-1",
+                      sourceJobId: "job-fail-1",
+                      state: "failed"
+                    }
+                  ]
+                };
+              }
+
+              if (table === attempts) {
+                insertedAttempt = value as typeof attempts.$inferInsert;
+                return {
+                  returning: async () => [
+                    {
+                      id: "attempt-row-1",
+                      sourceAttemptId: "attempt-fail-1",
+                      state: "failed",
+                      verdictClass: "fail"
+                    }
+                  ]
+                };
+              }
+
+              if (table === artifacts) {
+                insertedArtifacts = value as Array<typeof artifacts.$inferInsert>;
+                return Promise.resolve(insertedArtifacts);
+              }
+
+              if (table === auditEvents) {
+                insertedAuditEvents.push(value as typeof auditEvents.$inferInsert);
+                return Promise.resolve(value);
+              }
+
+              return Promise.resolve(value);
+            }
+          };
+        }
+      } as never)
+  };
+
+  const service = createProblem9OfflineIngestService(db as never);
+  const response = await service(request, "user-1");
+
+  assert.deepEqual(response, {
+    artifactCount: 11,
+    attempt: {
+      id: "attempt-row-1",
+      sourceAttemptId: "attempt-fail-1",
+      state: "failed",
+      verdictClass: "fail"
+    },
+    job: {
+      id: "job-row-1",
+      sourceJobId: "job-fail-1",
+      state: "failed"
+    },
+    run: {
+      id: "run-row-1",
+      sourceRunId: "run-fail-1",
+      state: "failed"
+    }
+  });
+  assert.equal(insertedRun?.stopReason, "provider_timeout");
+  assert.equal(insertedJob?.stopReason, "provider_timeout");
+  assert.equal(insertedAttempt?.stopReason, "provider_timeout");
+  assert.equal(insertedArtifacts.length, 11);
+  assert.deepEqual(insertedAuditEvents[0]?.payload, {
+    actorUserId: "user-1",
+    artifactCount: 11,
+    attemptId: "attempt-row-1",
+    jobId: "job-row-1",
+    runId: "run-row-1",
+    sourceAttemptId: "attempt-fail-1",
+    sourceJobId: "job-fail-1",
+    sourceRunId: "run-fail-1",
+    sourceStopReason: "provider_failed",
+    stopReason: "provider_timeout",
+    verdictClass: "fail"
+  });
 });
 
 test("POST /portal/admin/offline-ingest/problem9-run-bundles returns created responses", async (t) => {
