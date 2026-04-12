@@ -46,7 +46,28 @@ const portalRoutePathById = new Map<PortalRouteId, string>(
     .filter((entry) => entry.surface === "portal")
     .map((entry) => [entry.id, entry.path] as [PortalRouteId, string])
 );
-const localPortalStateParamKeys = ["surface", "access", "email", "roles", "reason"] as const;
+const localPortalStateParamKeys = ["surface", "access", "email", "role", "roles", "reason"] as const;
+
+export function mergeLocalPortalSearchParams(currentSearch: string, nextSearch: string) {
+  const preservedParams = new URLSearchParams();
+  const currentParams = new URLSearchParams(currentSearch);
+  const nextParams = new URLSearchParams(nextSearch);
+
+  for (const key of localPortalStateParamKeys) {
+    const value = currentParams.get(key);
+
+    if (value && !nextParams.has(key)) {
+      preservedParams.set(key, value);
+    }
+  }
+
+  for (const [key, value] of nextParams.entries()) {
+    preservedParams.set(key, value);
+  }
+
+  const mergedSearch = preservedParams.toString();
+  return mergedSearch ? `?${mergedSearch}` : "";
+}
 
 const portalRoleOrder: PortalRole[] = ["admin", "collaborator", "helper"];
 const portalSectionIconById: Record<PortalSectionDefinition["id"], AppIconName> = {
@@ -300,32 +321,19 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   }, []);
 
   function replacePortalLocation(nextPathname: string, nextSearch: string) {
-    const preservedParams = new URLSearchParams();
-    const currentParams = new URLSearchParams(window.location.search);
-    const nextParams = new URLSearchParams(nextSearch);
-
-    for (const key of localPortalStateParamKeys) {
-      const value = currentParams.get(key);
-
-      if (value && !nextParams.has(key)) {
-        preservedParams.set(key, value);
-      }
-    }
-
-    for (const [key, value] of nextParams.entries()) {
-      preservedParams.set(key, value);
-    }
-
-    const mergedSearch = preservedParams.toString();
+    const mergedSearch = mergeLocalPortalSearchParams(
+      window.location.search,
+      nextSearch
+    );
 
     window.history.replaceState(
       {},
       "",
-      `${nextPathname}${mergedSearch ? `?${mergedSearch}` : ""}`
+      `${nextPathname}${mergedSearch}`
     );
     setLocationState({
       pathname: nextPathname,
-      search: mergedSearch ? `?${mergedSearch}` : ""
+      search: mergedSearch
     });
   }
 

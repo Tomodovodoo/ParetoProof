@@ -1,7 +1,7 @@
 export type PortalAccessState =
   | { status: "loading" }
   | { status: "unauthenticated" }
-  | { status: "approved"; email: string | null; roles: string[] }
+  | { status: "approved"; email: string | null; role: string | null }
   | { status: "pending"; email: string | null }
   | {
       email: string | null;
@@ -21,6 +21,7 @@ export function buildLocalPendingPortalUrl(currentSearch = window.location.searc
   nextParams.set("surface", "portal");
   nextParams.set("access", "pending");
   nextParams.delete("reason");
+  nextParams.delete("role");
   nextParams.delete("roles");
 
   const email = currentParams.get("email");

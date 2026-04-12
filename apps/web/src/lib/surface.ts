@@ -155,6 +155,17 @@ export function copyLocalPortalState(targetUrl: URL, currentLocation = window.lo
   }
 
   if (
+    !targetUrl.searchParams.has("role") &&
+    shouldPreserveLocalPortalRoles(currentParams)
+  ) {
+    const role = currentParams.get("role");
+
+    if (role) {
+      targetUrl.searchParams.set("role", role);
+    }
+  }
+
+  if (
     !targetUrl.searchParams.has("roles") &&
     shouldPreserveLocalPortalRoles(currentParams)
   ) {
@@ -230,10 +241,18 @@ export function buildAccessStartUrl(
   if (isLocalOrigin(hostname)) {
     const localUrl = new URL(buildPortalUrl(normalizedTargetPath, hostname));
     const currentParams = new URLSearchParams(window.location.search);
+    const approvedRole =
+      currentParams.get("role") ??
+      (currentParams.get("roles") ?? "")
+        .split(",")
+        .map((role) => role.trim())
+        .find(Boolean) ??
+      "admin";
 
     localUrl.searchParams.set("access", "approved");
     localUrl.searchParams.set("email", currentParams.get("email") ?? "local@example.com");
-    localUrl.searchParams.set("roles", currentParams.get("roles") ?? "admin");
+    localUrl.searchParams.set("role", approvedRole);
+    localUrl.searchParams.delete("roles");
     localUrl.searchParams.delete("reason");
     return localUrl.toString();
   }
@@ -291,6 +310,7 @@ export function getCurrentRelativeUrl(location = window.location) {
   params.delete("surface");
   params.delete("access");
   params.delete("email");
+  params.delete("role");
   params.delete("roles");
   params.delete("reason");
 

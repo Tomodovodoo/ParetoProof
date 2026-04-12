@@ -80,7 +80,7 @@ function isDatabaseUniqueConstraintError(error: unknown, constraintNames: string
 function getAdminActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
 
-  if (context?.status !== "approved" || !context.roles.includes("admin")) {
+  if (context?.status !== "approved" || context.role !== "admin") {
     throw new Error("Admin access context was not attached to the benchmark workflow request.");
   }
 

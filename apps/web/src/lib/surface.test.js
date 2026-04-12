@@ -28,7 +28,7 @@ afterEach(() => {
 describe("buildPortalUrl", () => {
   it("drops stale denial reasons when building approved portal routes", () => {
     setWindowUrl(
-      "http://localhost/denied?surface=portal&access=approved&roles=helper&reason=insufficient_role&email=lin@paretoproof.local"
+      "http://localhost/denied?surface=portal&access=approved&role=helper&reason=insufficient_role&email=lin@paretoproof.local"
     );
 
     const portalUrl = new URL(buildPortalUrl("/"));
@@ -37,7 +37,7 @@ describe("buildPortalUrl", () => {
     expect(portalUrl.searchParams.get("surface")).toBe("portal");
     expect(portalUrl.searchParams.get("access")).toBe("approved");
     expect(portalUrl.searchParams.get("email")).toBe("lin@paretoproof.local");
-    expect(portalUrl.searchParams.get("roles")).toBe("helper");
+    expect(portalUrl.searchParams.get("role")).toBe("helper");
     expect(portalUrl.searchParams.has("reason")).toBe(false);
   });
 
@@ -58,7 +58,7 @@ describe("buildPortalUrl", () => {
 
   it("drops stale approved roles when the current preview access is pending", () => {
     setWindowUrl(
-      "http://localhost/pending?surface=portal&access=pending&roles=admin&email=ada@paretoproof.local"
+      "http://localhost/pending?surface=portal&access=pending&role=admin&email=ada@paretoproof.local"
     );
 
     const portalUrl = new URL(buildPortalUrl("/"));
@@ -67,6 +67,17 @@ describe("buildPortalUrl", () => {
     expect(portalUrl.searchParams.get("surface")).toBe("portal");
     expect(portalUrl.searchParams.get("access")).toBe("pending");
     expect(portalUrl.searchParams.get("email")).toBe("ada@paretoproof.local");
+    expect(portalUrl.searchParams.has("role")).toBe(false);
+  });
+
+  it("preserves the singular approved role preview on local portal redirects", () => {
+    setWindowUrl(
+      "http://localhost/?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local"
+    );
+
+    const portalUrl = new URL(buildPortalUrl("/launch"));
+
+    expect(portalUrl.searchParams.get("role")).toBe("collaborator");
     expect(portalUrl.searchParams.has("roles")).toBe(false);
   });
 

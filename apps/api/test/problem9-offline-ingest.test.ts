@@ -343,7 +343,7 @@ test("POST /portal/admin/offline-ingest/problem9-run-bundles returns created res
       request.accessRbacContext = {
         email: "admin@paretoproof.com",
         identityId: "identity-1",
-        roles: ["admin"],
+        role: "admin",
         status: "approved",
         subject: "subject-1",
         userId: "user-1"
@@ -425,7 +425,7 @@ test("POST /portal/admin/offline-ingest/problem9-run-bundles maps duplicate run 
       request.accessRbacContext = {
         email: "admin@paretoproof.com",
         identityId: "identity-1",
-        roles: ["admin"],
+        role: "admin",
         status: "approved",
         subject: "subject-1",
         userId: "user-1"

@@ -42,7 +42,7 @@ test("GET /portal/session/finalize/submit redirects back to the auth retry hando
       resolvePortalAccess: async () => ({
         email: "person@example.com",
         identityId: "identity-1",
-        roles: ["helper"],
+        role: "helper",
         status: "approved",
         subject: "subject-1",
         userId: "user-1",
@@ -95,7 +95,7 @@ test("GET /portal/session/finalize/submit honors a runtime-provided link-intent 
       resolvePortalAccess: async () => ({
         email: "person@example.com",
         identityId: "identity-1",
-        roles: ["helper"],
+        role: "helper",
         status: "approved",
         subject: "subject-1",
         userId: "user-1",
@@ -178,7 +178,7 @@ test("GET /portal/session/finalize/submit uses configured portal/auth origins an
         request.accessRbacContext = {
           email: "person@example.com",
           identityId: "identity-1",
-          roles: ["helper"],
+          role: "helper",
           status: "approved",
           subject: "subject-1",
           userId: "user-1",
@@ -279,7 +279,7 @@ test("GET /portal/session/finalize/submit creates an opaque DB-backed session fo
         request.accessRbacContext = {
           email: "person@example.com",
           identityId: "identity-1",
-          roles: ["helper"],
+          role: "helper",
           status: "approved",
           subject: "subject-1",
           userId: "user-1",
@@ -383,7 +383,7 @@ test("POST /portal/session/finalize/submit returns the JSON redirect payload for
         request.accessRbacContext = {
           email: "person@example.com",
           identityId: "identity-1",
-          roles: ["helper"],
+          role: "helper",
           status: "approved",
           subject: "subject-1",
           userId: "user-1",

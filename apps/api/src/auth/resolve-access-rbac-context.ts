@@ -39,13 +39,13 @@ export type AccessRbacContext =
   | {
       email: string;
       identityId: string;
-      roles: AccessRole[];
+      role: AccessRole;
       status: "approved";
       subject: string;
       userId: string;
     };
 
-async function getActiveRoles(db: DbClient, userId: string) {
+async function getActiveRole(db: DbClient, userId: string) {
   const grants = await db
     .select({
       role: roleGrants.role
@@ -53,7 +53,7 @@ async function getActiveRoles(db: DbClient, userId: string) {
     .from(roleGrants)
     .where(and(eq(roleGrants.userId, userId), isNull(roleGrants.revokedAt)));
 
-  return grants.map(({ role }) => role);
+  return grants[0]?.role ?? null;
 }
 
 async function getLatestStandardAccessRequestByEmail(db: DbClient, email: string) {
@@ -121,13 +121,13 @@ export async function resolveAccessRbacContext(
     : null;
 
   if (linkedIdentity) {
-    const roles = await getActiveRoles(db, linkedIdentity.user.id);
+    const role = await getActiveRole(db, linkedIdentity.user.id);
 
-    if (roles.length > 0) {
+    if (role) {
       return {
         email: linkedIdentity.user.email,
         identityId: linkedIdentity.id,
-        roles,
+        role,
         status: "approved",
         subject: identity.subject,
         userId: linkedIdentity.user.id
@@ -181,15 +181,15 @@ export async function resolveAccessRbacContext(
   const matchingUser = await db.query.users.findFirst({
     where: eq(users.email, normalizedIdentityEmail)
   });
-  const activeMatchingUserRoles = matchingUser
-    ? await getActiveRoles(db, matchingUser.id)
-    : [];
+  const activeMatchingUserRole = matchingUser
+    ? await getActiveRole(db, matchingUser.id)
+    : null;
   const latestRequest = await getLatestStandardAccessRequestByEmail(
     db,
     normalizedIdentityEmail
   );
 
-  if (matchingUser && activeMatchingUserRoles.length > 0) {
+  if (matchingUser && activeMatchingUserRole) {
     const pendingRecoveryRequest = identity.provider
       ? await getPendingRecoveryRequestForSubject(
           db,

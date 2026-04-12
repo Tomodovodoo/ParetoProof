@@ -60,7 +60,17 @@ declare module "fastify" {
 }
 
 function hasRole(context: AccessRbacContext, role: "admin" | "collaborator" | "helper") {
-  return context.status === "approved" && context.roles.includes(role);
+  if (context.status !== "approved") {
+    return false;
+  }
+
+  const roleRank = {
+    admin: 3,
+    collaborator: 2,
+    helper: 1
+  } as const;
+
+  return roleRank[context.role] >= roleRank[role];
 }
 
 function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequirement) {
@@ -73,15 +83,11 @@ function isAllowed(context: AccessRbacContext, requirement: RouteAccessRequireme
   }
 
   if (requirement === "approved_helper_or_higher") {
-    return (
-      hasRole(context, "helper") ||
-      hasRole(context, "collaborator") ||
-      hasRole(context, "admin")
-    );
+    return hasRole(context, "helper");
   }
 
   if (requirement === "approved_collaborator_or_higher") {
-    return hasRole(context, "collaborator") || hasRole(context, "admin");
+    return hasRole(context, "collaborator");
   }
 
   return hasRole(context, "admin");

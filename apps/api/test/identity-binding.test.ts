@@ -269,7 +269,7 @@ test("createPortalAccessSession rejects approved contexts when the stored identi
       {
         email: "person@example.com",
         identityId: "identity-1",
-        roles: ["helper"],
+        role: "helper",
         status: "approved",
         subject: "shared-subject",
         userId: "user-1"
