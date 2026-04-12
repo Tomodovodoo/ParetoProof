@@ -189,10 +189,10 @@ test("materialize-problem9-run-bundle rejects failing verifier artifacts without
       outputRoot: path.join(tempRoot, "outputs", "failing-verifier")
     });
 
-    assert.notEqual(result.status, 0);
+    assert.equal(result.status, 2);
     assert.match(
       result.stderr,
-      /Failing verifier artifacts require --failure-classification <path>\./u
+      /Failing bundles require --failure-classification <path>\./u
     );
   } finally {
     await rm(tempRoot, { force: true, recursive: true });
@@ -403,7 +403,7 @@ test("materialize-problem9-run-bundle rejects passing verifier artifacts when th
       outputRoot: path.join(tempRoot, "outputs", "candidate-sorry")
     });
 
-    assert.notEqual(result.status, 0);
+    assert.equal(result.status, 2);
     assert.match(result.stderr, /Passing verdicts may not contain sorry or admit\./u);
   } finally {
     await rm(tempRoot, { force: true, recursive: true });

@@ -826,12 +826,12 @@ function deriveBundleTruthFromArtifacts(options: {
       : options.verifierOutput.diagnosticGate.result;
 
   if (options.compilerDiagnostics.success === false && options.verifierOutput.result !== "fail") {
-    throw new Error("Passing verifier artifacts require compiler-diagnostics.json success=true.");
+    throw new Error("Passing bundles require compiler-diagnostics.json success=true.");
   }
 
   if (options.verifierOutput.result === "pass") {
     if (options.failureClassification !== null) {
-      throw new Error("Passing verifier artifacts may not include a failure classification.");
+      throw new Error("Passing bundles may not include a failure classification.");
     }
 
     return {
@@ -847,7 +847,7 @@ function deriveBundleTruthFromArtifacts(options: {
   }
 
   if (options.failureClassification === null) {
-    throw new Error("Failing verifier artifacts require --failure-classification <path>.");
+    throw new Error("Failing bundles require --failure-classification <path>.");
   }
 
   if (

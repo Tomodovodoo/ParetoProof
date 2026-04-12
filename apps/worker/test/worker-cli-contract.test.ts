@@ -10,6 +10,7 @@ import {
   getDefaultProblem9PromptPackageOptions,
   materializeProblem9PromptPackage
 } from "../src/lib/problem9-prompt-package.ts";
+import { classifyWorkerCliError, workerCliExitCodes } from "../src/lib/cli-contract.ts";
 import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts";
 
 const workerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,6 +60,22 @@ test("worker entrypoint exits 2 for unknown commands and prints usage", () => {
   assert.match(result.stderr, /^Validation error: Unknown worker command: totally-unknown-command/u);
   assert.match(result.stderr, /\nUsage:\n/u);
   assert.equal(result.stdout, "");
+});
+
+test("worker CLI classifies pass-verdict artifact consistency errors as validation failures", () => {
+  const validationMessages = [
+    "Passing verdicts may not include a failure classification.",
+    "Passing verdicts require semanticEquality=matched.",
+    "Passing verdicts may not contain sorry or admit.",
+    "Passing verdicts require axiomCheck=passed.",
+    "Passing verdicts require diagnosticGate=passed."
+  ];
+
+  for (const message of validationMessages) {
+    const failure = classifyWorkerCliError(new Error(message));
+    assert.equal(failure.kind, "validation");
+    assert.equal(failure.exitCode, workerCliExitCodes.validation);
+  }
 });
 
 test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-local mount markers", () => {
