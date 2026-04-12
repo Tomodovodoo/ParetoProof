@@ -22,7 +22,7 @@ function createAdminAccessGuard() {
     request.accessRbacContext = {
       email: "admin@paretoproof.com",
       identityId: "11111111-1111-4111-8111-111111111111",
-      roles: ["admin"],
+      role: "admin",
       status: "approved",
       subject: "admin-subject",
       userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -37,7 +37,7 @@ function createDeniedAccessGuard() {
       access: {
         email: "helper@paretoproof.com",
         identityId: "99999999-9999-4999-8999-999999999999",
-        roles: ["helper"],
+        role: "helper",
         status: "approved",
         subject: "helper-subject",
         userId: "99999999-9999-4999-8999-999999999999"

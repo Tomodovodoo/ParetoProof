@@ -27,7 +27,7 @@ function createApprovedAccessGuard() {
     request.accessRbacContext = {
       email: "person@example.com",
       identityId: "identity-1",
-      roles: ["admin"],
+      role: "admin",
       status: "approved",
       subject: "subject-1",
       userId: "user-1"
@@ -122,7 +122,7 @@ test("authenticated portal and admin routes share the authenticated per-user bud
       request.accessRbacContext = {
         email: "person@example.com",
         identityId: "identity-1",
-        roles: ["admin"],
+        role: "admin",
         status: "approved",
         subject: "subject-1",
         userId: "user-1"
@@ -150,6 +150,14 @@ test("authenticated portal and admin routes share the authenticated per-user bud
   assert.equal(portalResponse.statusCode, 200);
   assert.equal(portalResponse.headers["x-ratelimit-limit"], "2");
   assert.equal(portalResponse.headers["x-ratelimit-remaining"], "1");
+  assert.deepEqual(portalResponse.json().access, {
+    email: "person@example.com",
+    identityId: "identity-1",
+    role: "admin",
+    status: "approved",
+    subject: "subject-1",
+    userId: "user-1"
+  });
 
   const adminResponse = await app.inject({
     method: "GET",

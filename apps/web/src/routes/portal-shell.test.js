@@ -53,6 +53,19 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
+  it("preserves a singular local approved role across in-app portal navigation state", async () => {
+    const { mergeLocalPortalSearchParams } = await loadPortalShellModule();
+    const mergedSearch = mergeLocalPortalSearchParams(
+      "?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local",
+      "?tab=history"
+    );
+    const mergedUrl = new URL(`http://127.0.0.1/${mergedSearch}`);
+
+    expect(mergedUrl.searchParams.get("role")).toBe("collaborator");
+    expect(mergedUrl.searchParams.get("tab")).toBe("history");
+    expect(mergedUrl.searchParams.has("roles")).toBe(false);
+  });
+
   it("puts compact admin recent-run evidence before the action rail", async () => {
     const html = await renderPortalShell({
       email: "ada@paretoproof.local",

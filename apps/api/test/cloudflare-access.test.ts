@@ -7,7 +7,8 @@ import {
   verifyAccessProviderHint,
   type CloudflareAccessVerifierSet,
 } from "../src/auth/cloudflare-access.ts";
-import { createAccessResolver } from "../src/auth/require-access.ts";
+import Fastify from "fastify";
+import { createAccessGuard, createAccessResolver } from "../src/auth/require-access.ts";
 
 test("readAccessJwtAssertion falls back to CF_Authorization when the Access header is absent", () => {
   const assertion = readAccessJwtAssertion({
@@ -220,7 +221,7 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
     assert.deepEqual(context, {
       email: "person@example.com",
       identityId: "identity-1",
-      roles: ["helper"],
+      role: "helper",
       status: "approved",
       subject: "subject-1",
       userId: "user-1",
@@ -235,6 +236,127 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
   } finally {
     Object.assign(process.env, originalEnv);
   }
+});
+
+test("createAccessGuard ranks singular approved roles across helper, collaborator, and admin requirements", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const accessGuard = createAccessGuard(
+    {
+      query: {
+        userIdentities: {
+          findFirst: async () => ({
+            id: "identity-1",
+            provider: "cloudflare_google",
+            providerEmail: "person@example.com",
+            providerSubject: "subject-1",
+            user: {
+              email: "person@example.com",
+              id: "user-1",
+            },
+          }),
+        },
+      },
+      select() {
+        return {
+          from() {
+            return {
+              where: async () => [{ role: "collaborator" }],
+            };
+          },
+        };
+      },
+    } as never,
+    {
+      teamDomain: "paretoproof.cloudflareaccess.com",
+      verifiers: {
+        brandedRelay: {
+          verifyAssertion: async () => ({
+            email: "person@example.com",
+            issuer: "https://paretoproof.cloudflareaccess.com",
+            provider: "cloudflare_google",
+            subject: "subject-1",
+          }),
+        },
+        internal: {
+          verifyAssertion: async () => {
+            throw new Error("internal verifier should not run");
+          },
+        },
+        portal: {
+          verifyAssertion: async () => ({
+            email: "person@example.com",
+            issuer: "https://paretoproof.cloudflareaccess.com",
+            provider: "cloudflare_google",
+            subject: "subject-1",
+          }),
+        },
+      } as never,
+    },
+  );
+
+  app.get(
+    "/helper",
+    {
+      preHandler: accessGuard("approved_helper_or_higher"),
+    },
+    async () => ({ ok: true }),
+  );
+  app.get(
+    "/collaborator",
+    {
+      preHandler: accessGuard("approved_collaborator_or_higher"),
+    },
+    async () => ({ ok: true }),
+  );
+  app.get(
+    "/admin",
+    {
+      preHandler: accessGuard("admin_only"),
+    },
+    async () => ({ ok: true }),
+  );
+
+  const helperResponse = await app.inject({
+    headers: {
+      "cf-access-jwt-assertion": "test-assertion",
+    },
+    method: "GET",
+    url: "/helper",
+  });
+  const collaboratorResponse = await app.inject({
+    headers: {
+      "cf-access-jwt-assertion": "test-assertion",
+    },
+    method: "GET",
+    url: "/collaborator",
+  });
+  const adminResponse = await app.inject({
+    headers: {
+      "cf-access-jwt-assertion": "test-assertion",
+    },
+    method: "GET",
+    url: "/admin",
+  });
+
+  assert.equal(helperResponse.statusCode, 200);
+  assert.equal(collaboratorResponse.statusCode, 200);
+  assert.equal(adminResponse.statusCode, 403);
+  assert.deepEqual(adminResponse.json(), {
+    access: {
+      email: "person@example.com",
+      identityId: "identity-1",
+      role: "collaborator",
+      status: "approved",
+      subject: "subject-1",
+      userId: "user-1",
+    },
+    error: "insufficient_role",
+  });
 });
 
 test("createAccessResolver gracefully rejects legacy signed portal session cookies when no DB session exists", async () => {

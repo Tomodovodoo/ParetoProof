@@ -20,7 +20,7 @@ function createAdminAccessGuard() {
     request.accessRbacContext = {
       email: "admin@paretoproof.com",
       identityId: "11111111-1111-4111-8111-111111111111",
-      roles: ["admin"],
+      role: "admin",
       status: "approved",
       subject: "admin-subject",
       userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"

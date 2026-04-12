@@ -1,6 +1,7 @@
 import type {
   PortalAccessRecoveryInput,
-  PortalAccessRequestInput
+  PortalAccessRequestInput,
+  PortalRole
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "../components/app-icon";
@@ -25,7 +26,7 @@ import { PortalShell } from "./portal-shell";
 type PortalMeResponse = {
   access: {
     email: string | null;
-    roles?: string[];
+    role?: PortalRole | null;
     reason?:
       | "access_request_required"
       | "identity_recovery_required"
@@ -43,6 +44,69 @@ type PortalMutationAction = "access_request" | "identity_recovery";
 type PortalMutationErrorPayload = {
   error?: string;
 };
+
+type PortalBootstrapFetchResponse = Pick<Response, "json" | "ok" | "status" | "type">;
+type PortalBootstrapFetcher = (
+  input: string,
+  init: RequestInit
+) => Promise<PortalBootstrapFetchResponse>;
+
+export function derivePortalRoles(role: string | null | undefined) {
+  return role ? [role] : [];
+}
+
+export async function fetchPortalBootstrapState(
+  apiBaseUrl: string,
+  options?: {
+    fetcher?: PortalBootstrapFetcher;
+    signal?: AbortSignal;
+  }
+): Promise<PortalAccessState> {
+  const fetcher = options?.fetcher ?? fetchApi;
+  const response = await fetcher(`${apiBaseUrl}/portal/me`, {
+    credentials: "include",
+    headers: {
+      Accept: "application/json"
+    },
+    redirect: "manual",
+    signal: options?.signal
+  });
+
+  if (response.type === "opaqueredirect" || response.status === 401) {
+    return { status: "unauthenticated" };
+  }
+
+  if (!response.ok) {
+    throw new Error(`Portal bootstrap failed with ${response.status}.`);
+  }
+
+  const payload = (await response.json()) as PortalMeResponse;
+
+  if (shouldRestartPortalAuthForMissingProvider(payload)) {
+    return { status: "unauthenticated" };
+  }
+
+  if (payload.access.status === "approved") {
+    return {
+      email: payload.access.email,
+      role: payload.access.role ?? null,
+      status: "approved"
+    };
+  }
+
+  if (payload.access.status === "pending") {
+    return {
+      email: payload.access.email,
+      status: "pending"
+    };
+  }
+
+  return {
+    email: payload.access.email,
+    reason: payload.access.reason ?? "unknown_identity",
+    status: "denied"
+  };
+}
 
 function parseDeniedReason(
   reason: string | null
@@ -93,12 +157,17 @@ function readLocalAccessOverride(): PortalAccessState | null {
   }
 
   if (accessState === "approved") {
-    return {
-      email: params.get("email"),
-      roles: (params.get("roles") ?? "")
+    const approvedRole =
+      params.get("role") ??
+      (params.get("roles") ?? "")
         .split(",")
         .map((role) => role.trim())
-        .filter(Boolean),
+        .find(Boolean) ??
+      null;
+
+    return {
+      email: params.get("email"),
+      role: approvedRole,
       status: "approved"
     };
   }
@@ -171,16 +240,16 @@ export function PortalBootstrap() {
       return null;
     }
 
-    return resolvePortalRouteRedirect({
-      pathname: window.location.pathname,
-      reason:
-        state.status === "denied"
-          ? state.reason
-          : routeDeniedReason ?? undefined,
-      roles: state.status === "approved" ? state.roles : [],
-      search: window.location.search,
-      status: state.status
-    });
+      return resolvePortalRouteRedirect({
+        pathname: window.location.pathname,
+        reason:
+          state.status === "denied"
+            ? state.reason
+            : routeDeniedReason ?? undefined,
+        roles: state.status === "approved" ? derivePortalRoles(state.role) : [],
+        search: window.location.search,
+        status: state.status
+      });
   }, [routeDeniedReason, state]);
 
   useEffect(() => {
@@ -196,58 +265,11 @@ export function PortalBootstrap() {
 
     async function loadAccessState() {
       try {
-        const response = await fetchApi(`${apiBaseUrl}/portal/me`, {
-          credentials: "include",
-          headers: {
-            Accept: "application/json"
-          },
-          redirect: "manual",
-          signal: controller.signal
-        });
-
-        if (response.type === "opaqueredirect") {
-          setState({ status: "unauthenticated" });
-          return;
-        }
-
-        if (response.status === 401) {
-          setState({ status: "unauthenticated" });
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Portal bootstrap failed with ${response.status}.`);
-        }
-
-        const payload = (await response.json()) as PortalMeResponse;
-
-        if (shouldRestartPortalAuthForMissingProvider(payload)) {
-          setState({ status: "unauthenticated" });
-          return;
-        }
-
-        if (payload.access.status === "approved") {
-          setState({
-            email: payload.access.email,
-            roles: payload.access.roles ?? [],
-            status: "approved"
-          });
-          return;
-        }
-
-        if (payload.access.status === "pending") {
-          setState({
-            email: payload.access.email,
-            status: "pending"
-          });
-          return;
-        }
-
-        setState({
-          email: payload.access.email,
-          reason: payload.access.reason ?? "unknown_identity",
-          status: "denied"
-        });
+        setState(
+          await fetchPortalBootstrapState(apiBaseUrl, {
+            signal: controller.signal
+          })
+        );
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -458,7 +480,10 @@ export function PortalBootstrap() {
   }
 
   return (
-    <PortalShell email={state.email} roles={state.roles} />
+    <PortalShell
+      email={state.email}
+      roles={derivePortalRoles(state.role)}
+    />
   );
 }
 

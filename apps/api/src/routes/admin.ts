@@ -88,7 +88,7 @@ const adminAuditEchoEventIds = new Set([
 function getAdminActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
 
-  if (context?.status !== "approved" || !context.roles.includes("admin")) {
+  if (context?.status !== "approved" || context.role !== "admin") {
     throw new Error("Admin access context was not attached to the request.");
   }
 

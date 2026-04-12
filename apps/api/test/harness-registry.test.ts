@@ -26,7 +26,7 @@ function createRequireAccessStub(roles: Array<"admin" | "collaborator" | "helper
       request.accessRbacContext = {
         email: "person@example.com",
         identityId: "identity-1",
-        roles,
+        role: roles[0] ?? null,
         status: "approved",
         subject: "subject-1",
         userId: "user-1"
