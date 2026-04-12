@@ -452,6 +452,7 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  buildRunsSummarySelect,
   buildBenchmarkDatasetRunOrderBy,
   buildRunOrderBy,
   compareBenchmarkListItemLatestCompletedAtDesc,
@@ -612,6 +613,38 @@ function buildEmptyRunsListResponse(query: PortalRunsListQuery): PortalRunsListR
         invalid_result: 0,
         pass: 0
       }
+    }
+  };
+}
+
+function buildRunsSummarySelect() {
+  return {
+    activeRuns: sql<number>`cast(coalesce(sum(case when ${runs.state} in ('running', 'cancel_requested') then 1 else 0 end), 0) as integer)`,
+    failedRuns: sql<number>`cast(coalesce(sum(case when ${runs.state} = 'failed' then 1 else 0 end), 0) as integer)`,
+    totalMatches: count(),
+    verdictFailCount: sql<number>`cast(coalesce(sum(case when ${runs.state} in ('succeeded', 'failed', 'cancelled') and ${runs.verdictClass} = 'fail' then 1 else 0 end), 0) as integer)`,
+    verdictInvalidResultCount: sql<number>`cast(coalesce(sum(case when ${runs.state} in ('succeeded', 'failed', 'cancelled') and ${runs.verdictClass} = 'invalid_result' then 1 else 0 end), 0) as integer)`,
+    verdictPassCount: sql<number>`cast(coalesce(sum(case when ${runs.state} in ('succeeded', 'failed', 'cancelled') and ${runs.verdictClass} = 'pass' then 1 else 0 end), 0) as integer)`
+  };
+}
+
+async function loadRunsSummary(
+  db: ReturnTypeOfCreateDbClient,
+  whereClause: ReturnType<typeof and> | undefined
+) {
+  const [summaryRow] = await db
+    .select(buildRunsSummarySelect())
+    .from(runs)
+    .where(whereClause);
+
+  return {
+    activeRuns: summaryRow?.activeRuns ?? 0,
+    failedRuns: summaryRow?.failedRuns ?? 0,
+    totalMatches: summaryRow?.totalMatches ?? 0,
+    verdictCounts: {
+      fail: summaryRow?.verdictFailCount ?? 0,
+      invalid_result: summaryRow?.verdictInvalidResultCount ?? 0,
+      pass: summaryRow?.verdictPassCount ?? 0
     }
   };
 }
@@ -947,13 +980,8 @@ export function createPortalBenchmarkOpsReadModelService(
       }
 
       const whereClause = runConditions.length > 0 ? and(...runConditions) : undefined;
-      const [[{ total: totalMatches }], filters, runRows] = await Promise.all([
-        db
-          .select({
-            total: count()
-          })
-          .from(runs)
-          .where(whereClause),
+      const [summary, filters, runRows] = await Promise.all([
+        loadRunsSummary(db, whereClause),
         loadRunsFilters(db, whereClause),
         db
           .select()
@@ -980,16 +1008,11 @@ export function createPortalBenchmarkOpsReadModelService(
         items,
         query,
         summary: {
-          activeRuns: items.filter((item) => item.runLifecycleBucket === "active").length,
-          failedRuns: items.filter((item) => item.runState === "failed").length,
+          activeRuns: summary.activeRuns,
+          failedRuns: summary.failedRuns,
           returnedCount: items.length,
-          totalMatches,
-          verdictCounts: {
-            fail: items.filter((item) => item.verdictClass === "fail").length,
-            invalid_result: items.filter((item) => item.verdictClass === "invalid_result")
-              .length,
-            pass: items.filter((item) => item.verdictClass === "pass").length
-          }
+          totalMatches: summary.totalMatches,
+          verdictCounts: summary.verdictCounts
         }
       };
     },
