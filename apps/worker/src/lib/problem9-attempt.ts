@@ -432,7 +432,7 @@ export async function runProblem9Attempt(
     throw new Error("Attempt did not reach a bundle-emittable terminal state.");
   }
 
-  if (verificationResult === null) {
+  if (verificationResult === null || terminalFailure?.failureCode === "compile_failed") {
     verificationResult = await createCompileFailureVerificationResult({
       compileResult,
       tempArtifactsRoot
@@ -468,22 +468,14 @@ export async function runProblem9Attempt(
   }
 
   const bundleResult = await materializeProblem9RunBundle({
-    axiomCheck: verificationResult.axiomCheck,
     benchmarkPackageRoot,
     candidateSourcePath: candidatePath,
     compilerDiagnosticsPath: compileResult.diagnosticsPath,
     compilerOutputPath: compileResult.outputPath,
-    containsAdmit: verificationResult.containsAdmit,
-    containsSorry: verificationResult.containsSorry,
-    diagnosticGate: verificationResult.diagnosticGate,
     environmentInputPath,
     failureClassificationPath: passingAttempt ? null : failureClassificationPath,
     outputRoot,
     promptPackageRoot,
-    result: passingAttempt ? "pass" : "fail",
-    semanticEquality: verificationResult.semanticEquality,
-    stopReason: passingAttempt ? "verification_passed" : finalizedFailure!.stopReason,
-    surfaceEquality: verificationResult.surfaceEquality,
     verifierOutputPath: verificationResult.verifierOutputPath
   });
 

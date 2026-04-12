@@ -64,23 +64,7 @@ test("problem9 verifier smoke materializes a canonical run bundle and prints dig
     "--verifier-output",
     fixture.verifierOutputPath,
     "--environment-input",
-    fixture.environmentInputPath,
-    "--result",
-    "pass",
-    "--semantic-equality",
-    "matched",
-    "--surface-equality",
-    "matched",
-    "--contains-sorry",
-    "false",
-    "--contains-admit",
-    "false",
-    "--axiom-check",
-    "passed",
-    "--diagnostic-gate",
-    "passed",
-    "--stop-reason",
-    "verification_complete"
+    fixture.environmentInputPath
   ]);
 
   assert.equal(captured.stderrLines.length, 0);
@@ -130,23 +114,7 @@ test("problem9 verifier smoke rejects output roots that overlap the benchmark pa
         "--verifier-output",
         fixture.verifierOutputPath,
         "--environment-input",
-        fixture.environmentInputPath,
-        "--result",
-        "pass",
-        "--semantic-equality",
-        "matched",
-        "--surface-equality",
-        "matched",
-        "--contains-sorry",
-        "false",
-        "--contains-admit",
-        "false",
-        "--axiom-check",
-        "passed",
-        "--diagnostic-gate",
-        "passed",
-        "--stop-reason",
-        "verification_complete"
+        fixture.environmentInputPath
       ]),
     /Run bundle output overlaps the benchmark package input\. Choose a different output directory\./
   );
@@ -231,11 +199,53 @@ async function createRunBundleFixture(): Promise<{
     ].join("\n"),
     "utf8"
   );
-  await writeFile(compilerDiagnosticsPath, JSON.stringify({ diagnostics: [] }, null, 2), "utf8");
+  await writeFile(
+    compilerDiagnosticsPath,
+    JSON.stringify(
+      {
+        compilerDiagnosticsSchemaVersion: "1",
+        diagnostics: [],
+        success: true
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
   await writeFile(compilerOutputPath, "No compiler output\n", "utf8");
   await writeFile(
     verifierOutputPath,
-    JSON.stringify({ checked: true, result: "pass" }, null, 2),
+    JSON.stringify(
+      {
+        axiomCheck: {
+          output: "No axioms detected.",
+          result: "passed"
+        },
+        diagnosticGate: {
+          result: "passed"
+        },
+        forbiddenTokens: {
+          containsAdmit: false,
+          containsSorry: false
+        },
+        result: "pass",
+        semanticCheck: {
+          output: "",
+          result: "matched"
+        },
+        surfaceEquality: "matched",
+        surface_drift: false,
+        theoremHeaders: {
+          canonical:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n",
+          candidate:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n"
+        },
+        verifierOutputSchemaVersion: "1"
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(

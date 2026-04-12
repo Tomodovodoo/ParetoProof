@@ -25,6 +25,18 @@ async function readJsonFile<TValue>(filePath: string): Promise<TValue> {
   return JSON.parse(await readFile(filePath, "utf8")) as TValue;
 }
 
+async function readOptionalJsonFile<TValue>(filePath: string): Promise<TValue | null> {
+  try {
+    return await readJsonFile<TValue>(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function buildOfflineIngestRequest(options: {
   failureClassificationOverride?: Partial<{
     evidenceArtifactRefs: string[];
@@ -70,6 +82,8 @@ async function buildOfflineIngestRequest(options: {
   const failureClassificationPath = path.join(tempRoot, "failure-classification.json");
   const promptDefaults = getDefaultProblem9PromptPackageOptions();
   const idSuffix = options.result === "pass" ? "pass" : "fail";
+  const failureFamily = options.failureClassificationOverride?.failureFamily ?? "compile";
+  const compileSucceeded = options.result === "pass" || failureFamily !== "compile";
 
   await writeFile(
     candidateSourcePath,
@@ -84,13 +98,51 @@ async function buildOfflineIngestRequest(options: {
   );
   await writeFile(
     compilerDiagnosticsPath,
-    JSON.stringify({ diagnostics: [] }, null, 2),
+    JSON.stringify(
+      {
+        compilerDiagnosticsSchemaVersion: "1",
+        diagnostics: compileSucceeded ? [] : [{ severity: "error" }],
+        success: compileSucceeded
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(compilerOutputPath, "No compiler output\n", "utf8");
   await writeFile(
     verifierOutputPath,
-    JSON.stringify({ checked: true, result: options.result }, null, 2),
+    JSON.stringify(
+      {
+        axiomCheck: {
+          output: options.result === "pass" ? "No axioms detected." : "",
+          result: options.result === "pass" ? "passed" : "not_evaluated"
+        },
+        diagnosticGate: {
+          result: options.result === "pass" ? "passed" : "failed"
+        },
+        forbiddenTokens: {
+          containsAdmit: false,
+          containsSorry: false
+        },
+        result: options.result,
+        semanticCheck: {
+          output: options.result === "pass" ? "" : "Compile gate failed before semantic verification.",
+          result: options.result === "pass" ? "matched" : "not_evaluated"
+        },
+        surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
+        surface_drift: false,
+        theoremHeaders: {
+          canonical:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n",
+          candidate:
+            "declaration problem9 (n : Nat) : 2 * triangular n = n * Nat.succ n"
+        },
+        verifierOutputSchemaVersion: "1"
+      },
+      null,
+      2
+    ),
     "utf8"
   );
   await writeFile(
@@ -165,63 +217,66 @@ async function buildOfflineIngestRequest(options: {
 
   const bundleRoot = (
     await materializeProblem9RunBundle({
-      axiomCheck: options.result === "pass" ? "passed" : "not_evaluated",
       benchmarkPackageRoot,
       candidateSourcePath,
       compilerDiagnosticsPath,
       compilerOutputPath,
-      containsAdmit: false,
-      containsSorry: false,
-      diagnosticGate: options.result === "pass" ? "passed" : "failed",
       environmentInputPath,
       failureClassificationPath:
         options.result === "fail" ? failureClassificationPath : null,
       outputRoot: path.join(tempRoot, "run-bundle"),
       promptPackageRoot,
-      result: options.result,
-      semanticEquality: options.result === "pass" ? "matched" : "not_evaluated",
-      stopReason:
-        options.stopReason ??
-        (options.result === "pass" ? "verification_passed" : "compile_failed"),
-      surfaceEquality: options.result === "pass" ? "matched" : "not_evaluated",
       verifierOutputPath
     })
   ).outputRoot;
 
-  return {
-    request: {
-      bundle: {
-        artifactManifest: await readJsonFile(path.join(bundleRoot, "artifact-manifest.json")),
-        benchmarkPackage: await readJsonFile(
-          path.join(bundleRoot, "package", "benchmark-package.json")
-        ),
-        candidateSource: await readFile(
-          path.join(bundleRoot, "candidate", "Candidate.lean"),
-          "utf8"
-        ),
-        compilerDiagnostics: await readJsonFile(
-          path.join(bundleRoot, "verification", "compiler-diagnostics.json")
-        ),
-        compilerOutput: await readFile(
-          path.join(bundleRoot, "verification", "compiler-output.txt"),
-          "utf8"
-        ),
-        environment: await readJsonFile(
-          path.join(bundleRoot, "environment", "environment.json")
-        ),
-        packageRef: await readJsonFile(path.join(bundleRoot, "package", "package-ref.json")),
-        promptPackage: await readJsonFile(
-          path.join(bundleRoot, "prompt", "prompt-package.json")
-        ),
-        runBundle: await readJsonFile(path.join(bundleRoot, "run-bundle.json")),
-        usage: null,
-        verifierOutput: await readJsonFile(
-          path.join(bundleRoot, "verification", "verifier-output.json")
-        ),
-        verdict: await readJsonFile(path.join(bundleRoot, "verification", "verdict.json"))
-      },
-      ingestRequestSchemaVersion: "1"
+  const request = {
+    bundle: {
+      artifactManifest: await readJsonFile(path.join(bundleRoot, "artifact-manifest.json")),
+      benchmarkPackage: await readJsonFile(
+        path.join(bundleRoot, "package", "benchmark-package.json")
+      ),
+      candidateSource: await readFile(
+        path.join(bundleRoot, "candidate", "Candidate.lean"),
+        "utf8"
+      ),
+      compilerDiagnostics: await readJsonFile(
+        path.join(bundleRoot, "verification", "compiler-diagnostics.json")
+      ),
+      compilerOutput: await readFile(
+        path.join(bundleRoot, "verification", "compiler-output.txt"),
+        "utf8"
+      ),
+      environment: await readJsonFile(
+        path.join(bundleRoot, "environment", "environment.json")
+      ),
+      failureClassification: await readOptionalJsonFile(
+        path.join(bundleRoot, "verification", "failure-classification.json")
+      ),
+      packageRef: await readJsonFile(path.join(bundleRoot, "package", "package-ref.json")),
+      promptPackage: await readJsonFile(
+        path.join(bundleRoot, "prompt", "prompt-package.json")
+      ),
+      runBundle: await readJsonFile<Record<string, unknown>>(path.join(bundleRoot, "run-bundle.json")),
+      usage: null,
+      verifierOutput: await readJsonFile(
+        path.join(bundleRoot, "verification", "verifier-output.json")
+      ),
+      verdict: await readJsonFile(path.join(bundleRoot, "verification", "verdict.json"))
     },
+    ingestRequestSchemaVersion: "1" as const
+  };
+
+  if (options.stopReason) {
+    request.bundle.runBundle.stopReason = options.stopReason;
+    request.bundle.runBundle.bundleDigest = computeRunBundleDigest(
+      (request.bundle.artifactManifest as { artifacts: unknown[] }).artifacts,
+      request.bundle.runBundle
+    );
+  }
+
+  return {
+    request,
     tempRoot
   };
 }
@@ -291,6 +346,26 @@ test("buildProblem9OfflineIngestPlan preserves failure metadata for canonical fa
   assert.equal(plan.attempt.verdictClass, "fail");
   assert.equal(plan.attempt.primaryFailureCode, "compile_failed");
   assert.equal(plan.attempt.failureClassification?.failureFamily, "compile");
+});
+
+test("buildProblem9OfflineIngestPlan rejects failing bundles without inline failure-classification contents", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    result: "fail"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  request.bundle.failureClassification = null;
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "invalid_problem9_offline_ingest_payload" &&
+      error.issues.length > 0
+  );
 });
 
 test("buildProblem9OfflineIngestPlan accepts input-contract failure bundles when stopReason matches the failure code", async (t) => {
@@ -925,7 +1000,7 @@ test("createProblem9OfflineIngestService preserves source failure stop reasons w
   const response = await service(request, "user-1");
 
   assert.deepEqual(response, {
-    artifactCount: 11,
+    artifactCount: 12,
     attempt: {
       id: "attempt-row-1",
       sourceAttemptId: "attempt-fail-1",
@@ -946,10 +1021,10 @@ test("createProblem9OfflineIngestService preserves source failure stop reasons w
   assert.equal(insertedRun?.stopReason, "provider_timeout");
   assert.equal(insertedJob?.stopReason, "provider_timeout");
   assert.equal(insertedAttempt?.stopReason, "provider_timeout");
-  assert.equal(insertedArtifacts.length, 11);
+  assert.equal(insertedArtifacts.length, 12);
   assert.deepEqual(insertedAuditEvents[0]?.payload, {
     actorUserId: "user-1",
-    artifactCount: 11,
+    artifactCount: 12,
     attemptId: "attempt-row-1",
     jobId: "job-row-1",
     runId: "run-row-1",
@@ -1125,8 +1200,30 @@ function computeLegacyBenchmarkPackageDigest(manifest: Record<string, unknown>):
   );
 }
 
+function computeRunBundleDigest(
+  artifactInventory: unknown[],
+  runBundle: Record<string, unknown>
+): string {
+  return sha256Text(
+    stableStringify({
+      artifactInventory: [...artifactInventory].sort((left, right) =>
+        String((left as { relativePath?: string }).relativePath ?? "").localeCompare(
+          String((right as { relativePath?: string }).relativePath ?? "")
+        )
+      ),
+      runBundle: Object.fromEntries(
+        Object.entries(runBundle).filter(([key]) => !key.toLowerCase().endsWith("digest"))
+      )
+    })
+  );
+}
+
 function sha256Text(text: string): string {
-  return createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  return createHash("sha256").update(Buffer.from(normalizeText(text), "utf8")).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value), null, 2);
 }
 
 function sortJsonValue(value: unknown): unknown {
@@ -1143,4 +1240,8 @@ function sortJsonValue(value: unknown): unknown {
   }
 
   return value;
+}
+
+function normalizeText(text: string): string {
+  return text.replace(/^\uFEFF/u, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }

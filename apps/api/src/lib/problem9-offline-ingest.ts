@@ -26,7 +26,7 @@ import {
 } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
-const requiredManifestPaths = [
+const requiredManifestPathsBase = [
   "package/benchmark-package.json",
   "package/package-ref.json",
   "prompt/prompt-package.json",
@@ -37,6 +37,7 @@ const requiredManifestPaths = [
   "verification/verifier-output.json",
   "environment/environment.json"
 ] as const;
+const failureClassificationManifestPath = "verification/failure-classification.json" as const;
 
 const benchmarkExpectedHashPaths = [
   "FirstProof/Problem9/Gold.lean",
@@ -282,7 +283,7 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
   );
 
   assertNoDuplicateManifestPaths(bundle.artifactManifest);
-  assertRequiredManifestEntries(bundle.artifactManifest);
+  assertRequiredManifestEntries(bundle);
   assertDigest(
     computeBenchmarkPackageDigest(bundle.benchmarkPackage),
     bundle.benchmarkPackage.packageDigest,
@@ -365,6 +366,13 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
     "environment/environment.json",
     toWrittenText(stableStringify(bundle.environment))
   );
+  if (bundle.failureClassification != null) {
+    validateProvidedManifestEntry(
+      manifestEntriesByPath,
+      failureClassificationManifestPath,
+      toWrittenText(stableStringify(bundle.failureClassification))
+    );
+  }
 
   if (bundle.usage !== null) {
     validateProvidedManifestEntry(
@@ -520,7 +528,12 @@ function assertSafeArtifactManifestPaths(artifactManifest: Problem9OfflineArtifa
   }
 }
 
-function assertRequiredManifestEntries(artifactManifest: Problem9OfflineArtifactManifest) {
+function assertRequiredManifestEntries(bundle: Problem9OfflineIngestBundle) {
+  const requiredManifestPaths =
+    bundle.verdict.result === "fail"
+      ? [...requiredManifestPathsBase, failureClassificationManifestPath]
+      : [...requiredManifestPathsBase];
+  const artifactManifest = bundle.artifactManifest;
   const manifestPaths = new Set(artifactManifest.artifacts.map((artifact) => artifact.relativePath));
 
   for (const requiredPath of requiredManifestPaths) {
@@ -531,6 +544,14 @@ function assertRequiredManifestEntries(artifactManifest: Problem9OfflineArtifact
         requiredPath
       );
     }
+  }
+
+  if (bundle.verdict.result === "pass" && manifestPaths.has(failureClassificationManifestPath)) {
+    throw validationError(
+      "unexpected_artifact_manifest_entry",
+      `artifact-manifest.json may not include ${failureClassificationManifestPath} for passing bundles.`,
+      failureClassificationManifestPath
+    );
   }
 }
 
@@ -689,6 +710,14 @@ function assertConsistency(bundle: Problem9OfflineIngestBundle) {
   }
 
   if (bundle.verdict.result === "pass") {
+    if (bundle.failureClassification != null) {
+      throw validationError(
+        "verdict_inconsistent",
+        "Passing bundles may not include verification/failure-classification.json.",
+        failureClassificationManifestPath
+      );
+    }
+
     if (bundle.runBundle.status !== "success") {
       throw validationError(
         "verdict_inconsistent",
@@ -741,12 +770,29 @@ function assertConsistency(bundle: Problem9OfflineIngestBundle) {
     }
   } else {
     const primaryFailure = bundle.verdict.primaryFailure;
+    const failureClassification = bundle.failureClassification;
 
     if (primaryFailure === null) {
       throw validationError(
         "verdict_inconsistent",
         "Failing verifier verdicts require a primaryFailure classification.",
         "verification/verdict.json"
+      );
+    }
+
+    if (failureClassification == null) {
+      throw validationError(
+        "required_artifact_missing",
+        "Failing bundles must include verification/failure-classification.json.",
+        failureClassificationManifestPath
+      );
+    }
+
+    if (stableStringify(failureClassification) !== stableStringify(primaryFailure)) {
+      throw validationError(
+        "verdict_inconsistent",
+        "verification/failure-classification.json must match verification/verdict.json primaryFailure.",
+        failureClassificationManifestPath
       );
     }
 

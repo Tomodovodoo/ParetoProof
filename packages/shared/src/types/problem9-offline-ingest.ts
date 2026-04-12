@@ -15,7 +15,7 @@ export type Problem9OfflineIngestRequest = {
   bundle: Problem9OfflineIngestBundle;
 };
 
-export type Problem9OfflineIngestBundle = {
+type Problem9OfflineIngestBundleBase = {
   artifactManifest: Problem9OfflineArtifactManifest;
   benchmarkPackage: Problem9BenchmarkPackageManifest;
   candidateSource: string;
@@ -27,8 +27,21 @@ export type Problem9OfflineIngestBundle = {
   runBundle: Problem9RunBundleManifest;
   usage: unknown | null;
   verifierOutput: unknown;
-  verdict: Problem9VerifierVerdict;
 };
+
+export type Problem9PassingOfflineIngestBundle = Problem9OfflineIngestBundleBase & {
+  failureClassification: null;
+  verdict: Problem9PassingVerifierVerdict;
+};
+
+export type Problem9FailingOfflineIngestBundle = Problem9OfflineIngestBundleBase & {
+  failureClassification: Problem9FailureClassification;
+  verdict: Problem9FailingVerifierVerdict;
+};
+
+export type Problem9OfflineIngestBundle =
+  | Problem9PassingOfflineIngestBundle
+  | Problem9FailingOfflineIngestBundle;
 
 export type Problem9OfflineIngestResponse = {
   artifactCount: number;
@@ -66,6 +79,7 @@ export type Problem9OfflineArtifactManifestEntry = {
     | "compiler_output"
     | "compiler_diagnostics"
     | "verifier_output"
+    | "failure_classification"
     | "environment_snapshot"
     | "usage_summary"
     | "execution_trace";

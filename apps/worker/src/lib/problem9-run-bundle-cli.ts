@@ -1,23 +1,23 @@
 import path from "node:path";
+import { WorkerCliError } from "./cli-contract.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
-function parseBooleanFlag(rawValue: string, flag: string): boolean {
-  if (rawValue === "true") {
-    return true;
-  }
-
-  if (rawValue === "false") {
-    return false;
-  }
-
-  throw new Error(`${flag} must be either true or false.`);
-}
+const deprecatedTruthFlags = [
+  "--axiom-check",
+  "--contains-admit",
+  "--contains-sorry",
+  "--diagnostic-gate",
+  "--result",
+  "--semantic-equality",
+  "--stop-reason",
+  "--surface-equality"
+] as const;
 
 export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
   if (args.includes("--help")) {
     console.error(
-      "Usage: tsx src/index.ts materialize-problem9-run-bundle --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> --result <pass|fail> --semantic-equality <matched|mismatched|not_evaluated> --surface-equality <matched|drifted|not_evaluated> --contains-sorry <true|false> --contains-admit <true|false> --axiom-check <passed|failed|not_evaluated> --diagnostic-gate <passed|failed> --stop-reason <reason> [--failure-classification <file>]"
+      "Usage: tsx src/index.ts materialize-problem9-run-bundle --output <directory> --benchmark-package-root <directory> --prompt-package-root <directory> --candidate-source <file> --compiler-diagnostics <file> --compiler-output <file> --verifier-output <file> --environment-input <file> [--failure-classification <file>]"
     );
     return;
   }
@@ -25,6 +25,15 @@ export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
   await parseWorkerRuntimeEnv({
     commandFamily: "materializer"
   });
+
+  const usedDeprecatedTruthFlags = [...new Set(args.filter((argument) => deprecatedTruthFlags.includes(argument as (typeof deprecatedTruthFlags)[number])))];
+
+  if (usedDeprecatedTruthFlags.length > 0) {
+    throw new WorkerCliError(
+      "validation",
+      `Canonical run-bundle truth is now derived from bundled verifier artifacts; remove ${usedDeprecatedTruthFlags.join(", ")}.`
+    );
+  }
 
   const getRequiredValue = (flag: string): string => {
     const index = args.findIndex((argument) => argument === flag);
@@ -43,32 +52,15 @@ export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
 
   const failureClassificationPath = getOptionalValue("--failure-classification");
   const result = await materializeProblem9RunBundle({
-    axiomCheck: getRequiredValue("--axiom-check") as
-      | "passed"
-      | "failed"
-      | "not_evaluated",
     benchmarkPackageRoot: path.resolve(getRequiredValue("--benchmark-package-root")),
     candidateSourcePath: path.resolve(getRequiredValue("--candidate-source")),
     compilerDiagnosticsPath: path.resolve(getRequiredValue("--compiler-diagnostics")),
     compilerOutputPath: path.resolve(getRequiredValue("--compiler-output")),
-    containsAdmit: parseBooleanFlag(getRequiredValue("--contains-admit"), "--contains-admit"),
-    containsSorry: parseBooleanFlag(getRequiredValue("--contains-sorry"), "--contains-sorry"),
-    diagnosticGate: getRequiredValue("--diagnostic-gate") as "passed" | "failed",
     environmentInputPath: path.resolve(getRequiredValue("--environment-input")),
     failureClassificationPath:
       failureClassificationPath === null ? null : path.resolve(failureClassificationPath),
     outputRoot: path.resolve(getRequiredValue("--output")),
     promptPackageRoot: path.resolve(getRequiredValue("--prompt-package-root")),
-    result: getRequiredValue("--result") as "pass" | "fail",
-    semanticEquality: getRequiredValue("--semantic-equality") as
-      | "matched"
-      | "mismatched"
-      | "not_evaluated",
-    stopReason: getRequiredValue("--stop-reason"),
-    surfaceEquality: getRequiredValue("--surface-equality") as
-      | "matched"
-      | "drifted"
-      | "not_evaluated",
     verifierOutputPath: path.resolve(getRequiredValue("--verifier-output"))
   });
 

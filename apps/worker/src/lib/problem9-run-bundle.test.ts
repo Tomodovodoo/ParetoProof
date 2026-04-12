@@ -53,13 +53,11 @@ test("materialize-problem9-run-bundle CLI is deterministic for identical fixture
 
     const firstResult = runRunBundleCli({
       fixturePaths,
-      outputRoot: firstOutputRoot,
-      result: "pass"
+      outputRoot: firstOutputRoot
     });
     const secondResult = runRunBundleCli({
       fixturePaths,
-      outputRoot: secondOutputRoot,
-      result: "pass"
+      outputRoot: secondOutputRoot
     });
 
     assert.equal(firstResult.status, 0, firstResult.stderr);
@@ -109,8 +107,7 @@ test("materialize-problem9-run-bundle rejects output roots that contain fixture 
     const fixturePaths = await createFixtureInputs(path.join(tempRoot, "fixture-root"));
     const result = runRunBundleCli({
       fixturePaths,
-      outputRoot: path.join(tempRoot, "fixture-root"),
-      result: "pass"
+      outputRoot: path.join(tempRoot, "fixture-root")
     });
 
     assert.notEqual(result.status, 0);
@@ -132,11 +129,282 @@ test("materialize-problem9-run-bundle accepts legacy v1 benchmark manifests with
     });
     const result = runRunBundleCli({
       fixturePaths,
-      outputRoot: path.join(tempRoot, "outputs", "legacy"),
-      result: "pass"
+      outputRoot: path.join(tempRoot, "outputs", "legacy")
     });
 
     assert.equal(result.status, 0, result.stderr);
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("materialize-problem9-run-bundle rejects deprecated truth-bearing CLI flags", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot);
+    const result = runRunBundleCli({
+      extraArgs: ["--result", "pass", "--stop-reason", "verification_passed"],
+      fixturePaths,
+      outputRoot: path.join(tempRoot, "outputs", "deprecated-flags")
+    });
+
+    assert.equal(result.status, 2);
+    assert.match(
+      result.stderr,
+      /Canonical run-bundle truth is now derived from bundled verifier artifacts; remove --result, --stop-reason\./u
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("materialize-problem9-run-bundle rejects failing verifier artifacts without a failure classification", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot);
+    const failingVerifierOutputPath = fixturePaths.verifierOutputPath;
+    const failingVerifierOutput = JSON.parse(
+      await readNormalizedText(failingVerifierOutputPath)
+    ) as Record<string, unknown>;
+
+    failingVerifierOutput.axiomCheck = {
+      output: "",
+      result: "not_evaluated"
+    };
+    failingVerifierOutput.diagnosticGate = {
+      result: "failed"
+    };
+    failingVerifierOutput.result = "fail";
+    failingVerifierOutput.semanticCheck = {
+      output: "Compile gate failed before semantic verification.",
+      result: "not_evaluated"
+    };
+    failingVerifierOutput.surfaceEquality = "not_evaluated";
+    await writeJsonFile(failingVerifierOutputPath, failingVerifierOutput);
+
+    const result = runRunBundleCli({
+      fixturePaths,
+      outputRoot: path.join(tempRoot, "outputs", "failing-verifier")
+    });
+
+    assert.equal(result.status, 2);
+    assert.match(
+      result.stderr,
+      /Failing bundles require --failure-classification <path>\./u
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("materialize-problem9-run-bundle bundles failure classification artifacts for failing runs", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot);
+
+    await writeJsonFile(fixturePaths.compilerDiagnosticsPath, {
+      compilerDiagnosticsSchemaVersion: "1",
+      diagnostics: [{ message: "type mismatch", severity: "error", terminal: true }],
+      success: false
+    });
+    await writeNormalizedText(
+      fixturePaths.compilerOutputPath,
+      "error: type mismatch\n"
+    );
+    await writeJsonFile(fixturePaths.verifierOutputPath, {
+      axiomCheck: {
+        output: "",
+        result: "not_evaluated"
+      },
+      diagnosticGate: {
+        result: "failed"
+      },
+      forbiddenTokens: {
+        containsAdmit: false,
+        containsSorry: false
+      },
+      result: "fail",
+      semanticCheck: {
+        output: "Compile gate failed before semantic verification.",
+        result: "not_evaluated"
+      },
+      surfaceEquality: "not_evaluated",
+      surface_drift: false,
+      theoremHeaders: {
+        canonical: "",
+        candidate: ""
+      },
+      verifierOutputSchemaVersion: "1"
+    });
+
+    const result = runRunBundleCli({
+      fixturePaths,
+      includeFailureClassification: true,
+      outputRoot: path.join(tempRoot, "outputs", "failing-bundle")
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+
+    const payload = JSON.parse(result.stdout) as RunBundleCliResult;
+    const artifactManifest = JSON.parse(
+      await readNormalizedText(path.join(payload.outputRoot, "artifact-manifest.json"))
+    ) as {
+      artifacts: Array<{ relativePath: string }>;
+    };
+    const runBundle = JSON.parse(
+      await readNormalizedText(path.join(payload.outputRoot, "run-bundle.json"))
+    ) as {
+      status: string;
+      stopReason: string;
+    };
+
+    assert.equal(runBundle.status, "failure");
+    assert.equal(runBundle.stopReason, "compile_failed");
+    assert.deepEqual(
+      artifactManifest.artifacts.map((artifact) => artifact.relativePath),
+      [
+        "candidate/Candidate.lean",
+        "environment/environment.json",
+        "package/benchmark-package.json",
+        "package/package-ref.json",
+        "prompt/prompt-package.json",
+        "verification/compiler-diagnostics.json",
+        "verification/compiler-output.txt",
+        "verification/failure-classification.json",
+        "verification/verdict.json",
+        "verification/verifier-output.json"
+      ]
+    );
+    assert.equal(
+      await readNormalizedText(
+        path.join(payload.outputRoot, "verification", "failure-classification.json")
+      ),
+      await readNormalizedText(fixturePaths.failureClassificationPath)
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("materialize-problem9-run-bundle allows later non-compile failures after stale compile diagnostics", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot);
+
+    await writeJsonFile(fixturePaths.compilerDiagnosticsPath, {
+      compilerDiagnosticsSchemaVersion: "1",
+      diagnostics: [{ message: "type mismatch", severity: "error", terminal: true }],
+      success: false
+    });
+    await writeNormalizedText(
+      fixturePaths.compilerOutputPath,
+      "error: type mismatch\n"
+    );
+    await writeJsonFile(fixturePaths.verifierOutputPath, {
+      axiomCheck: {
+        output: "",
+        result: "not_evaluated"
+      },
+      diagnosticGate: {
+        result: "failed"
+      },
+      forbiddenTokens: {
+        containsAdmit: false,
+        containsSorry: false
+      },
+      result: "fail",
+      semanticCheck: {
+        output: "Compile gate failed before semantic verification.",
+        result: "not_evaluated"
+      },
+      surfaceEquality: "not_evaluated",
+      surface_drift: false,
+      theoremHeaders: {
+        canonical: "",
+        candidate: ""
+      },
+      verifierOutputSchemaVersion: "1"
+    });
+    await writeJsonFile(fixturePaths.failureClassificationPath, {
+      evidenceArtifactRefs: [
+        "candidate/Candidate.lean",
+        "verification/compiler-diagnostics.json",
+        "verification/compiler-output.txt"
+      ],
+      failureCode: "provider_timeout",
+      failureFamily: "provider",
+      phase: "generate",
+      retryEligibility: "manual_retry_only",
+      summary: "Provider timed out after the last compile repair request.",
+      terminality: "terminal_attempt",
+      userVisibility: "user_visible"
+    });
+
+    const result = runRunBundleCli({
+      fixturePaths,
+      includeFailureClassification: true,
+      outputRoot: path.join(tempRoot, "outputs", "stale-compile-provider-failure")
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+
+    const payload = JSON.parse(result.stdout) as RunBundleCliResult;
+    const runBundle = JSON.parse(
+      await readNormalizedText(path.join(payload.outputRoot, "run-bundle.json"))
+    ) as {
+      status: string;
+      stopReason: string;
+    };
+    const verdict = JSON.parse(
+      await readNormalizedText(path.join(payload.outputRoot, "verification", "verdict.json"))
+    ) as {
+      diagnosticGate: string;
+      primaryFailure: { failureCode: string };
+      result: string;
+    };
+
+    assert.equal(runBundle.status, "failure");
+    assert.equal(runBundle.stopReason, "provider_failed");
+    assert.equal(verdict.result, "fail");
+    assert.equal(verdict.diagnosticGate, "failed");
+    assert.equal(verdict.primaryFailure.failureCode, "provider_timeout");
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("materialize-problem9-run-bundle rejects passing verifier artifacts when the candidate still contains sorry", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-run-bundle-"));
+
+  try {
+    const fixturePaths = await createFixtureInputs(tempRoot);
+
+    await writeNormalizedText(
+      fixturePaths.candidateSourcePath,
+      [
+        "import FirstProof.Problem9.Support",
+        "",
+        "namespace FirstProof.Problem9",
+        "",
+        "theorem problem9 (n : Nat) :",
+        "    2 * triangular n = n * Nat.succ n := by",
+        "  sorry",
+        "",
+        "end FirstProof.Problem9"
+      ].join("\n")
+    );
+
+    const result = runRunBundleCli({
+      fixturePaths,
+      outputRoot: path.join(tempRoot, "outputs", "candidate-sorry")
+    });
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /Passing verdicts may not contain sorry or admit\./u);
   } finally {
     await rm(tempRoot, { force: true, recursive: true });
   }
@@ -306,9 +574,10 @@ async function createFixtureInputs(
 }
 
 function runRunBundleCli(options: {
+  extraArgs?: string[];
   fixturePaths: FixturePaths;
+  includeFailureClassification?: boolean;
   outputRoot: string;
-  result: "fail" | "pass";
 }): CliExecution {
   const args = [
     "--import",
@@ -330,27 +599,15 @@ function runRunBundleCli(options: {
     "--verifier-output",
     options.fixturePaths.verifierOutputPath,
     "--environment-input",
-    options.fixturePaths.environmentInputPath,
-    "--result",
-    options.result,
-    "--semantic-equality",
-    "matched",
-    "--surface-equality",
-    "matched",
-    "--contains-sorry",
-    "false",
-    "--contains-admit",
-    "false",
-    "--axiom-check",
-    "passed",
-    "--diagnostic-gate",
-    "passed",
-    "--stop-reason",
-    "verification_passed"
+    options.fixturePaths.environmentInputPath
   ];
 
-  if (options.result === "fail") {
+  if (options.includeFailureClassification) {
     args.push("--failure-classification", options.fixturePaths.failureClassificationPath);
+  }
+
+  if (options.extraArgs) {
+    args.push(...options.extraArgs);
   }
 
   const result = spawnSync(resolveNodeBinary(), args, {

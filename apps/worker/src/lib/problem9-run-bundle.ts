@@ -230,42 +230,45 @@ const bundleSemanticEqualitySchema = z.enum(["matched", "mismatched", "not_evalu
 const bundleSurfaceEqualitySchema = z.enum(["matched", "drifted", "not_evaluated"]);
 const bundleAxiomCheckSchema = z.enum(["passed", "failed", "not_evaluated"]);
 const bundleDiagnosticGateSchema = z.enum(["passed", "failed"]);
+const compilerDiagnosticsSchema = z
+  .object({
+    success: z.boolean().optional()
+  })
+  .passthrough();
+const verifierOutputSchema = z
+  .object({
+    axiomCheck: z.object({
+      result: bundleAxiomCheckSchema
+    }),
+    diagnosticGate: z.object({
+      result: bundleDiagnosticGateSchema
+    }),
+    forbiddenTokens: z.object({
+      containsAdmit: z.boolean(),
+      containsSorry: z.boolean()
+    }),
+    result: bundleResultSchema,
+    semanticCheck: z.object({
+      result: bundleSemanticEqualitySchema
+    }),
+    surfaceEquality: bundleSurfaceEqualitySchema,
+    verifierOutputSchemaVersion: z.literal("1")
+  })
+  .passthrough();
 
 const materializeProblem9RunBundleOptionsSchema = z
   .object({
-    axiomCheck: bundleAxiomCheckSchema,
     benchmarkPackageRoot: z.string().min(1),
     candidateSourcePath: z.string().min(1),
     compilerDiagnosticsPath: z.string().min(1),
     compilerOutputPath: z.string().min(1),
-    containsAdmit: z.boolean(),
-    containsSorry: z.boolean(),
-    diagnosticGate: bundleDiagnosticGateSchema,
     environmentInputPath: z.string().min(1),
     failureClassificationPath: z.string().min(1).nullable(),
     outputRoot: z.string().min(1),
     promptPackageRoot: z.string().min(1),
-    result: bundleResultSchema,
-    semanticEquality: bundleSemanticEqualitySchema,
-    stopReason: z.string().min(1),
-    surfaceEquality: bundleSurfaceEqualitySchema,
     verifierOutputPath: z.string().min(1)
   })
-  .superRefine((value, context) => {
-    if (value.result === "fail" && value.failureClassificationPath === null) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Failing bundles require --failure-classification <path>."
-      });
-    }
-
-    if (value.result === "pass" && value.failureClassificationPath !== null) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Passing bundles may not include a failure classification."
-      });
-    }
-  });
+  .strict();
 
 const benchmarkPackageManifestRelativePath = "benchmark-package.json";
 const benchmarkPackageSourceSchemaVersion = "1";
@@ -289,7 +292,7 @@ const promptLayerFilenames = ["benchmark.md", "item.md", "run-envelope.json", "s
 const promptPackageManifestFilename = "prompt-package.json";
 const requiredPromptPackagePaths = [promptPackageManifestFilename, ...promptLayerFilenames] as const;
 
-const requiredBundleFiles = [
+const requiredBundleBaseFiles = [
   "candidate/Candidate.lean",
   "environment/environment.json",
   "package/benchmark-package.json",
@@ -300,6 +303,7 @@ const requiredBundleFiles = [
   "verification/verdict.json",
   "verification/verifier-output.json"
 ] as const;
+const failureClassificationBundleRelativePath = "verification/failure-classification.json" as const;
 
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
 type PromptPackageManifest = z.infer<typeof promptPackageManifestSchema>;
@@ -371,9 +375,15 @@ export async function materializeProblem9RunBundle(
       ? null
       : await loadJsonFile(failureClassificationPath, failureClassificationSchema);
   const candidateContents = await loadNormalizedText(candidateSourcePath);
-  const compilerDiagnostics = await loadLooseJsonFile(compilerDiagnosticsPath);
-  const verifierOutput = await loadLooseJsonFile(verifierOutputPath);
+  const compilerDiagnostics = await loadJsonFile(compilerDiagnosticsPath, compilerDiagnosticsSchema);
+  const verifierOutput = await loadJsonFile(verifierOutputPath, verifierOutputSchema);
   const compilerOutput = await loadNormalizedText(compilerOutputPath);
+  const derivedBundleTruth = deriveBundleTruthFromArtifacts({
+    candidateContents,
+    compilerDiagnostics,
+    failureClassification,
+    verifierOutput
+  });
 
   const environmentManifest = buildEnvironmentManifest({
     environmentInput,
@@ -383,18 +393,18 @@ export async function materializeProblem9RunBundle(
   const candidateDigest = sha256Text(candidateContents);
   const verdict = buildVerdict({
     attemptId: runEnvelope.attemptId,
-    axiomCheck: options.axiomCheck,
+    axiomCheck: derivedBundleTruth.axiomCheck,
     benchmarkPackageDigest: benchmarkManifest.packageDigest,
     candidateDigest,
-    containsAdmit: options.containsAdmit,
-    containsSorry: options.containsSorry,
-    diagnosticGate: options.diagnosticGate,
+    containsAdmit: derivedBundleTruth.containsAdmit,
+    containsSorry: derivedBundleTruth.containsSorry,
+    diagnosticGate: derivedBundleTruth.diagnosticGate,
     failureClassification,
     laneId: promptManifest.laneId,
-    result: options.result,
+    result: derivedBundleTruth.result,
     runId: runEnvelope.runId,
-    semanticEquality: options.semanticEquality,
-    surfaceEquality: options.surfaceEquality
+    semanticEquality: derivedBundleTruth.semanticEquality,
+    surfaceEquality: derivedBundleTruth.surfaceEquality
   });
   const verdictDigest = sha256Text(stableStringify(verdict));
   const packageRef = buildPackageRef({
@@ -443,8 +453,8 @@ export async function materializeProblem9RunBundle(
     runConfigDigest,
     runId: runEnvelope.runId,
     runMode: promptManifest.runMode,
-    status: options.result === "pass" ? "success" : "failure",
-    stopReason: options.stopReason,
+    status: derivedBundleTruth.result === "pass" ? "success" : "failure",
+    stopReason: derivedBundleTruth.stopReason,
     toolProfile: promptManifest.toolProfile,
     verifierVersion: environmentInput.verifierVersion,
     verdictDigest
@@ -479,10 +489,19 @@ export async function materializeProblem9RunBundle(
     verifierOutput
   );
   await writeJsonFile(path.join(bundleRoot, "verification", "verdict.json"), verdict);
+  if (failureClassification !== null) {
+    await writeJsonFile(
+      path.join(bundleRoot, failureClassificationBundleRelativePath),
+      failureClassification
+    );
+  }
   await writeJsonFile(path.join(bundleRoot, "environment", "environment.json"), environmentManifest);
   await writeJsonFile(path.join(bundleRoot, "package", "package-ref.json"), packageRef);
 
-  const artifactEntries = await collectArtifactManifestEntries(bundleRoot);
+  const artifactEntries = await collectArtifactManifestEntries(
+    bundleRoot,
+    requiredBundleFilesFor(failureClassification)
+  );
   await writeJsonFile(path.join(bundleRoot, "artifact-manifest.json"), {
     artifactManifestSchemaVersion: "1",
     artifacts: artifactEntries,
@@ -782,6 +801,95 @@ function buildEnvironmentManifest(options: {
   };
 }
 
+function deriveBundleTruthFromArtifacts(options: {
+  candidateContents: string;
+  compilerDiagnostics: z.output<typeof compilerDiagnosticsSchema>;
+  failureClassification: FailureClassification | null;
+  verifierOutput: z.output<typeof verifierOutputSchema>;
+}): {
+  axiomCheck: z.infer<typeof bundleAxiomCheckSchema>;
+  containsAdmit: boolean;
+  containsSorry: boolean;
+  diagnosticGate: z.infer<typeof bundleDiagnosticGateSchema>;
+  result: z.infer<typeof bundleResultSchema>;
+  semanticEquality: z.infer<typeof bundleSemanticEqualitySchema>;
+  stopReason: string;
+  surfaceEquality: z.infer<typeof bundleSurfaceEqualitySchema>;
+} {
+  const containsSorry = /\bsorry\b/u.test(options.candidateContents);
+  const containsAdmit = /\badmit\b/u.test(options.candidateContents);
+  const hasCompilerDiagnostics =
+    ((options.compilerDiagnostics.diagnostics as Array<unknown> | undefined) ?? []).length > 0;
+  const diagnosticGate =
+    options.compilerDiagnostics.success === false || hasCompilerDiagnostics
+      ? "failed"
+      : options.verifierOutput.diagnosticGate.result;
+
+  if (options.compilerDiagnostics.success === false && options.verifierOutput.result !== "fail") {
+    throw new Error("Passing bundles require compiler-diagnostics.json success=true.");
+  }
+
+  if (options.verifierOutput.result === "pass") {
+    if (options.failureClassification !== null) {
+      throw new Error("Passing bundles may not include a failure classification.");
+    }
+
+    return {
+      axiomCheck: options.verifierOutput.axiomCheck.result,
+      containsAdmit,
+      containsSorry,
+      diagnosticGate,
+      result: options.verifierOutput.result,
+      semanticEquality: options.verifierOutput.semanticCheck.result,
+      stopReason: "verification_passed",
+      surfaceEquality: options.verifierOutput.surfaceEquality
+    };
+  }
+
+  if (options.failureClassification === null) {
+    throw new Error("Failing bundles require --failure-classification <path>.");
+  }
+
+  if (
+    options.compilerDiagnostics.success !== false &&
+    options.failureClassification.failureFamily === "compile"
+  ) {
+    throw new Error(
+      "Compile failure classifications require compiler-diagnostics.json success=false."
+    );
+  }
+
+  return {
+    axiomCheck: options.verifierOutput.axiomCheck.result,
+    containsAdmit,
+    containsSorry,
+    diagnosticGate,
+    result: options.verifierOutput.result,
+    semanticEquality: options.verifierOutput.semanticCheck.result,
+    stopReason: deriveStopReasonFromFailureClassification(options.failureClassification),
+    surfaceEquality: options.verifierOutput.surfaceEquality
+  };
+}
+
+function deriveStopReasonFromFailureClassification(
+  failureClassification: FailureClassification
+): string {
+  switch (failureClassification.failureFamily) {
+    case "budget":
+      return "budget_exhausted";
+    case "compile":
+      return "compile_failed";
+    case "provider":
+    case "tooling":
+      return "provider_failed";
+    case "verification":
+      return "verifier_failed";
+    case "harness":
+    case "input_contract":
+      return failureClassification.failureCode;
+  }
+}
+
 function buildVerdict(options: {
   attemptId: string;
   axiomCheck: z.infer<typeof bundleAxiomCheckSchema>;
@@ -863,8 +971,15 @@ function buildPackageRef(options: {
   };
 }
 
+function requiredBundleFilesFor(failureClassification: FailureClassification | null): string[] {
+  return failureClassification === null
+    ? [...requiredBundleBaseFiles]
+    : [...requiredBundleBaseFiles, failureClassificationBundleRelativePath];
+}
+
 async function collectArtifactManifestEntries(
-  bundleRoot: string
+  bundleRoot: string,
+  requiredBundleFiles: string[]
 ): Promise<
   Array<{
     artifactRole: string;
@@ -917,6 +1032,8 @@ function artifactRoleForPath(relativePath: string): string {
       return "compiler_diagnostics";
     case "verification/verifier-output.json":
       return "verifier_output";
+    case failureClassificationBundleRelativePath:
+      return "failure_classification";
     case "environment/environment.json":
       return "environment_snapshot";
     default:
@@ -981,11 +1098,6 @@ async function walkDirectory(
 async function loadNormalizedText(filePath: string): Promise<string> {
   await ensureFile(filePath);
   return normalizeText(await readFile(filePath, "utf8"));
-}
-
-async function loadLooseJsonFile(filePath: string): Promise<unknown> {
-  await ensureFile(filePath);
-  return JSON.parse(normalizeText(await readFile(filePath, "utf8")));
 }
 
 async function loadJsonFile<TSchema extends z.ZodTypeAny>(

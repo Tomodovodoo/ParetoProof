@@ -92,6 +92,7 @@ export const artifactClassEnum = pgEnum("artifact_class", [
   "compiler_output",
   "compiler_diagnostics",
   "verifier_output",
+  "failure_classification",
   "environment_snapshot",
   "usage_summary",
   "execution_trace"

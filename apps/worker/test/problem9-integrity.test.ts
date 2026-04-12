@@ -15,7 +15,7 @@ import { materializeProblem9RunBundle } from "../src/lib/problem9-run-bundle.ts"
 const expectedIntegrityDigests = {
   benchmarkPackage: "2a613fe5717c5df32fc3c95b0cf4cbbc9a99312c0cac44948b0cd641acac8dcb",
   promptPackage: "f0fe26f4c426b6b51d524a6bcf23331556a590d0b621f5ccc74fe416c1f7f329",
-  runBundle: "3dea5638b16d0ee293ffdf5508f66beea74a7da776149f689f599e9c5f7cb821"
+  runBundle: "5222dbac0acdcdbe3dbfbdb4bfcc2f483101cf8f3847a9fb21c6dc259a4a21cc"
 } as const;
 
 const expectedBenchmarkSourceMetadata = {
@@ -124,34 +124,18 @@ test("Problem 9 run-bundle materialization stays deterministic", async () => {
       path.join(tempRoot, "prompt-source")
     );
     const firstBundle = await materializeProblem9RunBundle({
-      axiomCheck: "passed",
       benchmarkPackageRoot: fixture.benchmarkPackageRoot,
       ...fixture.bundleInputs,
-      containsAdmit: false,
-      containsSorry: false,
-      diagnosticGate: "passed",
       failureClassificationPath: null,
       outputRoot: path.join(tempRoot, "bundle-first"),
       promptPackageRoot: promptPackage.outputRoot,
-      result: "pass",
-      semanticEquality: "matched",
-      stopReason: "verification_passed",
-      surfaceEquality: "matched"
     });
     const secondBundle = await materializeProblem9RunBundle({
-      axiomCheck: "passed",
       benchmarkPackageRoot: fixture.benchmarkPackageRoot,
       ...fixture.bundleInputs,
-      containsAdmit: false,
-      containsSorry: false,
-      diagnosticGate: "passed",
       failureClassificationPath: null,
       outputRoot: path.join(tempRoot, "bundle-second"),
       promptPackageRoot: promptPackage.outputRoot,
-      result: "pass",
-      semanticEquality: "matched",
-      stopReason: "verification_passed",
-      surfaceEquality: "matched"
     });
 
     assert.equal(firstBundle.bundleDigest, expectedIntegrityDigests.runBundle);
@@ -209,19 +193,11 @@ test("run-bundle materialization rejects tampered prompt-package inputs", async 
 
     await assert.rejects(
       materializeProblem9RunBundle({
-        axiomCheck: "passed",
         benchmarkPackageRoot: fixture.benchmarkPackageRoot,
         ...fixture.bundleInputs,
-        containsAdmit: false,
-        containsSorry: false,
-        diagnosticGate: "passed",
         failureClassificationPath: null,
         outputRoot: path.join(tempRoot, "bundle-after-prompt-tamper"),
-        promptPackageRoot: promptPackage.outputRoot,
-        result: "pass",
-        semanticEquality: "matched",
-        stopReason: "verification_passed",
-        surfaceEquality: "matched"
+        promptPackageRoot: promptPackage.outputRoot
       }),
       /Prompt package layer digests do not match the materialized layer files\./u
     );
