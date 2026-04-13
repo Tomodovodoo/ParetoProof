@@ -44,8 +44,21 @@ const requiredBundleFiles = [
   "artifact-manifest.json",
   "run-bundle.json",
   "package/benchmark-package.json",
+  "package/FirstProof/Problem9/Gold.lean",
+  "package/FirstProof/Problem9/Statement.lean",
+  "package/FirstProof/Problem9/Support.lean",
+  "package/LICENSE",
+  "package/README.md",
+  "package/lake-manifest.json",
+  "package/lakefile.toml",
+  "package/lean-toolchain",
+  "package/statements/problem.md",
   "package/package-ref.json",
+  "prompt/benchmark.md",
+  "prompt/item.md",
   "prompt/prompt-package.json",
+  "prompt/run-envelope.json",
+  "prompt/system.md",
   "candidate/Candidate.lean",
   "verification/compiler-diagnostics.json",
   "verification/compiler-output.txt",
@@ -195,10 +208,27 @@ async function loadProblem9OfflineIngestRequest(
     bundleRootRealPath,
     "package/package-ref.json"
   );
+  const benchmarkSources = await loadNamedTextFiles(bundleRootRealPath, [
+    "package/FirstProof/Problem9/Gold.lean",
+    "package/FirstProof/Problem9/Statement.lean",
+    "package/FirstProof/Problem9/Support.lean",
+    "package/LICENSE",
+    "package/README.md",
+    "package/lake-manifest.json",
+    "package/lakefile.toml",
+    "package/lean-toolchain",
+    "package/statements/problem.md"
+  ] as const);
   const promptPackage = await loadJsonFile<Problem9PromptPackageManifest>(
     bundleRootRealPath,
     "prompt/prompt-package.json"
   );
+  const promptLayers = await loadNamedTextFiles(bundleRootRealPath, [
+    "prompt/benchmark.md",
+    "prompt/item.md",
+    "prompt/run-envelope.json",
+    "prompt/system.md"
+  ] as const);
   const runBundle = await loadJsonFile<Problem9RunBundleManifest>(
     bundleRootRealPath,
     "run-bundle.json"
@@ -221,6 +251,19 @@ async function loadProblem9OfflineIngestRequest(
     bundle: {
       artifactManifest,
       benchmarkPackage,
+      benchmarkSources: {
+        "FirstProof/Problem9/Gold.lean": benchmarkSources["package/FirstProof/Problem9/Gold.lean"],
+        "FirstProof/Problem9/Statement.lean":
+          benchmarkSources["package/FirstProof/Problem9/Statement.lean"],
+        "FirstProof/Problem9/Support.lean":
+          benchmarkSources["package/FirstProof/Problem9/Support.lean"],
+        LICENSE: benchmarkSources["package/LICENSE"],
+        "README.md": benchmarkSources["package/README.md"],
+        "lake-manifest.json": benchmarkSources["package/lake-manifest.json"],
+        "lakefile.toml": benchmarkSources["package/lakefile.toml"],
+        "lean-toolchain": benchmarkSources["package/lean-toolchain"],
+        "statements/problem.md": benchmarkSources["package/statements/problem.md"]
+      },
       candidateSource,
       compilerDiagnostics,
       compilerOutput,
@@ -228,6 +271,12 @@ async function loadProblem9OfflineIngestRequest(
       failureClassification,
       packageRef,
       promptPackage,
+      promptLayers: {
+        "benchmark.md": promptLayers["prompt/benchmark.md"],
+        "item.md": promptLayers["prompt/item.md"],
+        "run-envelope.json": promptLayers["prompt/run-envelope.json"],
+        "system.md": promptLayers["prompt/system.md"]
+      },
       runBundle,
       usage,
       verifierOutput,
@@ -316,6 +365,17 @@ async function loadOptionalJsonFile<TValue>(
   await resolveBundleFilePath(bundleRootRealPath, relativePath);
 
   return loadJsonFile<TValue>(bundleRootRealPath, relativePath);
+}
+
+async function loadNamedTextFiles<const TRelativePaths extends readonly string[]>(
+  bundleRootRealPath: string,
+  relativePaths: TRelativePaths
+): Promise<Record<TRelativePaths[number], string>> {
+  const entries = await Promise.all(
+    relativePaths.map(async (relativePath) => [relativePath, await loadTextFile(bundleRootRealPath, relativePath)] as const)
+  );
+
+  return Object.fromEntries(entries) as Record<TRelativePaths[number], string>;
 }
 
 async function resolveBundleFilePath(

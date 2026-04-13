@@ -13,6 +13,8 @@ import {
   type Problem9VerifierVerdict
 } from "@paretoproof/shared";
 import { eq } from "drizzle-orm";
+import path from "node:path";
+import { z } from "zod";
 import {
   artifacts,
   attempts,
@@ -28,8 +30,21 @@ import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 const requiredManifestPathsBase = [
   "package/benchmark-package.json",
+  "package/FirstProof/Problem9/Gold.lean",
+  "package/FirstProof/Problem9/Statement.lean",
+  "package/FirstProof/Problem9/Support.lean",
+  "package/LICENSE",
+  "package/README.md",
+  "package/lake-manifest.json",
+  "package/lakefile.toml",
+  "package/lean-toolchain",
+  "package/statements/problem.md",
   "package/package-ref.json",
+  "prompt/benchmark.md",
+  "prompt/item.md",
   "prompt/prompt-package.json",
+  "prompt/run-envelope.json",
+  "prompt/system.md",
   "candidate/Candidate.lean",
   "verification/compiler-diagnostics.json",
   "verification/compiler-output.txt",
@@ -50,6 +65,65 @@ const benchmarkExpectedHashPaths = [
   "lean-toolchain",
   "statements/problem.md"
 ] as const;
+const promptLayerPaths = ["benchmark.md", "item.md", "run-envelope.json", "system.md"] as const;
+const bundleManifestArtifactRoles = {
+  "candidate/Candidate.lean": "candidate_source",
+  "environment/environment.json": "environment_snapshot",
+  "package/benchmark-package.json": "package_reference",
+  "package/FirstProof/Problem9/Gold.lean": "package_reference",
+  "package/FirstProof/Problem9/Statement.lean": "package_reference",
+  "package/FirstProof/Problem9/Support.lean": "package_reference",
+  "package/LICENSE": "package_reference",
+  "package/README.md": "package_reference",
+  "package/lake-manifest.json": "package_reference",
+  "package/lakefile.toml": "package_reference",
+  "package/lean-toolchain": "package_reference",
+  "package/package-ref.json": "package_reference",
+  "package/statements/problem.md": "package_reference",
+  "prompt/benchmark.md": "prompt_package",
+  "prompt/item.md": "prompt_package",
+  "prompt/prompt-package.json": "prompt_package",
+  "prompt/run-envelope.json": "prompt_package",
+  "prompt/system.md": "prompt_package",
+  "verification/compiler-diagnostics.json": "compiler_diagnostics",
+  "verification/compiler-output.txt": "compiler_output",
+  "verification/failure-classification.json": "failure_classification",
+  "verification/verdict.json": "verdict_record",
+  "verification/verifier-output.json": "verifier_output"
+} as const satisfies Record<string, Problem9OfflineArtifactManifestEntry["artifactRole"]>;
+const optionalBundleManifestMetadataByPath = {
+  "execution/usage.json": {
+    artifactRole: "usage_summary",
+    contentEncoding: null,
+    mediaType: "application/json",
+    requiredForIngest: false
+  }
+} as const satisfies Record<
+  string,
+  Pick<
+    Problem9OfflineArtifactManifestEntry,
+    "artifactRole" | "contentEncoding" | "mediaType" | "requiredForIngest"
+  >
+>;
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
+const promptRunEnvelopeSchema = z.object({
+  attemptId: z.string().min(1),
+  authMode: z.string().min(1),
+  benchmarkItemId: z.literal("Problem9"),
+  benchmarkPackageDigest: sha256Schema,
+  benchmarkPackageId: z.literal("firstproof/Problem9"),
+  benchmarkPackageVersion: z.string().min(1),
+  harnessRevision: z.string().min(1),
+  jobId: z.string().min(1).nullable(),
+  laneId: z.string().min(1),
+  modelConfigId: z.string().min(1),
+  promptProtocolVersion: z.string().min(1),
+  providerFamily: z.string().min(1),
+  runEnvelopeSchemaVersion: z.literal("1"),
+  runId: z.string().min(1),
+  runMode: z.string().min(1),
+  toolProfile: z.string().min(1)
+});
 
 const offlineIngestDuplicateConstraints = new Set([
   "runs_source_run_id_unique",
@@ -336,6 +410,35 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
     "prompt/prompt-package.json",
     toWrittenText(stableStringify(bundle.promptPackage))
   );
+  for (const relativePath of benchmarkExpectedHashPaths) {
+    const contents = bundle.benchmarkSources[relativePath];
+    validateProvidedManifestEntry(
+      manifestEntriesByPath,
+      `package/${relativePath}`,
+      toWrittenText(contents)
+    );
+    assertDigest(
+      sha256Text(toWrittenText(contents)),
+      bundle.benchmarkPackage.hashes[relativePath],
+      `package/benchmark-package.json hashes.${relativePath}`,
+      "bundle_digest_mismatch"
+    );
+  }
+  for (const relativePath of promptLayerPaths) {
+    const contents = bundle.promptLayers[relativePath];
+    validateProvidedManifestEntry(
+      manifestEntriesByPath,
+      `prompt/${relativePath}`,
+      toWrittenText(contents)
+    );
+    assertDigest(
+      sha256Text(toWrittenText(contents)),
+      bundle.promptPackage.layerDigests[relativePath],
+      `prompt/prompt-package.json layerDigests.${relativePath}`,
+      "bundle_digest_mismatch"
+    );
+  }
+  assertPromptRunEnvelopeConsistency(parsePromptRunEnvelope(bundle.promptLayers["run-envelope.json"]), bundle);
   validateProvidedManifestEntry(
     manifestEntriesByPath,
     "candidate/Candidate.lean",
@@ -585,6 +688,157 @@ function validateProvidedManifestEntry(
       `${relativePath} byteSize does not match artifact-manifest.json.`,
       relativePath
     );
+  }
+
+  const expectedMetadata = expectedManifestMetadataForPath(relativePath);
+
+  if (entry.artifactRole !== expectedMetadata.artifactRole) {
+    throw validationError(
+      "unexpected_artifact_manifest_entry",
+      `${relativePath} artifactRole does not match the canonical bundle contract.`,
+      relativePath
+    );
+  }
+
+  if (entry.contentEncoding !== expectedMetadata.contentEncoding) {
+    throw validationError(
+      "unexpected_artifact_manifest_entry",
+      `${relativePath} contentEncoding does not match the canonical bundle contract.`,
+      relativePath
+    );
+  }
+
+  if (entry.mediaType !== expectedMetadata.mediaType) {
+    throw validationError(
+      "unexpected_artifact_manifest_entry",
+      `${relativePath} mediaType does not match the canonical bundle contract.`,
+      relativePath
+    );
+  }
+
+  if (entry.requiredForIngest !== expectedMetadata.requiredForIngest) {
+    throw validationError(
+      "unexpected_artifact_manifest_entry",
+      `${relativePath} requiredForIngest does not match the canonical bundle contract.`,
+      relativePath
+    );
+  }
+}
+
+function expectedManifestMetadataForPath(relativePath: string) {
+  const optionalMetadata =
+    optionalBundleManifestMetadataByPath[
+      relativePath as keyof typeof optionalBundleManifestMetadataByPath
+    ];
+
+  if (optionalMetadata) {
+    return optionalMetadata;
+  }
+
+  return {
+    artifactRole:
+      bundleManifestArtifactRoles[relativePath as keyof typeof bundleManifestArtifactRoles],
+    contentEncoding: null,
+    mediaType: relativePath.endsWith(".json")
+      ? "application/json"
+      : isNormalizedTextBundlePath(relativePath)
+        ? "text/plain"
+        : null,
+    requiredForIngest: true
+  };
+}
+
+function isNormalizedTextBundlePath(relativePath: string): boolean {
+  const baseName = path.posix.basename(relativePath);
+
+  return (
+    relativePath.endsWith(".txt") ||
+    relativePath.endsWith(".lean") ||
+    relativePath.endsWith(".md") ||
+    relativePath.endsWith(".toml") ||
+    baseName === "LICENSE" ||
+    baseName === "lean-toolchain"
+  );
+}
+
+function parsePromptRunEnvelope(contents: string) {
+  try {
+    return promptRunEnvelopeSchema.parse(JSON.parse(normalizeText(contents)));
+  } catch {
+    throw validationError(
+      "invalid_problem9_offline_ingest_payload",
+      "prompt/run-envelope.json is not a valid prompt run envelope.",
+      "prompt/run-envelope.json"
+    );
+  }
+}
+
+function assertPromptRunEnvelopeConsistency(
+  runEnvelope: z.infer<typeof promptRunEnvelopeSchema>,
+  bundle: Problem9OfflineIngestBundle
+) {
+  const checks: Array<[actual: string | null, expected: string | null, label: string]> = [
+    [runEnvelope.attemptId, bundle.runBundle.attemptId, "prompt/run-envelope.json attemptId"],
+    [runEnvelope.authMode, bundle.promptPackage.authMode, "prompt/run-envelope.json authMode"],
+    [
+      runEnvelope.benchmarkItemId,
+      bundle.benchmarkPackage.benchmarkItemId,
+      "prompt/run-envelope.json benchmarkItemId"
+    ],
+    [
+      runEnvelope.benchmarkPackageDigest,
+      bundle.benchmarkPackage.packageDigest,
+      "prompt/run-envelope.json benchmarkPackageDigest"
+    ],
+    [
+      runEnvelope.benchmarkPackageId,
+      bundle.benchmarkPackage.packageId,
+      "prompt/run-envelope.json benchmarkPackageId"
+    ],
+    [
+      runEnvelope.benchmarkPackageVersion,
+      bundle.benchmarkPackage.packageVersion,
+      "prompt/run-envelope.json benchmarkPackageVersion"
+    ],
+    [
+      runEnvelope.harnessRevision,
+      bundle.promptPackage.harnessRevision,
+      "prompt/run-envelope.json harnessRevision"
+    ],
+    [runEnvelope.jobId, bundle.runBundle.jobId, "prompt/run-envelope.json jobId"],
+    [runEnvelope.laneId, bundle.promptPackage.laneId, "prompt/run-envelope.json laneId"],
+    [
+      runEnvelope.modelConfigId,
+      bundle.promptPackage.modelConfigId,
+      "prompt/run-envelope.json modelConfigId"
+    ],
+    [
+      runEnvelope.promptProtocolVersion,
+      bundle.promptPackage.promptProtocolVersion,
+      "prompt/run-envelope.json promptProtocolVersion"
+    ],
+    [
+      runEnvelope.providerFamily,
+      bundle.promptPackage.providerFamily,
+      "prompt/run-envelope.json providerFamily"
+    ],
+    [runEnvelope.runId, bundle.runBundle.runId, "prompt/run-envelope.json runId"],
+    [runEnvelope.runMode, bundle.promptPackage.runMode, "prompt/run-envelope.json runMode"],
+    [
+      runEnvelope.toolProfile,
+      bundle.promptPackage.toolProfile,
+      "prompt/run-envelope.json toolProfile"
+    ]
+  ];
+
+  for (const [actual, expected, label] of checks) {
+    if (actual !== expected) {
+      throw validationError(
+        "identity_inconsistent",
+        `${label} does not match the canonical bundle contract.`,
+        "prompt/run-envelope.json"
+      );
+    }
   }
 }
 

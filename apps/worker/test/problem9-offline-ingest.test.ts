@@ -215,7 +215,7 @@ test("runProblem9OfflineIngest posts canonical bundle requests with Access auth"
 
         return new Response(
           JSON.stringify({
-            artifactCount: 11,
+            artifactCount: 24,
             attempt: {
               id: "attempt-row-1",
               sourceAttemptId: "attempt-pass-1",
@@ -255,8 +255,16 @@ test("runProblem9OfflineIngest posts canonical bundle requests with Access auth"
       "ingestRequestSchemaVersion" in receivedRequestBody,
     true
   );
+  const parsedRequest = receivedRequestBody as {
+    bundle: {
+      benchmarkSources: Record<string, string>;
+      promptLayers: Record<string, string>;
+    };
+  };
+  assert.match(parsedRequest.bundle.benchmarkSources["README.md"] ?? "", /.+/u);
+  assert.match(parsedRequest.bundle.promptLayers["system.md"] ?? "", /.+/u);
   assert.deepEqual(result, {
-    artifactCount: 11,
+    artifactCount: 24,
     attempt: {
       id: "attempt-row-1",
       sourceAttemptId: "attempt-pass-1",

@@ -233,15 +233,36 @@ export const problem9OfflineArtifactManifestSchema = z.object({
   hashAlgorithm: z.literal("sha256")
 });
 
+export const problem9BenchmarkSourceFilesSchema = z.object({
+  "FirstProof/Problem9/Gold.lean": z.string().min(1),
+  "FirstProof/Problem9/Statement.lean": z.string().min(1),
+  "FirstProof/Problem9/Support.lean": z.string().min(1),
+  LICENSE: z.string().min(1),
+  "README.md": z.string().min(1),
+  "lake-manifest.json": z.string().min(1),
+  "lakefile.toml": z.string().min(1),
+  "lean-toolchain": z.string().min(1),
+  "statements/problem.md": z.string().min(1)
+});
+
+export const problem9PromptLayerContentsSchema = z.object({
+  "benchmark.md": z.string().min(1),
+  "item.md": z.string().min(1),
+  "run-envelope.json": z.string().min(1),
+  "system.md": z.string().min(1)
+});
+
 const problem9OfflineIngestBundleBaseSchema = z.object({
   artifactManifest: problem9OfflineArtifactManifestSchema,
   benchmarkPackage: problem9BenchmarkPackageManifestSchema,
+  benchmarkSources: problem9BenchmarkSourceFilesSchema,
   candidateSource: z.string().min(1),
   compilerDiagnostics: recordValueSchema,
   compilerOutput: z.string(),
   environment: problem9EnvironmentManifestSchema,
   packageRef: problem9PackageRefSchema,
   promptPackage: problem9PromptPackageManifestSchema,
+  promptLayers: problem9PromptLayerContentsSchema,
   runBundle: problem9RunBundleManifestSchema,
   usage: recordValueSchema.nullable(),
   verifierOutput: recordValueSchema

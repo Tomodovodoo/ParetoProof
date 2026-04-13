@@ -205,6 +205,7 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
         "compiler_output",
         "compiler_diagnostics",
         "verifier_output",
+        "failure_classification",
         "environment_snapshot",
         "usage_summary",
         "execution_trace"
@@ -379,6 +380,181 @@ test("runWorkerClaimLoop accepts uppercase verdict benchmarkPackageDigest hex", 
       stoppedReason: "max_jobs_reached"
     });
     assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/result`);
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
+    await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("runWorkerClaimLoop registers failure-classification artifacts for failing verifier results", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-claim-failing-verdict-"));
+
+  try {
+    const calls: ApiCall[] = [];
+    const baseWorkerJob = buildWorkerJob();
+    const workerJob = {
+      ...baseWorkerJob,
+      requiredArtifactRoles: [...baseWorkerJob.requiredArtifactRoles, "failure_classification" as const]
+    };
+    const artifactEntries = buildArtifactEntries({ includeFailureClassification: true });
+    let writtenBundle: WrittenBundleDigests | null = null;
+    const fetchImpl = createFetchMock(
+      [
+        {
+          body: {
+            leaseStatus: "active",
+            pollAfterSeconds: 0,
+            workerJob
+          },
+          path: "/internal/worker/claims"
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 0,
+            jobToken: "job-token-2"
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 1
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: buildHeartbeatResponse({
+            acknowledgedEventSequence: 1
+          }),
+          path: `/internal/worker/jobs/${workerJob.jobId}/heartbeat`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            artifactManifestDigest,
+            artifacts: artifactEntries.map((artifact, index) => ({
+              artifactId: `artifact-${index + 1}`,
+              artifactRole: artifact.artifactRole,
+              relativePath: artifact.relativePath
+            }))
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/artifacts`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 2
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            acknowledgedSequence: 3
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/events`
+        },
+        {
+          body: {
+            acceptedAt: fixedNow.toISOString(),
+            attemptState: "failed",
+            jobState: "failed",
+            runState: "failed"
+          },
+          path: `/internal/worker/jobs/${workerJob.jobId}/failure`
+        }
+      ],
+      calls
+    );
+
+    const result = await runWorkerClaimLoop(
+      {
+        authMode: "machine_api_key",
+        maxJobs: 1,
+        once: true,
+        outputRoot: path.join(tempRoot, "output"),
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1",
+        workspaceRoot: path.join(tempRoot, "workspace")
+      },
+      {
+        attemptRunner: async (options) => {
+          writtenBundle = await writeBundleOutputsWithVerdict(options.outputRoot, artifactEntries, {
+            diagnosticGate: "failed",
+            failureCode: "proof_policy_failed",
+            primaryFailure: {
+              evidenceArtifactRefs: ["verification/failure-classification.json"],
+              failureCode: "proof_policy_failed",
+              failureFamily: "verification",
+              phase: "verify",
+              retryEligibility: "never",
+              summary: "Canonical verifier failure payload.",
+              terminality: "terminal_attempt",
+              userVisibility: "internal_only"
+            },
+            result: "fail"
+          });
+
+          return {
+            artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            authMode: "machine_api_key",
+            bundleDigest,
+            compileRepairCount: 0,
+            outputRoot: options.outputRoot,
+            promptPackageDigest: promptDigest,
+            providerFamily: "openai",
+            providerTurnsUsed: 1,
+            result: "fail",
+            runConfigDigest: "2".repeat(64),
+            runId: workerJob.runId,
+            stopReason: "verifier_failed",
+            verifierRepairCount: 0,
+            verdictDigest
+          };
+        },
+        fetchImpl,
+        materializeBenchmarkPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          packageDigest: benchmarkDigest,
+          packageId: "firstproof/Problem9",
+          packageVersion: "2026.03.13"
+        }),
+        materializePromptPackage: async ({ outputRoot }) => ({
+          outputRoot,
+          promptPackageDigest: promptDigest
+        }),
+        now: () => fixedNow,
+        rawEnv: {
+          API_BASE_URL: "https://api.paretoproof.test",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        },
+        sleep: neverSleep
+      }
+    );
+
+    assert.deepEqual(result, {
+      claimedJobs: 1,
+      completedJobs: 1,
+      idlePollCount: 0,
+      stoppedReason: "max_jobs_reached"
+    });
+    assert.equal(calls.at(-1)?.path, `/internal/worker/jobs/${workerJob.jobId}/failure`);
+    const failureBody = calls.at(-1)?.body as WorkerTerminalFailureRequest;
+    assert.deepEqual(failureBody.artifactIds, expectedArtifactIds(artifactEntries));
+    assert.equal(failureBody.artifactManifestDigest, writtenBundle?.artifactManifestDigest);
+    assert.equal(failureBody.bundleDigest, writtenBundle?.bundleDigest);
+    assert.equal(failureBody.candidateDigest, writtenBundle?.candidateDigest);
+    assert.equal(failureBody.verdictDigest, writtenBundle?.verdictDigest);
+    assert.equal(failureBody.failure.failureCode, "proof_policy_failed");
+    assert.deepEqual(failureBody.failure.evidenceArtifactRefs, [
+      "verification/failure-classification.json"
+    ]);
+    assert.equal(failureBody.terminalState, "failed");
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "workspace"));
     await assertDirectoryEmptyOrMissing(path.join(tempRoot, "output"));
   } finally {
@@ -1768,7 +1944,7 @@ test("runWorkerClaimLoop reports invalid hosted modelConfigId prefixes before at
   }
 });
 
-function buildWorkerJob() {
+function buildWorkerJob(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     attemptId: "attempt-1",
     heartbeatIntervalSeconds: 30,
@@ -1815,7 +1991,8 @@ function buildWorkerJob() {
       runKind: "single_run" as const,
       runMode: "bounded_agentic_attempt" as const,
       toolProfile: "workspace_edit_limited" as const
-    }
+    },
+    ...overrides
   };
 }
 
@@ -1831,8 +2008,8 @@ function buildHeartbeatResponse(overrides: Partial<Record<string, unknown>> = {}
   };
 }
 
-function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
-  return [
+function buildArtifactEntries(options: { includeFailureClassification?: boolean } = {}): WorkerArtifactManifestEntry[] {
+  const entries: WorkerArtifactManifestEntry[] = [
     {
       artifactRole: "package_reference",
       byteSize: 128,
@@ -1846,10 +2023,91 @@ function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
       artifactRole: "package_reference",
       byteSize: 64,
       contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/FirstProof/Problem9/Gold.lean",
+      requiredForIngest: true,
+      sha256: "31".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/FirstProof/Problem9/Statement.lean",
+      requiredForIngest: true,
+      sha256: "32".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/FirstProof/Problem9/Support.lean",
+      requiredForIngest: true,
+      sha256: "33".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/LICENSE",
+      requiredForIngest: true,
+      sha256: "34".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/README.md",
+      requiredForIngest: true,
+      sha256: "35".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "package/lake-manifest.json",
+      requiredForIngest: true,
+      sha256: "36".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/lakefile.toml",
+      requiredForIngest: true,
+      sha256: "37".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/lean-toolchain",
+      requiredForIngest: true,
+      sha256: "38".repeat(32)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
       mediaType: "application/json",
       relativePath: "package/package-ref.json",
       requiredForIngest: true,
       sha256: "4".repeat(64)
+    },
+    {
+      artifactRole: "package_reference",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "package/statements/problem.md",
+      requiredForIngest: true,
+      sha256: "39".repeat(32)
     },
     {
       artifactRole: "prompt_package",
@@ -1859,6 +2117,42 @@ function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
       relativePath: "prompt/prompt-package.json",
       requiredForIngest: true,
       sha256: "5".repeat(64)
+    },
+    {
+      artifactRole: "prompt_package",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "prompt/benchmark.md",
+      requiredForIngest: true,
+      sha256: "41".repeat(32)
+    },
+    {
+      artifactRole: "prompt_package",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "prompt/item.md",
+      requiredForIngest: true,
+      sha256: "42".repeat(32)
+    },
+    {
+      artifactRole: "prompt_package",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "prompt/run-envelope.json",
+      requiredForIngest: true,
+      sha256: "43".repeat(32)
+    },
+    {
+      artifactRole: "prompt_package",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "text/plain",
+      relativePath: "prompt/system.md",
+      requiredForIngest: true,
+      sha256: "44".repeat(32)
     },
     {
       artifactRole: "candidate_source",
@@ -1933,6 +2227,20 @@ function buildArtifactEntries(): WorkerArtifactManifestEntry[] {
       sha256: "d".repeat(64)
     }
   ];
+
+  if (options.includeFailureClassification) {
+    entries.splice(entries.findIndex((entry) => entry.relativePath === "verification/verdict.json"), 0, {
+      artifactRole: "failure_classification",
+      byteSize: 64,
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "verification/failure-classification.json",
+      requiredForIngest: true,
+      sha256: "45".repeat(32)
+    });
+  }
+
+  return entries;
 }
 
 async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArtifactManifestEntry[]) {
@@ -1945,6 +2253,8 @@ async function writeBundleOutputsWithVerdict(
   verdictOverrides: Record<string, unknown> = {}
 ) : Promise<WrittenBundleDigests> {
   await mkdir(path.join(outputRoot, "package"), { recursive: true });
+  await mkdir(path.join(outputRoot, "package", "FirstProof", "Problem9"), { recursive: true });
+  await mkdir(path.join(outputRoot, "package", "statements"), { recursive: true });
   await mkdir(path.join(outputRoot, "prompt"), { recursive: true });
   await mkdir(path.join(outputRoot, "candidate"), { recursive: true });
   await mkdir(path.join(outputRoot, "diagnostics"), { recursive: true });
@@ -1952,6 +2262,40 @@ async function writeBundleOutputsWithVerdict(
   await mkdir(path.join(outputRoot, "traces"), { recursive: true });
   await mkdir(path.join(outputRoot, "verification"), { recursive: true });
   const candidateSource = "theorem Candidate : True := by\n  trivial\n";
+  const benchmarkSources = {
+    "FirstProof/Problem9/Gold.lean": "theorem problem9_gold : True := by\n  trivial\n",
+    "FirstProof/Problem9/Statement.lean": "theorem problem9_statement : True := by\n  trivial\n",
+    "FirstProof/Problem9/Support.lean": "theorem problem9_support : True := by\n  trivial\n",
+    "LICENSE": "Apache License\nVersion 2.0, January 2004\n",
+    "README.md": "# Problem9\n\nCanonical benchmark package fixture.\n",
+    "lake-manifest.json": `${stableStringify({ packagesDir: ".lake/packages" })}\n`,
+    "lakefile.toml": 'name = "FirstProof"\n',
+    "lean-toolchain": "leanprover/lean4:v4.22.0\n",
+    "statements/problem.md": "# Problem 9\n\nShow `True`.\n"
+  } as const;
+  const promptLayers = {
+    "benchmark.md": "Benchmark instructions.\n",
+    "item.md": "Item-specific guidance.\n",
+    "run-envelope.json": `${stableStringify({
+      attemptId: "attempt-1",
+      authMode: "machine_api_key",
+      benchmarkItemId: "Problem9",
+      benchmarkPackageDigest: benchmarkDigest,
+      benchmarkPackageId: "firstproof/Problem9",
+      benchmarkPackageVersion: "2026.03.13",
+      harnessRevision: "worker-harness.v1",
+      jobId: "job-1",
+      laneId: "lean422_exact",
+      modelConfigId: "openai/gpt-5",
+      promptProtocolVersion: "problem9-prompt-protocol.v1",
+      providerFamily: "openai",
+      runEnvelopeSchemaVersion: "1",
+      runId: "run-1",
+      runMode: "bounded_agentic_attempt",
+      toolProfile: "workspace_edit_limited"
+    })}\n`,
+    "system.md": "System prompt guidance.\n"
+  } as const;
   const benchmarkPackage = {
     benchmarkFamily: "firstproof",
     benchmarkItemId: "Problem9",
@@ -1961,12 +2305,12 @@ async function writeBundleOutputsWithVerdict(
       support: "FirstProof/Problem9/Support.lean"
     },
     hashAlgorithm: "sha256",
-    hashes: {
-      "FirstProof/Problem9/Gold.lean": "9".repeat(64),
-      "FirstProof/Problem9/Statement.lean": "8".repeat(64),
-      "FirstProof/Problem9/Support.lean": "7".repeat(64),
-      "README.md": "6".repeat(64)
-    },
+    hashes: Object.fromEntries(
+      Object.entries(benchmarkSources).map(([relativePath, contents]) => [
+        relativePath,
+        sha256Text(contents)
+      ])
+    ),
     lanePolicy: {
       primaryLane: "lean422_exact",
       supportedLanes: ["lean422_exact"]
@@ -1997,12 +2341,12 @@ async function writeBundleOutputsWithVerdict(
     benchmarkPackageVersion: "2026.03.13",
     harnessRevision: "worker-harness.v1",
     laneId: "lean422_exact",
-    layerDigests: {
-      "benchmark.md": "2".repeat(64),
-      "item.md": "3".repeat(64),
-      "run-envelope.json": "4".repeat(64),
-      "system.md": "5".repeat(64)
-    },
+    layerDigests: Object.fromEntries(
+      Object.entries(promptLayers).map(([relativePath, contents]) => [
+        relativePath,
+        sha256Text(contents)
+      ])
+    ),
     layerVersions: {
       benchmark: "1",
       item: "1",
@@ -2039,6 +2383,16 @@ async function writeBundleOutputsWithVerdict(
   const executionTrace = gzipSync(
     Buffer.from('{"event":"attempt_started","ts":"2026-03-13T00:00:00.000Z"}\n', "utf8")
   );
+  const failureClassification = {
+    evidenceArtifactRefs: ["verification/failure-classification.json"],
+    failureCode: "proof_policy_failed",
+    failureFamily: "verification",
+    phase: "verify",
+    retryEligibility: "never",
+    summary: "Canonical verifier failure payload.",
+    terminality: "terminal_attempt",
+    userVisibility: "internal_only"
+  };
   const environment = {
     authMode: "machine_api_key",
     environmentSchemaVersion: "1",
@@ -2103,12 +2457,18 @@ async function writeBundleOutputsWithVerdict(
     writtenBenchmarkPackage,
     "utf8"
   );
+  for (const [relativePath, contents] of Object.entries(benchmarkSources)) {
+    await writeFile(path.join(outputRoot, "package", relativePath), contents, "utf8");
+  }
   await writeFile(path.join(outputRoot, "package", "package-ref.json"), writtenPackageRef, "utf8");
   await writeFile(
     path.join(outputRoot, "prompt", "prompt-package.json"),
     writtenPromptPackage,
     "utf8"
   );
+  for (const [relativePath, contents] of Object.entries(promptLayers)) {
+    await writeFile(path.join(outputRoot, "prompt", relativePath), contents, "utf8");
+  }
   await writeFile(
     path.join(outputRoot, "environment", "environment.json"),
     writtenEnvironment,
@@ -2134,6 +2494,17 @@ async function writeBundleOutputsWithVerdict(
     writtenVerifierOutput,
     "utf8"
   );
+  if (
+    artifactEntries.some(
+      (artifact) => artifact.relativePath === "verification/failure-classification.json"
+    )
+  ) {
+    await writeFile(
+      path.join(outputRoot, "verification", "failure-classification.json"),
+      `${stableStringify(failureClassification)}\n`,
+      "utf8"
+    );
+  }
   await writeFile(
     path.join(outputRoot, "verification", "verdict.json"),
     writtenVerdict,
@@ -2221,7 +2592,7 @@ async function writeBundleOutputsWithVerdict(
   };
 }
 
-test("runWorkerClaimLoop rejects bundle digest drift before artifact registration", async (t) => {
+test("runWorkerClaimLoop rejects bundle digest drift before artifact registration", async () => {
   const mismatchCases = [
     {
       expectedSummary: /artifactManifestDigest does not match artifact-manifest\.json/i,
@@ -2322,6 +2693,7 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
         const benchmarkPackage = await readJsonFile(path.join(outputRoot, "package", "benchmark-package.json"));
         const packageRef = await readJsonFile(path.join(outputRoot, "package", "package-ref.json"));
         const promptPackage = await readJsonFile(path.join(outputRoot, "prompt", "prompt-package.json"));
+        const runEnvelope = await readJsonFile(path.join(outputRoot, "prompt", "run-envelope.json"));
         const environment = await readJsonFile(path.join(outputRoot, "environment", "environment.json"));
         const verdict = await readJsonFile(path.join(outputRoot, "verification", "verdict.json"));
         const tamperedBenchmarkPackage = {
@@ -2336,9 +2708,21 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
           ...promptPackage,
           benchmarkPackageDigest: "9".repeat(64)
         };
+        const tamperedRunEnvelope = {
+          ...runEnvelope,
+          benchmarkPackageDigest: "9".repeat(64)
+        };
         const tamperedVerdict = {
           ...verdict,
           benchmarkPackageDigest: "9".repeat(64)
+        };
+        const runEnvelopeText = `${stableStringify(tamperedRunEnvelope)}\n`;
+        const tamperedPromptPackageWithRunEnvelope = {
+          ...tamperedPromptPackage,
+          layerDigests: {
+            ...(tamperedPromptPackage.layerDigests as Record<string, unknown>),
+            "run-envelope.json": sha256Text(runEnvelopeText)
+          }
         };
         const verdictText = stableStringify(tamperedVerdict);
 
@@ -2349,9 +2733,10 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
         );
         await writeFile(
           path.join(outputRoot, "prompt", "prompt-package.json"),
-          `${stableStringify(tamperedPromptPackage)}\n`,
+          `${stableStringify(tamperedPromptPackageWithRunEnvelope)}\n`,
           "utf8"
         );
+        await writeFile(path.join(outputRoot, "prompt", "run-envelope.json"), runEnvelopeText, "utf8");
         await writeFile(
           path.join(outputRoot, "package", "package-ref.json"),
           `${stableStringify(tamperedPackageRef)}\n`,
@@ -2378,6 +2763,13 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
           relativePath: "prompt/prompt-package.json",
           requiredForIngest: true
         });
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "prompt_package",
+          contentEncoding: null,
+          mediaType: "application/json",
+          relativePath: "prompt/run-envelope.json",
+          requiredForIngest: true
+        });
         await writeFile(path.join(outputRoot, "verification", "verdict.json"), verdictText, "utf8");
         await upsertArtifactManifestEntry(outputRoot, {
           artifactRole: "verdict_record",
@@ -2398,15 +2790,15 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
             },
             environmentDigest: sha256Text(stableStringify(environment)),
             promptPackage: {
-              authMode: String(tamperedPromptPackage.authMode),
-              harnessRevision: String(tamperedPromptPackage.harnessRevision),
-              laneId: String(tamperedPromptPackage.laneId),
-              modelConfigId: String(tamperedPromptPackage.modelConfigId),
-              promptPackageDigest: String(tamperedPromptPackage.promptPackageDigest),
-              promptProtocolVersion: String(tamperedPromptPackage.promptProtocolVersion),
-              providerFamily: String(tamperedPromptPackage.providerFamily),
-              runMode: String(tamperedPromptPackage.runMode),
-              toolProfile: String(tamperedPromptPackage.toolProfile)
+              authMode: String(tamperedPromptPackageWithRunEnvelope.authMode),
+              harnessRevision: String(tamperedPromptPackageWithRunEnvelope.harnessRevision),
+              laneId: String(tamperedPromptPackageWithRunEnvelope.laneId),
+              modelConfigId: String(tamperedPromptPackageWithRunEnvelope.modelConfigId),
+              promptPackageDigest: String(tamperedPromptPackageWithRunEnvelope.promptPackageDigest),
+              promptProtocolVersion: String(tamperedPromptPackageWithRunEnvelope.promptProtocolVersion),
+              providerFamily: String(tamperedPromptPackageWithRunEnvelope.providerFamily),
+              runMode: String(tamperedPromptPackageWithRunEnvelope.runMode),
+              toolProfile: String(tamperedPromptPackageWithRunEnvelope.toolProfile)
             }
           }),
           verdictDigest: sha256Text(verdictText)
@@ -2418,15 +2810,26 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
       name: "coherent prompt and environment retamper",
       tamper: async (outputRoot: string) => {
         const promptPackage = await readJsonFile(path.join(outputRoot, "prompt", "prompt-package.json"));
+        const runEnvelope = await readJsonFile(path.join(outputRoot, "prompt", "run-envelope.json"));
         const environment = await readJsonFile(path.join(outputRoot, "environment", "environment.json"));
         const tamperedPromptPackage = { ...promptPackage, modelConfigId: "openai/gpt-5-pro" };
+        const tamperedRunEnvelope = { ...runEnvelope, modelConfigId: "openai/gpt-5-pro" };
         const tamperedEnvironment = { ...environment, modelConfigId: "openai/gpt-5-pro" };
+        const runEnvelopeText = `${stableStringify(tamperedRunEnvelope)}\n`;
+        const tamperedPromptPackageWithRunEnvelope = {
+          ...tamperedPromptPackage,
+          layerDigests: {
+            ...(tamperedPromptPackage.layerDigests as Record<string, unknown>),
+            "run-envelope.json": sha256Text(runEnvelopeText)
+          }
+        };
 
         await writeFile(
           path.join(outputRoot, "prompt", "prompt-package.json"),
-          `${stableStringify(tamperedPromptPackage)}\n`,
+          `${stableStringify(tamperedPromptPackageWithRunEnvelope)}\n`,
           "utf8"
         );
+        await writeFile(path.join(outputRoot, "prompt", "run-envelope.json"), runEnvelopeText, "utf8");
         await writeFile(
           path.join(outputRoot, "environment", "environment.json"),
           `${stableStringify(tamperedEnvironment)}\n`,
@@ -2437,6 +2840,13 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
           contentEncoding: null,
           mediaType: "application/json",
           relativePath: "prompt/prompt-package.json",
+          requiredForIngest: true
+        });
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "prompt_package",
+          contentEncoding: null,
+          mediaType: "application/json",
+          relativePath: "prompt/run-envelope.json",
           requiredForIngest: true
         });
         await upsertArtifactManifestEntry(outputRoot, {
@@ -2459,15 +2869,15 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
             },
             environmentDigest: sha256Text(stableStringify(tamperedEnvironment)),
             promptPackage: {
-              authMode: String(tamperedPromptPackage.authMode),
-              harnessRevision: String(tamperedPromptPackage.harnessRevision),
-              laneId: String(tamperedPromptPackage.laneId),
-              modelConfigId: String(tamperedPromptPackage.modelConfigId),
-              promptPackageDigest: String(tamperedPromptPackage.promptPackageDigest),
-              promptProtocolVersion: String(tamperedPromptPackage.promptProtocolVersion),
-              providerFamily: String(tamperedPromptPackage.providerFamily),
-              runMode: String(tamperedPromptPackage.runMode),
-              toolProfile: String(tamperedPromptPackage.toolProfile)
+              authMode: String(tamperedPromptPackageWithRunEnvelope.authMode),
+              harnessRevision: String(tamperedPromptPackageWithRunEnvelope.harnessRevision),
+              laneId: String(tamperedPromptPackageWithRunEnvelope.laneId),
+              modelConfigId: String(tamperedPromptPackageWithRunEnvelope.modelConfigId),
+              promptPackageDigest: String(tamperedPromptPackageWithRunEnvelope.promptPackageDigest),
+              promptProtocolVersion: String(tamperedPromptPackageWithRunEnvelope.promptProtocolVersion),
+              providerFamily: String(tamperedPromptPackageWithRunEnvelope.providerFamily),
+              runMode: String(tamperedPromptPackageWithRunEnvelope.runMode),
+              toolProfile: String(tamperedPromptPackageWithRunEnvelope.toolProfile)
             }
           })
         }));
@@ -2498,6 +2908,40 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
                   }
                 : artifact
             )
+        }));
+        await refreshBundleDigests(outputRoot);
+      }
+    },
+    {
+      expectedSummary:
+        /artifact-manifest\.json is missing required bundle file: package\/README\.md\./i,
+      name: "missing benchmark provenance manifest entry",
+      tamper: async (outputRoot: string) => {
+        await rewriteArtifactManifest(outputRoot, (artifactManifest) => ({
+          ...artifactManifest,
+          artifacts: (((artifactManifest.artifacts as Array<Record<string, unknown>>) ?? [])).filter(
+            (artifact) => String(artifact.relativePath) !== "package/README.md"
+          )
+        }));
+        await refreshBundleDigests(outputRoot);
+      }
+    },
+    {
+      expectedSummary:
+        /package\/README\.md mediaType does not match the canonical bundle contract\./i,
+      name: "benchmark provenance metadata drift",
+      tamper: async (outputRoot: string) => {
+        await rewriteArtifactManifest(outputRoot, (artifactManifest) => ({
+          ...artifactManifest,
+          artifacts: (((artifactManifest.artifacts as Array<Record<string, unknown>>) ?? [])).map(
+            (artifact) =>
+              String(artifact.relativePath) === "package/README.md"
+                ? {
+                    ...artifact,
+                    mediaType: null
+                  }
+                : artifact
+          )
         }));
         await refreshBundleDigests(outputRoot);
       }
@@ -2703,11 +3147,88 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
         }));
         await refreshBundleDigests(outputRoot);
       }
+    },
+    {
+      expectedSummary:
+        /package\/README\.md does not match package\/benchmark-package\.json hashes\./i,
+      name: "benchmark source digest drift",
+      tamper: async (outputRoot: string) => {
+        await writeFile(path.join(outputRoot, "package", "README.md"), "# Tampered benchmark fixture\n", "utf8");
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "package_reference",
+          contentEncoding: null,
+          mediaType: "text/plain",
+          relativePath: "package/README.md",
+          requiredForIngest: true
+        });
+        await refreshBundleDigests(outputRoot);
+      }
+    },
+    {
+      expectedSummary:
+        /prompt\/system\.md does not match prompt\/prompt-package\.json layerDigests\./i,
+      name: "prompt layer digest drift",
+      tamper: async (outputRoot: string) => {
+        await writeFile(
+          path.join(outputRoot, "prompt", "system.md"),
+          "Tampered system prompt\n",
+          "utf8"
+        );
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "prompt_package",
+          contentEncoding: null,
+          mediaType: "text/plain",
+          relativePath: "prompt/system.md",
+          requiredForIngest: true
+        });
+        await refreshBundleDigests(outputRoot);
+      }
+    },
+    {
+      expectedSummary:
+        /prompt\/run-envelope\.json runId does not match the canonical bundle contract\./i,
+      name: "run-envelope semantic drift",
+      tamper: async (outputRoot: string) => {
+        const runEnvelopePath = path.join(outputRoot, "prompt", "run-envelope.json");
+        const promptPackagePath = path.join(outputRoot, "prompt", "prompt-package.json");
+        const runEnvelope = await readJsonFile(runEnvelopePath);
+        const promptPackage = await readJsonFile(promptPackagePath);
+        const tamperedRunEnvelope = {
+          ...runEnvelope,
+          runId: "run-tampered"
+        };
+        const tamperedRunEnvelopeText = `${stableStringify(tamperedRunEnvelope)}\n`;
+        const tamperedPromptPackage = {
+          ...promptPackage,
+          layerDigests: {
+            ...(promptPackage.layerDigests as Record<string, unknown>),
+            "run-envelope.json": sha256Text(tamperedRunEnvelopeText)
+          }
+        };
+
+        await writeFile(runEnvelopePath, tamperedRunEnvelopeText, "utf8");
+        await writeFile(promptPackagePath, `${stableStringify(tamperedPromptPackage)}\n`, "utf8");
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "prompt_package",
+          contentEncoding: null,
+          mediaType: "application/json",
+          relativePath: "prompt/run-envelope.json",
+          requiredForIngest: true
+        });
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "prompt_package",
+          contentEncoding: null,
+          mediaType: "application/json",
+          relativePath: "prompt/prompt-package.json",
+          requiredForIngest: true
+        });
+        await refreshBundleDigests(outputRoot);
+      }
     }
   ] as const;
 
   for (const mismatchCase of mismatchCases) {
-    await t.test(mismatchCase.name, async () => {
+    {
       const tempRoot = await mkdtemp(
         path.join(os.tmpdir(), `paretoproof-worker-claim-bundle-mismatch-${sanitizePath(mismatchCase.name)}-`)
       );
@@ -2846,7 +3367,7 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
       } finally {
         await rm(tempRoot, { force: true, recursive: true });
       }
-    });
+    }
   }
 });
 

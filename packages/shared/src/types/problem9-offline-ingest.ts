@@ -15,15 +15,36 @@ export type Problem9OfflineIngestRequest = {
   bundle: Problem9OfflineIngestBundle;
 };
 
+export type Problem9BenchmarkSourceFiles = {
+  "FirstProof/Problem9/Gold.lean": string;
+  "FirstProof/Problem9/Statement.lean": string;
+  "FirstProof/Problem9/Support.lean": string;
+  LICENSE: string;
+  "README.md": string;
+  "lake-manifest.json": string;
+  "lakefile.toml": string;
+  "lean-toolchain": string;
+  "statements/problem.md": string;
+};
+
+export type Problem9PromptLayerContents = {
+  "benchmark.md": string;
+  "item.md": string;
+  "run-envelope.json": string;
+  "system.md": string;
+};
+
 type Problem9OfflineIngestBundleBase = {
   artifactManifest: Problem9OfflineArtifactManifest;
   benchmarkPackage: Problem9BenchmarkPackageManifest;
+  benchmarkSources: Problem9BenchmarkSourceFiles;
   candidateSource: string;
   compilerDiagnostics: unknown;
   compilerOutput: string;
   environment: Problem9EnvironmentManifest;
   packageRef: Problem9PackageRef;
   promptPackage: Problem9PromptPackageManifest;
+  promptLayers: Problem9PromptLayerContents;
   runBundle: Problem9RunBundleManifest;
   usage: unknown | null;
   verifierOutput: unknown;
