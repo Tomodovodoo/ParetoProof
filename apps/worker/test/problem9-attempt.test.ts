@@ -334,7 +334,7 @@ test(
       assert.equal(verdict.semanticEquality, "matched");
       assert.equal(verdict.axiomCheck, "passed");
     } finally {
-      process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST = originalDevboxDigest;
+      restoreOptionalEnvVar("PARETOPROOF_DEVBOX_IMAGE_DIGEST", originalDevboxDigest);
       await rm(fixture.tempRoot, { force: true, recursive: true });
     }
   }
@@ -392,7 +392,7 @@ test(
       );
       assert.equal((verdict.primaryFailure as Record<string, unknown>).phase, "compile");
     } finally {
-      process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST = originalDevboxDigest;
+      restoreOptionalEnvVar("PARETOPROOF_DEVBOX_IMAGE_DIGEST", originalDevboxDigest);
       await rm(fixture.tempRoot, { force: true, recursive: true });
     }
   }
@@ -451,4 +451,13 @@ async function createAttemptFixture(): Promise<{
     promptPackageRoot: promptPackage.outputRoot,
     tempRoot
   };
+}
+
+function restoreOptionalEnvVar(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 }
