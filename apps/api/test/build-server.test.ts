@@ -7,6 +7,7 @@ import {
   readBrandedAuthOrigins,
   readCorsRoutePath,
   readAllowedCorsOrigins,
+  readTrustedMutationOrigins,
 } from "../src/server/build-server.ts";
 
 test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allowlist", () => {
@@ -20,10 +21,14 @@ test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allow
       "https://portal.preview.paretoproof.com",
       "https://github.auth.preview.paretoproof.com",
     ],
+    mathPublicOrigin: "https://math.preview.paretoproof.com",
     portalPublicOrigin: "https://portal.preview.paretoproof.com",
   } as never);
 
-  assert.deepEqual(origins, ["https://portal.preview.paretoproof.com"]);
+  assert.deepEqual(origins, [
+    "https://portal.preview.paretoproof.com",
+    "https://math.preview.paretoproof.com",
+  ]);
   assert.equal(origins.includes("https://auth.preview.paretoproof.com"), false);
   assert.equal(
     origins.includes("https://github.auth.preview.paretoproof.com"),
@@ -39,10 +44,42 @@ test("readAllowedCorsOrigins keeps the portal origin when auth and portal share 
   const origins = readAllowedCorsOrigins({
     brandedAuthOrigins: ["https://portal.preview.paretoproof.com"],
     corsAllowedOrigins: [],
+    mathPublicOrigin: "https://math.preview.paretoproof.com",
     portalPublicOrigin: "https://portal.preview.paretoproof.com",
   } as never);
 
-  assert.deepEqual(origins, ["https://portal.preview.paretoproof.com"]);
+  assert.deepEqual(origins, [
+    "https://portal.preview.paretoproof.com",
+    "https://math.preview.paretoproof.com",
+  ]);
+});
+
+test("readTrustedMutationOrigins keeps math out of the generic trusted portal mutation allowlist", () => {
+  const origins = readTrustedMutationOrigins({
+    brandedAuthOrigins: [
+      "https://auth.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+      "https://google.auth.preview.paretoproof.com",
+    ],
+    corsAllowedOrigins: [
+      "https://portal.preview.paretoproof.com",
+      "https://math.preview.paretoproof.com",
+      "https://portal-canary.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+    ],
+    mathPublicOrigin: "https://math.preview.paretoproof.com",
+    portalPublicOrigin: "https://portal.preview.paretoproof.com",
+  } as never);
+
+  assert.deepEqual(origins, [
+    "https://portal.preview.paretoproof.com",
+    "https://portal-canary.preview.paretoproof.com",
+  ]);
+  assert.equal(origins.includes("https://math.preview.paretoproof.com"), false);
+  assert.equal(
+    origins.includes("https://github.auth.preview.paretoproof.com"),
+    false,
+  );
 });
 
 test("readBrandedAuthOrigins excludes the portal origin when auth and portal share one origin", () => {
@@ -183,6 +220,7 @@ test("buildServer keeps the parsed runtime contract authoritative during boot an
       CF_ACCESS_PORTAL_AUD: "portal-audience",
       CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
       DATABASE_URL: "postgres://localhost:5432/paretoproof",
+      MATH_PUBLIC_ORIGIN: "https://math.preview.paretoproof.com",
       PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
       WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
     }),
@@ -223,6 +261,7 @@ test("buildServer maps default DB readiness failures to 503 health responses", a
       CF_ACCESS_PORTAL_AUD: "portal-audience",
       CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
       DATABASE_URL: "postgres://localhost:5432/paretoproof",
+      MATH_PUBLIC_ORIGIN: "https://math.preview.paretoproof.com",
       PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
       WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
     }),

@@ -141,6 +141,60 @@ export const appRouteAccessMatrix = [
     redirectIfDenied: "portal_denied",
     surface: "portal",
     summary: "Role management and contributor state inspection for admins."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.home",
+    path: "/",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Math workflow home for approved contributors."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.questions",
+    path: "/questions",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Question workflow index for math review and launch preparation."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.question-detail",
+    path: "/questions/:questionId",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Question-specific workflow shell on the dedicated math surface."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.submissions",
+    path: "/submissions",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Structured submission workflow placeholder for the math surface."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.reviews",
+    path: "/reviews",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Review workflow placeholder for the dedicated math surface."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
+    id: "math.launch",
+    path: "/launch",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Question-centric launch entry on the dedicated math surface."
   })
 ] as const;
 

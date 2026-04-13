@@ -99,7 +99,7 @@ describe("resolveAuthEntrySessionCheckAction", () => {
           }
         }
       )
-    ).toBe("redirect_portal");
+    ).toBe("redirect_authenticated_app");
   });
 
   it("redirects pending users straight to the pending route", () => {

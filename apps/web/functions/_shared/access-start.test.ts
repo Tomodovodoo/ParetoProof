@@ -8,7 +8,9 @@ function readSetCookies(response: Response) {
 describe("handleAccessStart", () => {
   it("starts Google sign-in with Strict provider state and clears abandoned link state", async () => {
     const response = await handleAccessStart(
-      new Request("https://auth.paretoproof.com/api/access/start/google?redirect=/profile"),
+      new Request(
+        "https://auth.paretoproof.com/api/access/start/google?app=portal&redirect=/profile"
+      ),
       {
         ACCESS_PROVIDER_STATE_SECRET: "test-secret"
       },
@@ -17,7 +19,7 @@ describe("handleAccessStart", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://google.auth.paretoproof.com/?redirect=%2Fprofile"
+      "https://google.auth.paretoproof.com/?app=portal&redirect=%2Fprofile"
     );
 
     const setCookies = readSetCookies(response);
@@ -31,7 +33,7 @@ describe("handleAccessStart", () => {
   it("starts GitHub profile linking without clearing the existing link intent and keeps provider state Strict", async () => {
     const response = await handleAccessStart(
       new Request(
-        "https://auth.paretoproof.com/api/access/start/github?flow=link&redirect=/profile?tab=identities"
+        "https://auth.paretoproof.com/api/access/start/github?app=portal&flow=link&redirect=/profile?tab=identities"
       ),
       {
         ACCESS_PROVIDER_STATE_SECRET: "test-secret"
@@ -41,12 +43,29 @@ describe("handleAccessStart", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://github.auth.paretoproof.com/?redirect=%2Fprofile%3Ftab%3Didentities&flow=link"
+      "https://github.auth.paretoproof.com/?app=portal&redirect=%2Fprofile%3Ftab%3Didentities&flow=link"
     );
 
     const setCookies = readSetCookies(response);
     expect(setCookies).toHaveLength(1);
     expect(setCookies[0]).toContain("PortalAccessProvider=");
     expect(setCookies[0]).toContain("SameSite=Strict");
+  });
+
+  it("preserves math-surface continuation on the branded provider handoff", async () => {
+    const response = await handleAccessStart(
+      new Request(
+        "https://auth.paretoproof.com/api/access/start/google?app=math&redirect=/questions/problem-9"
+      ),
+      {
+        ACCESS_PROVIDER_STATE_SECRET: "test-secret"
+      },
+      "google"
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://google.auth.paretoproof.com/?app=math&redirect=%2Fquestions%2Fproblem-9"
+    );
   });
 });

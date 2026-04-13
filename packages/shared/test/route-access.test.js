@@ -28,6 +28,10 @@ describe("route ownership matrix helpers", () => {
     expect(findAppRouteBySurface("portal", "/runs/run-123")?.id).toBe(
       "portal.run-detail"
     );
+    expect(findAppRouteBySurface("math", "/questions/problem-9")?.id).toBe(
+      "math.question-detail"
+    );
+    expect(findAppRouteBySurface("math", "/workers")).toBeNull();
   });
 
   it("keeps portal route-linked catalogs aligned with the portal route matrix", () => {
@@ -35,6 +39,8 @@ describe("route ownership matrix helpers", () => {
       appRouteAccessMatrix.every((entry) =>
         entry.surface === "portal"
           ? entry.id.startsWith("portal.")
+          : entry.surface === "math"
+            ? entry.id.startsWith("math.")
           : entry.id.startsWith("public.")
       )
     ).toBe(true);

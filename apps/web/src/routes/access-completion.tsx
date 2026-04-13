@@ -3,19 +3,33 @@ import { AppIcon } from "../components/app-icon";
 import {
   buildAccessFinalizeUrl,
   buildAuthUrl,
+  describeAuthenticatedSurface,
+  type AuthenticatedSurface,
   isLocalHostname
 } from "../lib/surface";
 
 type AccessCompletionProps = {
   provider: "github" | "google";
   redirectPath: string;
+  redirectSurface: AuthenticatedSurface;
 };
 
-export function AccessCompletion({ provider, redirectPath }: AccessCompletionProps) {
-  const finalizeUrl = buildAccessFinalizeUrl(redirectPath);
+export function AccessCompletion({
+  provider,
+  redirectPath,
+  redirectSurface
+}: AccessCompletionProps) {
+  const finalizeUrl = buildAccessFinalizeUrl(redirectPath, {
+    surface: redirectSurface
+  });
   const finalizeFormRef = useRef<HTMLFormElement>(null);
-  const retryUrl = new URL(buildAuthUrl(redirectPath));
+  const retryUrl = new URL(
+    buildAuthUrl(redirectPath, undefined, {
+      surface: redirectSurface
+    })
+  );
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
+  const destinationLabel = describeAuthenticatedSurface(redirectSurface);
 
   retryUrl.searchParams.set("handoff", "retry");
 
@@ -36,11 +50,11 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           <span className="inline-icon" aria-hidden="true">
             <AppIcon name="shield" />
           </span>
-          ParetoProof Portal
+          ParetoProof workspace
         </p>
         <h1>Completing {providerLabel} sign in</h1>
         <p>
-          Your session is active. Redirecting you to the portal now.
+          Your session is active. Redirecting you to the {destinationLabel} now.
         </p>
         <p>
           If you are not redirected automatically,{" "}
@@ -53,8 +67,9 @@ export function AccessCompletion({ provider, redirectPath }: AccessCompletionPro
           className="auth-form"
         >
           {redirectPath !== "/" ? <input type="hidden" name="redirect" value={redirectPath} /> : null}
+          <input type="hidden" name="app" value={redirectSurface} />
           <button type="submit" className="button">
-            Continue to the portal
+            Continue to the {destinationLabel}
           </button>
         </form>
       </section>

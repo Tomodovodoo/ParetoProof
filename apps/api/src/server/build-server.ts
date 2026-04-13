@@ -41,7 +41,8 @@ export function readBrandedAuthOrigins(runtimeEnv: ApiRuntimeEnv) {
 export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
   const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
-  const baselineOrigins = [portalPublicOrigin];
+  const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
+  const baselineOrigins = [portalPublicOrigin, mathPublicOrigin];
 
   return [
     ...new Set(
@@ -49,7 +50,25 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
         .map(normalizeOrigin)
         .filter(
           (origin) =>
-            origin === portalPublicOrigin || !brandedAuthOrigins.has(origin),
+            baselineOrigins.includes(origin) || !brandedAuthOrigins.has(origin),
+      ),
+    ),
+  ];
+}
+
+export function readTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
+  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+  const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
+
+  return [
+    ...new Set(
+      [portalPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
+        .map(normalizeOrigin)
+        .filter(
+          (origin) =>
+            origin === portalPublicOrigin ||
+            (origin !== mathPublicOrigin && !brandedAuthOrigins.has(origin)),
         ),
     ),
   ];
@@ -147,7 +166,8 @@ export async function buildServer(
   const rateLimitPreHandlers = createRateLimitPreHandlers(
     createInMemoryRateLimiter(),
   );
-  const allowedOrigins = readAllowedCorsOrigins(runtimeEnv);
+  const corsAllowedOrigins = readAllowedCorsOrigins(runtimeEnv);
+  const trustedMutationOrigins = readTrustedMutationOrigins(runtimeEnv);
   const brandedAuthOrigins = readBrandedAuthOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
   const checkReadiness =
@@ -171,7 +191,7 @@ export async function buildServer(
           if (
             isAllowedCorsOrigin({
               allowLocalhostCors,
-              allowedOrigins,
+              allowedOrigins: corsAllowedOrigins,
               brandedAuthOrigins,
               method: request.method,
               origin,
@@ -192,7 +212,7 @@ export async function buildServer(
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: allowLocalhostCors,
-      allowedOrigins,
+      allowedOrigins: trustedMutationOrigins,
       brandedAuthOrigins,
     }),
   );
@@ -209,6 +229,7 @@ export async function buildServer(
     allowLocalhostOrigins: runtimeEnv.corsAllowLocalhost,
     authPublicOrigin: runtimeEnv.authPublicOrigin,
     brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
+    mathPublicOrigin: runtimeEnv.mathPublicOrigin,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
     rateLimitPreHandlers,
   });

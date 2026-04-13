@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { resolvePortalRouteRedirect } from "./portal-route-access.ts";
+import {
+  resolvePortalRouteRedirect,
+  resolveSurfaceRouteRedirect
+} from "./portal-route-access.ts";
 
 const originalWindow = globalThis.window;
 
@@ -132,5 +135,79 @@ describe("resolvePortalRouteRedirect", () => {
     expect(redirect.pathname).toBe("/denied");
     expect(redirect.searchParams.get("surface")).toBe("portal");
     expect(redirect.searchParams.get("reason")).toBe("insufficient_role");
+  });
+
+  it("keeps approved users on owned math routes and preserves the math surface locally", () => {
+    setWindowUrl(
+      "http://localhost/questions/problem-9?surface=math&access=approved&roles=helper&email=lin@paretoproof.local"
+    );
+
+    expect(
+      resolveSurfaceRouteRedirect({
+        pathname: "/questions/problem-9",
+        roles: ["helper"],
+        search:
+          "?surface=math&access=approved&roles=helper&email=lin@paretoproof.local",
+        status: "approved",
+        surface: "math"
+      })
+    ).toBeNull();
+  });
+
+  it("redirects pending math users to the portal pending surface", () => {
+    setWindowUrl(
+      "http://localhost/launch?surface=math&access=pending&email=ada@paretoproof.local"
+    );
+
+    const redirect = new URL(
+      resolveSurfaceRouteRedirect({
+        pathname: "/launch",
+        roles: [],
+        search: "?surface=math&access=pending&email=ada@paretoproof.local",
+        status: "pending",
+        surface: "math"
+      }),
+      "http://localhost"
+    );
+
+    expect(redirect.pathname).toBe("/pending");
+    expect(redirect.searchParams.get("surface")).toBe("portal");
+    expect(redirect.searchParams.get("access")).toBe("pending");
+  });
+
+  it("redirects math-host portal state routes back onto the portal host even when the path matches", () => {
+    setWindowUrl("https://math.paretoproof.com/pending");
+
+    expect(
+      resolveSurfaceRouteRedirect({
+        pathname: "/pending",
+        roles: [],
+        search: "",
+        status: "pending",
+        surface: "math"
+      })
+    ).toBe("https://portal.paretoproof.com/pending");
+  });
+
+  it("redirects unknown approved math paths back to the math home surface", () => {
+    setWindowUrl(
+      "http://localhost/unknown?surface=math&access=approved&roles=helper&email=lin@paretoproof.local"
+    );
+
+    const redirect = new URL(
+      resolveSurfaceRouteRedirect({
+        pathname: "/unknown",
+        roles: ["helper"],
+        search:
+          "?surface=math&access=approved&roles=helper&email=lin@paretoproof.local",
+        status: "approved",
+        surface: "math"
+      }),
+      "http://localhost"
+    );
+
+    expect(redirect.pathname).toBe("/");
+    expect(redirect.searchParams.get("surface")).toBe("math");
+    expect(redirect.searchParams.get("access")).toBe("approved");
   });
 });

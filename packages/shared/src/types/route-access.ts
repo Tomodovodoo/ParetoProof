@@ -1,11 +1,16 @@
-export type AppSurface = "public_site" | "portal";
+export type AppSurface = "public_site" | "portal" | "math";
 
 export type PublicRouteId = `public.${string}`;
 export type PortalRouteId = `portal.${string}`;
-export type AppRouteId = PublicRouteId | PortalRouteId;
+export type MathRouteId = `math.${string}`;
+export type AppRouteId = PublicRouteId | PortalRouteId | MathRouteId;
 
 export type AppRouteIdForSurface<TSurface extends AppSurface> =
-  TSurface extends "portal" ? PortalRouteId : PublicRouteId;
+  TSurface extends "portal"
+    ? PortalRouteId
+    : TSurface extends "math"
+      ? MathRouteId
+      : PublicRouteId;
 
 export type RouteAccessLevel =
   | "public"
@@ -21,7 +26,8 @@ export type RouteRedirectTarget =
   | "public_home"
   | "portal_home"
   | "portal_pending"
-  | "portal_denied";
+  | "portal_denied"
+  | "math_home";
 
 export type AppRouteMatrixEntry<TSurface extends AppSurface = AppSurface> = {
   access: RouteAccessLevel;
