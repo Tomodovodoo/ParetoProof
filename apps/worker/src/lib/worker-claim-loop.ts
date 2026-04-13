@@ -225,6 +225,7 @@ export type RunWorkerClaimLoopResult = {
 type ActiveWorkerJob = Extract<WorkerClaimResponse, { leaseStatus: "active" }>["workerJob"];
 
 type ActiveLeaseState = {
+  backgroundControlError: unknown | null;
   cancelRequested: boolean;
   currentPhase: WorkerExecutionPhase;
   heartbeatErrorMessage: string | null;
@@ -398,6 +399,7 @@ async function processClaimedJob(
   dependencies: WorkerClaimLoopResolvedDependencies
 ): Promise<"completed" | "cancelled" | "lease_lost"> {
   const leaseState: ActiveLeaseState = {
+    backgroundControlError: null,
     cancelRequested: false,
     currentPhase: "prepare",
     heartbeatErrorMessage: null,
@@ -416,194 +418,45 @@ async function processClaimedJob(
     workspaceRoot: options.workspaceRoot
   });
   let heartbeatLoop = Promise.resolve();
+  let failureTerminalContext: CancellationTerminalContext | null = null;
 
   try {
     try {
       await prepareLeaseFilesystemRoots(leaseRoots);
     } catch (error) {
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        buildStaticFailure({
-          summary: error instanceof Error ? error.message : String(error),
-          failureCode: "tool_permission_violation",
-          phase: "prepare"
-        })
-      );
-      return "completed";
-    }
-
-    await refreshLease(leaseState, apiBaseUrl, dependencies);
-
-    if (
-      await submitCancellationIfRequested(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        "Worker received a control-plane cancellation request before execution started."
-      )
-    ) {
-      return "completed";
-    }
-
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
-
-    if (workerJob.target.runKind !== "single_run") {
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        buildStaticFailure({
-          summary: `Worker received unsupported run kind ${workerJob.target.runKind}.`,
-          failureCode: "run_configuration_invalid",
-          phase: "prepare"
-        })
-      );
-      return "completed";
-    }
-
-    if (workerJob.target.benchmarkItemId !== "Problem9") {
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        buildStaticFailure({
-          summary: `Worker received unsupported benchmark item ${workerJob.target.benchmarkItemId}.`,
-          failureCode: "run_configuration_invalid",
-          phase: "prepare"
-        })
-      );
-      return "completed";
-    }
-
-    if (workerJob.target.runMode === "pass_k_probe") {
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        buildStaticFailure({
-          summary: "Hosted worker single-run execution does not support pass_k_probe targets yet.",
-          failureCode: "run_configuration_invalid",
-          phase: "prepare"
-        })
-      );
-      return "completed";
-    }
-
-    try {
-      assertProblem9HostedCapability({
-        authMode: workerJob.target.authMode,
-        modelConfigId: workerJob.target.modelConfigId,
-        providerFamily: workerJob.target.providerFamily
-      });
-    } catch (error) {
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        buildStaticFailure({
-          summary: error instanceof Error ? error.message : String(error),
-          failureCode: "provider_unsupported_request",
-          phase: "prepare"
-        })
-      );
-      return "completed";
-    }
-
-    const benchmarkResult = await dependencies.materializeBenchmarkPackage({
-      outputRoot: leaseRoots.benchmarkPackageRoot
-    });
-
-    assertExpectedBenchmarkIdentity(workerJob.target, benchmarkResult);
-
-    const promptDefaults = getDefaultProblem9PromptPackageOptions();
-    const promptResult = await dependencies.materializePromptPackage({
-      attemptId: workerJob.attemptId,
-      authMode: workerJob.target.authMode,
-      benchmarkPackageRoot: benchmarkResult.outputRoot,
-      harnessRevision: workerJob.target.harnessRevision,
-      jobId: workerJob.jobId,
-      laneId: workerJob.target.laneId,
-      modelConfigId: workerJob.target.modelConfigId,
-      outputRoot: leaseRoots.promptPackageRoot,
-      passKCount: null,
-      passKIndex: null,
-      promptLayerVersions: promptDefaults.promptLayerVersions,
-      promptProtocolVersion: workerJob.target.promptProtocolVersion,
-      providerFamily: workerJob.target.providerFamily,
-      runId: workerJob.runId,
-      runMode: workerJob.target.runMode,
-      toolProfile: workerJob.target.toolProfile
-    });
-
-    if (promptResult.promptPackageDigest !== workerJob.target.promptPackageDigest) {
-      throw new Error(
-        `Prompt package digest mismatch: expected ${workerJob.target.promptPackageDigest}, got ${promptResult.promptPackageDigest}.`
-      );
-    }
-
-    await appendWorkerEvent(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      "attempt_started",
-      "prepare",
-      "Materialized benchmark and prompt package; starting Problem 9 attempt.",
-      {
-        benchmarkPackageDigest: benchmarkResult.packageDigest,
-        promptPackageDigest: promptResult.promptPackageDigest,
-        runMode: workerJob.target.runMode
+      try {
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          buildStaticFailure({
+            summary: error instanceof Error ? error.message : String(error),
+            failureCode: "tool_permission_violation",
+            phase: "prepare"
+          })
+        );
+      } catch (submissionError) {
+        return await normalizeUnhandledClaimLoopFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          submissionError,
+          null,
+          heartbeatLoop
+        );
       }
-    );
-
-    if (
-      await submitCancellationIfRequested(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        "Worker received a control-plane cancellation request before the attempt entered execution."
-      )
-    ) {
       return "completed";
     }
 
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
-
-    leaseState.currentPhase = "generate";
-    leaseState.progressMessage = "Running Problem 9 attempt.";
-    heartbeatLoop = startHeartbeatLoop(leaseState, apiBaseUrl, dependencies);
-
-    let attemptResult: Problem9AttemptResult;
-
     try {
-      attemptResult = await dependencies.attemptRunner({
-        authMode: workerJob.target.authMode,
-        benchmarkPackageRoot: benchmarkResult.outputRoot,
-        modelSnapshotId: workerJob.target.modelSnapshotId,
-        networkPolicyMode: "hosted",
-        outputRoot: leaseRoots.attemptOutputRoot,
-        promptPackageRoot: promptResult.outputRoot,
-        providerFamily: workerJob.target.providerFamily,
-        providerModel: resolveProviderModel({
-          providerFamily: workerJob.target.providerFamily,
-          configuredProviderModel: options.providerModel,
-          modelConfigId: workerJob.target.modelConfigId
-        }),
-        stubScenario: inferStubScenario(workerJob.target.modelSnapshotId),
-        workspaceRoot: leaseRoots.attemptWorkspaceRoot
-      });
-    } catch (error) {
+      await refreshLease(leaseState, apiBaseUrl, dependencies);
+
       if (
         await submitCancellationIfRequested(
           leaseState,
           apiBaseUrl,
           dependencies,
-          "Worker stopped after a control-plane cancellation request during attempt execution."
+          "Worker received a control-plane cancellation request before execution started."
         )
       ) {
         return "completed";
@@ -613,187 +466,467 @@ async function processClaimedJob(
         return "lease_lost";
       }
 
-      await submitHarnessFailure(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        classifyHostedAttemptError(error)
-      );
-      return "completed";
-    }
-
-    leaseState.currentPhase = "finalize";
-    leaseState.progressMessage = "Preparing terminal worker submission.";
-
-    if (
-      await submitCancellationIfRequested(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        "Worker received a control-plane cancellation request before terminal submission."
-      )
-    ) {
-      return "completed";
-    }
-
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
-
-    await refreshLease(leaseState, apiBaseUrl, dependencies);
-
-    if (
-      await submitCancellationIfRequested(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        "Worker received a control-plane cancellation request while preparing terminal submission."
-      )
-    ) {
-      return "completed";
-    }
-
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
-
-    let bundleSubmission: PreparedBundleSubmission;
-
-    try {
-      bundleSubmission = await readBundleSubmission(attemptResult.outputRoot);
-      assertBundleSubmissionMatchesJobTarget(bundleSubmission, {
-        attemptId: workerJob.attemptId,
-        authMode: workerJob.target.authMode,
-        benchmarkItemId: workerJob.target.benchmarkItemId,
-        benchmarkPackageDigest: workerJob.target.benchmarkPackageDigest,
-        benchmarkPackageId: workerJob.target.benchmarkPackageId,
-        benchmarkPackageVersion: workerJob.target.benchmarkPackageVersion,
-        bundleSchemaVersion: workerJob.runBundleSchemaVersion,
-        harnessRevision: workerJob.target.harnessRevision,
-        jobId: workerJob.jobId,
-        laneId: workerJob.target.laneId,
-        modelConfigId: workerJob.target.modelConfigId,
-        modelSnapshotId: workerJob.target.modelSnapshotId,
-        promptPackageDigest: workerJob.target.promptPackageDigest,
-        promptProtocolVersion: workerJob.target.promptProtocolVersion,
-        providerFamily: workerJob.target.providerFamily,
-        runId: workerJob.runId,
-        runMode: workerJob.target.runMode,
-        status: attemptResult.result === "pass" ? "success" : "failure",
-        stopReason: attemptResult.stopReason,
-        toolProfile: workerJob.target.toolProfile
-      });
-      assertRequiredArtifactRoles(bundleSubmission.artifactManifest, workerJob.requiredArtifactRoles);
-    } catch (error) {
-      if (error instanceof Error) {
+      if (workerJob.target.runKind !== "single_run") {
         await submitHarnessFailure(
           leaseState,
           apiBaseUrl,
           dependencies,
           buildStaticFailure({
-            summary: error.message,
-            failureCode: "harness_crashed",
-            phase: "finalize"
+            summary: `Worker received unsupported run kind ${workerJob.target.runKind}.`,
+            failureCode: "run_configuration_invalid",
+            phase: "prepare"
           })
         );
+        return "completed";
+      }
+
+      if (workerJob.target.benchmarkItemId !== "Problem9") {
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          buildStaticFailure({
+            summary: `Worker received unsupported benchmark item ${workerJob.target.benchmarkItemId}.`,
+            failureCode: "run_configuration_invalid",
+            phase: "prepare"
+          })
+        );
+        return "completed";
+      }
+
+      if (workerJob.target.runMode === "pass_k_probe") {
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          buildStaticFailure({
+            summary: "Hosted worker single-run execution does not support pass_k_probe targets yet.",
+            failureCode: "run_configuration_invalid",
+            phase: "prepare"
+          })
+        );
+        return "completed";
+      }
+
+      try {
+        assertProblem9HostedCapability({
+          authMode: workerJob.target.authMode,
+          modelConfigId: workerJob.target.modelConfigId,
+          providerFamily: workerJob.target.providerFamily
+        });
+      } catch (error) {
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          buildStaticFailure({
+            summary: error instanceof Error ? error.message : String(error),
+            failureCode: "provider_unsupported_request",
+            phase: "prepare"
+          })
+        );
+        return "completed";
+      }
+
+      const benchmarkResult = await dependencies.materializeBenchmarkPackage({
+        outputRoot: leaseRoots.benchmarkPackageRoot
+      });
+
+      assertExpectedBenchmarkIdentity(workerJob.target, benchmarkResult);
+
+      const promptDefaults = getDefaultProblem9PromptPackageOptions();
+      const promptResult = await dependencies.materializePromptPackage({
+        attemptId: workerJob.attemptId,
+        authMode: workerJob.target.authMode,
+        benchmarkPackageRoot: benchmarkResult.outputRoot,
+        harnessRevision: workerJob.target.harnessRevision,
+        jobId: workerJob.jobId,
+        laneId: workerJob.target.laneId,
+        modelConfigId: workerJob.target.modelConfigId,
+        outputRoot: leaseRoots.promptPackageRoot,
+        passKCount: null,
+        passKIndex: null,
+        promptLayerVersions: promptDefaults.promptLayerVersions,
+        promptProtocolVersion: workerJob.target.promptProtocolVersion,
+        providerFamily: workerJob.target.providerFamily,
+        runId: workerJob.runId,
+        runMode: workerJob.target.runMode,
+        toolProfile: workerJob.target.toolProfile
+      });
+
+      if (promptResult.promptPackageDigest !== workerJob.target.promptPackageDigest) {
+        throw new Error(
+          `Prompt package digest mismatch: expected ${workerJob.target.promptPackageDigest}, got ${promptResult.promptPackageDigest}.`
+        );
+      }
+
+      await appendWorkerEvent(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "attempt_started",
+        "prepare",
+        "Materialized benchmark and prompt package; starting Problem 9 attempt.",
+        {
+          benchmarkPackageDigest: benchmarkResult.packageDigest,
+          promptPackageDigest: promptResult.promptPackageDigest,
+          runMode: workerJob.target.runMode
+        }
+      );
+
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker received a control-plane cancellation request before the attempt entered execution."
+        )
+      ) {
+        return "completed";
+      }
+
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+
+      leaseState.currentPhase = "generate";
+      leaseState.progressMessage = "Running Problem 9 attempt.";
+      heartbeatLoop = startHeartbeatLoop(leaseState, apiBaseUrl, dependencies);
+
+      let attemptResult: Problem9AttemptResult;
+
+      try {
+        attemptResult = await dependencies.attemptRunner({
+          authMode: workerJob.target.authMode,
+          benchmarkPackageRoot: benchmarkResult.outputRoot,
+          modelSnapshotId: workerJob.target.modelSnapshotId,
+          networkPolicyMode: "hosted",
+          outputRoot: leaseRoots.attemptOutputRoot,
+          promptPackageRoot: promptResult.outputRoot,
+          providerFamily: workerJob.target.providerFamily,
+          providerModel: resolveProviderModel({
+            providerFamily: workerJob.target.providerFamily,
+            configuredProviderModel: options.providerModel,
+            modelConfigId: workerJob.target.modelConfigId
+          }),
+          stubScenario: inferStubScenario(workerJob.target.modelSnapshotId),
+          workspaceRoot: leaseRoots.attemptWorkspaceRoot
+        });
+      } catch (error) {
+        leaseState.stopped = true;
+        leaseState.stopHeartbeat?.();
+        await heartbeatLoop;
+
         if (
           await submitCancellationIfRequested(
             leaseState,
             apiBaseUrl,
             dependencies,
-            "Worker received a control-plane cancellation request while validating the terminal bundle."
+            "Worker stopped after a control-plane cancellation request during attempt execution."
           )
         ) {
           return "completed";
         }
 
-        return leaseState.leaseLost ? "lease_lost" : "completed";
+        if (leaseState.leaseLost) {
+          return "lease_lost";
+        }
+
+        const backgroundAttemptError = consumeBackgroundControlError(leaseState);
+
+        if (backgroundAttemptError) {
+          return await normalizeUnhandledClaimLoopFailure(
+            leaseState,
+            apiBaseUrl,
+            dependencies,
+            backgroundAttemptError,
+            failureTerminalContext,
+            heartbeatLoop
+          );
+        }
+
+        if (leaseState.cancelRequested) {
+          return await normalizeUnhandledClaimLoopFailure(
+            leaseState,
+            apiBaseUrl,
+            dependencies,
+            error,
+            failureTerminalContext,
+            heartbeatLoop
+          );
+        }
+
+        await submitHarnessFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          classifyHostedAttemptError(error)
+        );
+        return "completed";
       }
 
-      throw error;
-    }
+      await Promise.resolve();
 
-    const manifestResponse = await submitArtifactManifest(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      {
-        artifacts: bundleSubmission.artifactManifest,
+      const backgroundAttemptError = consumeBackgroundControlError(leaseState);
+
+      if (backgroundAttemptError) {
+        return await normalizeUnhandledClaimLoopFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          backgroundAttemptError,
+          failureTerminalContext,
+          heartbeatLoop
+        );
+      }
+
+      leaseState.currentPhase = "finalize";
+      leaseState.progressMessage = "Preparing terminal worker submission.";
+
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker received a control-plane cancellation request before terminal submission."
+        )
+      ) {
+        return "completed";
+      }
+
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+
+      await refreshLease(leaseState, apiBaseUrl, dependencies);
+
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker received a control-plane cancellation request while preparing terminal submission."
+        )
+      ) {
+        return "completed";
+      }
+
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+
+      const preFinalizeBackgroundError = consumeBackgroundControlError(leaseState);
+
+      if (preFinalizeBackgroundError) {
+        return await normalizeUnhandledClaimLoopFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          preFinalizeBackgroundError,
+          failureTerminalContext,
+          heartbeatLoop
+        );
+      }
+
+      let bundleSubmission: PreparedBundleSubmission;
+
+      try {
+        bundleSubmission = await readBundleSubmission(attemptResult.outputRoot);
+        assertBundleSubmissionMatchesJobTarget(bundleSubmission, {
+          attemptId: workerJob.attemptId,
+          authMode: workerJob.target.authMode,
+          benchmarkItemId: workerJob.target.benchmarkItemId,
+          benchmarkPackageDigest: workerJob.target.benchmarkPackageDigest,
+          benchmarkPackageId: workerJob.target.benchmarkPackageId,
+          benchmarkPackageVersion: workerJob.target.benchmarkPackageVersion,
+          bundleSchemaVersion: workerJob.runBundleSchemaVersion,
+          harnessRevision: workerJob.target.harnessRevision,
+          jobId: workerJob.jobId,
+          laneId: workerJob.target.laneId,
+          modelConfigId: workerJob.target.modelConfigId,
+          modelSnapshotId: workerJob.target.modelSnapshotId,
+          promptPackageDigest: workerJob.target.promptPackageDigest,
+          promptProtocolVersion: workerJob.target.promptProtocolVersion,
+          providerFamily: workerJob.target.providerFamily,
+          runId: workerJob.runId,
+          runMode: workerJob.target.runMode,
+          status: attemptResult.result === "pass" ? "success" : "failure",
+          stopReason: attemptResult.stopReason,
+          toolProfile: workerJob.target.toolProfile
+        });
+        assertRequiredArtifactRoles(bundleSubmission.artifactManifest, workerJob.requiredArtifactRoles);
+      } catch (error) {
+        if (error instanceof Error) {
+          await submitHarnessFailure(
+            leaseState,
+            apiBaseUrl,
+            dependencies,
+            buildStaticFailure({
+              summary: error.message,
+              failureCode: "harness_crashed",
+              phase: "finalize"
+            })
+          );
+          if (
+            await submitCancellationIfRequested(
+              leaseState,
+              apiBaseUrl,
+              dependencies,
+              "Worker received a control-plane cancellation request while validating the terminal bundle."
+            )
+          ) {
+            return "completed";
+          }
+
+          return leaseState.leaseLost ? "lease_lost" : "completed";
+        }
+
+        throw error;
+      }
+
+      const manifestResponse = await submitArtifactManifest(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        {
+          artifacts: bundleSubmission.artifactManifest,
+          artifactManifestDigest: bundleSubmission.artifactManifestDigest,
+          attemptId: workerJob.attemptId,
+          jobId: workerJob.jobId,
+          leaseId: workerJob.leaseId,
+          recordedAt: dependencies.now().toISOString()
+        }
+      );
+      const cancellationTerminalContext: CancellationTerminalContext = {
+        artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
         artifactManifestDigest: bundleSubmission.artifactManifestDigest,
-        attemptId: workerJob.attemptId,
-        jobId: workerJob.jobId,
-        leaseId: workerJob.leaseId,
-        recordedAt: dependencies.now().toISOString()
-      }
-    );
-    const cancellationTerminalContext: CancellationTerminalContext = {
-      artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
-      artifactManifestDigest: bundleSubmission.artifactManifestDigest,
-      artifacts: manifestResponse.artifacts,
-      bundleDigest: bundleSubmission.bundleDigest,
-      candidateDigest: bundleSubmission.candidateDigest
-    };
-
-    await appendWorkerEvent(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      "artifact_manifest_written",
-      "finalize",
-      "Registered artifact manifest for Problem 9 attempt bundle.",
-      {
-        artifactCount: bundleSubmission.artifactManifest.length,
-        artifactManifestDigest: bundleSubmission.artifactManifestDigest
-      }
-    );
-
-    if (
-      await submitCancellationIfRequested(
-        leaseState,
-        apiBaseUrl,
-        dependencies,
-        "Worker received a control-plane cancellation request after artifact registration.",
-        cancellationTerminalContext
-      )
-    ) {
-      return "completed";
-    }
-
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
-
-    await appendWorkerEvent(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      "bundle_finalized",
-      "finalize",
-      `Finalized offline-compatible run bundle with ${bundleSubmission.verifierVerdict.result} verdict.`,
-      {
+        artifacts: manifestResponse.artifacts,
         bundleDigest: bundleSubmission.bundleDigest,
-        verdictDigest: bundleSubmission.verdictDigest
-      }
-    );
+        candidateDigest: bundleSubmission.candidateDigest
+      };
+      failureTerminalContext = cancellationTerminalContext;
 
-    if (
-      await submitCancellationIfRequested(
+      await appendWorkerEvent(
         leaseState,
         apiBaseUrl,
         dependencies,
-        "Worker received a control-plane cancellation request after bundle finalization.",
-        cancellationTerminalContext
-      )
-    ) {
-      return "completed";
-    }
+        "artifact_manifest_written",
+        "finalize",
+        "Registered artifact manifest for Problem 9 attempt bundle.",
+        {
+          artifactCount: bundleSubmission.artifactManifest.length,
+          artifactManifestDigest: bundleSubmission.artifactManifestDigest
+        }
+      );
 
-    if (leaseState.leaseLost) {
-      return "lease_lost";
-    }
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker received a control-plane cancellation request after artifact registration.",
+          cancellationTerminalContext
+        )
+      ) {
+        return "completed";
+      }
 
-    if (bundleSubmission.verifierVerdict.result === "pass") {
-      const resultResponse = await submitWorkerResult(
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+
+      const postManifestBackgroundError = consumeBackgroundControlError(leaseState);
+
+      if (postManifestBackgroundError) {
+        return await normalizeUnhandledClaimLoopFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          postManifestBackgroundError,
+          failureTerminalContext,
+          heartbeatLoop
+        );
+      }
+
+      await appendWorkerEvent(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        "bundle_finalized",
+        "finalize",
+        `Finalized offline-compatible run bundle with ${bundleSubmission.verifierVerdict.result} verdict.`,
+        {
+          bundleDigest: bundleSubmission.bundleDigest,
+          verdictDigest: bundleSubmission.verdictDigest
+        }
+      );
+
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          "Worker received a control-plane cancellation request after bundle finalization.",
+          cancellationTerminalContext
+        )
+      ) {
+        return "completed";
+      }
+
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+
+      const postBundleBackgroundError = consumeBackgroundControlError(leaseState);
+
+      if (postBundleBackgroundError) {
+        return await normalizeUnhandledClaimLoopFailure(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          postBundleBackgroundError,
+          failureTerminalContext,
+          heartbeatLoop
+        );
+      }
+
+      if (bundleSubmission.verifierVerdict.result === "pass") {
+        const resultResponse = await submitWorkerResult(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          {
+            artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
+            artifactManifestDigest: bundleSubmission.artifactManifestDigest,
+            attemptId: workerJob.attemptId,
+            bundleDigest: bundleSubmission.bundleDigest,
+            candidateDigest: bundleSubmission.candidateDigest,
+            completedAt: dependencies.now().toISOString(),
+            environmentDigest: bundleSubmission.environmentDigest,
+            jobId: workerJob.jobId,
+            leaseId: workerJob.leaseId,
+            offlineBundleCompatible: true,
+            runId: workerJob.runId,
+            summary: "Problem 9 attempt passed the authoritative verifier.",
+            usageSummary: {
+              compileRepairCount: attemptResult.compileRepairCount,
+              providerTurnsUsed: attemptResult.providerTurnsUsed,
+              stopReason: attemptResult.stopReason,
+              verifierRepairCount: attemptResult.verifierRepairCount
+            },
+            verifierVerdict: bundleSubmission.verifierVerdict,
+            verdictDigest: bundleSubmission.verdictDigest
+          }
+        );
+
+        if (resultResponse.runState !== "succeeded") {
+          throw new Error(`Unexpected worker result terminal state ${resultResponse.runState}.`);
+        }
+
+        return "completed";
+      }
+
+      await submitWorkerFailure(
         leaseState,
         apiBaseUrl,
         dependencies,
@@ -803,62 +936,37 @@ async function processClaimedJob(
           attemptId: workerJob.attemptId,
           bundleDigest: bundleSubmission.bundleDigest,
           candidateDigest: bundleSubmission.candidateDigest,
-          completedAt: dependencies.now().toISOString(),
-          environmentDigest: bundleSubmission.environmentDigest,
+          failedAt: dependencies.now().toISOString(),
+          failure:
+            bundleSubmission.verifierVerdict.primaryFailure ??
+            buildSelectedArtifactFallbackFailure(manifestResponse.artifacts, {
+              summary: "Worker produced a failing verdict without a canonical primaryFailure payload.",
+              failureCode: "proof_policy_failed",
+              phase: "verify"
+            }),
           jobId: workerJob.jobId,
           leaseId: workerJob.leaseId,
-          offlineBundleCompatible: true,
           runId: workerJob.runId,
-          summary: "Problem 9 attempt passed the authoritative verifier.",
-          usageSummary: {
-            compileRepairCount: attemptResult.compileRepairCount,
-            providerTurnsUsed: attemptResult.providerTurnsUsed,
-            stopReason: attemptResult.stopReason,
-            verifierRepairCount: attemptResult.verifierRepairCount
-          },
+          summary:
+            bundleSubmission.verifierVerdict.primaryFailure?.summary ??
+            "Problem 9 attempt failed verification.",
+          terminalState: "failed",
           verifierVerdict: bundleSubmission.verifierVerdict,
           verdictDigest: bundleSubmission.verdictDigest
         }
       );
 
-      if (resultResponse.runState !== "succeeded") {
-        throw new Error(`Unexpected worker result terminal state ${resultResponse.runState}.`);
-      }
-
       return "completed";
+    } catch (error) {
+      return await normalizeUnhandledClaimLoopFailure(
+        leaseState,
+        apiBaseUrl,
+        dependencies,
+        error,
+        failureTerminalContext,
+        heartbeatLoop
+      );
     }
-
-    await submitWorkerFailure(
-      leaseState,
-      apiBaseUrl,
-      dependencies,
-      {
-        artifactIds: manifestResponse.artifacts.map((artifact) => artifact.artifactId),
-        artifactManifestDigest: bundleSubmission.artifactManifestDigest,
-        attemptId: workerJob.attemptId,
-        bundleDigest: bundleSubmission.bundleDigest,
-        candidateDigest: bundleSubmission.candidateDigest,
-        failedAt: dependencies.now().toISOString(),
-        failure:
-          bundleSubmission.verifierVerdict.primaryFailure ??
-          buildSelectedArtifactFallbackFailure(manifestResponse.artifacts, {
-            summary: "Worker produced a failing verdict without a canonical primaryFailure payload.",
-            failureCode: "proof_policy_failed",
-            phase: "verify"
-          }),
-        jobId: workerJob.jobId,
-        leaseId: workerJob.leaseId,
-        runId: workerJob.runId,
-        summary:
-          bundleSubmission.verifierVerdict.primaryFailure?.summary ??
-          "Problem 9 attempt failed verification.",
-        terminalState: "failed",
-        verifierVerdict: bundleSubmission.verifierVerdict,
-        verdictDigest: bundleSubmission.verdictDigest
-      }
-    );
-
-    return "completed";
   } finally {
     leaseState.stopped = true;
     leaseState.stopHeartbeat?.();
@@ -925,8 +1033,12 @@ function startHeartbeatLoop(
       try {
         await refreshLease(leaseState, apiBaseUrl, dependencies);
       } catch (error) {
-        leaseState.leaseLost = true;
         leaseState.heartbeatErrorMessage = error instanceof Error ? error.message : String(error);
+        if (isLeaseLossControlError(error)) {
+          leaseState.leaseLost = true;
+        } else {
+          leaseState.backgroundControlError = error;
+        }
         return;
       }
     }
@@ -1181,6 +1293,129 @@ async function submitCancellationIfRequested(
   return true;
 }
 
+async function normalizeUnhandledClaimLoopFailure(
+  leaseState: ActiveLeaseState,
+  apiBaseUrl: string,
+  dependencies: WorkerClaimLoopResolvedDependencies,
+  error: unknown,
+  terminalContext: CancellationTerminalContext | null,
+  heartbeatLoop: Promise<void>
+): Promise<"completed" | "lease_lost"> {
+  leaseState.stopped = true;
+  leaseState.stopHeartbeat?.();
+  await heartbeatLoop;
+
+  if (isLeaseLossControlError(error)) {
+    leaseState.heartbeatErrorMessage = error instanceof Error ? error.message : String(error);
+    leaseState.leaseLost = true;
+    return "lease_lost";
+  }
+
+  const cancellationSummary =
+    "Worker received a control-plane cancellation request while recovering from an internal worker control failure.";
+  let recoveryError = error;
+  let retryCancelledTerminalization = isCancelRequestedTerminalizationConflict(error);
+
+  if (retryCancelledTerminalization) {
+    leaseState.cancelRequested = true;
+  }
+
+  if (leaseState.cancelRequested) {
+    try {
+      if (
+        await submitCancellationIfRequested(
+          leaseState,
+          apiBaseUrl,
+          dependencies,
+          cancellationSummary,
+          terminalContext
+        )
+      ) {
+        return "completed";
+      }
+
+      if (leaseState.leaseLost) {
+        return "lease_lost";
+      }
+    } catch (cancelError) {
+      if (isLeaseLossControlError(cancelError)) {
+        leaseState.heartbeatErrorMessage =
+          cancelError instanceof Error ? cancelError.message : String(cancelError);
+        leaseState.leaseLost = true;
+        return "lease_lost";
+      }
+
+      recoveryError = cancelError;
+      retryCancelledTerminalization = true;
+    }
+  }
+
+  const summary = retryCancelledTerminalization
+    ? cancellationSummary
+    : recoveryError instanceof Error
+      ? recoveryError.message
+      : String(recoveryError);
+  const failure = retryCancelledTerminalization
+    ? terminalContext
+      ? buildSelectedArtifactFallbackFailure(terminalContext.artifacts, {
+          summary,
+          failureCode: "manual_cancelled",
+          phase: "cancel"
+        })
+      : buildStaticFailure({
+          summary,
+          failureCode: "manual_cancelled",
+          phase: "cancel"
+        })
+    : terminalContext
+      ? buildSelectedArtifactFallbackFailure(terminalContext.artifacts, {
+          summary,
+          failureCode: "harness_crashed",
+          phase: leaseState.currentPhase
+        })
+      : buildStaticFailure({
+          summary,
+          failureCode: "harness_crashed",
+          phase: leaseState.currentPhase
+        });
+
+  try {
+    await submitWorkerFailure(leaseState, apiBaseUrl, dependencies, {
+      artifactIds: terminalContext?.artifactIds,
+      artifactManifestDigest: terminalContext?.artifactManifestDigest ?? null,
+      attemptId: leaseState.job.attemptId,
+      bundleDigest: terminalContext?.bundleDigest ?? null,
+      candidateDigest: terminalContext?.candidateDigest ?? null,
+      failedAt: dependencies.now().toISOString(),
+      failure,
+      jobId: leaseState.job.jobId,
+      leaseId: leaseState.job.leaseId,
+      runId: leaseState.job.runId,
+      summary,
+      terminalState: retryCancelledTerminalization ? "cancelled" : "failed",
+      verifierVerdict: null,
+      verdictDigest: null
+    });
+  } catch (submissionError) {
+    if (isLeaseLossControlError(submissionError)) {
+      leaseState.heartbeatErrorMessage =
+        submissionError instanceof Error ? submissionError.message : String(submissionError);
+      leaseState.leaseLost = true;
+      return "lease_lost";
+    }
+
+    throw submissionError;
+  }
+
+  return "completed";
+}
+
+function consumeBackgroundControlError(leaseState: ActiveLeaseState): unknown | null {
+  const backgroundControlError = leaseState.backgroundControlError;
+  leaseState.backgroundControlError = null;
+  return backgroundControlError;
+}
+
 function isLeaseLossControlError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -1188,6 +1423,13 @@ function isLeaseLossControlError(error: unknown): boolean {
 
   return /invalid_worker_job_token|worker_lease_not_active|worker_lease_not_found/u.test(
     error.message
+  );
+}
+
+function isCancelRequestedTerminalizationConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /worker_cancel_requested_requires_cancelled_terminalization/u.test(error.message)
   );
 }
 
