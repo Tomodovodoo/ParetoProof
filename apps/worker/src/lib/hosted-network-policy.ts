@@ -18,6 +18,14 @@ const hostedProviderOverrideEnvNames: Record<Problem9ProviderFamily, readonly st
   openai: ["OPENAI_API_BASE", "OPENAI_API_BASE_URL", "OPENAI_BASE_URL"]
 };
 
+const hostedLeanToolForbiddenEnvNames = [
+  "API_BASE_URL",
+  "CODEX_API_KEY",
+  "CODEX_HOME",
+  "PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT",
+  "WORKER_BOOTSTRAP_TOKEN"
+] as const;
+
 type HostedControlPlaneOriginOptions = {
   allowLoopback: boolean;
 };
@@ -111,6 +119,19 @@ export function buildHostedProviderCommandEnv(
   const sanitizedEnv = { ...env };
 
   for (const name of forbiddenOverrideNames) {
+    delete sanitizedEnv[name];
+  }
+
+  return sanitizedEnv;
+}
+
+export function buildHostedLeanToolCommandEnv(
+  env: NodeJS.ProcessEnv,
+  providerFamily: Problem9ProviderFamily
+): NodeJS.ProcessEnv {
+  const sanitizedEnv = buildHostedProviderCommandEnv(env, providerFamily);
+
+  for (const name of hostedLeanToolForbiddenEnvNames) {
     delete sanitizedEnv[name];
   }
 

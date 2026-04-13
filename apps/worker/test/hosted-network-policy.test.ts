@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildHostedLeanToolCommandEnv,
   buildHostedProviderCommandEnv,
   createHostedControlPlaneFetch,
   resolveHostedControlPlaneOrigin
@@ -62,4 +63,25 @@ test("buildHostedProviderCommandEnv rejects proxy and provider-base overrides", 
       ),
     /forbidden env override\(s\) HTTPS_PROXY, OPENAI_BASE_URL/
   );
+});
+
+test("buildHostedLeanToolCommandEnv strips hosted worker secrets while preserving toolchain env", () => {
+  const sanitized = buildHostedLeanToolCommandEnv(
+    {
+      API_BASE_URL: "https://api.paretoproof.test",
+      CODEX_API_KEY: "worker-api-key",
+      CODEX_HOME: "/run/paretoproof/codex-home",
+      PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: "readonly_auth_json",
+      PATH: "/usr/local/bin:/usr/bin",
+      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+    },
+    "openai"
+  );
+
+  assert.equal(sanitized.API_BASE_URL, undefined);
+  assert.equal(sanitized.CODEX_API_KEY, undefined);
+  assert.equal(sanitized.CODEX_HOME, undefined);
+  assert.equal(sanitized.PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT, undefined);
+  assert.equal(sanitized.WORKER_BOOTSTRAP_TOKEN, undefined);
+  assert.equal(sanitized.PATH, "/usr/local/bin:/usr/bin");
 });
