@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  lstat,
   mkdir,
   readdir,
   readFile,
@@ -14,6 +15,7 @@ import {
   getProblem9ModelConfigIdPrefix,
   problem9LocalAuthModes,
   problem9ProviderFamilies,
+  problem9PromptPackageManifestSchema,
   problem9RunModes,
   problem9ToolProfiles
 } from "@paretoproof/shared";
@@ -141,6 +143,9 @@ const promptTemplateSourceRoot = path.resolve(
 );
 
 const textLayerFilenames = ["system.md", "benchmark.md", "item.md", "run-envelope.json"] as const;
+const promptPackageManifestFilename = "prompt-package.json";
+const managedPromptPackageEntryNames = [...textLayerFilenames, promptPackageManifestFilename] as const;
+const managedPromptPackageEntryNameSet = new Set<string>(managedPromptPackageEntryNames);
 
 const promptDefaults = {
   promptLayerVersions: {
@@ -170,6 +175,7 @@ const requiredBenchmarkPackagePaths = [
 ] as const;
 
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
+type PromptPackageManifest = z.output<typeof problem9PromptPackageManifestSchema>;
 
 export type MaterializeProblem9PromptPackageOptions = z.infer<
   typeof problem9PromptPackageOptionsSchema
@@ -199,8 +205,7 @@ export async function materializeProblem9PromptPackage(
   await assertNoPathOverlap(promptTemplateSourceRoot, outputRoot, "prompt template source");
   await assertNoPathOverlap(benchmarkPackageRoot, outputRoot, "benchmark package input");
 
-  await rm(outputRoot, { force: true, recursive: true });
-  await mkdir(outputRoot, { recursive: true });
+  await preparePromptPackageOutputRoot(outputRoot);
 
   const systemTemplate = await loadNormalizedText(
     path.join(promptTemplateSourceRoot, "system.md")
@@ -251,25 +256,23 @@ export async function materializeProblem9PromptPackage(
     Object.entries(layerContents)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([filename, content]) => [filename, sha256Text(content)])
-  );
+  ) as Record<(typeof textLayerFilenames)[number], string>;
 
-  const promptPackageDigest = sha256Text(
-    stableStringify({
-      authMode: options.authMode,
-      benchmarkPackageDigest: benchmarkManifest.packageDigest,
-      benchmarkPackageId: benchmarkManifest.packageId,
-      benchmarkPackageVersion: benchmarkManifest.packageVersion,
-      harnessRevision: options.harnessRevision,
-      laneId: options.laneId,
-      layerDigests,
-      layerVersions: options.promptLayerVersions,
-      modelConfigId: options.modelConfigId,
-      promptProtocolVersion: options.promptProtocolVersion,
-      providerFamily: options.providerFamily,
-      runMode: options.runMode,
-      toolProfile: options.toolProfile
-    })
-  );
+  const promptPackageDigest = computePromptPackageDigest({
+    authMode: options.authMode,
+    benchmarkPackageDigest: benchmarkManifest.packageDigest,
+    benchmarkPackageId: benchmarkManifest.packageId,
+    benchmarkPackageVersion: benchmarkManifest.packageVersion,
+    harnessRevision: options.harnessRevision,
+    laneId: options.laneId,
+    layerDigests,
+    layerVersions: options.promptLayerVersions,
+    modelConfigId: options.modelConfigId,
+    promptProtocolVersion: options.promptProtocolVersion,
+    providerFamily: options.providerFamily,
+    runMode: options.runMode,
+    toolProfile: options.toolProfile
+  });
 
   const promptPackageManifest = {
     promptPackageSchemaVersion: "1",
@@ -297,7 +300,10 @@ export async function materializeProblem9PromptPackage(
     }
   };
 
-  await writeNormalizedText(path.join(outputRoot, "prompt-package.json"), stableStringify(promptPackageManifest));
+  await writeNormalizedText(
+    path.join(outputRoot, promptPackageManifestFilename),
+    stableStringify(promptPackageManifest)
+  );
 
   return {
     outputRoot,
@@ -590,6 +596,116 @@ async function assertNoPathOverlap(
   }
 }
 
+async function preparePromptPackageOutputRoot(outputRoot: string): Promise<void> {
+  const outputRootStats = await lstat(outputRoot).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  });
+
+  if (outputRootStats === null) {
+    await mkdir(outputRoot, { recursive: true });
+    return;
+  }
+
+  if (outputRootStats.isSymbolicLink()) {
+    throw new Error(
+      "Prompt package output may not be a symbolic link. Choose a dedicated output directory."
+    );
+  }
+
+  if (!outputRootStats.isDirectory()) {
+    throw new Error(
+      "Prompt package output must be a directory path. Choose an empty directory or a prior prompt-package output."
+    );
+  }
+
+  const unexpectedEntries = (await readdir(outputRoot, { withFileTypes: true }))
+    .filter((entry) => !entry.isFile() || !managedPromptPackageEntryNameSet.has(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+
+  if (unexpectedEntries.length > 0) {
+    throw new Error(
+      `Prompt package output must be empty or contain only a prior prompt-package materialization. Unexpected entries: ${unexpectedEntries.join(", ")}.`
+    );
+  }
+
+  if ((await readdir(outputRoot)).length > 0) {
+    await assertPriorPromptPackageOutput(outputRoot);
+  }
+
+  await Promise.all(
+    managedPromptPackageEntryNames.map((entryName) => rm(path.join(outputRoot, entryName), { force: true }))
+  );
+}
+
+async function assertPriorPromptPackageOutput(outputRoot: string): Promise<void> {
+  const existingEntryNames = new Set(await readdir(outputRoot));
+  const missingEntries = managedPromptPackageEntryNames.filter(
+    (entryName) => !existingEntryNames.has(entryName)
+  );
+
+  if (missingEntries.length > 0) {
+    throw new Error(
+      `Prompt package output must be empty or contain only a prior prompt-package materialization. Missing managed entries: ${missingEntries.join(", ")}.`
+    );
+  }
+
+  let promptPackageManifest: PromptPackageManifest;
+
+  try {
+    promptPackageManifest = problem9PromptPackageManifestSchema.parse(
+      JSON.parse(await readFile(path.join(outputRoot, promptPackageManifestFilename), "utf8"))
+    );
+  } catch {
+    throw new Error(
+      "Prompt package output must be empty or contain only a prior prompt-package materialization. Existing managed files do not form a valid prompt-package output."
+    );
+  }
+
+  const layerDigests = Object.fromEntries(
+    await Promise.all(
+      textLayerFilenames.map(async (filename) => [
+        filename,
+        sha256Text(await loadNormalizedText(path.join(outputRoot, filename)))
+      ])
+    )
+  ) as Record<(typeof textLayerFilenames)[number], string>;
+
+  for (const filename of textLayerFilenames) {
+    if (layerDigests[filename] !== promptPackageManifest.layerDigests[filename]) {
+      throw new Error(
+        "Prompt package output must be empty or contain only a prior prompt-package materialization. Existing managed files do not match their manifest digests."
+      );
+    }
+  }
+
+  const expectedPromptPackageDigest = computePromptPackageDigest({
+    authMode: promptPackageManifest.authMode,
+    benchmarkPackageDigest: promptPackageManifest.benchmarkPackageDigest,
+    benchmarkPackageId: promptPackageManifest.benchmarkPackageId,
+    benchmarkPackageVersion: promptPackageManifest.benchmarkPackageVersion,
+    harnessRevision: promptPackageManifest.harnessRevision,
+    laneId: promptPackageManifest.laneId,
+    layerDigests: promptPackageManifest.layerDigests,
+    layerVersions: promptPackageManifest.layerVersions,
+    modelConfigId: promptPackageManifest.modelConfigId,
+    promptProtocolVersion: promptPackageManifest.promptProtocolVersion,
+    providerFamily: promptPackageManifest.providerFamily,
+    runMode: promptPackageManifest.runMode,
+    toolProfile: promptPackageManifest.toolProfile
+  });
+
+  if (expectedPromptPackageDigest !== promptPackageManifest.promptPackageDigest) {
+    throw new Error(
+      "Prompt package output must be empty or contain only a prior prompt-package materialization. Existing managed files do not match their manifest digest."
+    );
+  }
+}
+
 function assertOutputRootIsNotFilesystemRoot(outputRoot: string): void {
   const parsedOutputRoot = path.parse(outputRoot).root;
 
@@ -644,6 +760,40 @@ async function sha256NormalizedFile(filePath: string): Promise<string> {
 
 function sha256Text(text: string): string {
   return createHash("sha256").update(Buffer.from(normalizeText(text), "utf8")).digest("hex");
+}
+
+function computePromptPackageDigest(value: {
+  authMode: MaterializeProblem9PromptPackageOptions["authMode"];
+  benchmarkPackageDigest: string;
+  benchmarkPackageId: string;
+  benchmarkPackageVersion: string;
+  harnessRevision: string;
+  laneId: string;
+  layerDigests: Record<(typeof textLayerFilenames)[number], string>;
+  layerVersions: MaterializeProblem9PromptPackageOptions["promptLayerVersions"];
+  modelConfigId: string;
+  promptProtocolVersion: string;
+  providerFamily: MaterializeProblem9PromptPackageOptions["providerFamily"];
+  runMode: MaterializeProblem9PromptPackageOptions["runMode"];
+  toolProfile: MaterializeProblem9PromptPackageOptions["toolProfile"];
+}) {
+  return sha256Text(
+    stableStringify({
+      authMode: value.authMode,
+      benchmarkPackageDigest: value.benchmarkPackageDigest,
+      benchmarkPackageId: value.benchmarkPackageId,
+      benchmarkPackageVersion: value.benchmarkPackageVersion,
+      harnessRevision: value.harnessRevision,
+      laneId: value.laneId,
+      layerDigests: value.layerDigests,
+      layerVersions: value.layerVersions,
+      modelConfigId: value.modelConfigId,
+      promptProtocolVersion: value.promptProtocolVersion,
+      providerFamily: value.providerFamily,
+      runMode: value.runMode,
+      toolProfile: value.toolProfile
+    })
+  );
 }
 
 function stableStringify(value: unknown): string {

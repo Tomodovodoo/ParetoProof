@@ -104,6 +104,80 @@ test("runProblem9PromptPackageCli materializes a prompt package and prints its d
   assert.equal(payload.promptPackageDigest, promptPackage.promptPackageDigest);
 });
 
+test("runProblem9PromptPackageCli rejects missing required flag values before another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9PromptPackageCli([
+        "--attempt-id",
+        "attempt-cli-invalid-001",
+        "--auth-mode",
+        "local_stub",
+        "--benchmark-package-root",
+        "ignored-benchmark",
+        "--harness-revision",
+        "smoke-harness-rev",
+        "--lane-id",
+        "lean422_exact",
+        "--model-config-id",
+        "local_stub/problem9_fixture.v1",
+        "--output",
+        "--run-id",
+        "run-cli-invalid-001",
+        "--run-mode",
+        "single_pass_probe",
+        "--tool-profile",
+        "workspace_edit_limited",
+        "--provider-family",
+        "openai"
+      ]),
+    /Missing required --output <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
+test("runProblem9PromptPackageCli rejects optional flag names that omit a value", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9PromptPackageCli([
+        "--attempt-id",
+        "attempt-cli-invalid-002",
+        "--auth-mode",
+        "local_stub",
+        "--benchmark-package-root",
+        "ignored-benchmark",
+        "--harness-revision",
+        "smoke-harness-rev",
+        "--lane-id",
+        "lean422_exact",
+        "--model-config-id",
+        "local_stub/problem9_fixture.v1",
+        "--output",
+        "ignored-output",
+        "--pass-k-count",
+        "--pass-k-index",
+        "0",
+        "--provider-family",
+        "openai",
+        "--run-id",
+        "run-cli-invalid-002",
+        "--run-mode",
+        "pass_k_probe",
+        "--tool-profile",
+        "workspace_edit_limited"
+      ]),
+    /Missing --pass-k-count <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
 test("runProblem9RunBundleCli materializes a canonical run bundle and prints digest output", async (t) => {
   const fixture = await createRunBundleFixture();
   const captured = captureConsole(t);

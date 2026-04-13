@@ -23,22 +23,58 @@ export async function runProblem9PromptPackageCli(args: string[]): Promise<void>
     commandFamily: "materializer"
   });
 
-  const getRequiredValue = (flag: string): string => {
+  const readFlagValue = (flag: string): { present: boolean; value: string | null } => {
     const index = args.findIndex((argument) => argument === flag);
 
-    if (index === -1 || !args[index + 1]) {
+    if (index === -1) {
+      return {
+        present: false,
+        value: null
+      };
+    }
+
+    const candidateValue = args[index + 1];
+
+    if (!candidateValue || candidateValue.startsWith("--")) {
+      return {
+        present: true,
+        value: null
+      };
+    }
+
+    return {
+      present: true,
+      value: candidateValue
+    };
+  };
+
+  const getRequiredValue = (flag: string): string => {
+    const { value } = readFlagValue(flag);
+
+    if (value === null) {
       throw new Error(`Missing required ${flag} <value> argument.`);
     }
 
-    return args[index + 1];
+    return value;
   };
 
   const getOptionalValue = (flag: string): string | null => {
-    const index = args.findIndex((argument) => argument === flag);
-    return index === -1 || !args[index + 1] ? null : args[index + 1];
+    const { present, value } = readFlagValue(flag);
+
+    if (!present) {
+      return null;
+    }
+
+    if (value === null) {
+      throw new Error(`Missing ${flag} <value> argument.`);
+    }
+
+    return value;
   };
 
   const defaults = getDefaultProblem9PromptPackageOptions();
+  const passKCount = getOptionalValue("--pass-k-count");
+  const passKIndex = getOptionalValue("--pass-k-index");
   const result = await materializeProblem9PromptPackage({
     attemptId: getRequiredValue("--attempt-id"),
     authMode: getRequiredValue("--auth-mode") as Problem9LocalAuthMode,
@@ -48,12 +84,8 @@ export async function runProblem9PromptPackageCli(args: string[]): Promise<void>
     laneId: getRequiredValue("--lane-id"),
     modelConfigId: getRequiredValue("--model-config-id"),
     outputRoot: path.resolve(getRequiredValue("--output")),
-    passKCount: getOptionalValue("--pass-k-count")
-      ? Number(getOptionalValue("--pass-k-count"))
-      : null,
-    passKIndex: getOptionalValue("--pass-k-index")
-      ? Number(getOptionalValue("--pass-k-index"))
-      : null,
+    passKCount: passKCount ? Number(passKCount) : null,
+    passKIndex: passKIndex ? Number(passKIndex) : null,
     promptLayerVersions: defaults.promptLayerVersions,
     promptProtocolVersion: defaults.promptProtocolVersion,
     providerFamily: getRequiredValue("--provider-family") as Problem9ProviderFamily,
