@@ -59,6 +59,7 @@ async function buildOfflineIngestRequest(options: {
     terminality: "terminal_attempt" | "retryable_outer" | "cancelled";
     userVisibility: "user_visible" | "user_visible_sanitized" | "internal_only";
   }>;
+  includeUsage?: boolean;
   legacyBenchmarkManifest?: boolean;
   result: "pass" | "fail";
   stopReason?: string;
@@ -308,10 +309,46 @@ async function buildOfflineIngestRequest(options: {
     );
   }
 
+  if (options.includeUsage) {
+    addUsageSummaryArtifact(request, {
+      completionTokens: 5,
+      promptTokens: 8,
+      totalTokens: 13
+    });
+  }
+
   return {
     request,
     tempRoot
   };
+}
+
+function addUsageSummaryArtifact(
+  request: Problem9OfflineIngestRequest,
+  usage: Record<string, unknown>
+) {
+  const usageText = `${stableStringify(usage)}\n`;
+
+  request.bundle.usage = usage;
+  request.bundle.artifactManifest.artifacts = [
+    ...request.bundle.artifactManifest.artifacts,
+    {
+      artifactRole: "usage_summary",
+      byteSize: Buffer.byteLength(usageText, "utf8"),
+      contentEncoding: null,
+      mediaType: "application/json",
+      relativePath: "execution/usage.json",
+      requiredForIngest: false,
+      sha256: sha256Text(usageText)
+    }
+  ].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  request.bundle.runBundle.artifactManifestDigest = sha256Text(
+    `${stableStringify(request.bundle.artifactManifest)}\n`
+  );
+  request.bundle.runBundle.bundleDigest = computeRunBundleDigest(
+    request.bundle.artifactManifest.artifacts,
+    request.bundle.runBundle
+  );
 }
 
 test("buildProblem9OfflineIngestPlan maps canonical passing bundles to terminal imported states", async (t) => {
@@ -360,6 +397,44 @@ test("buildProblem9OfflineIngestPlan maps canonical passing bundles to terminal 
     plan.artifacts.find((artifact) => artifact.relativePath === "candidate/Candidate.lean")?.bucketName,
     "paretoproof-dev-artifacts"
   );
+});
+
+test("buildProblem9OfflineIngestPlan accepts optional usage summary artifacts", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    includeUsage: true,
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+  const usageArtifact = plan.artifacts.find((artifact) => artifact.relativePath === "execution/usage.json");
+  const usageText = `${stableStringify(request.bundle.usage)}\n`;
+
+  assert.equal(plan.artifacts.length, 25);
+  assert.deepEqual(plan.attempt.usageSummary, request.bundle.usage);
+  assert.ok(usageArtifact);
+  assert.equal(usageArtifact.artifactClassId, "usage_summary");
+  assert.equal(
+    usageArtifact.artifactManifestDigest,
+    request.bundle.runBundle.artifactManifestDigest
+  );
+  assert.equal(usageArtifact.bucketName, "paretoproof-dev-artifacts");
+  assert.equal(usageArtifact.byteSize, Buffer.byteLength(usageText, "utf8"));
+  assert.equal(usageArtifact.contentEncoding, null);
+  assert.equal(usageArtifact.lifecycleState, "registered");
+  assert.equal(usageArtifact.mediaType, "application/json");
+  assert.equal(
+    usageArtifact.objectKey,
+    "runs/run-pass-1/artifacts/attempt-pass-1/execution/usage.json"
+  );
+  assert.equal(usageArtifact.prefixFamily, "run_artifacts");
+  assert.equal(usageArtifact.providerEtag, null);
+  assert.equal(usageArtifact.requiredForIngest, false);
+  assert.equal(usageArtifact.sha256, sha256Text(usageText));
+  assert.equal(usageArtifact.storageProvider, "cloudflare_r2");
 });
 
 test("buildProblem9OfflineIngestPlan preserves failure metadata for canonical failing bundles", async (t) => {

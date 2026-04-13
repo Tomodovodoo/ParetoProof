@@ -91,6 +91,20 @@ const bundleManifestArtifactRoles = {
   "verification/verdict.json": "verdict_record",
   "verification/verifier-output.json": "verifier_output"
 } as const satisfies Record<string, Problem9OfflineArtifactManifestEntry["artifactRole"]>;
+const optionalBundleManifestMetadataByPath = {
+  "execution/usage.json": {
+    artifactRole: "usage_summary",
+    contentEncoding: null,
+    mediaType: "application/json",
+    requiredForIngest: false
+  }
+} as const satisfies Record<
+  string,
+  Pick<
+    Problem9OfflineArtifactManifestEntry,
+    "artifactRole" | "contentEncoding" | "mediaType" | "requiredForIngest"
+  >
+>;
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
 const promptRunEnvelopeSchema = z.object({
   attemptId: z.string().min(1),
@@ -712,6 +726,15 @@ function validateProvidedManifestEntry(
 }
 
 function expectedManifestMetadataForPath(relativePath: string) {
+  const optionalMetadata =
+    optionalBundleManifestMetadataByPath[
+      relativePath as keyof typeof optionalBundleManifestMetadataByPath
+    ];
+
+  if (optionalMetadata) {
+    return optionalMetadata;
+  }
+
   return {
     artifactRole:
       bundleManifestArtifactRoles[relativePath as keyof typeof bundleManifestArtifactRoles],
