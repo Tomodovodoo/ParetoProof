@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { problem9AuthModes } from "../src/lib/problem9-auth.ts";
 import {
+  buildProblem9LeanToolCommandEnv,
   findForbiddenProblem9CandidateImports,
   resolveProblem9ModelSnapshotId,
   runProblem9Attempt
@@ -66,6 +67,50 @@ test("resolveProblem9ModelSnapshotId preserves explicit overrides and non-stub p
     }),
     "prompt/default-model"
   );
+});
+
+test("buildProblem9LeanToolCommandEnv strips hosted worker secrets while keeping PATH", () => {
+  const env = buildProblem9LeanToolCommandEnv(
+    "hosted",
+    {
+      API_BASE_URL: "https://api.paretoproof.test",
+      CODEX_API_KEY: "worker-api-key",
+      CODEX_HOME: "/run/paretoproof/codex-home",
+      PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: "readonly_auth_json",
+      PATH: "/usr/local/bin:/usr/bin",
+      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+    },
+    "openai"
+  );
+
+  assert.equal(env.API_BASE_URL, undefined);
+  assert.equal(env.CODEX_API_KEY, undefined);
+  assert.equal(env.CODEX_HOME, undefined);
+  assert.equal(env.PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT, undefined);
+  assert.equal(env.WORKER_BOOTSTRAP_TOKEN, undefined);
+  assert.equal(env.PATH, "/usr/local/bin:/usr/bin");
+});
+
+test("buildProblem9LeanToolCommandEnv leaves local attempt env untouched", () => {
+  const env = buildProblem9LeanToolCommandEnv(
+    "default",
+    {
+      API_BASE_URL: "https://api.paretoproof.test",
+      CODEX_API_KEY: "worker-api-key",
+      CODEX_HOME: "/run/paretoproof/codex-home",
+      PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: "readonly_auth_json",
+      PATH: "/usr/local/bin:/usr/bin",
+      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+    },
+    "openai"
+  );
+
+  assert.equal(env.API_BASE_URL, "https://api.paretoproof.test");
+  assert.equal(env.CODEX_API_KEY, "worker-api-key");
+  assert.equal(env.CODEX_HOME, "/run/paretoproof/codex-home");
+  assert.equal(env.PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT, "readonly_auth_json");
+  assert.equal(env.WORKER_BOOTSTRAP_TOKEN, "bootstrap-token");
+  assert.equal(env.PATH, "/usr/local/bin:/usr/bin");
 });
 
 test("findForbiddenProblem9CandidateImports flags benchmark-owned gold-proof imports", () => {

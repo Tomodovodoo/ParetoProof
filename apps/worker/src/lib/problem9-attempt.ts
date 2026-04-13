@@ -17,7 +17,10 @@ import {
   type Problem9AuthPreflight,
   preflightProblem9AuthMode
 } from "./problem9-auth.js";
-import { buildHostedProviderCommandEnv } from "./hosted-network-policy.js";
+import {
+  buildHostedLeanToolCommandEnv,
+  buildHostedProviderCommandEnv
+} from "./hosted-network-policy.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
@@ -188,6 +191,16 @@ type ProviderResponse = {
   };
 };
 
+export function buildProblem9LeanToolCommandEnv(
+  networkPolicyMode: "default" | "hosted",
+  env: NodeJS.ProcessEnv,
+  providerFamily: Problem9ProviderFamily
+): NodeJS.ProcessEnv {
+  return networkPolicyMode === "hosted"
+    ? buildHostedLeanToolCommandEnv(env, providerFamily)
+    : { ...env };
+}
+
 const forbiddenProblem9CandidateImports = new Set(["FirstProof.Problem9.Gold"]);
 const problem9ImportBoundaryKeywords = new Set([
   "#check",
@@ -287,6 +300,11 @@ export async function runProblem9Attempt(
 
   const compileRoot = path.join(workspaceRoot, "package");
   const tempArtifactsRoot = path.join(workspaceRoot, ".paretoproof-artifacts");
+  const leanToolEnv = buildProblem9LeanToolCommandEnv(
+    options.networkPolicyMode,
+    process.env,
+    effectiveProviderFamily
+  );
 
   await cp(benchmarkPackageRoot, compileRoot, { recursive: true });
   await mkdir(tempArtifactsRoot, { recursive: true });
@@ -372,6 +390,7 @@ export async function runProblem9Attempt(
     compileResult = await compileCandidate({
       candidatePath,
       compileRoot,
+      executionEnv: leanToolEnv,
       tempArtifactsRoot
     });
 
@@ -401,6 +420,7 @@ export async function runProblem9Attempt(
       canonicalTheoremHeader,
       compileResult,
       compileRoot,
+      executionEnv: leanToolEnv,
       tempArtifactsRoot
     });
 
@@ -449,6 +469,7 @@ export async function runProblem9Attempt(
     await buildEnvironmentInput({
       benchmarkManifest,
       compileRoot,
+      executionEnv: leanToolEnv,
       modelSnapshotId: resolveProblem9ModelSnapshotId({
         authMode: effectiveAuthMode,
         fallbackModelConfigId: promptManifest.modelConfigId,
@@ -745,6 +766,7 @@ async function buildProviderPrompt(options: {
 async function compileCandidate(options: {
   candidatePath: string;
   compileRoot: string;
+  executionEnv: NodeJS.ProcessEnv;
   tempArtifactsRoot: string;
 }): Promise<CompileResult> {
   const compileCommand = await runCommand(
@@ -752,7 +774,7 @@ async function compileCandidate(options: {
     ["build", "FirstProof.Problem9.Candidate"],
     {
       cwd: options.compileRoot,
-      env: process.env,
+      env: options.executionEnv,
       timeoutMs: 300000
     }
   );
@@ -780,6 +802,7 @@ async function verifyCandidate(options: {
   canonicalTheoremHeader: string;
   compileResult: CompileResult;
   compileRoot: string;
+  executionEnv: NodeJS.ProcessEnv;
   tempArtifactsRoot: string;
 }): Promise<VerificationResult> {
   const containsSorry = /\bsorry\b/.test(options.candidateSource);
@@ -814,7 +837,7 @@ async function verifyCandidate(options: {
     ["env", "lean", path.basename(semanticProbePath)],
     {
       cwd: options.compileRoot,
-      env: process.env,
+      env: options.executionEnv,
       timeoutMs: 300000
     }
   );
@@ -849,7 +872,7 @@ async function verifyCandidate(options: {
       ["env", "lean", path.basename(axiomProbePath)],
       {
         cwd: options.compileRoot,
-        env: process.env,
+        env: options.executionEnv,
         timeoutMs: 300000
       }
     );
@@ -1032,11 +1055,12 @@ function buildVerifierFailureSummary(
 async function buildEnvironmentInput(options: {
   benchmarkManifest: BenchmarkPackageManifest;
   compileRoot: string;
+  executionEnv: NodeJS.ProcessEnv;
   modelSnapshotId: string;
 }): Promise<Record<string, unknown>> {
   const leanVersionCommand = await runCommand("lake", ["env", "lean", "--version"], {
     cwd: options.compileRoot,
-    env: process.env,
+    env: options.executionEnv,
     timeoutMs: 120000
   });
   const leanVersion = (
