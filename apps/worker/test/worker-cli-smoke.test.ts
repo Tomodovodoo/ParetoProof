@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runProblem9AttemptCli } from "../src/lib/problem9-attempt-cli.ts";
 import { runProblem9AttemptInDevboxCli } from "../src/lib/problem9-attempt-devbox-cli.ts";
 import { runProblem9PackageCli } from "../src/lib/problem9-package-cli.ts";
 import { materializeProblem9Package } from "../src/lib/problem9-package.ts";
@@ -47,6 +48,18 @@ test("runProblem9PackageCli materializes the canonical package and prints JSON o
   assert.equal(payload.packageId, "firstproof/Problem9");
   assert.equal(payload.packageDigest, manifest.packageDigest);
   assert.equal(payload.packageVersion, manifest.packageVersion);
+});
+
+test("runProblem9PackageCli rejects missing required flag values before another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () => runProblem9PackageCli(["--output", "--ignored-flag"]),
+    /Missing required --output <directory> argument for materialize-problem9-package\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
 });
 
 test("runProblem9PromptPackageCli materializes a prompt package and prints its digest", async (t) => {
@@ -228,6 +241,112 @@ test("runProblem9RunBundleCli materializes a canonical run bundle and prints dig
   assert.equal(payload.bundleDigest, bundle.bundleDigest);
 });
 
+test("runProblem9RunBundleCli rejects missing required flag values before another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9RunBundleCli([
+        "--output",
+        "--benchmark-package-root",
+        "ignored-benchmark-package-root",
+        "--prompt-package-root",
+        "ignored-prompt-package-root",
+        "--candidate-source",
+        "ignored-candidate",
+        "--compiler-diagnostics",
+        "ignored-compiler-diagnostics",
+        "--compiler-output",
+        "ignored-compiler-output",
+        "--verifier-output",
+        "ignored-verifier-output",
+        "--environment-input",
+        "ignored-environment-input"
+      ]),
+    /Missing required --output <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
+test("runProblem9RunBundleCli rejects optional flag values that are followed by another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9RunBundleCli([
+        "--output",
+        "ignored-output",
+        "--benchmark-package-root",
+        "ignored-benchmark-package-root",
+        "--prompt-package-root",
+        "ignored-prompt-package-root",
+        "--candidate-source",
+        "ignored-candidate",
+        "--compiler-diagnostics",
+        "ignored-compiler-diagnostics",
+        "--compiler-output",
+        "ignored-compiler-output",
+        "--failure-classification",
+        "--verifier-output",
+        "ignored-verifier-output",
+        "--environment-input",
+        "ignored-environment-input"
+      ]),
+    /Missing --failure-classification <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
+test("runProblem9AttemptCli rejects missing required flag values before another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9AttemptCli([
+        "--benchmark-package-root",
+        "--prompt-package-root",
+        "ignored-prompt-package-root",
+        "--workspace",
+        "ignored-workspace-root",
+        "--output",
+        "ignored-output-root"
+      ]),
+    /Missing required --benchmark-package-root <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
+test("runProblem9AttemptCli rejects optional flag values that are followed by another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runProblem9AttemptCli([
+        "--benchmark-package-root",
+        "ignored-benchmark-package-root",
+        "--prompt-package-root",
+        "ignored-prompt-package-root",
+        "--workspace",
+        "ignored-workspace-root",
+        "--output",
+        "ignored-output-root",
+        "--provider-model",
+        "--stub-scenario",
+        "exact_canonical"
+      ]),
+    /Missing --provider-model <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
 test("runWorkerClaimLoopCli fails clearly when required worker identity flags are missing", async () => {
   await assert.rejects(
     () =>
@@ -246,6 +365,56 @@ test("runWorkerClaimLoopCli fails clearly when required worker identity flags ar
   );
 });
 
+test("runWorkerClaimLoopCli rejects required flag values before another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runWorkerClaimLoopCli([
+        "--worker-id",
+        "--worker-pool",
+        "modal-dev",
+        "--worker-version",
+        "worker-smoke-1",
+        "--workspace-root",
+        path.join(os.tmpdir(), "worker-workspace"),
+        "--output-root",
+        path.join(os.tmpdir(), "worker-output"),
+        "--once"
+      ]),
+    /Missing required --worker-id <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
+test("runWorkerClaimLoopCli rejects optional flag values that are followed by another flag", async (t) => {
+  const captured = captureConsole(t);
+
+  await assert.rejects(
+    () =>
+      runWorkerClaimLoopCli([
+        "--worker-id",
+        "worker-smoke-1",
+        "--worker-pool",
+        "modal-dev",
+        "--worker-version",
+        "worker-smoke-1",
+        "--workspace-root",
+        path.join(os.tmpdir(), "worker-workspace"),
+        "--output-root",
+        path.join(os.tmpdir(), "worker-output"),
+        "--max-jobs",
+        "--once"
+      ]),
+    /Missing --max-jobs <value> argument\./u
+  );
+
+  assert.equal(captured.stderrLines.length, 0);
+  assert.equal(captured.stdoutLines.length, 0);
+});
+
 test("runProblem9AttemptInDevboxCli rejects unsupported provider families before env preflight", async () => {
   await assert.rejects(
     () =>
@@ -256,6 +425,17 @@ test("runProblem9AttemptInDevboxCli rejects unsupported provider families before
         "anthropic"
       ]),
     /Trusted-local devbox runs currently support only provider-family openai, received anthropic\./
+  );
+});
+
+test("runProblem9AttemptInDevboxCli rejects missing valued flags before another flag", async () => {
+  await assert.rejects(
+    () =>
+      runProblem9AttemptInDevboxCli([
+        "--image",
+        "--preflight-only"
+      ]),
+    /Missing required --image <value> argument\./u
   );
 });
 

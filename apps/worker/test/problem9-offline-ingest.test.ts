@@ -506,6 +506,50 @@ test("runProblem9OfflineIngestCli emits JSON setup failures for missing flags", 
   });
 });
 
+test("runProblem9OfflineIngestCli keeps JSON setup failures when a required flag value is another flag", async (t) => {
+  const originalExitCode = process.exitCode;
+  const originalConsoleError = console.error;
+  const originalConsoleLog = console.log;
+  const stderrLines: string[] = [];
+  const stdoutLines: string[] = [];
+
+  process.exitCode = undefined;
+  console.error = (...args: unknown[]) => {
+    stderrLines.push(args.map(String).join(" "));
+  };
+  console.log = (...args: unknown[]) => {
+    stdoutLines.push(args.map(String).join(" "));
+  };
+
+  t.after(() => {
+    process.exitCode = originalExitCode;
+    console.error = originalConsoleError;
+    console.log = originalConsoleLog;
+  });
+
+  await runProblem9OfflineIngestCli([
+    "--access-jwt",
+    "--bundle-root",
+    path.join(os.tmpdir(), "bundle-root")
+  ]);
+
+  assert.equal(stdoutLines.length, 0);
+  assert.equal(process.exitCode, 2);
+  assert.deepEqual(JSON.parse(stderrLines.join("\n")), {
+    bundleRoot: null,
+    endpoint: null,
+    error: "offline_ingest_setup_failure",
+    issues: [
+      {
+        message: "Missing required --access-jwt <value> argument.",
+        path: "--access-jwt"
+      }
+    ],
+    stage: "setup_failure",
+    status: "rejected"
+  });
+});
+
 test("runProblem9OfflineIngestCli uses runtime exit code for remote rejections", async (t) => {
   const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
     result: "pass"

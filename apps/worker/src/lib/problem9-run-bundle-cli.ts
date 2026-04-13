@@ -1,5 +1,5 @@
 import path from "node:path";
-import { WorkerCliError } from "./cli-contract.js";
+import { readWorkerCliFlagValue, WorkerCliError } from "./cli-contract.js";
 import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
@@ -36,18 +36,27 @@ export async function runProblem9RunBundleCli(args: string[]): Promise<void> {
   }
 
   const getRequiredValue = (flag: string): string => {
-    const index = args.findIndex((argument) => argument === flag);
+    const { value } = readWorkerCliFlagValue(args, flag);
 
-    if (index === -1 || !args[index + 1]) {
+    if (value === null) {
       throw new Error(`Missing required ${flag} <value> argument.`);
     }
 
-    return args[index + 1];
+    return value;
   };
 
   const getOptionalValue = (flag: string): string | null => {
-    const index = args.findIndex((argument) => argument === flag);
-    return index === -1 || !args[index + 1] ? null : args[index + 1];
+    const { present, value } = readWorkerCliFlagValue(args, flag);
+
+    if (!present) {
+      return null;
+    }
+
+    if (value === null) {
+      throw new Error(`Missing ${flag} <value> argument.`);
+    }
+
+    return value;
   };
 
   const failureClassificationPath = getOptionalValue("--failure-classification");

@@ -1,6 +1,7 @@
 import { access, constants, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { readWorkerCliFlagValue } from "./cli-contract.js";
 import {
   parseWorkerRuntimeEnv
 } from "./runtime.js";
@@ -243,17 +244,26 @@ export function buildTrustedLocalDevboxDockerArgs(
 
 function parseDevboxWrapperOptions(args: string[]): DevboxWrapperOptions {
   const getRequiredValue = (flag: string): string => {
-    const value = getOptionalValue(flag);
+    const { value } = readWorkerCliFlagValue(args, flag);
 
-    if (!value) {
+    if (value === null) {
       throw new Error(`Missing required ${flag} <value> argument.`);
     }
 
     return value;
   };
   const getOptionalValue = (flag: string): string | undefined => {
-    const index = args.findIndex((argument) => argument === flag);
-    return index === -1 || !args[index + 1] ? undefined : args[index + 1];
+    const { present, value } = readWorkerCliFlagValue(args, flag);
+
+    if (!present) {
+      return undefined;
+    }
+
+    if (value === null) {
+      throw new Error(`Missing ${flag} <value> argument.`);
+    }
+
+    return value;
   };
   const hasFlag = (flag: string): boolean => args.includes(flag);
   const preflightOnly = hasFlag("--preflight-only");
