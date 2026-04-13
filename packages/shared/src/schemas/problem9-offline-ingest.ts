@@ -134,35 +134,63 @@ export const problem9PromptPackageManifestSchema = problem9PromptPackageManifest
   }
 });
 
-export const problem9EnvironmentManifestSchema = z.object({
-  authMode: problem9PromptPackageManifestBaseSchema.shape.authMode,
-  environmentSchemaVersion: z.string().min(1),
-  executionImageDigest: sha256Schema.nullable(),
-  executionTargetKind: z.enum(["problem9-devbox", "problem9-execution"]),
-  harnessRevision: z.string().min(1),
-  lakeSnapshotId: z.string().min(1),
-  laneId: z.string().min(1),
-  leanVersion: z.string().min(1),
-  localDevboxDigest: sha256Schema.nullable(),
-  metadata: z.record(z.string(), recordValueSchema),
-  modelConfigId: z.string().min(1),
-  modelSnapshotId: z.string().min(1),
-  os: z.object({
-    arch: z.string().min(1),
-    platform: z.string().min(1),
-    release: z.string().min(1)
-  }),
-  promptProtocolVersion: z.string().min(1),
-  providerFamily: problem9PromptPackageManifestBaseSchema.shape.providerFamily,
-  runMode: problem9PromptPackageManifestBaseSchema.shape.runMode,
-  runtime: z.object({
-    bunVersion: z.string().min(1).nullable(),
-    nodeVersion: z.string().min(1),
-    tsxVersion: z.string().min(1).nullable()
-  }),
-  toolProfile: problem9PromptPackageManifestBaseSchema.shape.toolProfile,
-  verifierVersion: z.string().min(1)
-});
+export const problem9EnvironmentManifestSchema = z
+  .object({
+    authMode: problem9PromptPackageManifestBaseSchema.shape.authMode,
+    environmentSchemaVersion: z.string().min(1),
+    executionImageDigest: sha256Schema.nullable(),
+    executionTargetKind: z.enum([
+      "paretoproof-worker",
+      "problem9-devbox",
+      "problem9-execution"
+    ]),
+    harnessRevision: z.string().min(1),
+    lakeSnapshotId: z.string().min(1),
+    laneId: z.string().min(1),
+    leanVersion: z.string().min(1),
+    localDevboxDigest: sha256Schema.nullable(),
+    metadata: z.record(z.string(), recordValueSchema),
+    modelConfigId: z.string().min(1),
+    modelSnapshotId: z.string().min(1),
+    os: z.object({
+      arch: z.string().min(1),
+      platform: z.string().min(1),
+      release: z.string().min(1)
+    }),
+    promptProtocolVersion: z.string().min(1),
+    providerFamily: problem9PromptPackageManifestBaseSchema.shape.providerFamily,
+    runMode: problem9PromptPackageManifestBaseSchema.shape.runMode,
+    runtime: z.object({
+      bunVersion: z.string().min(1).nullable(),
+      nodeVersion: z.string().min(1),
+      tsxVersion: z.string().min(1).nullable()
+    }),
+    toolProfile: problem9PromptPackageManifestBaseSchema.shape.toolProfile,
+    verifierVersion: z.string().min(1)
+  })
+  .superRefine((value, context) => {
+    if (value.executionTargetKind !== "paretoproof-worker") {
+      return;
+    }
+
+    if (value.executionImageDigest === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "executionImageDigest is required when executionTargetKind is paretoproof-worker.",
+        path: ["executionImageDigest"]
+      });
+    }
+
+    if (value.localDevboxDigest !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "localDevboxDigest must be null when executionTargetKind is paretoproof-worker.",
+        path: ["localDevboxDigest"]
+      });
+    }
+  });
 
 export const problem9RunBundleManifestSchema = z.object({
   artifactManifestDigest: sha256Schema,

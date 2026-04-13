@@ -170,6 +170,7 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -184,6 +185,12 @@ test("runWorkerClaimLoop submits manifest and terminal result for a claimed sing
     });
     assert.equal(attemptCalls.length, 1);
     assert.equal(attemptCalls[0]?.authMode, "machine_api_key");
+    assert.deepEqual(attemptCalls[0]?.environmentProvenance, {
+      executionImageDigest: "9".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null,
+      metadata: {}
+    });
     assert.equal(attemptCalls[0]?.providerFamily, "openai");
     assert.equal(attemptCalls[0]?.networkPolicyMode, "hosted");
     assert.equal(attemptCalls[0]?.providerModel, "gpt-5");
@@ -367,6 +374,7 @@ test("runWorkerClaimLoop accepts uppercase verdict benchmarkPackageDigest hex", 
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -531,6 +539,7 @@ test("runWorkerClaimLoop registers failure-classification artifacts for failing 
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -635,6 +644,7 @@ test("runWorkerClaimLoop terminalizes cancellation after the first cancel-reques
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -775,6 +785,7 @@ test("runWorkerClaimLoop terminalizes cancellation after control-plane cancel du
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -921,6 +932,7 @@ test("runWorkerClaimLoop preserves cancelled terminalization when the first canc
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -1066,6 +1078,7 @@ test("runWorkerClaimLoop treats bounded cancel-finalization window loss as lease
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -1258,6 +1271,7 @@ test("runWorkerClaimLoop treats late-finalize cancel-window loss as lease loss a
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {
@@ -1468,6 +1482,7 @@ test("runWorkerClaimLoop treats late-finalize cancel-window loss as lease loss a
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {
@@ -1620,6 +1635,7 @@ test("runWorkerClaimLoop converts non-lease finalize heartbeat failures into can
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -1785,6 +1801,7 @@ test("runWorkerClaimLoop converts non-lease background heartbeat failures into c
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {}
@@ -1956,6 +1973,7 @@ test("runWorkerClaimLoop falls back to an artifact-backed harness failure when t
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -2158,6 +2176,7 @@ test("runWorkerClaimLoop preserves cancelled terminalization when a late cancel 
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {
@@ -2387,6 +2406,7 @@ test("runWorkerClaimLoop preserves cancelled terminalization when a late cancel 
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {
@@ -2561,6 +2581,7 @@ test("runWorkerClaimLoop preserves lease_lost when terminal result submission lo
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -2746,6 +2767,7 @@ test("runWorkerClaimLoop retries failing-verdict terminalization with a canonica
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -2934,6 +2956,7 @@ test("runWorkerClaimLoop heartbeats do not advertise unsent finalize event seque
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {
@@ -3030,6 +3053,7 @@ test("runWorkerClaimLoop submits a canonical pre-bundle failure when the inner a
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -3176,6 +3200,7 @@ test("runWorkerClaimLoop preserves cancelled terminalization when a late cancel 
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: async () => {}
@@ -3290,6 +3315,7 @@ test("runWorkerClaimLoop constrains claimed job filesystem paths under the confi
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -3329,6 +3355,7 @@ test("runWorkerClaimLoop rejects modal control-plane raw IP origins before any h
           rawEnv: {
             API_BASE_URL: "http://127.0.0.1:3000",
             CODEX_API_KEY: "worker-api-key",
+            PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
             WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
           }
         }
@@ -3406,6 +3433,7 @@ test("runWorkerClaimLoop fails closed on pre-existing lease residue and skips ex
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -3506,6 +3534,7 @@ test("runWorkerClaimLoop recovers when the first prepare-phase failure submissio
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -3620,6 +3649,7 @@ test("runWorkerClaimLoop preserves cancelled terminalization when the first prep
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -3731,6 +3761,7 @@ test("runWorkerClaimLoop reports invalid hosted modelConfigId prefixes before at
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep
@@ -4059,7 +4090,8 @@ async function writeBundleOutputs(outputRoot: string, artifactEntries: WorkerArt
 async function writeBundleOutputsWithVerdict(
   outputRoot: string,
   artifactEntries: WorkerArtifactManifestEntry[],
-  verdictOverrides: Record<string, unknown> = {}
+  verdictOverrides: Record<string, unknown> = {},
+  environmentOverrides: Record<string, unknown> = {}
 ) : Promise<WrittenBundleDigests> {
   await mkdir(path.join(outputRoot, "package"), { recursive: true });
   await mkdir(path.join(outputRoot, "package", "FirstProof", "Problem9"), { recursive: true });
@@ -4205,8 +4237,8 @@ async function writeBundleOutputsWithVerdict(
   const environment = {
     authMode: "machine_api_key",
     environmentSchemaVersion: "1",
-    executionImageDigest: null,
-    executionTargetKind: "problem9-execution",
+    executionImageDigest: "9".repeat(64),
+    executionTargetKind: "paretoproof-worker",
     harnessRevision: "worker-harness.v1",
     lakeSnapshotId: "leanprover/lean4:v4.22.0",
     laneId: "lean422_exact",
@@ -4229,7 +4261,8 @@ async function writeBundleOutputsWithVerdict(
       tsxVersion: null
     },
     toolProfile: "workspace_edit_limited",
-    verifierVersion: "lean4.22.0"
+    verifierVersion: "lean4.22.0",
+    ...environmentOverrides
   };
   const baseVerdict = {
     attemptId: "attempt-1",
@@ -4693,6 +4726,58 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
       }
     },
     {
+      expectedSummary:
+        /environment\/environment\.json executionTargetKind does not match the hosted worker runtime provenance\./i,
+      name: "hosted provenance drift",
+      tamper: async (outputRoot: string) => {
+        const benchmarkPackage = await readJsonFile(path.join(outputRoot, "package", "benchmark-package.json"));
+        const promptPackage = await readJsonFile(path.join(outputRoot, "prompt", "prompt-package.json"));
+        const environment = await readJsonFile(path.join(outputRoot, "environment", "environment.json"));
+        const tamperedEnvironment = {
+          ...environment,
+          executionTargetKind: "problem9-execution"
+        };
+        const environmentDigest = sha256Text(stableStringify(tamperedEnvironment));
+
+        await writeFile(
+          path.join(outputRoot, "environment", "environment.json"),
+          `${stableStringify(tamperedEnvironment)}\n`,
+          "utf8"
+        );
+        await upsertArtifactManifestEntry(outputRoot, {
+          artifactRole: "environment_snapshot",
+          contentEncoding: null,
+          mediaType: "application/json",
+          relativePath: "environment/environment.json",
+          requiredForIngest: true
+        });
+        await refreshBundleDigests(outputRoot, (runBundle) => ({
+          ...runBundle,
+          environmentDigest,
+          runConfigDigest: computeRunConfigDigest({
+            benchmarkPackage: {
+              benchmarkItemId: String(benchmarkPackage.benchmarkItemId),
+              packageDigest: String(benchmarkPackage.packageDigest),
+              packageId: String(benchmarkPackage.packageId),
+              packageVersion: String(benchmarkPackage.packageVersion)
+            },
+            environmentDigest,
+            promptPackage: {
+              authMode: String(promptPackage.authMode),
+              harnessRevision: String(promptPackage.harnessRevision),
+              laneId: String(promptPackage.laneId),
+              modelConfigId: String(promptPackage.modelConfigId),
+              promptPackageDigest: String(promptPackage.promptPackageDigest),
+              promptProtocolVersion: String(promptPackage.promptProtocolVersion),
+              providerFamily: String(promptPackage.providerFamily),
+              runMode: String(promptPackage.runMode),
+              toolProfile: String(promptPackage.toolProfile)
+            }
+          })
+        }));
+      }
+    },
+    {
       expectedSummary: /bundleSchemaVersion does not match the claimed job target/i,
       name: "bundleSchemaVersion drift",
       tamper: async (outputRoot: string) => {
@@ -5139,6 +5224,7 @@ test("runWorkerClaimLoop rejects bundle digest drift before artifact registratio
             rawEnv: {
               API_BASE_URL: "https://api.paretoproof.test",
               CODEX_API_KEY: "worker-api-key",
+              PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
               WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
             },
             sleep: neverSleep
@@ -5284,6 +5370,7 @@ test("runWorkerClaimLoop rejects a failing verdict that omits primaryFailure bef
         rawEnv: {
           API_BASE_URL: "https://api.paretoproof.test",
           CODEX_API_KEY: "worker-api-key",
+          PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
           WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
         },
         sleep: neverSleep

@@ -13,6 +13,12 @@ import { runProblem9OfflineIngestCli } from "../src/lib/problem9-offline-ingest-
 import { runProblem9OfflineIngest } from "../src/lib/problem9-offline-ingest.ts";
 
 async function buildOfflineIngestBundleRoot(options: {
+  environmentOverride?: Partial<{
+    executionImageDigest: string | null;
+    executionTargetKind: "paretoproof-worker" | "problem9-devbox" | "problem9-execution";
+    localDevboxDigest: string | null;
+    metadata: Record<string, string>;
+  }>;
   result: "pass" | "fail";
 }): Promise<{
   bundleRoot: string;
@@ -99,12 +105,13 @@ async function buildOfflineIngestBundleRoot(options: {
     JSON.stringify(
       {
         environmentSchemaVersion: "1",
-        executionImageDigest: null,
-        executionTargetKind: "problem9-devbox",
+        executionImageDigest: options.environmentOverride?.executionImageDigest ?? null,
+        executionTargetKind:
+          options.environmentOverride?.executionTargetKind ?? "problem9-devbox",
         lakeSnapshotId: "lake-snapshot-test",
         leanVersion: "4.22.0",
-        localDevboxDigest: null,
-        metadata: {
+        localDevboxDigest: options.environmentOverride?.localDevboxDigest ?? null,
+        metadata: options.environmentOverride?.metadata ?? {
           source: "worker-test"
         },
         modelSnapshotId: `model-snapshot-${idSuffix}`,
@@ -285,6 +292,79 @@ test("runProblem9OfflineIngest posts canonical bundle requests with Access auth"
     },
     status: "accepted"
   });
+});
+
+test("runProblem9OfflineIngest preserves hosted wrapper environment identity", async (t) => {
+  const { bundleRoot, tempRoot } = await buildOfflineIngestBundleRoot({
+    environmentOverride: {
+      executionImageDigest: "7".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null,
+      metadata: {
+        source: "worker-test"
+      }
+    },
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  let receivedRequestBody: unknown = null;
+
+  await runProblem9OfflineIngest(
+    {
+      accessJwt: "test-access-jwt",
+      bundleRoot
+    },
+    {
+      fetchImpl: async (_input, init) => {
+        receivedRequestBody = init?.body ? JSON.parse(String(init.body)) : null;
+
+        return new Response(
+          JSON.stringify({
+            artifactCount: 24,
+            attempt: {
+              id: "attempt-row-1",
+              sourceAttemptId: "attempt-pass-1",
+              state: "succeeded",
+              verdictClass: "pass"
+            },
+            job: {
+              id: "job-row-1",
+              sourceJobId: "job-pass-1",
+              state: "completed"
+            },
+            run: {
+              id: "run-row-1",
+              sourceRunId: "run-pass-1",
+              state: "succeeded"
+            }
+          }),
+          {
+            headers: {
+              "content-type": "application/json"
+            },
+            status: 201
+          }
+        );
+      },
+      runtimeEnv: {
+        API_BASE_URL: "https://api.paretoproof.com"
+      }
+    }
+  );
+
+  const parsedRequest = receivedRequestBody as {
+    bundle: {
+      environment: Record<string, unknown>;
+    };
+  };
+
+  assert.equal(parsedRequest.bundle.environment.executionTargetKind, "paretoproof-worker");
+  assert.equal(parsedRequest.bundle.environment.executionImageDigest, "7".repeat(64));
+  assert.equal(parsedRequest.bundle.environment.localDevboxDigest, null);
 });
 
 test("runProblem9OfflineIngest rejects failing bundles that omit failure-classification artifacts", async (t) => {

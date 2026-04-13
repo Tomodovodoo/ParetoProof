@@ -36,7 +36,10 @@ import {
 } from "@paretoproof/shared";
 import { z } from "zod";
 import type { Problem9AttemptResult } from "./problem9-attempt.js";
-import { runProblem9Attempt } from "./problem9-attempt.js";
+import {
+  resolveProblem9AttemptEnvironmentProvenance,
+  runProblem9Attempt
+} from "./problem9-attempt.js";
 import {
   getDefaultProblem9PromptPackageOptions,
   materializeProblem9PromptPackage
@@ -243,6 +246,7 @@ type PreparedBundleSubmission = {
   artifactManifestDigest: string;
   bundleDigest: string;
   candidateDigest: string;
+  environment: z.output<typeof problem9EnvironmentManifestSchema>;
   environmentDigest: string;
   runBundle: z.output<typeof runBundleFileSchema>;
   verifierVerdict: WorkerVerifierVerdict & { runId: string };
@@ -298,6 +302,10 @@ export async function runWorkerClaimLoop(
     authMode: options.authMode,
     commandFamily: "worker_claim_loop"
   }, dependencies.rawEnv);
+  const hostedAttemptEnvironmentProvenance = resolveProblem9AttemptEnvironmentProvenance({
+    hostedWorkerImageDigest: runtimeEnv.hostedWorkerImageDigest,
+    networkPolicyMode: "hosted"
+  });
   const fetchImpl =
     options.workerRuntime === "modal"
       ? createHostedControlPlaneFetch(
@@ -364,6 +372,7 @@ export async function runWorkerClaimLoop(
       claimResponse.workerJob,
       options,
       runtimeEnv.apiBaseUrl!,
+      hostedAttemptEnvironmentProvenance,
       {
         attemptRunner,
         fetchImpl,
@@ -396,6 +405,9 @@ async function processClaimedJob(
   workerJob: NonNullable<ActiveWorkerJob>,
   options: WorkerClaimLoopResolvedOptions,
   apiBaseUrl: string,
+  hostedAttemptEnvironmentProvenance: ReturnType<
+    typeof resolveProblem9AttemptEnvironmentProvenance
+  >,
   dependencies: WorkerClaimLoopResolvedDependencies
 ): Promise<"completed" | "cancelled" | "lease_lost"> {
   const leaseState: ActiveLeaseState = {
@@ -599,6 +611,7 @@ async function processClaimedJob(
         attemptResult = await dependencies.attemptRunner({
           authMode: workerJob.target.authMode,
           benchmarkPackageRoot: benchmarkResult.outputRoot,
+          environmentProvenance: hostedAttemptEnvironmentProvenance,
           modelSnapshotId: workerJob.target.modelSnapshotId,
           networkPolicyMode: "hosted",
           outputRoot: leaseRoots.attemptOutputRoot,
@@ -754,6 +767,10 @@ async function processClaimedJob(
           stopReason: attemptResult.stopReason,
           toolProfile: workerJob.target.toolProfile
         });
+        assertBundleSubmissionMatchesExpectedEnvironmentProvenance(
+          bundleSubmission.environment,
+          hostedAttemptEnvironmentProvenance
+        );
         assertRequiredArtifactRoles(bundleSubmission.artifactManifest, workerJob.requiredArtifactRoles);
       } catch (error) {
         if (error instanceof Error) {
@@ -1570,6 +1587,7 @@ async function readBundleSubmission(bundleRoot: string): Promise<PreparedBundleS
     artifactManifestDigest,
     bundleDigest,
     candidateDigest,
+    environment,
     environmentDigest,
     runBundle,
     verifierVerdict,
@@ -1647,6 +1665,30 @@ function assertBundleSubmissionMatchesJobTarget(
   if (mismatchedVerdictField) {
     throw new BundleSubmissionIntegrityError(
       `verification/verdict.json ${mismatchedVerdictField[0]} does not match the claimed job target.`
+    );
+  }
+}
+
+function assertBundleSubmissionMatchesExpectedEnvironmentProvenance(
+  environment: z.output<typeof problem9EnvironmentManifestSchema>,
+  expectedEnvironmentProvenance: ReturnType<typeof resolveProblem9AttemptEnvironmentProvenance>
+): void {
+  const environmentChecks: Array<[field: string, actual: string | null, expectedValue: string | null]> = [
+    [
+      "executionImageDigest",
+      environment.executionImageDigest,
+      expectedEnvironmentProvenance.executionImageDigest
+    ],
+    ["executionTargetKind", environment.executionTargetKind, expectedEnvironmentProvenance.executionTargetKind],
+    ["localDevboxDigest", environment.localDevboxDigest, expectedEnvironmentProvenance.localDevboxDigest]
+  ];
+  const mismatchedEnvironmentField = environmentChecks.find(
+    ([field, actual, expectedValue]) => !isBundleFieldMatch(field, actual, expectedValue)
+  );
+
+  if (mismatchedEnvironmentField) {
+    throw new BundleSubmissionIntegrityError(
+      `environment/environment.json ${mismatchedEnvironmentField[0]} does not match the hosted worker runtime provenance.`
     );
   }
 }
@@ -2278,13 +2320,17 @@ function sortJsonValue(value: unknown): unknown {
   return value;
 }
 
-function isBundleFieldMatch(field: string, actual: string | null, expectedValue: string): boolean {
+function isBundleFieldMatch(
+  field: string,
+  actual: string | null,
+  expectedValue: string | null
+): boolean {
   if (actual === null) {
-    return false;
+    return expectedValue === null;
   }
 
   if (field.toLowerCase().endsWith("digest")) {
-    return normalizeDigest(actual) === normalizeDigest(expectedValue);
+    return expectedValue !== null && normalizeDigest(actual) === normalizeDigest(expectedValue);
   }
 
   return actual === expectedValue;

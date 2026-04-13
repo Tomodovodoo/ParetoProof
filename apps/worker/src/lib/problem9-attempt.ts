@@ -25,6 +25,16 @@ import { materializeProblem9RunBundle } from "./problem9-run-bundle.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/i);
+const recordValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(recordValueSchema),
+    z.record(z.string(), recordValueSchema)
+  ])
+);
 
 const providerFamilySchema = z.enum(problem9ProviderFamilies);
 
@@ -116,9 +126,45 @@ const runEnvelopeSchema = z.object({
   toolProfile: toolProfileSchema
 });
 
+const problem9AttemptEnvironmentProvenanceSchema = z
+  .object({
+    executionImageDigest: sha256Schema.nullable().default(null),
+    executionTargetKind: z.enum([
+      "paretoproof-worker",
+      "problem9-devbox",
+      "problem9-execution"
+    ]),
+    localDevboxDigest: sha256Schema.nullable().default(null),
+    metadata: z.record(z.string(), recordValueSchema).default({})
+  })
+  .superRefine((value, context) => {
+    if (value.executionTargetKind !== "paretoproof-worker") {
+      return;
+    }
+
+    if (value.executionImageDigest === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "executionImageDigest is required when executionTargetKind is paretoproof-worker.",
+        path: ["executionImageDigest"]
+      });
+    }
+
+    if (value.localDevboxDigest !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "localDevboxDigest must be null when executionTargetKind is paretoproof-worker.",
+        path: ["localDevboxDigest"]
+      });
+    }
+  });
+
 const problem9AttemptOptionsSchema = z.object({
   authMode: authModeSchema.optional(),
   benchmarkPackageRoot: z.string().min(1),
+  environmentProvenance: problem9AttemptEnvironmentProvenanceSchema.optional(),
   modelSnapshotId: z.string().min(1).optional(),
   networkPolicyMode: z.enum(["default", "hosted"]).default("default"),
   outputRoot: z.string().min(1),
@@ -133,6 +179,9 @@ type Problem9AttemptOptions = z.input<typeof problem9AttemptOptionsSchema>;
 type BenchmarkPackageManifest = z.infer<typeof benchmarkPackageManifestSchema>;
 type PromptPackageManifest = z.infer<typeof promptPackageManifestSchema>;
 type RunEnvelope = z.infer<typeof runEnvelopeSchema>;
+type Problem9EnvironmentProvenance = NonNullable<
+  z.infer<typeof problem9AttemptOptionsSchema>["environmentProvenance"]
+>;
 
 type CompileResult = {
   diagnostics: Record<string, unknown>;
@@ -257,6 +306,34 @@ export type Problem9AttemptResult = {
   verdictDigest: string;
 };
 
+export function resolveProblem9AttemptEnvironmentProvenance(options: {
+  devboxImageDigest?: string;
+  hostedWorkerImageDigest?: string;
+  networkPolicyMode: "default" | "hosted";
+}): Problem9EnvironmentProvenance {
+  if (options.networkPolicyMode === "hosted") {
+    if (!options.hostedWorkerImageDigest) {
+      throw new Error(
+        "Hosted Problem 9 attempts require a paretoproof-worker image digest for environment provenance."
+      );
+    }
+
+    return {
+      executionImageDigest: options.hostedWorkerImageDigest,
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null,
+      metadata: {}
+    };
+  }
+
+  return {
+    executionImageDigest: null,
+    executionTargetKind: "problem9-devbox",
+    localDevboxDigest: options.devboxImageDigest ?? null,
+    metadata: {}
+  };
+}
+
 export async function runProblem9Attempt(
   rawOptions: Problem9AttemptOptions
 ): Promise<Problem9AttemptResult> {
@@ -289,11 +366,18 @@ export async function runProblem9Attempt(
 
   const effectiveProviderFamily = options.providerFamily ?? promptManifest.providerFamily;
   const effectiveAuthMode = (options.authMode ?? promptManifest.authMode) as Problem9AuthMode;
-  await parseWorkerRuntimeEnv({
+  const runtimeEnv = await parseWorkerRuntimeEnv({
     authMode: effectiveAuthMode,
     commandFamily: "problem9_attempt"
   });
   const authPreflight = await preflightProblem9AuthMode(effectiveAuthMode);
+  const environmentProvenance =
+    options.environmentProvenance ??
+    resolveProblem9AttemptEnvironmentProvenance({
+      devboxImageDigest: runtimeEnv.devboxImageDigest,
+      hostedWorkerImageDigest: runtimeEnv.hostedWorkerImageDigest,
+      networkPolicyMode: options.networkPolicyMode
+    });
 
   await rm(workspaceRoot, { force: true, recursive: true });
   await mkdir(workspaceRoot, { recursive: true });
@@ -469,6 +553,7 @@ export async function runProblem9Attempt(
     await buildEnvironmentInput({
       benchmarkManifest,
       compileRoot,
+      environmentProvenance,
       executionEnv: leanToolEnv,
       modelSnapshotId: resolveProblem9ModelSnapshotId({
         authMode: effectiveAuthMode,
@@ -1055,6 +1140,7 @@ function buildVerifierFailureSummary(
 async function buildEnvironmentInput(options: {
   benchmarkManifest: BenchmarkPackageManifest;
   compileRoot: string;
+  environmentProvenance: Problem9EnvironmentProvenance;
   executionEnv: NodeJS.ProcessEnv;
   modelSnapshotId: string;
 }): Promise<Record<string, unknown>> {
@@ -1073,12 +1159,12 @@ async function buildEnvironmentInput(options: {
 
   return {
     environmentSchemaVersion: "1",
-    executionImageDigest: null,
-    executionTargetKind: "problem9-devbox",
+    executionImageDigest: options.environmentProvenance.executionImageDigest,
+    executionTargetKind: options.environmentProvenance.executionTargetKind,
     lakeSnapshotId: options.benchmarkManifest.hashes["lake-manifest.json"] ?? "unknown",
     leanVersion,
-    localDevboxDigest: null,
-    metadata: {},
+    localDevboxDigest: options.environmentProvenance.localDevboxDigest,
+    metadata: options.environmentProvenance.metadata,
     modelSnapshotId: options.modelSnapshotId,
     os: {
       arch: os.arch(),

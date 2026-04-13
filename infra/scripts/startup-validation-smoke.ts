@@ -140,6 +140,8 @@ if (skipDockerStartupSmoke) {
       "--env",
       "CODEX_API_KEY=worker-api-key",
       "--env",
+      `PARETOPROOF_WORKER_IMAGE_DIGEST=${"9".repeat(64)}`,
+      "--env",
       "PARETOPROOF_STARTUP_VALIDATION_ONLY=1",
       startupSmokeExecutionImage,
       "node",
@@ -193,6 +195,40 @@ if (skipDockerStartupSmoke) {
   );
 
   expectCommandFailure(
+    "local Docker worker startup rejects a missing hosted worker image digest",
+    [
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--env",
+      "API_BASE_URL=https://api.paretoproof.com",
+      "--env",
+      "WORKER_BOOTSTRAP_TOKEN=worker-bootstrap-token",
+      "--env",
+      "CODEX_API_KEY=worker-api-key",
+      "--env",
+      "PARETOPROOF_STARTUP_VALIDATION_ONLY=1",
+      startupSmokeExecutionImage,
+      "node",
+      "apps/worker/dist/index.js",
+      "run-worker-claim-loop",
+      "--worker-id",
+      "startup-smoke-worker",
+      "--worker-pool",
+      "startup-smoke",
+      "--worker-version",
+      "startup-smoke-v1",
+      "--workspace-root",
+      "/tmp/worker-workspace",
+      "--output-root",
+      "/tmp/worker-output",
+      "--once"
+    ],
+    /Validation error: Invalid worker runtime environment: PARETOPROOF_WORKER_IMAGE_DIGEST: is required/
+  );
+
+  expectCommandFailure(
     "local Docker worker startup rejects a hosted provider-base override env",
     [
       "run",
@@ -205,6 +241,8 @@ if (skipDockerStartupSmoke) {
       "WORKER_BOOTSTRAP_TOKEN=worker-bootstrap-token",
       "--env",
       "CODEX_API_KEY=worker-api-key",
+      "--env",
+      `PARETOPROOF_WORKER_IMAGE_DIGEST=${"9".repeat(64)}`,
       "--env",
       "OPENAI_BASE_URL=https://evil.example.test",
       "--env",

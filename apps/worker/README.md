@@ -102,6 +102,7 @@ Local attempt execution:
 - the command copies the immutable benchmark package into a clean writable workspace, writes the candidate as `FirstProof/Problem9/Candidate.lean`, runs the authoritative Lean compile gate, runs theorem and axiom verification, and finalizes through the existing run-bundle materializer instead of inventing a second output shape
 - `trusted_local_user` runs fail fast if the resolved `CODEX_HOME/auth.json` is missing or unreadable or if `codex login status` fails; the command does not silently downgrade to machine auth
 - `machine_api_key` runs require `CODEX_API_KEY`
+- set `PARETOPROOF_DEVBOX_IMAGE_DIGEST` when you want locally emitted Problem 9 bundles to carry the exact devbox image digest instead of a null local-devbox provenance field
 - `local_stub` is the deterministic offline verification path for local dry runs and fixture generation
 - use `bun --cwd apps/worker test:attempt-smoke` or the root alias `bun run test:worker:attempt-smoke` for the deterministic local-stub worker smoke gate; it proves one exact-canonical pass path and one compile-failure path without any interactive auth or paid provider traffic
 - pull-request CI now runs `test:worker:verifier-smoke` after `build:shared` and `node infra/scripts/run-problem9-attempt-smoke.mjs --image paretoproof-problem9-devbox:pr-smoke` against the already-built devbox image; those two named CI steps are the authoritative pre-merge evidence for deterministic Problem 9 verifier and worker health
@@ -132,7 +133,10 @@ Hosted claim loop:
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
   - `CODEX_API_KEY`
+- hosted runtime provenance also requires:
+  - `PARETOPROOF_WORKER_IMAGE_DIGEST`
 - hosted claim-loop execution fails closed if proxy env or provider base-URL override env is present, and modal workers reject raw-IP or loopback control-plane origins instead of treating them as normal hosted targets
+- hosted bundles now emit `executionTargetKind: "paretoproof-worker"` and the matching wrapper digest from `PARETOPROOF_WORKER_IMAGE_DIGEST` instead of falling back to the local-devbox placeholder identity
 - hosted and packaged modes reject the trusted-local mount marker and the canonical `/run/paretoproof/codex-home` `CODEX_HOME` contract instead of silently attempting to reuse contributor auth material
 - the hosted loop only accepts `single_run` claims with machine auth, materializes the canonical benchmark and prompt packages from repo-owned sources, reuses the same `runProblem9Attempt` inner runner as local single-run execution, and submits heartbeats, execution events, artifact manifests, and terminal success or failure objects through the internal API
 - if a heartbeat returns `cancel_requested` or `expired`, the loop exits that claim without sending a stale terminal finalize

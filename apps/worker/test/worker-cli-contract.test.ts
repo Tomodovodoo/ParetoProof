@@ -101,6 +101,7 @@ test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-loca
         ...process.env,
         API_BASE_URL: "https://api.paretoproof.com",
         CODEX_API_KEY: "worker-api-key",
+        PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
         PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT: "readonly_auth_json",
         WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
       }
@@ -145,6 +146,7 @@ test("worker entrypoint exits 2 when hosted claim-loop env includes a provider-b
         OPENAI_API_BASE: "",
         OPENAI_API_BASE_URL: "",
         OPENAI_BASE_URL: "https://evil.example.test",
+        PARETOPROOF_WORKER_IMAGE_DIGEST: "9".repeat(64),
         WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
         all_proxy: "",
         http_proxy: "",

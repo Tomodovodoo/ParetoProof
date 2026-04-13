@@ -36,6 +36,7 @@ type DevboxWrapperOptions = {
 type TrustedLocalDevboxDockerArgsOptions = {
   authJsonPath: string;
   benchmarkPackageRoot: string | null;
+  devboxImageDigest?: string;
   image: string;
   modelSnapshotId?: string;
   outputMountRoot: string | null;
@@ -57,7 +58,7 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
   }
 
   const options = parseDevboxWrapperOptions(args);
-  await parseWorkerRuntimeEnv({
+  const runtimeEnv = await parseWorkerRuntimeEnv({
     commandFamily: "trusted_local_devbox"
   });
   const authPreflight = await preflightProblem9AuthMode("trusted_local_user");
@@ -136,6 +137,7 @@ export async function runProblem9AttemptInDevboxCli(args: string[]): Promise<voi
   const dockerArgs = buildTrustedLocalDevboxDockerArgs({
     authJsonPath: authPreflight.authJsonPath,
     benchmarkPackageRoot,
+    devboxImageDigest: runtimeEnv.devboxImageDigest,
     image: options.image,
     modelSnapshotId: options.modelSnapshotId,
     outputMountRoot,
@@ -208,6 +210,13 @@ export function buildTrustedLocalDevboxDockerArgs(
       true
     )
   ];
+
+  if (options.devboxImageDigest) {
+    dockerArgs.push(
+      "--env",
+      `PARETOPROOF_DEVBOX_IMAGE_DIGEST=${options.devboxImageDigest}`
+    );
+  }
 
   if (options.benchmarkPackageRoot) {
     dockerArgs.push(
