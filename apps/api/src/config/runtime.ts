@@ -255,6 +255,7 @@ export type ApiOriginRuntimeConfig = {
 export function resolveApiOriginRuntimeConfig(
   config?: Partial<ApiOriginRuntimeConfig>,
 ): ApiOriginRuntimeConfig {
+  const usesExplicitMathPublicOrigin = config?.mathPublicOrigin !== undefined;
   const authPublicOrigin =
     config?.authPublicOrigin ?? defaultApiAuthPublicOrigin;
   const mathPublicOrigin =
@@ -272,7 +273,11 @@ export function resolveApiOriginRuntimeConfig(
         .filter((origin) => origin.length > 0),
     ),
   ];
-  const cookieOrigins = [portalPublicOrigin, mathPublicOrigin, ...brandedAuthOrigins];
+  const cookieOrigins = [
+    portalPublicOrigin,
+    ...brandedAuthOrigins,
+    ...(usesExplicitMathPublicOrigin ? [mathPublicOrigin] : []),
+  ];
 
   return {
     accessCookieDomain:

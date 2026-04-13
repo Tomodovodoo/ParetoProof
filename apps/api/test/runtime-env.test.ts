@@ -95,6 +95,23 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
   });
 });
 
+test("parseApiRuntimeEnv keeps preview cookie scope when portal/auth are overridden without an explicit math origin", () => {
+  const runtimeEnv = parseApiRuntimeEnv({
+    ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    AUTH_PUBLIC_ORIGIN: "https://auth.preview.paretoproof.com",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+    CF_ACCESS_PORTAL_AUD: "portal-audience",
+    CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+    DATABASE_URL: "postgres://railway.internal:5432/paretoproof",
+    PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+  });
+
+  assert.equal(runtimeEnv.mathPublicOrigin, "https://math.paretoproof.com");
+  assert.equal(runtimeEnv.accessCookieDomain, ".preview.paretoproof.com");
+  assert.equal(runtimeEnv.accessCookieSecure, true);
+});
+
 test("parseApiRuntimeEnv derives host-only insecure cookie mode from explicit local origins", () => {
   const runtimeEnv = parseApiRuntimeEnv({
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",

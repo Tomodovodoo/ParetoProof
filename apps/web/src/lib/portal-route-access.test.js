@@ -175,18 +175,22 @@ describe("resolvePortalRouteRedirect", () => {
     expect(redirect.searchParams.get("access")).toBe("pending");
   });
 
-  it("redirects math-host portal state routes back onto the portal host even when the path matches", () => {
-    setWindowUrl("https://math.paretoproof.com/pending");
+  it("canonicalizes hosted pending math users onto the portal host even when the path already matches", () => {
+    setWindowUrl(
+      "https://math.paretoproof.com/pending?access=pending&email=ada@paretoproof.com"
+    );
 
-    expect(
-      resolveSurfaceRouteRedirect({
-        pathname: "/pending",
-        roles: [],
-        search: "",
-        status: "pending",
-        surface: "math"
-      })
-    ).toBe("https://portal.paretoproof.com/pending");
+    const redirect = resolveSurfaceRouteRedirect({
+      pathname: "/pending",
+      roles: [],
+      search: "?access=pending&email=ada@paretoproof.com",
+      status: "pending",
+      surface: "math"
+    });
+
+    expect(redirect).toBe(
+      "https://portal.paretoproof.com/pending"
+    );
   });
 
   it("redirects unknown approved math paths back to the math home surface", () => {
