@@ -947,6 +947,25 @@ function ensureManualCancellationWasRequested(
   );
 }
 
+function ensureCancelRequestedLeaseOnlyAcceptsCancelledTerminalization(
+  request: WorkerTerminalFailureRequest,
+  leaseState: LeaseStateRow
+) {
+  if (leaseState.jobState !== "cancel_requested" && leaseState.runState !== "cancel_requested") {
+    return;
+  }
+
+  if (request.terminalState === "cancelled" && request.failure.failureCode === "manual_cancelled") {
+    return;
+  }
+
+  throw createConflictError(
+    "worker_cancel_requested_requires_cancelled_terminalization",
+    "failure submission must finalize as manual_cancelled while the lease is cancel_requested.",
+    "terminalState"
+  );
+}
+
 async function promoteExecutionToRunning(
   db: ReadWriteExecutor,
   authContext: InternalWorkerJobAuthContext,
@@ -2188,6 +2207,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           path: "failure submission"
         });
         ensureManualCancellationWasRequested(request, lease);
+        ensureCancelRequestedLeaseOnlyAcceptsCancelledTerminalization(request, lease);
 
         const artifactIds = request.artifactIds ?? [];
         const artifactRows = await loadArtifactsByIds(tx, authContext.attemptRowId, artifactIds);

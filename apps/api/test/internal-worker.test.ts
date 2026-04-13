@@ -1749,6 +1749,57 @@ test("submitFailure rejects manual cancellation when cancel was not requested", 
   );
 });
 
+test("submitFailure rejects non-cancel terminalization when only the run is cancel_requested", async () => {
+  const control = createInternalWorkerControlService({
+    transaction: async (callback: (tx: unknown) => Promise<WorkerTerminalFailureResponse>) => {
+      let selectCount = 0;
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([
+                      buildLeaseStateRow({
+                        attemptState: "active",
+                        jobState: "running",
+                        runState: "cancel_requested"
+                      })
+                    ]);
+                  }
+                };
+              }
+            };
+          }
+
+          throw new Error("non-cancel terminalization should reject before artifact loading");
+        },
+        update() {
+          throw new Error("non-cancel terminalization should reject before writes");
+        }
+      };
+
+      return callback(tx);
+    }
+  } as never);
+
+  await assert.rejects(
+    () => control.submitFailure(buildFailureRequest(), buildJobAuthContext()),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_cancel_requested_requires_cancelled_terminalization"
+  );
+});
+
 test("submitFailure accepts manual cancellation when the job is cancel_requested before run state catches up", async () => {
   const updateCalls: Array<{ target: unknown; values: Record<string, unknown> }> = [];
   let selectCount = 0;
