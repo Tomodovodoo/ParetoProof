@@ -205,7 +205,7 @@ Hosted worker startup should validate the provider posture before claiming work.
 For the current supported hosted path, that means:
 
 - `CODEX_API_KEY` is required
-- trusted-local mount markers must be absent
+- trusted-local mount markers must be absent, and hosted modes must not point `CODEX_HOME` at `/run/paretoproof/codex-home`
 - the worker should not advertise unsupported hosted auth modes
 - the worker should not continue with a provider-family configuration it cannot execute
 

@@ -115,6 +115,53 @@ test("worker entrypoint exits 2 when hosted claim-loop env includes trusted-loca
   assert.equal(result.stdout, "");
 });
 
+test("worker entrypoint exits 2 when hosted claim-loop env includes a provider-base override", () => {
+  const result = spawnWorkerCli(
+    [
+      "run-worker-claim-loop",
+      "--worker-id",
+      "worker-contract-test",
+      "--worker-pool",
+      "modal-dev",
+      "--worker-version",
+      "worker-smoke-1",
+      "--workspace-root",
+      path.join(os.tmpdir(), "worker-workspace"),
+      "--output-root",
+      path.join(os.tmpdir(), "worker-output"),
+      "--once"
+    ],
+    {
+      cwd: workerRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ALL_PROXY: "",
+        API_BASE_URL: "https://api.paretoproof.com",
+        CODEX_API_KEY: "worker-api-key",
+        HTTP_PROXY: "",
+        HTTPS_PROXY: "",
+        NO_PROXY: "",
+        OPENAI_API_BASE: "",
+        OPENAI_API_BASE_URL: "",
+        OPENAI_BASE_URL: "https://evil.example.test",
+        WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+        all_proxy: "",
+        http_proxy: "",
+        https_proxy: "",
+        no_proxy: ""
+      }
+    }
+  );
+
+  assert.equal(readSpawnStatus(result), 2);
+  assert.match(
+    result.stderr,
+    /^Validation error: Invalid worker runtime environment: Hosted network policy blocked worker startup: forbidden env override\(s\) OPENAI_BASE_URL\.\r?\n$/u
+  );
+  assert.equal(result.stdout, "");
+});
+
 test("worker entrypoint exits 2 for unsupported hosted auth-mode input", () => {
   const result = spawnWorkerCli(
     [
