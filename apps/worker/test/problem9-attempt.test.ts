@@ -169,7 +169,7 @@ test("resolveProblem9AttemptEnvironmentProvenance emits hosted wrapper identity"
   );
 });
 
-test("resolveProblem9AttemptEnvironmentProvenance keeps local attempts on the devbox target", () => {
+test("resolveProblem9AttemptEnvironmentProvenance uses the devbox target when an explicit devbox digest is present", () => {
   assert.deepEqual(
     resolveProblem9AttemptEnvironmentProvenance({
       devboxImageDigest: "b".repeat(64),
@@ -179,6 +179,35 @@ test("resolveProblem9AttemptEnvironmentProvenance keeps local attempts on the de
       executionImageDigest: null,
       executionTargetKind: "problem9-devbox",
       localDevboxDigest: "b".repeat(64),
+      metadata: {}
+    }
+  );
+});
+
+test("resolveProblem9AttemptEnvironmentProvenance uses the devbox target for trusted-local container runs", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      networkPolicyMode: "default",
+      trustedLocalContainerMount: true
+    }),
+    {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-devbox",
+      localDevboxDigest: null,
+      metadata: {}
+    }
+  );
+});
+
+test("resolveProblem9AttemptEnvironmentProvenance keeps direct local host runs on the execution target", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      networkPolicyMode: "default"
+    }),
+    {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-execution",
+      localDevboxDigest: null,
       metadata: {}
     }
   );
@@ -342,6 +371,13 @@ test(
       ) as Record<string, unknown>;
       assert.equal(runBundle.status, "failure");
       assert.equal(runBundle.stopReason, "compile_failed");
+
+      const environment = JSON.parse(
+        await readFile(path.join(result.outputRoot, "environment", "environment.json"), "utf8")
+      ) as Record<string, unknown>;
+      assert.equal(environment.executionTargetKind, "problem9-execution");
+      assert.equal(environment.executionImageDigest, null);
+      assert.equal(environment.localDevboxDigest, null);
 
       const verdict = JSON.parse(
         await readFile(path.join(result.outputRoot, "verification", "verdict.json"), "utf8")

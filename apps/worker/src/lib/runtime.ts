@@ -27,7 +27,8 @@ const trimmedOptionalStringSchema = z.preprocess(
   normalizeOptionalEnvValue,
   z.string().trim().optional()
 );
-const sha256Pattern = /^[a-f0-9]{64}$/i;
+const bareSha256Pattern = /^[a-f0-9]{64}$/i;
+const prefixedSha256Pattern = /^sha256:([a-f0-9]{64})$/i;
 
 const workerRawRuntimeEnvSchema = z.object({
   ALL_PROXY: trimmedOptionalStringSchema,
@@ -80,6 +81,7 @@ export type WorkerRuntimeEnv = {
   codexApiKey?: string;
   devboxImageDigest?: string;
   hostedWorkerImageDigest?: string;
+  trustedLocalContainerMount?: true;
   trustedLocalAuthJsonPath?: string;
   trustedLocalCodexHome?: string;
   workerBootstrapToken?: string;
@@ -127,9 +129,14 @@ function resolveOptionalDigest(
     return undefined;
   }
 
-  if (!sha256Pattern.test(value)) {
+  const prefixedDigestMatch = prefixedSha256Pattern.exec(value);
+  if (prefixedDigestMatch) {
+    return prefixedDigestMatch[1].toLowerCase();
+  }
+
+  if (!bareSha256Pattern.test(value)) {
     throw new Error(
-      `Invalid worker runtime environment: ${fieldName}: must be a sha256 hex digest`
+      `Invalid worker runtime environment: ${fieldName}: must be a sha256 hex digest or sha256:<hex> digest`
     );
   }
 
@@ -333,9 +340,13 @@ async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEn
   );
 
   return {
+    ...(hasTrustedLocalContainerMount(rawEnv) ? { trustedLocalContainerMount: true as const } : {}),
     trustedLocalAuthJsonPath,
     trustedLocalCodexHome
-  } satisfies Pick<WorkerRuntimeEnv, "trustedLocalAuthJsonPath" | "trustedLocalCodexHome">;
+  } satisfies Pick<
+    WorkerRuntimeEnv,
+    "trustedLocalAuthJsonPath" | "trustedLocalCodexHome" | "trustedLocalContainerMount"
+  >;
 }
 
 export async function parseWorkerRuntimeEnv(

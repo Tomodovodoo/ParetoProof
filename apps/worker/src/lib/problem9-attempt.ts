@@ -310,6 +310,7 @@ export function resolveProblem9AttemptEnvironmentProvenance(options: {
   devboxImageDigest?: string;
   hostedWorkerImageDigest?: string;
   networkPolicyMode: "default" | "hosted";
+  trustedLocalContainerMount?: boolean;
 }): Problem9EnvironmentProvenance {
   if (options.networkPolicyMode === "hosted") {
     if (!options.hostedWorkerImageDigest) {
@@ -326,10 +327,19 @@ export function resolveProblem9AttemptEnvironmentProvenance(options: {
     };
   }
 
+  if (options.devboxImageDigest || options.trustedLocalContainerMount) {
+    return {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-devbox",
+      localDevboxDigest: options.devboxImageDigest ?? null,
+      metadata: {}
+    };
+  }
+
   return {
     executionImageDigest: null,
-    executionTargetKind: "problem9-devbox",
-    localDevboxDigest: options.devboxImageDigest ?? null,
+    executionTargetKind: "problem9-execution",
+    localDevboxDigest: null,
     metadata: {}
   };
 }
@@ -376,7 +386,8 @@ export async function runProblem9Attempt(
     resolveProblem9AttemptEnvironmentProvenance({
       devboxImageDigest: runtimeEnv.devboxImageDigest,
       hostedWorkerImageDigest: runtimeEnv.hostedWorkerImageDigest,
-      networkPolicyMode: options.networkPolicyMode
+      networkPolicyMode: options.networkPolicyMode,
+      trustedLocalContainerMount: runtimeEnv.trustedLocalContainerMount
     });
 
   await rm(workspaceRoot, { force: true, recursive: true });
