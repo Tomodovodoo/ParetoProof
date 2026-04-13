@@ -28,7 +28,10 @@ type SurfaceRouteAccessContext = PortalRouteAccessContext & {
   surface: AuthenticatedSurface;
 };
 
-function findSurfaceRoute(surface: AuthenticatedSurface, pathname: string) {
+function findSurfaceRoute<TSurface extends AuthenticatedSurface>(
+  surface: TSurface,
+  pathname: string
+) {
   return findAppRouteBySurface(surface, pathname);
 }
 
