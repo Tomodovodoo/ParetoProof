@@ -27,6 +27,8 @@ const trimmedOptionalStringSchema = z.preprocess(
   normalizeOptionalEnvValue,
   z.string().trim().optional()
 );
+const bareSha256Pattern = /^[a-f0-9]{64}$/i;
+const prefixedSha256Pattern = /^sha256:([a-f0-9]{64})$/i;
 
 const workerRawRuntimeEnvSchema = z.object({
   ALL_PROXY: trimmedOptionalStringSchema,
@@ -42,7 +44,9 @@ const workerRawRuntimeEnvSchema = z.object({
   OPENAI_API_BASE: trimmedOptionalStringSchema,
   OPENAI_API_BASE_URL: trimmedOptionalStringSchema,
   OPENAI_BASE_URL: trimmedOptionalStringSchema,
+  PARETOPROOF_DEVBOX_IMAGE_DIGEST: trimmedOptionalStringSchema,
   [trustedLocalAuthMountMarkerEnvName]: trimmedOptionalStringSchema,
+  PARETOPROOF_WORKER_IMAGE_DIGEST: trimmedOptionalStringSchema,
   R2_ACCESS_KEY_ID: trimmedOptionalStringSchema,
   R2_SECRET_ACCESS_KEY: trimmedOptionalStringSchema,
   USERPROFILE: trimmedOptionalStringSchema,
@@ -75,6 +79,9 @@ export type WorkerRuntimeMode =
 export type WorkerRuntimeEnv = {
   apiBaseUrl?: string;
   codexApiKey?: string;
+  devboxImageDigest?: string;
+  hostedWorkerImageDigest?: string;
+  trustedLocalContainerMount?: true;
   trustedLocalAuthJsonPath?: string;
   trustedLocalCodexHome?: string;
   workerBootstrapToken?: string;
@@ -112,6 +119,50 @@ function resolveRequiredField(
   }
 
   return value;
+}
+
+function resolveOptionalDigest(
+  fieldName: "PARETOPROOF_DEVBOX_IMAGE_DIGEST" | "PARETOPROOF_WORKER_IMAGE_DIGEST",
+  value: string | undefined
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  const prefixedDigestMatch = prefixedSha256Pattern.exec(value);
+  if (prefixedDigestMatch) {
+    return prefixedDigestMatch[1].toLowerCase();
+  }
+
+  if (!bareSha256Pattern.test(value)) {
+    throw new Error(
+      `Invalid worker runtime environment: ${fieldName}: must be a sha256 hex digest or sha256:<hex> digest`
+    );
+  }
+
+  return value.toLowerCase();
+}
+
+function resolveRequiredDigest(
+  fieldName: "PARETOPROOF_WORKER_IMAGE_DIGEST",
+  value: string | undefined
+) {
+  const digest = resolveOptionalDigest(fieldName, value);
+
+  if (!digest) {
+    throw new Error(`Invalid worker runtime environment: ${fieldName}: is required`);
+  }
+
+  return digest;
+}
+
+function buildOptionalDevboxRuntimeEnv(rawEnv: z.output<typeof workerRawRuntimeEnvSchema>) {
+  const devboxImageDigest = resolveOptionalDigest(
+    "PARETOPROOF_DEVBOX_IMAGE_DIGEST",
+    rawEnv.PARETOPROOF_DEVBOX_IMAGE_DIGEST
+  );
+
+  return devboxImageDigest ? { devboxImageDigest } : {};
 }
 
 function assertRequiredFields(
@@ -289,9 +340,13 @@ async function resolveTrustedLocalEnv(rawEnv: z.output<typeof workerRawRuntimeEn
   );
 
   return {
+    ...(hasTrustedLocalContainerMount(rawEnv) ? { trustedLocalContainerMount: true as const } : {}),
     trustedLocalAuthJsonPath,
     trustedLocalCodexHome
-  } satisfies Pick<WorkerRuntimeEnv, "trustedLocalAuthJsonPath" | "trustedLocalCodexHome">;
+  } satisfies Pick<
+    WorkerRuntimeEnv,
+    "trustedLocalAuthJsonPath" | "trustedLocalCodexHome" | "trustedLocalContainerMount"
+  >;
 }
 
 export async function parseWorkerRuntimeEnv(
@@ -314,17 +369,24 @@ export async function parseWorkerRuntimeEnv(
       switch (mode.authMode) {
         case "local_stub":
           rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
-          return {};
+          return buildOptionalDevboxRuntimeEnv(parsed.data);
         case "machine_api_key":
           rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
           return {
-            codexApiKey: resolveRequiredField("CODEX_API_KEY", parsed.data.CODEX_API_KEY)
+            codexApiKey: resolveRequiredField("CODEX_API_KEY", parsed.data.CODEX_API_KEY),
+            ...buildOptionalDevboxRuntimeEnv(parsed.data)
           };
         case "trusted_local_user":
-          return resolveTrustedLocalEnv(parsed.data);
+          return {
+            ...(await resolveTrustedLocalEnv(parsed.data)),
+            ...buildOptionalDevboxRuntimeEnv(parsed.data)
+          };
       }
     case "trusted_local_devbox":
-      return resolveTrustedLocalEnv(parsed.data);
+      return {
+        ...(await resolveTrustedLocalEnv(parsed.data)),
+        ...buildOptionalDevboxRuntimeEnv(parsed.data)
+      };
     case "worker_claim_loop":
       rejectTrustedLocalContainerMount(parsed.data, mode.commandFamily);
       assertRequiredFields([
@@ -348,6 +410,10 @@ export async function parseWorkerRuntimeEnv(
           mode.authMode === "machine_api_key"
             ? resolveRequiredField("CODEX_API_KEY", parsed.data.CODEX_API_KEY)
             : undefined,
+        hostedWorkerImageDigest: resolveRequiredDigest(
+          "PARETOPROOF_WORKER_IMAGE_DIGEST",
+          parsed.data.PARETOPROOF_WORKER_IMAGE_DIGEST
+        ),
         workerBootstrapToken: resolveRequiredField(
           "WORKER_BOOTSTRAP_TOKEN",
           parsed.data.WORKER_BOOTSTRAP_TOKEN

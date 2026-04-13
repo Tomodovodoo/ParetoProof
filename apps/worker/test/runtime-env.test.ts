@@ -34,6 +34,58 @@ test("parseWorkerRuntimeEnv keeps local stub attempts env-free", async () => {
   assert.deepEqual(runtimeEnv, {});
 });
 
+test("parseWorkerRuntimeEnv preserves an optional devbox digest for local attempts", async () => {
+  const runtimeEnv = await parseWorkerRuntimeEnv(
+    {
+      authMode: "local_stub",
+      commandFamily: "problem9_attempt"
+    },
+    {
+      PARETOPROOF_DEVBOX_IMAGE_DIGEST: "a".repeat(64)
+    }
+  );
+
+  assert.deepEqual(runtimeEnv, {
+    devboxImageDigest: "a".repeat(64)
+  });
+});
+
+test("parseWorkerRuntimeEnv normalizes published sha256-prefixed digests", async () => {
+  const localRuntimeEnv = await parseWorkerRuntimeEnv(
+    {
+      authMode: "local_stub",
+      commandFamily: "problem9_attempt"
+    },
+    {
+      PARETOPROOF_DEVBOX_IMAGE_DIGEST: `sha256:${"a".repeat(64)}`
+    }
+  );
+
+  assert.deepEqual(localRuntimeEnv, {
+    devboxImageDigest: "a".repeat(64)
+  });
+
+  const hostedRuntimeEnv = await parseWorkerRuntimeEnv(
+    {
+      authMode: "machine_api_key",
+      commandFamily: "worker_claim_loop"
+    },
+    {
+      API_BASE_URL: "https://api.paretoproof.com",
+      CODEX_API_KEY: "worker-api-key",
+      PARETOPROOF_WORKER_IMAGE_DIGEST: `sha256:${"b".repeat(64)}`,
+      WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+    }
+  );
+
+  assert.deepEqual(hostedRuntimeEnv, {
+    apiBaseUrl: "https://api.paretoproof.com",
+    codexApiKey: "worker-api-key",
+    hostedWorkerImageDigest: "b".repeat(64),
+    workerBootstrapToken: "bootstrap-token"
+  });
+});
+
 test("parseWorkerRuntimeEnv requires CODEX_API_KEY for machine_api_key attempts", async () => {
   await assert.rejects(
     () =>
@@ -127,6 +179,22 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
     /WORKER_BOOTSTRAP_TOKEN: is required/
   );
 
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "machine_api_key",
+          commandFamily: "worker_claim_loop"
+        },
+        {
+          API_BASE_URL: "https://api.paretoproof.com",
+          CODEX_API_KEY: "worker-api-key",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        }
+      ),
+    /PARETOPROOF_WORKER_IMAGE_DIGEST: is required/
+  );
+
   const runtimeEnv = await parseWorkerRuntimeEnv(
     {
       authMode: "machine_api_key",
@@ -135,6 +203,7 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
     {
       API_BASE_URL: "https://api.paretoproof.com",
       CODEX_API_KEY: "worker-api-key",
+      PARETOPROOF_WORKER_IMAGE_DIGEST: "b".repeat(64),
       WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
     }
   );
@@ -142,6 +211,7 @@ test("parseWorkerRuntimeEnv requires hosted worker env for future claim-loop mac
   assert.deepEqual(runtimeEnv, {
     apiBaseUrl: "https://api.paretoproof.com",
     codexApiKey: "worker-api-key",
+    hostedWorkerImageDigest: "b".repeat(64),
     workerBootstrapToken: "bootstrap-token"
   });
 });

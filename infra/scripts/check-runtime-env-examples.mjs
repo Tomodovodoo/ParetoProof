@@ -70,7 +70,9 @@ const checks = [
     variables: [
       { name: "API_BASE_URL", commented: false },
       { name: "WORKER_BOOTSTRAP_TOKEN", commented: true },
+      { name: "PARETOPROOF_WORKER_IMAGE_DIGEST", commented: true },
       { name: "CODEX_API_KEY", commented: true },
+      { name: "PARETOPROOF_DEVBOX_IMAGE_DIGEST", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_ID", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_SECRET", commented: true },
       { name: "R2_ACCESS_KEY_ID", commented: true },

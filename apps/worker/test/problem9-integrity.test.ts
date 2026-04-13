@@ -149,6 +149,76 @@ test("Problem 9 run-bundle materialization stays deterministic", async () => {
   }
 });
 
+test("Problem 9 run-bundle materialization rejects hosted worker provenance without a wrapper digest", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-integrity-"));
+
+  try {
+    const fixture = await createIntegrityFixture(tempRoot);
+    const promptPackage = await materializePromptPackage(
+      fixture,
+      path.join(tempRoot, "prompt-source")
+    );
+    const environmentInput = JSON.parse(
+      await readNormalizedText(fixture.bundleInputs.environmentInputPath)
+    ) as Record<string, unknown>;
+
+    await writeJsonFile(fixture.bundleInputs.environmentInputPath, {
+      ...environmentInput,
+      executionImageDigest: null,
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null
+    });
+
+    await assert.rejects(
+      materializeProblem9RunBundle({
+        benchmarkPackageRoot: fixture.benchmarkPackageRoot,
+        ...fixture.bundleInputs,
+        failureClassificationPath: null,
+        outputRoot: path.join(tempRoot, "bundle-invalid-hosted-digest"),
+        promptPackageRoot: promptPackage.outputRoot,
+      }),
+      /executionImageDigest is required when executionTargetKind is paretoproof-worker/u
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("Problem 9 run-bundle materialization rejects hosted worker provenance with a devbox digest", async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-integrity-"));
+
+  try {
+    const fixture = await createIntegrityFixture(tempRoot);
+    const promptPackage = await materializePromptPackage(
+      fixture,
+      path.join(tempRoot, "prompt-source")
+    );
+    const environmentInput = JSON.parse(
+      await readNormalizedText(fixture.bundleInputs.environmentInputPath)
+    ) as Record<string, unknown>;
+
+    await writeJsonFile(fixture.bundleInputs.environmentInputPath, {
+      ...environmentInput,
+      executionImageDigest: "7".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: "8".repeat(64)
+    });
+
+    await assert.rejects(
+      materializeProblem9RunBundle({
+        benchmarkPackageRoot: fixture.benchmarkPackageRoot,
+        ...fixture.bundleInputs,
+        failureClassificationPath: null,
+        outputRoot: path.join(tempRoot, "bundle-invalid-hosted-devbox"),
+        promptPackageRoot: promptPackage.outputRoot,
+      }),
+      /localDevboxDigest must be null when executionTargetKind is paretoproof-worker/u
+    );
+  } finally {
+    await rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
 test("prompt-package materialization rejects tampered benchmark-package inputs", async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-integrity-"));
 

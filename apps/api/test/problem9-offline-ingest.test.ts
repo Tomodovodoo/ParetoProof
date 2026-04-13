@@ -42,6 +42,12 @@ async function readTextFile(filePath: string): Promise<string> {
 }
 
 async function buildOfflineIngestRequest(options: {
+  environmentOverride?: Partial<{
+    executionImageDigest: string | null;
+    executionTargetKind: "paretoproof-worker" | "problem9-devbox" | "problem9-execution";
+    localDevboxDigest: string | null;
+    metadata: Record<string, string>;
+  }>;
   failureClassificationOverride?: Partial<{
     evidenceArtifactRefs: string[];
     failureCode: string;
@@ -155,12 +161,13 @@ async function buildOfflineIngestRequest(options: {
     JSON.stringify(
       {
         environmentSchemaVersion: "1",
-        executionImageDigest: null,
-        executionTargetKind: "problem9-devbox",
+        executionImageDigest: options.environmentOverride?.executionImageDigest ?? null,
+        executionTargetKind:
+          options.environmentOverride?.executionTargetKind ?? "problem9-devbox",
         lakeSnapshotId: "lake-snapshot-test",
         leanVersion: "4.22.0",
-        localDevboxDigest: null,
-        metadata: {
+        localDevboxDigest: options.environmentOverride?.localDevboxDigest ?? null,
+        metadata: options.environmentOverride?.metadata ?? {
           source: "api-test"
         },
         modelSnapshotId: `model-snapshot-${idSuffix}`,
@@ -435,6 +442,97 @@ test("buildProblem9OfflineIngestPlan accepts optional usage summary artifacts", 
   assert.equal(usageArtifact.requiredForIngest, false);
   assert.equal(usageArtifact.sha256, sha256Text(usageText));
   assert.equal(usageArtifact.storageProvider, "cloudflare_r2");
+});
+
+test("buildProblem9OfflineIngestPlan accepts hosted wrapper environment identity", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    environmentOverride: {
+      executionImageDigest: "7".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null,
+      metadata: {
+        source: "api-test"
+      }
+    },
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  const plan = buildProblem9OfflineIngestPlan(request);
+  const environmentArtifact = plan.artifacts.find(
+    (artifact) => artifact.relativePath === "environment/environment.json"
+  );
+  const manifestEnvironmentArtifact = request.bundle.artifactManifest.artifacts.find(
+    (artifact) => artifact.relativePath === "environment/environment.json"
+  );
+
+  assert.equal(request.bundle.environment.executionTargetKind, "paretoproof-worker");
+  assert.equal(plan.attempt.environmentDigest, request.bundle.runBundle.environmentDigest);
+  assert.equal(plan.run.environmentDigest, request.bundle.runBundle.environmentDigest);
+  assert.ok(environmentArtifact);
+  assert.ok(manifestEnvironmentArtifact);
+  assert.equal(environmentArtifact.sha256, manifestEnvironmentArtifact.sha256);
+});
+
+test("buildProblem9OfflineIngestPlan rejects hosted wrapper identity without an execution image digest", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    environmentOverride: {
+      executionImageDigest: "7".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null
+    },
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  request.bundle.environment.executionImageDigest = null;
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "invalid_problem9_offline_ingest_payload" &&
+      error.issues.some(
+        (issue) =>
+          issue.path === "bundle.environment.executionImageDigest" &&
+          /required when executionTargetKind is paretoproof-worker/u.test(issue.message)
+      )
+  );
+});
+
+test("buildProblem9OfflineIngestPlan rejects hosted wrapper identity with a devbox digest", async (t) => {
+  const { request, tempRoot } = await buildOfflineIngestRequest({
+    environmentOverride: {
+      executionImageDigest: "7".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null
+    },
+    result: "pass"
+  });
+
+  t.after(async () => {
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  request.bundle.environment.localDevboxDigest = "8".repeat(64);
+
+  assert.throws(
+    () => buildProblem9OfflineIngestPlan(request),
+    (error: unknown) =>
+      error instanceof Problem9OfflineIngestValidationError &&
+      error.code === "invalid_problem9_offline_ingest_payload" &&
+      error.issues.some(
+        (issue) =>
+          issue.path === "bundle.environment.localDevboxDigest" &&
+          /must be null when executionTargetKind is paretoproof-worker/u.test(issue.message)
+      )
+  );
 });
 
 test("buildProblem9OfflineIngestPlan preserves failure metadata for canonical failing bundles", async (t) => {

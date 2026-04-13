@@ -41,6 +41,13 @@ test(
       assert.equal(runBundle.status, "success");
       assert.equal(runBundle.stopReason, "verification_passed");
 
+      const environment = JSON.parse(
+        await readFile(path.join(result.outputRoot, "environment", "environment.json"), "utf8")
+      ) as Record<string, unknown>;
+      assert.equal(environment.executionTargetKind, "problem9-execution");
+      assert.equal(environment.executionImageDigest, null);
+      assert.equal(environment.localDevboxDigest, null);
+
       const verdict = JSON.parse(
         await readFile(path.join(result.outputRoot, "verification", "verdict.json"), "utf8")
       ) as Record<string, unknown>;

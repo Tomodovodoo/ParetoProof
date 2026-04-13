@@ -209,7 +209,7 @@ export type Problem9EnvironmentManifest = {
   authMode: Problem9PromptPackageManifest["authMode"];
   environmentSchemaVersion: string;
   executionImageDigest: string | null;
-  executionTargetKind: "problem9-devbox" | "problem9-execution";
+  executionTargetKind: "paretoproof-worker" | "problem9-devbox" | "problem9-execution";
   harnessRevision: string;
   lakeSnapshotId: string;
   laneId: string;

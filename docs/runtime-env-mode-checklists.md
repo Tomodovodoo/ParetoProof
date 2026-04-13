@@ -170,9 +170,13 @@ Use this mode for:
 
 - Example file: `apps/worker/.env.example`
 - Required env: none
-- Optional env: none
+- Optional env:
+  - `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
 - Secret env: none
 - Notes:
+  - direct host-side runs default to `executionTargetKind: "problem9-execution"`
+  - set `PARETOPROOF_DEVBOX_IMAGE_DIGEST` only when the local attempt is actually running inside the canonical Problem 9 devbox and should record `executionTargetKind: "problem9-devbox"`
+  - digest env accepts either bare `64`-hex input or the published `sha256:<hex>` form
   - these commands are intentionally file-driven
   - do not inject `API_BASE_URL`, `WORKER_BOOTSTRAP_TOKEN`, or provider keys just because they exist in the worker example file
 
@@ -182,7 +186,8 @@ Use this mode for deterministic local dry runs of `run-problem9-attempt`.
 
 - Example file: `apps/worker/.env.example`
 - Required env: none
-- Optional env: none
+- Optional env:
+  - `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
 - Secret env: none
 
 ### Local Problem 9 attempt with `machine_api_key`
@@ -192,9 +197,14 @@ Use this mode for `run-problem9-attempt --auth-mode machine_api_key`.
 - Example file: `apps/worker/.env.example`
 - Required env:
   - `CODEX_API_KEY`
-- Optional env: none
+- Optional env:
+  - `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
 - Secret env:
   - `CODEX_API_KEY`
+- Notes:
+  - direct host-side runs default to `executionTargetKind: "problem9-execution"`
+  - set `PARETOPROOF_DEVBOX_IMAGE_DIGEST` only when the local attempt is actually running inside the canonical Problem 9 devbox and should record `executionTargetKind: "problem9-devbox"`
+  - digest env accepts either bare `64`-hex input or the published `sha256:<hex>` form
 
 ### Local Problem 9 attempt with `trusted_local_user`
 
@@ -205,6 +215,7 @@ Use this mode for `run-problem9-attempt --auth-mode trusted_local_user`.
   - none if the default Codex home is correct
 - Optional env:
   - `CODEX_HOME` when the local auth cache is not under the default home directory
+  - `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
 - Required local file/state:
   - a readable `auth.json` under `CODEX_HOME` or the inferred home directory
   - a passing `codex login status`
@@ -214,6 +225,8 @@ Use this mode for `run-problem9-attempt --auth-mode trusted_local_user`.
   - on non-Windows hosts, the default inferred path is `$HOME/.codex/auth.json`
   - malformed `auth.json` content is treated as a setup failure, not a runtime fallback
   - this is a trusted-local path only; do not reuse it for hosted worker modes
+  - direct host-side runs default to `executionTargetKind: "problem9-execution"` unless they are launched through the canonical trusted-local devbox wrapper or you set `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
+  - digest env accepts either bare `64`-hex input or the published `sha256:<hex>` form
 
 ### Trusted-local devbox wrapper
 
@@ -227,6 +240,7 @@ Use this mode for:
   - none if the default Codex home is correct
 - Optional env:
   - `CODEX_HOME` when the local auth cache is not under the default home directory
+  - `PARETOPROOF_DEVBOX_IMAGE_DIGEST`
 - Required local file/state:
   - a readable `auth.json` under `CODEX_HOME` or the inferred home directory
   - a passing host `codex login status`
@@ -235,6 +249,8 @@ Use this mode for:
   - this wrapper mounts the auth file into the container read-only
   - the wrapper also sets `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT=readonly_auth_json` and expects `CODEX_HOME=/run/paretoproof/codex-home` inside the devbox
   - do not move trusted-local auth into `apps/worker/.env`
+  - if `PARETOPROOF_DEVBOX_IMAGE_DIGEST` is provided, the wrapper forwards it into the container so emitted bundles record the actual devbox digest
+  - digest env accepts either bare `64`-hex input or the published `sha256:<hex>` form
 
 ### Offline ingest CLI
 
@@ -264,6 +280,7 @@ Use this mode for `bun run run:worker-claim-loop -- --auth-mode machine_api_key 
   - `API_BASE_URL`
   - `WORKER_BOOTSTRAP_TOKEN`
   - `CODEX_API_KEY`
+  - `PARETOPROOF_WORKER_IMAGE_DIGEST`
 - Optional env: none
 - Secret env:
   - `WORKER_BOOTSTRAP_TOKEN`
@@ -272,6 +289,8 @@ Use this mode for `bun run run:worker-claim-loop -- --auth-mode machine_api_key 
   - this is the fully documented hosted worker path in the repository today
   - hosted modes must not set `PARETOPROOF_TRUSTED_LOCAL_AUTH_MOUNT` or point `CODEX_HOME` at `/run/paretoproof/codex-home`
   - hosted Problem 9 execution currently supports only provider family `openai`
+  - hosted bundles emit `executionTargetKind: "paretoproof-worker"` and carry the exact wrapper digest from `PARETOPROOF_WORKER_IMAGE_DIGEST`
+  - digest env accepts either bare `64`-hex input or the published `sha256:<hex>` form
   - hosted claim-loop runs fail closed when proxy env or provider base-URL override env is present, including `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `OPENAI_BASE_URL`, `OPENAI_API_BASE`, and `OPENAI_API_BASE_URL`
 
 ## Reserved later-scope variables

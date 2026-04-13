@@ -203,27 +203,55 @@ const failureClassificationSchema = z.object({
   userVisibility: z.enum(["user_visible", "user_visible_sanitized", "internal_only"])
 });
 
-const environmentInputSchema = z.object({
-  environmentSchemaVersion: z.string().min(1).default("1"),
-  executionImageDigest: sha256Schema.nullable().default(null),
-  executionTargetKind: z.enum(["problem9-devbox", "problem9-execution"]),
-  lakeSnapshotId: z.string().min(1),
-  leanVersion: z.string().min(1),
-  localDevboxDigest: sha256Schema.nullable().default(null),
-  metadata: z.record(z.string(), recordValueSchema).default({}),
-  modelSnapshotId: z.string().min(1),
-  os: z.object({
-    arch: z.string().min(1),
-    platform: z.string().min(1),
-    release: z.string().min(1)
-  }),
-  runtime: z.object({
-    bunVersion: z.string().min(1).nullable().default(null),
-    nodeVersion: z.string().min(1),
-    tsxVersion: z.string().min(1).nullable().default(null)
-  }),
-  verifierVersion: z.string().min(1)
-});
+const environmentInputSchema = z
+  .object({
+    environmentSchemaVersion: z.string().min(1).default("1"),
+    executionImageDigest: sha256Schema.nullable().default(null),
+    executionTargetKind: z.enum([
+      "paretoproof-worker",
+      "problem9-devbox",
+      "problem9-execution"
+    ]),
+    lakeSnapshotId: z.string().min(1),
+    leanVersion: z.string().min(1),
+    localDevboxDigest: sha256Schema.nullable().default(null),
+    metadata: z.record(z.string(), recordValueSchema).default({}),
+    modelSnapshotId: z.string().min(1),
+    os: z.object({
+      arch: z.string().min(1),
+      platform: z.string().min(1),
+      release: z.string().min(1)
+    }),
+    runtime: z.object({
+      bunVersion: z.string().min(1).nullable().default(null),
+      nodeVersion: z.string().min(1),
+      tsxVersion: z.string().min(1).nullable().default(null)
+    }),
+    verifierVersion: z.string().min(1)
+  })
+  .superRefine((value, context) => {
+    if (value.executionTargetKind !== "paretoproof-worker") {
+      return;
+    }
+
+    if (value.executionImageDigest === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "executionImageDigest is required when executionTargetKind is paretoproof-worker.",
+        path: ["executionImageDigest"]
+      });
+    }
+
+    if (value.localDevboxDigest !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "localDevboxDigest must be null when executionTargetKind is paretoproof-worker.",
+        path: ["localDevboxDigest"]
+      });
+    }
+  });
 
 const bundleResultSchema = z.enum(["pass", "fail"]);
 const bundleSemanticEqualitySchema = z.enum(["matched", "mismatched", "not_evaluated"]);

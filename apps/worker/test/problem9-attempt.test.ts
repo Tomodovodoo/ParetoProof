@@ -9,6 +9,7 @@ import { problem9AuthModes } from "../src/lib/problem9-auth.ts";
 import {
   buildProblem9LeanToolCommandEnv,
   findForbiddenProblem9CandidateImports,
+  resolveProblem9AttemptEnvironmentProvenance,
   resolveProblem9ModelSnapshotId,
   runProblem9Attempt
 } from "../src/lib/problem9-attempt.ts";
@@ -17,6 +18,12 @@ import {
   getDefaultProblem9PromptPackageOptions,
   materializeProblem9PromptPackage
 } from "../src/lib/problem9-prompt-package.ts";
+
+const bunInvocation = process.versions.bun
+  ? { command: process.execPath, prelude: [] as string[] }
+  : process.platform === "win32"
+    ? { command: process.env.ComSpec ?? "cmd.exe", prelude: ["/d", "/s", "/c", "bun"] }
+    : { command: "bun", prelude: [] as string[] };
 
 test("resolveProblem9ModelSnapshotId uses the selected local stub scenario by default", () => {
   assert.equal(
@@ -147,6 +154,65 @@ test("findForbiddenProblem9CandidateImports catches tab-separated and multiline 
   );
 });
 
+test("resolveProblem9AttemptEnvironmentProvenance emits hosted wrapper identity", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      hostedWorkerImageDigest: "a".repeat(64),
+      networkPolicyMode: "hosted"
+    }),
+    {
+      executionImageDigest: "a".repeat(64),
+      executionTargetKind: "paretoproof-worker",
+      localDevboxDigest: null,
+      metadata: {}
+    }
+  );
+});
+
+test("resolveProblem9AttemptEnvironmentProvenance uses the devbox target when an explicit devbox digest is present", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      devboxImageDigest: "b".repeat(64),
+      networkPolicyMode: "default"
+    }),
+    {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-devbox",
+      localDevboxDigest: "b".repeat(64),
+      metadata: {}
+    }
+  );
+});
+
+test("resolveProblem9AttemptEnvironmentProvenance uses the devbox target for trusted-local container runs", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      networkPolicyMode: "default",
+      trustedLocalContainerMount: true
+    }),
+    {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-devbox",
+      localDevboxDigest: null,
+      metadata: {}
+    }
+  );
+});
+
+test("resolveProblem9AttemptEnvironmentProvenance keeps direct local host runs on the execution target", () => {
+  assert.deepEqual(
+    resolveProblem9AttemptEnvironmentProvenance({
+      networkPolicyMode: "default"
+    }),
+    {
+      executionImageDigest: null,
+      executionTargetKind: "problem9-execution",
+      localDevboxDigest: null,
+      metadata: {}
+    }
+  );
+});
+
 test("materializeProblem9PromptPackage rejects modelConfigId values outside the supported auth matrix", async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "paretoproof-worker-prompt-contract-"));
 
@@ -190,8 +256,9 @@ test("run-problem9-attempt rejects unsupported auth-mode values at the CLI bound
     "../src/index.ts"
   );
   const result = spawnSync(
-    "bun",
+    bunInvocation.command,
     [
+      ...bunInvocation.prelude,
       workerEntryPoint,
       "run-problem9-attempt",
       "--benchmark-package-root",
@@ -226,6 +293,8 @@ test(
   { timeout: 60000 },
   async () => {
     const fixture = await createAttemptFixture();
+    const originalDevboxDigest = process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST;
+    process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST = "d".repeat(64);
 
     try {
       const result = await runProblem9Attempt({
@@ -251,6 +320,13 @@ test(
       assert.equal(runBundle.status, "success");
       assert.equal(runBundle.stopReason, "verification_passed");
 
+      const environment = JSON.parse(
+        await readFile(path.join(result.outputRoot, "environment", "environment.json"), "utf8")
+      ) as Record<string, unknown>;
+      assert.equal(environment.executionTargetKind, "problem9-devbox");
+      assert.equal(environment.executionImageDigest, null);
+      assert.equal(environment.localDevboxDigest, "d".repeat(64));
+
       const verdict = JSON.parse(
         await readFile(path.join(result.outputRoot, "verification", "verdict.json"), "utf8")
       ) as Record<string, unknown>;
@@ -258,6 +334,7 @@ test(
       assert.equal(verdict.semanticEquality, "matched");
       assert.equal(verdict.axiomCheck, "passed");
     } finally {
+      restoreOptionalEnvVar("PARETOPROOF_DEVBOX_IMAGE_DIGEST", originalDevboxDigest);
       await rm(fixture.tempRoot, { force: true, recursive: true });
     }
   }
@@ -268,6 +345,8 @@ test(
   { timeout: 60000 },
   async () => {
     const fixture = await createAttemptFixture();
+    const originalDevboxDigest = process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST;
+    delete process.env.PARETOPROOF_DEVBOX_IMAGE_DIGEST;
 
     try {
       const result = await runProblem9Attempt({
@@ -293,6 +372,13 @@ test(
       assert.equal(runBundle.status, "failure");
       assert.equal(runBundle.stopReason, "compile_failed");
 
+      const environment = JSON.parse(
+        await readFile(path.join(result.outputRoot, "environment", "environment.json"), "utf8")
+      ) as Record<string, unknown>;
+      assert.equal(environment.executionTargetKind, "problem9-execution");
+      assert.equal(environment.executionImageDigest, null);
+      assert.equal(environment.localDevboxDigest, null);
+
       const verdict = JSON.parse(
         await readFile(path.join(result.outputRoot, "verification", "verdict.json"), "utf8")
       ) as Record<string, unknown>;
@@ -306,6 +392,7 @@ test(
       );
       assert.equal((verdict.primaryFailure as Record<string, unknown>).phase, "compile");
     } finally {
+      restoreOptionalEnvVar("PARETOPROOF_DEVBOX_IMAGE_DIGEST", originalDevboxDigest);
       await rm(fixture.tempRoot, { force: true, recursive: true });
     }
   }
@@ -364,4 +451,13 @@ async function createAttemptFixture(): Promise<{
     promptPackageRoot: promptPackage.outputRoot,
     tempRoot
   };
+}
+
+function restoreOptionalEnvVar(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 }

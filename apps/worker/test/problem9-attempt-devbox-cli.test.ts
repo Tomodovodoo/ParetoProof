@@ -12,9 +12,11 @@ import {
 
 test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Codex home", () => {
   const authJsonPath = "/host/.codex/auth.json";
+  const devboxImageDigest = "a".repeat(64);
   const dockerArgs = buildTrustedLocalDevboxDockerArgs({
     authJsonPath,
     benchmarkPackageRoot: "/host/benchmark",
+    devboxImageDigest,
     image: "paretoproof-problem9-devbox:local",
     outputMountRoot: "/host/outputs",
     outputRoot: "/host/outputs/output-run",
@@ -30,6 +32,7 @@ test("buildTrustedLocalDevboxDockerArgs mounts only auth.json from the host Code
   );
 
   assert.ok(dockerArgs.includes(`CODEX_HOME=${trustedLocalCodexContainerHome}`));
+  assert.ok(dockerArgs.includes(`PARETOPROOF_DEVBOX_IMAGE_DIGEST=${devboxImageDigest}`));
   assert.ok(
     dockerArgs.includes(
       `${trustedLocalAuthMountMarkerEnvName}=${trustedLocalAuthMountMarkerValue}`
