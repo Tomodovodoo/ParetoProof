@@ -17,6 +17,9 @@ const hostedProxyEnvNames = [
 const hostedProviderOverrideEnvNames: Record<Problem9ProviderFamily, readonly string[]> = {
   openai: ["OPENAI_API_BASE", "OPENAI_API_BASE_URL", "OPENAI_BASE_URL"]
 };
+const allHostedProviderOverrideEnvNames = [
+  ...new Set(Object.values(hostedProviderOverrideEnvNames).flat())
+];
 
 const hostedLeanToolForbiddenEnvNames = [
   "API_BASE_URL",
@@ -104,17 +107,8 @@ export function buildHostedProviderCommandEnv(
   env: NodeJS.ProcessEnv,
   providerFamily: Problem9ProviderFamily
 ): NodeJS.ProcessEnv {
-  const forbiddenOverrideNames = [
-    ...hostedProxyEnvNames,
-    ...hostedProviderOverrideEnvNames[providerFamily]
-  ];
-  const offendingNames = forbiddenOverrideNames.filter((name) => hasNonEmptyEnvValue(env[name]));
-
-  if (offendingNames.length > 0) {
-    throw new Error(
-      `Hosted network policy blocked provider execution: forbidden env override(s) ${offendingNames.join(", ")}.`
-    );
-  }
+  const forbiddenOverrideNames = [...hostedProxyEnvNames, ...hostedProviderOverrideEnvNames[providerFamily]];
+  assertHostedEnvOverridesForbidden(env, forbiddenOverrideNames, "provider execution");
 
   const sanitizedEnv = { ...env };
 
@@ -138,6 +132,14 @@ export function buildHostedLeanToolCommandEnv(
   return sanitizedEnv;
 }
 
+export function assertHostedClaimLoopStartupEnv(env: NodeJS.ProcessEnv): void {
+  assertHostedEnvOverridesForbidden(
+    env,
+    [...hostedProxyEnvNames, ...allHostedProviderOverrideEnvNames],
+    "worker startup"
+  );
+}
+
 function resolveRequestUrl(input: URL | RequestInfo): URL {
   if (input instanceof URL) {
     return input;
@@ -156,6 +158,22 @@ function resolveRequestUrl(input: URL | RequestInfo): URL {
 
 function hasNonEmptyEnvValue(value: string | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function assertHostedEnvOverridesForbidden(
+  env: NodeJS.ProcessEnv,
+  forbiddenOverrideNames: readonly string[],
+  context: string
+): void {
+  const offendingNames = forbiddenOverrideNames.filter((name) => hasNonEmptyEnvValue(env[name]));
+
+  if (offendingNames.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Hosted network policy blocked ${context}: forbidden env override(s) ${offendingNames.join(", ")}.`
+  );
 }
 
 function isIpLiteral(hostname: string): boolean {

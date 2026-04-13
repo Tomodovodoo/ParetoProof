@@ -12,6 +12,7 @@ import {
   trustedLocalCodexContainerAuthJsonPath,
   trustedLocalCodexContainerHome
 } from "./trusted-local-auth-contract.js";
+import { assertHostedClaimLoopStartupEnv } from "./hosted-network-policy.js";
 
 function normalizeOptionalEnvValue(value: unknown) {
   if (typeof value !== "string") {
@@ -28,17 +29,28 @@ const trimmedOptionalStringSchema = z.preprocess(
 );
 
 const workerRawRuntimeEnvSchema = z.object({
+  ALL_PROXY: trimmedOptionalStringSchema,
   API_BASE_URL: trimmedOptionalStringSchema,
   CF_INTERNAL_API_SERVICE_TOKEN_ID: trimmedOptionalStringSchema,
   CF_INTERNAL_API_SERVICE_TOKEN_SECRET: trimmedOptionalStringSchema,
   CODEX_API_KEY: trimmedOptionalStringSchema,
   CODEX_HOME: trimmedOptionalStringSchema,
   HOME: trimmedOptionalStringSchema,
+  HTTPS_PROXY: trimmedOptionalStringSchema,
+  HTTP_PROXY: trimmedOptionalStringSchema,
+  NO_PROXY: trimmedOptionalStringSchema,
+  OPENAI_API_BASE: trimmedOptionalStringSchema,
+  OPENAI_API_BASE_URL: trimmedOptionalStringSchema,
+  OPENAI_BASE_URL: trimmedOptionalStringSchema,
   [trustedLocalAuthMountMarkerEnvName]: trimmedOptionalStringSchema,
   R2_ACCESS_KEY_ID: trimmedOptionalStringSchema,
   R2_SECRET_ACCESS_KEY: trimmedOptionalStringSchema,
   USERPROFILE: trimmedOptionalStringSchema,
-  WORKER_BOOTSTRAP_TOKEN: trimmedOptionalStringSchema
+  WORKER_BOOTSTRAP_TOKEN: trimmedOptionalStringSchema,
+  all_proxy: trimmedOptionalStringSchema,
+  http_proxy: trimmedOptionalStringSchema,
+  https_proxy: trimmedOptionalStringSchema,
+  no_proxy: trimmedOptionalStringSchema
 });
 
 export type WorkerRuntimeMode =
@@ -322,6 +334,13 @@ export async function parseWorkerRuntimeEnv(
           ? [["CODEX_API_KEY", parsed.data.CODEX_API_KEY] as const]
           : [])
       ]);
+      try {
+        assertHostedClaimLoopStartupEnv(parsed.data);
+      } catch (error) {
+        throw new Error(
+          `Invalid worker runtime environment: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
 
       return {
         apiBaseUrl: resolveRequiredField("API_BASE_URL", parsed.data.API_BASE_URL),

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertHostedClaimLoopStartupEnv,
   buildHostedLeanToolCommandEnv,
   buildHostedProviderCommandEnv,
   createHostedControlPlaneFetch,
@@ -61,6 +62,19 @@ test("buildHostedProviderCommandEnv rejects proxy and provider-base overrides", 
         },
         "openai"
       ),
+    /forbidden env override\(s\) HTTPS_PROXY, OPENAI_BASE_URL/
+  );
+});
+
+test("assertHostedClaimLoopStartupEnv rejects proxy and provider-base overrides before startup", () => {
+  assert.throws(
+    () =>
+      assertHostedClaimLoopStartupEnv({
+        CODEX_API_KEY: "worker-api-key",
+        HTTPS_PROXY: "https://proxy.example.test",
+        OPENAI_BASE_URL: "https://evil.example.test",
+        WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+      }),
     /forbidden env override\(s\) HTTPS_PROXY, OPENAI_BASE_URL/
   );
 });

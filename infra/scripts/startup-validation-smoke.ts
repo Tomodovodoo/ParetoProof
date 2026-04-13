@@ -191,6 +191,42 @@ if (skipDockerStartupSmoke) {
     ],
     /Validation error: Invalid worker runtime environment: WORKER_BOOTSTRAP_TOKEN: is required/
   );
+
+  expectCommandFailure(
+    "local Docker worker startup rejects a hosted provider-base override env",
+    [
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--env",
+      "API_BASE_URL=https://api.paretoproof.com",
+      "--env",
+      "WORKER_BOOTSTRAP_TOKEN=worker-bootstrap-token",
+      "--env",
+      "CODEX_API_KEY=worker-api-key",
+      "--env",
+      "OPENAI_BASE_URL=https://evil.example.test",
+      "--env",
+      "PARETOPROOF_STARTUP_VALIDATION_ONLY=1",
+      startupSmokeExecutionImage,
+      "node",
+      "apps/worker/dist/index.js",
+      "run-worker-claim-loop",
+      "--worker-id",
+      "startup-smoke-worker",
+      "--worker-pool",
+      "startup-smoke",
+      "--worker-version",
+      "startup-smoke-v1",
+      "--workspace-root",
+      "/tmp/worker-workspace",
+      "--output-root",
+      "/tmp/worker-output",
+      "--once"
+    ],
+    /Validation error: Invalid worker runtime environment: Hosted network policy blocked worker startup: forbidden env override\(s\) OPENAI_BASE_URL\./
+  );
 }
 
 console.log(

@@ -165,6 +165,45 @@ test("parseWorkerRuntimeEnv rejects trusted-local mount markers for hosted claim
   );
 });
 
+test("parseWorkerRuntimeEnv rejects canonical trusted-local CODEX_HOME for hosted claim loops", async () => {
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "machine_api_key",
+          commandFamily: "worker_claim_loop"
+        },
+        {
+          API_BASE_URL: "https://api.paretoproof.com",
+          CODEX_API_KEY: "worker-api-key",
+          CODEX_HOME: "/run/paretoproof/codex-home",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        }
+      ),
+    /trusted-local auth mounts are not allowed for worker_claim_loop/
+  );
+});
+
+test("parseWorkerRuntimeEnv rejects hosted proxy and provider-base override env for claim loops", async () => {
+  await assert.rejects(
+    () =>
+      parseWorkerRuntimeEnv(
+        {
+          authMode: "machine_api_key",
+          commandFamily: "worker_claim_loop"
+        },
+        {
+          API_BASE_URL: "https://api.paretoproof.com",
+          CODEX_API_KEY: "worker-api-key",
+          HTTPS_PROXY: "https://proxy.example.test",
+          OPENAI_BASE_URL: "https://evil.example.test",
+          WORKER_BOOTSTRAP_TOKEN: "bootstrap-token"
+        }
+      ),
+    /Invalid worker runtime environment: Hosted network policy blocked worker startup: forbidden env override\(s\) HTTPS_PROXY, OPENAI_BASE_URL\./
+  );
+});
+
 test("parseWorkerRuntimeEnv requires API base URL for offline ingest", async () => {
   await assert.rejects(
     () =>
