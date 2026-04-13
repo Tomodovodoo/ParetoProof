@@ -1,5 +1,6 @@
 import path from "node:path";
 import { type Problem9HostedAuthMode } from "@paretoproof/shared";
+import { readWorkerCliFlagValue } from "./cli-contract.js";
 import { runWorkerClaimLoop } from "./worker-claim-loop.js";
 
 export async function runWorkerClaimLoopCli(args: string[]): Promise<void> {
@@ -14,18 +15,27 @@ export async function runWorkerClaimLoopCli(args: string[]): Promise<void> {
   }
 
   const getRequiredValue = (flag: string): string => {
-    const index = args.findIndex((argument) => argument === flag);
+    const { value } = readWorkerCliFlagValue(args, flag);
 
-    if (index === -1 || !args[index + 1]) {
+    if (value === null) {
       throw new Error(`Missing required ${flag} <value> argument.`);
     }
 
-    return args[index + 1];
+    return value;
   };
 
   const getOptionalValue = (flag: string): string | undefined => {
-    const index = args.findIndex((argument) => argument === flag);
-    return index === -1 || !args[index + 1] ? undefined : args[index + 1];
+    const { present, value } = readWorkerCliFlagValue(args, flag);
+
+    if (!present) {
+      return undefined;
+    }
+
+    if (value === null) {
+      throw new Error(`Missing ${flag} <value> argument.`);
+    }
+
+    return value;
   };
 
   const maxJobs = getOptionalValue("--max-jobs");

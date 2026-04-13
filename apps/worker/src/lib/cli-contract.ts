@@ -5,6 +5,11 @@ export const workerCliExitCodes = {
   runtime: 3
 } as const;
 
+type WorkerCliFlagValue = {
+  present: boolean;
+  value: string | null;
+};
+
 type WorkerCliExitCode =
   (typeof workerCliExitCodes)[keyof typeof workerCliExitCodes];
 
@@ -25,6 +30,7 @@ export class WorkerCliError extends Error {
 const validationMessagePatterns = [
   /^Invalid worker runtime environment:/u,
   /^Missing required /u,
+  /^Missing --/u,
   /^Unknown worker command:/u,
   /^Unsupported /u,
   /^Trusted-local Codex auth preflight failed\./u,
@@ -115,4 +121,29 @@ export function rejectedOfflineIngestExitCode(stage: string) {
   return stage === "remote_rejection"
     ? workerCliExitCodes.runtime
     : workerCliExitCodes.validation;
+}
+
+export function readWorkerCliFlagValue(args: string[], flag: string): WorkerCliFlagValue {
+  const index = args.findIndex((argument) => argument === flag);
+
+  if (index === -1) {
+    return {
+      present: false,
+      value: null
+    };
+  }
+
+  const candidateValue = args[index + 1];
+
+  if (!candidateValue || candidateValue.startsWith("--")) {
+    return {
+      present: true,
+      value: null
+    };
+  }
+
+  return {
+    present: true,
+    value: candidateValue
+  };
 }

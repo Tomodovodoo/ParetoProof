@@ -147,6 +147,34 @@ test("worker entrypoint exits 2 for unsupported hosted auth-mode input", () => {
   assert.equal(result.stdout, "");
 });
 
+test("worker entrypoint exits 2 for optional valued flags that omit a value", () => {
+  const result = spawnWorkerCli(
+    [
+      "run-worker-claim-loop",
+      "--worker-id",
+      "worker-contract-test",
+      "--worker-pool",
+      "modal-dev",
+      "--worker-version",
+      "worker-smoke-1",
+      "--workspace-root",
+      path.join(os.tmpdir(), "worker-workspace"),
+      "--output-root",
+      path.join(os.tmpdir(), "worker-output"),
+      "--max-jobs",
+      "--once"
+    ],
+    {
+      cwd: workerRoot,
+      encoding: "utf8"
+    }
+  );
+
+  assert.equal(readSpawnStatus(result), 2);
+  assert.match(result.stderr, /^Validation error: Missing --max-jobs <value> argument\.\r?\n$/u);
+  assert.equal(result.stdout, "");
+});
+
 test(
   "worker entrypoint exits 3 and preserves machine-readable offline-ingest remote rejections",
   { timeout: 120000 },

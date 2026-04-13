@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readWorkerCliFlagValue } from "./cli-contract.js";
 import { materializeProblem9Package } from "./problem9-package.js";
 import { parseWorkerRuntimeEnv } from "./runtime.js";
 
@@ -12,15 +13,15 @@ export async function runProblem9PackageCli(args: string[]): Promise<void> {
     commandFamily: "materializer"
   });
 
-  const outputArgumentIndex = args.findIndex((argument) => argument === "--output");
+  const { value: outputValue } = readWorkerCliFlagValue(args, "--output");
 
-  if (outputArgumentIndex === -1 || !args[outputArgumentIndex + 1]) {
+  if (outputValue === null) {
     throw new Error(
       "Missing required --output <directory> argument for materialize-problem9-package."
     );
   }
 
-  const outputRoot = path.resolve(args[outputArgumentIndex + 1]);
+  const outputRoot = path.resolve(outputValue);
   const result = await materializeProblem9Package({ outputRoot });
 
   console.log(

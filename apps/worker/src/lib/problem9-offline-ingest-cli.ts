@@ -1,5 +1,5 @@
 import path from "node:path";
-import { rejectedOfflineIngestExitCode } from "./cli-contract.js";
+import { readWorkerCliFlagValue, rejectedOfflineIngestExitCode } from "./cli-contract.js";
 import { runProblem9OfflineIngest } from "./problem9-offline-ingest.js";
 
 export async function runProblem9OfflineIngestCli(args: string[]): Promise<void> {
@@ -11,13 +11,13 @@ export async function runProblem9OfflineIngestCli(args: string[]): Promise<void>
   }
 
   const getRequiredValue = (flag: "--access-jwt" | "--bundle-root"): string => {
-    const index = args.findIndex((argument) => argument === flag);
+    const { value } = readWorkerCliFlagValue(args, flag);
 
-    if (index === -1 || !args[index + 1]) {
+    if (value === null) {
       throw new Error(`Missing required ${flag} <value> argument.`);
     }
 
-    return args[index + 1];
+    return value;
   };
 
   const parsedOptions = (() => {
