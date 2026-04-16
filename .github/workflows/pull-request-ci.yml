@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Playwright Chromium for web layout regressions
+        run: cd apps/web && bunx playwright install --with-deps chromium
+
       - name: Smoke startup validation across runtime surfaces
         run: bun run test:startup-validation
 
@@ -91,6 +94,9 @@ jobs:
 
       - name: Test web auth relay functions
         run: bun --cwd apps/web test:functions
+
+      - name: Test web layout regressions
+        run: bun --cwd apps/web test:layout
 
       - name: Typecheck workspace
         run: >-
