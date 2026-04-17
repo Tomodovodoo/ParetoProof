@@ -174,6 +174,10 @@ export function shouldStayOnAuthEntryForProviderlessRecovery(
   );
 }
 
+export function shouldSkipAuthEntrySessionCheck(search = window.location.search) {
+  return new URLSearchParams(search).get("guidance") === "1";
+}
+
 export type AuthEntrySessionCheckAction =
   | "redirect_access_request"
   | "redirect_denied"
@@ -232,7 +236,8 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
     [isLocal, mode, redirectPath]
   );
   const publicHomeLabel = isLocal ? "Back to local home" : "Back to paretoproof.com";
-  const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
+  const skipSessionCheck = shouldSkipAuthEntrySessionCheck();
+  const [isCheckingSession, setIsCheckingSession] = useState(!isLocal && !skipSessionCheck);
   const handoffMode = new URLSearchParams(window.location.search).get("handoff");
   const showFailedNotice = handoffMode === "failed";
   const showRetryNotice = handoffMode === "retry";
@@ -244,7 +249,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
       : signInChecks;
 
   useEffect(() => {
-    if (isLocal) {
+    if (isLocal || skipSessionCheck) {
       return;
     }
 
@@ -289,7 +294,15 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
     return () => {
       controller.abort();
     };
-  }, [apiBaseUrl, isLocal, portalAccessRequestUrl, portalDeniedUrl, portalPendingUrl, portalUrl]);
+  }, [
+    apiBaseUrl,
+    isLocal,
+    portalAccessRequestUrl,
+    portalDeniedUrl,
+    portalPendingUrl,
+    portalUrl,
+    skipSessionCheck
+  ]);
 
   return (
     <main className="auth-shell">
@@ -434,8 +447,8 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
               localExperience
                 ? localExperience.footerCta.href
                 : mode === "access_request"
-                  ? approvedSignInUrl
-                  : accessRequestUrl
+                ? approvedSignInUrl
+                : accessRequestUrl
             }
           >
             {localExperience

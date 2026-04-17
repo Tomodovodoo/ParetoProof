@@ -5,6 +5,7 @@ import {
   buildLocalAuthEntryPreviewState,
   resolveAuthEntryApprovedPortalTargetPath,
   resolveAuthEntrySessionCheckAction,
+  shouldSkipAuthEntrySessionCheck,
   shouldStayOnAuthEntryForProviderlessRecovery
 } from "./auth-entry.tsx";
 
@@ -45,6 +46,13 @@ describe("shouldStayOnAuthEntryForProviderlessRecovery", () => {
         }
       })
     ).toBe(false);
+  });
+});
+
+describe("shouldSkipAuthEntrySessionCheck", () => {
+  it("skips automatic session reuse when guidance mode is requested explicitly", () => {
+    expect(shouldSkipAuthEntrySessionCheck("?guidance=1")).toBe(true);
+    expect(shouldSkipAuthEntrySessionCheck("?redirect=%2Fpending")).toBe(false);
   });
 });
 
@@ -257,5 +265,19 @@ describe("AuthEntry local rendering", () => {
     expect(html).toContain("Open local sign-in guidance");
     expect(html).toContain("Back to local home");
     expect(html).not.toContain("Use GitHub or Google to verify your identity.");
+  });
+});
+
+describe("AuthEntry hosted guidance rendering", () => {
+  it("does not show the session-checking state when guidance mode is requested", () => {
+    globalThis.window = {
+      location: new URL("https://auth.paretoproof.com/?guidance=1&redirect=%2Fpending")
+    };
+
+    const html = renderToStaticMarkup(<AuthEntry redirectPath="/pending" />);
+
+    expect(html).not.toContain("Checking for an existing session...");
+    expect(html).toContain("Continue with GitHub");
+    expect(html).toContain("Continue with Google");
   });
 });

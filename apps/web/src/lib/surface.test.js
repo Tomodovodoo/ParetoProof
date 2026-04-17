@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   buildAccessFinalizeUrl,
+  buildAuthGuidanceUrl,
   buildAuthUrl,
   buildPortalUrl,
   buildPublicUrl,
@@ -144,6 +145,17 @@ describe("surface ownership helpers", () => {
     expect(buildAuthUrl("/benchmarks")).toBe("https://auth.paretoproof.com/");
     expect(buildAuthUrl("https://math.paretoproof.com/runs/problem-9")).toBe(
       "https://auth.paretoproof.com/"
+    );
+  });
+
+  it("builds auth-guidance URLs that keep the redirect target but skip session reuse", () => {
+    setWindowUrl("https://paretoproof.com/");
+
+    expect(buildAuthGuidanceUrl("/runs/run-123?tab=events#trace")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace&guidance=1"
+    );
+    expect(buildAuthGuidanceUrl("/benchmarks")).toBe(
+      "https://auth.paretoproof.com/?guidance=1"
     );
   });
 

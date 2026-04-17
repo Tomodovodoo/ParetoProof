@@ -238,6 +238,15 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
   return authUrl.toString();
 }
 
+export function buildAuthGuidanceUrl(
+  targetPath = "/",
+  hostname = window.location.hostname
+) {
+  const authUrl = new URL(buildAuthUrl(targetPath, hostname));
+  authUrl.searchParams.set("guidance", "1");
+  return authUrl.toString();
+}
+
 export function buildAccessRequestUrl(hostname = window.location.hostname) {
   return buildAuthUrl("/access-request", hostname);
 }
