@@ -636,25 +636,13 @@ describe("local benchmark ops sorting", () => {
     expect(dataset.runs.map((run) => run.runId)).toEqual(["PP-318", "PP-321", "PP-319"]);
   });
 
-  it("marks local runs and worker incidents as preview fixtures instead of live operational facts", () => {
-    const runs = portalBenchmarkOpsLocalTestUtils.buildLocalRunsListResponse(defaultPortalRunsQuery);
-    const workers = portalBenchmarkOpsLocalTestUtils.buildLocalWorkersViewResponse();
-
-    expect(runs.items.map((item) => item.benchmarkLabel)).toEqual(
-      expect.arrayContaining([
-        "Local preview / axiom slice example",
-        "Local preview / induction example",
-        "Local preview / simplification example",
-        "Local preview / worker handoff example"
-      ])
-    );
-    expect(workers.incidents.map((incident) => incident.summary)).toEqual([
-      "Local preview fixture: a stale lease expired on the local-preview pool while PP-320 was retrying.",
-      "Local preview fixture: queued slice work is waiting on modal-preview capacity."
-    ]);
-    expect(workers.workerPools.map((pool) => pool.workerPool)).toEqual([
-      "modal-preview",
-      "local-preview"
-    ]);
+  it("keeps benchmark dataset exports scoped to the canonical package id in their file names", () => {
+    expect(
+      buildPortalBenchmarkDatasetExportFileName(
+        "problem9/core@2026.04",
+        "csv",
+        new Date("2026-04-17T09:10:11.000Z")
+      )
+    ).toBe("paretoproof-problem9-core-2026.04-dataset-2026-04-17T09-10-11.csv");
   });
 });

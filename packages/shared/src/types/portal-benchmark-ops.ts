@@ -399,3 +399,21 @@ export type PortalWorkersViewResponse = {
   };
   workerPools: PortalWorkerPoolSummary[];
 };
+
+export type PortalOverviewResponse = {
+  benchmarkHighlights: PortalBenchmarkListItem[];
+  generatedAt: string;
+  recentIncidents: PortalWorkerIncident[];
+  recentRuns: PortalRunListItem[];
+  summary: {
+    activeLeases: number;
+    activeRuns: number;
+    failedRuns: number;
+    observedBenchmarkPackageCount: number;
+    queuedJobs: number;
+    queuedRuns: number;
+    runningJobs: number;
+    staleLeaseCount: number;
+    totalRuns: number;
+  };
+};

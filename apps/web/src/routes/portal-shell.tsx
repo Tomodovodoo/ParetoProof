@@ -1,9 +1,12 @@
 import {
   appRouteAccessMatrix,
+  evaluationVerdictLabels,
   getPortalActionsForRoles,
   getPortalLiveViewFreshness,
   getPortalSectionsForRoles,
+  getRunLifecycleStateLabel,
   type PortalActionDefinition,
+  type PortalOverviewResponse,
   type PortalRole,
   type PortalRouteId,
   type PortalSectionDefinition
@@ -11,8 +14,9 @@ import {
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
+import { fetchPortalOverview } from "../lib/portal-overview";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
-import { buildPortalUrl, isLocalHostname } from "../lib/surface";
+import { buildPortalUrl } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalAdminUsersPanel } from "./portal-admin-users-panel";
 import { PortalBenchmarkOpsSurface } from "./portal-benchmark-ops-surfaces";
@@ -40,11 +44,17 @@ type OverviewSurfaceRow = {
   summary: string;
 };
 
+type PortalOverviewState =
+  | { status: "loading" }
+  | { data: PortalOverviewResponse; status: "ready" }
+  | { message: string; status: "error" };
+
 const portalRoutePathById = new Map<PortalRouteId, string>(
   appRouteAccessMatrix
     .filter((entry) => entry.surface === "portal")
     .map((entry) => [entry.id, entry.path] as [PortalRouteId, string])
 );
+
 const localPortalStateParamKeys = ["surface", "access", "email", "role", "roles", "reason"] as const;
 
 export function mergeLocalPortalSearchParams(currentSearch: string, nextSearch: string) {
@@ -263,22 +273,139 @@ function getOverviewSourceLabel(sectionId: PortalSectionDefinition["id"]) {
   return "Benchmark ops";
 }
 
-function getOverviewFreshnessLabel(routeId: PortalRouteId, isLocalPreview: boolean) {
-  if (isLocalPreview) {
-    return "Demo fixture";
+function getOverviewFreshnessLabel(routeId: PortalRouteId) {
+  return getPortalLiveViewFreshness(routeId) ? "API-backed" : "Navigation";
+}
+
+function formatPortalOverviewError(error: unknown) {
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message;
   }
 
-  return getPortalLiveViewFreshness(routeId) ? "API-backed" : "Navigation";
+  return "The portal overview could not be loaded.";
+}
+
+function formatPortalOverviewTimestamp(value: string | null) {
+  if (!value) {
+    return "In progress";
+  }
+
+  return value.replace("T", " ").replace(".000Z", "Z");
 }
 
 export function getCompactOverviewSectionOrder() {
   return ["recentRuns", "metrics", "overviewLead", "actions"] as const;
 }
 
+export function createPortalOverviewPollController() {
+  let requestInFlight = false;
+  let requestVersion = 0;
+
+  return {
+    begin(backgroundRefresh: boolean) {
+      if (backgroundRefresh && requestInFlight) {
+        return null;
+      }
+
+      requestInFlight = true;
+      requestVersion += 1;
+      return requestVersion;
+    },
+    clear(requestToken: number) {
+      if (requestToken !== requestVersion) {
+        return false;
+      }
+
+      requestInFlight = false;
+      return true;
+    },
+    isCurrent(requestToken: number) {
+      return requestToken === requestVersion;
+    }
+  };
+}
+
+type PortalOverviewPollingHandlers = {
+  fetchOverview: typeof fetchPortalOverview;
+  intervalMs: number | null;
+  onForegroundError(message: string): void;
+  onLoadingStateChange(nextState: PortalOverviewState): void;
+  onRefreshingChange(isRefreshing: boolean): void;
+  onReady(data: PortalOverviewResponse): void;
+};
+
+export function startPortalOverviewPolling({
+  fetchOverview,
+  intervalMs,
+  onForegroundError,
+  onLoadingStateChange,
+  onReady,
+  onRefreshingChange
+}: PortalOverviewPollingHandlers) {
+  let cancelled = false;
+  const controller = createPortalOverviewPollController();
+
+  const loadOverview = async (backgroundRefresh: boolean) => {
+    const requestToken = controller.begin(backgroundRefresh);
+
+    if (requestToken === null) {
+      return;
+    }
+
+    if (backgroundRefresh) {
+      onRefreshingChange(true);
+    } else {
+      onLoadingStateChange({ status: "loading" });
+    }
+
+    try {
+      const nextOverview = await fetchOverview();
+
+      if (cancelled || !controller.isCurrent(requestToken)) {
+        return;
+      }
+
+      onReady(nextOverview);
+    } catch (error) {
+      if (cancelled || !controller.isCurrent(requestToken)) {
+        return;
+      }
+
+      if (!backgroundRefresh) {
+        onForegroundError(formatPortalOverviewError(error));
+      }
+    } finally {
+      if (!cancelled && controller.clear(requestToken)) {
+        onRefreshingChange(false);
+      }
+    }
+  };
+
+  void loadOverview(false);
+
+  if (!intervalMs) {
+    return () => {
+      cancelled = true;
+    };
+  }
+
+  const intervalId = window.setInterval(() => {
+    void loadOverview(true);
+  }, intervalMs);
+
+  return () => {
+    cancelled = true;
+    window.clearInterval(intervalId);
+  };
+}
+
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [overviewRefreshing, setOverviewRefreshing] = useState(false);
+  const [overviewState, setOverviewState] = useState<PortalOverviewState>({
+    status: "loading"
+  });
   const compactLayout = useCompactLayout();
-  const isLocalPreview = isLocalHostname(window.location.hostname);
   const approvedRoles = useMemo(() => coercePortalRoles(roles), [roles]);
   const sections = useMemo(
     () => getPortalSectionsForRoles(approvedRoles),
@@ -329,19 +456,51 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           return {
             entryHref,
             entryLabel: new URL(entryHref).pathname,
-            freshnessLabel: getOverviewFreshnessLabel(section.routeId, isLocalPreview),
+            freshnessLabel: getOverviewFreshnessLabel(section.routeId),
             id: section.id,
             scopeLabel: section.description,
             sourceLabel: getOverviewSourceLabel(section.id),
             summary: portalSectionBodyCopy[section.id]
           };
         }),
-    [isLocalPreview, sections]
+    [sections]
   );
-  const overviewMetricsCopy = isLocalPreview ? localPreviewMetrics : defaultOverviewMetrics;
-  const overviewNotes = isLocalPreview
-    ? localPreviewOverviewNotes
-    : defaultOverviewNotes;
+  const overviewData = overviewState.status === "ready" ? overviewState.data : null;
+  const overviewMetricsCopy = useMemo(
+    () => [
+      {
+        label: "Total runs",
+        note: overviewData
+          ? overviewData.summary.totalRuns === 0
+            ? "No benchmark runs have been recorded yet."
+            : `${overviewData.summary.observedBenchmarkPackageCount} benchmark package(s) have recorded run history.`
+          : "Loading run history.",
+        value: overviewData ? String(overviewData.summary.totalRuns) : "-"
+      },
+      {
+        label: "Active runs",
+        note: overviewData
+          ? `${overviewData.summary.failedRuns} failed run(s) recorded in the current aggregate.`
+          : "Loading run posture.",
+        value: overviewData ? String(overviewData.summary.activeRuns) : "-"
+      },
+      {
+        label: "Queued jobs",
+        note: overviewData
+          ? `${overviewData.summary.queuedRuns} queued run(s), ${overviewData.summary.runningJobs} running job(s).`
+          : "Loading queue posture.",
+        value: overviewData ? String(overviewData.summary.queuedJobs) : "-"
+      },
+      {
+        label: "Active leases",
+        note: overviewData
+          ? `${overviewData.summary.staleLeaseCount} stale lease(s), ${overviewData.recentIncidents.length} recent incident(s).`
+          : "Loading worker lease posture.",
+        value: overviewData ? String(overviewData.summary.activeLeases) : "-"
+      }
+    ],
+    [overviewData]
+  );
 
   useEffect(() => {
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
@@ -369,6 +528,41 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
+
+  useEffect(() => {
+    if (!overviewRouteActive) {
+      return;
+    }
+
+    const intervalMs =
+      activeFreshnessPolicy?.mode === "polling" ? activeFreshnessPolicy.pollIntervalMs : null;
+    return startPortalOverviewPolling({
+      fetchOverview: fetchPortalOverview,
+      intervalMs,
+      onForegroundError(message) {
+        setOverviewState({
+          message,
+          status: "error"
+        });
+      },
+      onLoadingStateChange(nextState) {
+        setOverviewState(nextState);
+      },
+      onReady(data) {
+        setOverviewState({
+          data,
+          status: "ready"
+        });
+      },
+      onRefreshingChange(isRefreshing) {
+        setOverviewRefreshing(isRefreshing);
+      }
+    });
+  }, [
+    activeFreshnessPolicy?.mode,
+    activeFreshnessPolicy?.pollIntervalMs,
+    overviewRouteActive
+  ]);
 
   function replacePortalLocation(nextPathname: string, nextSearch: string) {
     const mergedSearch = mergeLocalPortalSearchParams(
@@ -416,12 +610,18 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <section className="portal-overview-grid">
       <article className="portal-panel portal-overview-lead">
         <p>
-          {isLocalPreview
-            ? "Review the localhost portal structure against schema-faithful demo fixtures. Real run, worker, and admin posture still belongs to the API-backed routes."
-            : "Use this overview to orient around the portal routes without inventing live operational facts. Real run, worker, and admin posture appears on the deeper API-backed surfaces."}
+          {overviewState.status === "error"
+            ? overviewState.message
+            : overviewState.status === "ready"
+              ? "This landing view is backed by the same Railway/Neon read models as Runs, Workers, and Launch. Use it for current queue posture, recent run evidence, and incident follow-up."
+              : "Loading the live portal overview from the same backend read models that power Runs, Workers, and Launch."}
         </p>
         {activeFreshnessPolicy ? (
-          <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
+          <PortalFreshnessCard
+            isRefreshing={overviewRefreshing}
+            lastUpdatedAt={overviewData?.generatedAt ?? null}
+            routeId={activeRouteId}
+          />
         ) : null}
       </article>
 
@@ -432,46 +632,118 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <section className="portal-overview-grid portal-overview-grid-secondary">
       <article className="portal-panel-table-flat">
         <div className="portal-panel-header">
-          <h2>Portal sections</h2>
+          <h2>Recent runs</h2>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
             Open runs
           </a>
         </div>
 
-        <div className="portal-table-shell" role="table" aria-label="Portal sections">
+        <div className="portal-table-shell" role="table" aria-label="Recent runs">
           <div className="portal-table-head" role="row">
-            <span>Surface</span>
-            <span>Source</span>
-            <span>What it shows</span>
-            <span>Entry</span>
-            <span>Mode</span>
-            <span>Scope</span>
+            <span>Run</span>
+            <span>Benchmark</span>
+            <span>Model</span>
+            <span>State</span>
+            <span>Finished</span>
+            <span>Verdict</span>
           </div>
-          {overviewSurfaceRows.map((row) => (
-            <div className="portal-table-row" key={row.id} role="row">
+          {overviewData?.recentRuns.length ? overviewData.recentRuns.map((run) => (
+            <div className="portal-table-row" key={run.runId} role="row">
               <span>
-                <a className="portal-inline-link" href={row.entryHref}>
-                  {row.id}
+                <a
+                  className="portal-inline-link"
+                  href={buildPortalUrl(`/runs/${encodeURIComponent(run.runId)}`)}
+                >
+                  {run.runId}
                 </a>
               </span>
-              <span>{row.sourceLabel}</span>
-              <span>{row.summary}</span>
-              <span>{row.entryLabel}</span>
-              <span>{row.freshnessLabel}</span>
-              <span>{row.scopeLabel}</span>
+              <span>{run.benchmarkLabel}</span>
+              <span>{run.modelConfigLabel}</span>
+              <span>{getRunLifecycleStateLabel(run.runState)}</span>
+              <span>{formatPortalOverviewTimestamp(run.completedAt)}</span>
+              <span>
+                {run.verdictClass ? evaluationVerdictLabels[run.verdictClass] : "In progress"}
+              </span>
             </div>
-          ))}
+          )) : overviewState.status === "error" ? (
+            <div className="portal-table-row" role="row">
+              <span>Overview unavailable.</span>
+              <span>{overviewState.message}</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+            </div>
+          ) : overviewData ? (
+            <div className="portal-table-row" role="row">
+              <span>No runs recorded yet.</span>
+              <span>The synced backend has not produced any benchmark runs.</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+            </div>
+          ) : (
+            <div className="portal-table-row" role="row">
+              <span>Loading overview.</span>
+              <span>Loading recent run history from the backend.</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+            </div>
+          )}
         </div>
       </article>
 
       <aside className="portal-overview-timeline">
-        <h2>{isLocalPreview ? "Local preview notes" : "Overview notes"}</h2>
+        <h2>Operational signals</h2>
         <div className="portal-timeline">
-          {overviewNotes.map((item) => (
-            <article className="portal-timeline-item" key={item.title}>
-              <strong>{item.title}</strong>
-              <p>{item.detail}</p>
-              <small>{item.meta}</small>
+          {overviewData?.recentIncidents.length ? (
+            overviewData.recentIncidents.map((incident) => (
+              <article
+                className="portal-timeline-item"
+                key={`${incident.kind}:${incident.observedAt}:${incident.summary}`}
+              >
+                <strong>{incident.summary}</strong>
+                <p>
+                  {incident.workerPool
+                    ? `Worker pool ${incident.workerPool}.`
+                    : "Derived from the current worker and queue posture."}
+                </p>
+                <small>{incident.severity}</small>
+              </article>
+            ))
+          ) : overviewData ? (
+            <article className="portal-timeline-item">
+              <strong>No current worker incidents</strong>
+              <p>The current overview has no backlog, stale-lease, or clustered-failure incidents.</p>
+              <small>Live backend state</small>
+            </article>
+          ) : overviewState.status === "error" ? (
+            <article className="portal-timeline-item">
+              <strong>Overview unavailable.</strong>
+              <p>{overviewState.message}</p>
+              <small>Portal home</small>
+            </article>
+          ) : (
+            <article className="portal-timeline-item">
+              <strong>Loading overview.</strong>
+              <p>Fetching current worker incidents and benchmark highlights.</p>
+              <small>Portal home</small>
+            </article>
+          )}
+          {overviewData?.benchmarkHighlights.slice(0, 3).map((benchmark) => (
+            <article
+              className="portal-timeline-item"
+              key={`${benchmark.benchmarkPackageId}:${benchmark.latestRunId ?? "none"}`}
+            >
+              <strong>{benchmark.benchmarkLabel}</strong>
+              <p>
+                {benchmark.runCount} run(s), latest completion{" "}
+                {formatPortalOverviewTimestamp(benchmark.latestCompletedAt)}.
+              </p>
+              <small>{benchmark.benchmarkPackageId}</small>
             </article>
           ))}
         </div>
@@ -588,16 +860,6 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             ))}
           </div>
         </header>
-
-        {isLocalPreview ? (
-          <section className="portal-panel" aria-label="Local portal preview">
-            <p className="eyebrow">Local preview</p>
-            <p>
-              This localhost portal is rendering demo fixture data stored in this browser.
-              It is not live API or operational state.
-            </p>
-          </section>
-        ) : null}
 
         {activeSection?.id === "overview" ? (
           <>

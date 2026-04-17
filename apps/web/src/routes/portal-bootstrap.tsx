@@ -11,15 +11,13 @@ import { createApiFormBody } from "../lib/api-form";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
 import { AccessRequestScreen } from "./access-request-screen";
 import {
-  buildLocalPendingPortalUrl,
   reducePortalStateAfterAuthExpiry,
   type PortalAccessState
 } from "./portal-bootstrap-state";
 import {
   buildPortalUrl,
   buildAuthUrl,
-  getCurrentRelativeUrl,
-  isLocalHostname
+  getCurrentRelativeUrl
 } from "../lib/surface";
 import { PortalShell } from "./portal-shell";
 
@@ -153,52 +151,6 @@ function readRouteDeniedReason(search = window.location.search) {
   return reason === "insufficient_role" ? reason : null;
 }
 
-function readLocalAccessOverride(): PortalAccessState | null {
-  if (!isLocalHostname(window.location.hostname)) {
-    return null;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const accessState = params.get("access");
-
-  if (accessState === "unauthenticated") {
-    return { status: "unauthenticated" };
-  }
-
-  if (accessState === "pending") {
-    return {
-      email: params.get("email"),
-      status: "pending"
-    };
-  }
-
-  if (accessState === "denied") {
-    return {
-      email: params.get("email"),
-      reason: parseDeniedReason(params.get("reason")) ?? "access_request_required",
-      status: "denied"
-    };
-  }
-
-  if (accessState === "approved") {
-    const approvedRole =
-      params.get("role") ??
-      (params.get("roles") ?? "")
-        .split(",")
-        .map((role) => role.trim())
-        .find(Boolean) ??
-      null;
-
-    return {
-      email: params.get("email"),
-      role: approvedRole,
-      status: "approved"
-    };
-  }
-
-  return null;
-}
-
 function formatPortalBootstrapError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "Failed to fetch") {
@@ -285,15 +237,6 @@ export function PortalBootstrap() {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    const localAccessOverride = readLocalAccessOverride();
-
-    if (localAccessOverride) {
-      setState(localAccessOverride);
-      return () => {
-        active = false;
-        controller.abort();
-      };
-    }
 
     async function loadAccessState() {
       try {
@@ -373,15 +316,6 @@ export function PortalBootstrap() {
   }, [routeRedirectTarget]);
 
   async function submitAccessRequest(payload: PortalAccessRequestInput) {
-    if (isLocalHostname(window.location.hostname)) {
-      setState({
-        email: state.status === "denied" || state.status === "pending" ? state.email : null,
-        status: "pending"
-      });
-      window.history.replaceState({}, "", buildLocalPendingPortalUrl());
-      return;
-    }
-
     const response = await fetchApi(`${apiBaseUrl}/portal/access-requests`, {
       body: createApiFormBody({
         rationale: payload.rationale ?? "",
@@ -406,15 +340,6 @@ export function PortalBootstrap() {
   }
 
   async function submitAccessRecovery(payload: PortalAccessRecoveryInput) {
-    if (isLocalHostname(window.location.hostname)) {
-      setState({
-        email: state.status === "denied" || state.status === "pending" ? state.email : null,
-        status: "pending"
-      });
-      window.history.replaceState({}, "", buildLocalPendingPortalUrl());
-      return;
-    }
-
     const response = await fetchApi(`${apiBaseUrl}/portal/access-recovery`, {
       body: createApiFormBody({
         rationale: payload.rationale ?? ""

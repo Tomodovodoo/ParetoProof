@@ -5,6 +5,7 @@ import type {
   PortalBenchmarkDatasetResponse,
   PortalBenchmarksListResponse,
   PortalLaunchViewResponse,
+  PortalOverviewResponse,
   PortalRunDetailResponse,
   PortalRunsListQuery,
   PortalRunsListResponse,
@@ -458,6 +459,51 @@ function buildWorkersViewResponse(): PortalWorkersViewResponse {
   };
 }
 
+function buildOverviewResponse(): PortalOverviewResponse {
+  const runs = buildRunsListResponse({
+    attemptId: null,
+    authMode: null,
+    benchmarkPackageDigest: null,
+    benchmarkPackageId: null,
+    benchmarkPackageVersion: null,
+    failureCode: null,
+    failureFamily: null,
+    jobId: null,
+    lifecycleBucket: null,
+    limit: 5,
+    modelConfigId: null,
+    providerFamily: null,
+    q: null,
+    runId: null,
+    runKind: null,
+    runLifecycle: [],
+    runMode: null,
+    sort: "started_at_desc",
+    toolProfile: null,
+    verdict: []
+  });
+  const benchmarks = buildBenchmarksListResponse();
+  const workers = buildWorkersViewResponse();
+
+  return {
+    benchmarkHighlights: benchmarks.items,
+    generatedAt: workers.generatedAt,
+    recentIncidents: workers.incidents,
+    recentRuns: runs.items,
+    summary: {
+      activeLeases: workers.activeLeases.length,
+      activeRuns: runs.summary.activeRuns,
+      failedRuns: runs.summary.failedRuns,
+      observedBenchmarkPackageCount: benchmarks.items.length,
+      queuedJobs: workers.queueSummary.queuedJobs,
+      queuedRuns: workers.queueSummary.queuedRuns,
+      runningJobs: workers.queueSummary.runningJobs,
+      staleLeaseCount: 0,
+      totalRuns: runs.summary.totalMatches
+    }
+  };
+}
+
 function buildRunRow(overrides: Record<string, unknown> = {}) {
   return {
     authMode: "machine_api_key",
@@ -580,6 +626,75 @@ function createRunsListDbStub(options: {
   };
 }
 
+function createOverviewDbStub(options: {
+  overviewBenchmarkRows: Array<{
+    attemptCount: number;
+    benchmarkPackageId: string;
+    latestCompletedAt: Date | null;
+    latestRunId: string | null;
+    modelConfigIds: string[];
+    providerFamilies: string[];
+    runCount: number;
+    totalObservedPackageCount: number;
+    versions: string[];
+    verdictFailCount: number;
+    verdictInvalidResultCount: number;
+    verdictPassCount: number;
+  }>;
+  recentRunRows: Array<Record<string, unknown>>;
+  summaryRow: {
+    activeRuns: number;
+    failedRuns: number;
+    totalMatches: number;
+    verdictFailCount: number;
+    verdictInvalidResultCount: number;
+    verdictPassCount: number;
+  };
+}) {
+  return {
+    execute: async () => options.overviewBenchmarkRows,
+    select(selection?: Record<string, unknown>) {
+      return {
+        from(table: unknown) {
+          if (
+            table === runs &&
+            selection &&
+            "activeRuns" in selection &&
+            "failedRuns" in selection &&
+            "totalMatches" in selection
+          ) {
+            return {
+              where: async () => [options.summaryRow]
+            };
+          }
+
+          if (table === runs) {
+            return {
+              where() {
+                return {
+                  orderBy() {
+                    return {
+                      limit: async () => options.recentRunRows
+                    };
+                  }
+                };
+              }
+            };
+          }
+
+          if (table === jobs || table === attempts) {
+            return {
+              where: async () => []
+            };
+          }
+
+          throw new Error("Unexpected select source in overview test stub.");
+        }
+      };
+    }
+  };
+}
+
 test("getRunsList summary counts stay aggregate when the returned page is limited", async () => {
   const query: PortalRunsListQuery = {
     attemptId: null,
@@ -652,6 +767,64 @@ test("getRunsList summary counts stay aggregate when the returned page is limite
   });
 });
 
+test("getOverview uses dedicated overview queries instead of the heavier runs and benchmarks paths", async () => {
+  const readModels = createPortalBenchmarkOpsReadModelService(
+    createOverviewDbStub({
+      overviewBenchmarkRows: [
+        {
+          attemptCount: 2,
+          benchmarkPackageId: "problem9",
+          latestCompletedAt: new Date("2026-03-14T20:00:00.000Z"),
+          latestRunId: "PP-319",
+          modelConfigIds: ["gpt-oss"],
+          providerFamilies: ["openai"],
+          runCount: 2,
+          totalObservedPackageCount: 7,
+          versions: ["2026.03", "2026.04"],
+          verdictFailCount: 0,
+          verdictInvalidResultCount: 0,
+          verdictPassCount: 2
+        }
+      ],
+      recentRunRows: [
+        buildRunRow({
+          completedAt: null,
+          id: "run-row-3",
+          sourceRunId: "PP-400",
+          state: "running",
+          updatedAt: new Date("2026-03-15T20:00:00.000Z"),
+          verdictClass: null
+        })
+      ],
+      summaryRow: {
+        activeRuns: 1,
+        failedRuns: 0,
+        totalMatches: 3,
+        verdictFailCount: 0,
+        verdictInvalidResultCount: 0,
+        verdictPassCount: 2
+      }
+    }) as never
+  );
+
+  readModels.getBenchmarksList = async () => {
+    throw new Error("getOverview should not call getBenchmarksList.");
+  };
+  readModels.getRunsList = async () => {
+    throw new Error("getOverview should not call getRunsList.");
+  };
+  readModels.getWorkersView = async () => buildWorkersViewResponse();
+
+  const payload = await readModels.getOverview();
+
+  assert.equal(payload.summary.totalRuns, 3);
+  assert.equal(payload.summary.activeRuns, 1);
+  assert.equal(payload.summary.observedBenchmarkPackageCount, 7);
+  assert.equal(payload.recentRuns[0]?.runId, "PP-400");
+  assert.equal(payload.benchmarkHighlights[0]?.benchmarkPackageId, "problem9");
+  assert.equal(payload.benchmarkHighlights[0]?.runCount, 2);
+});
+
 test("portal benchmark ops runs summary verdict aggregation only counts terminal run states", () => {
   const summarySelect = portalBenchmarkOpsReadModelTestUtils.buildRunsSummarySelect();
   const verdictSql = [
@@ -666,10 +839,30 @@ test("portal benchmark ops runs summary verdict aggregation only counts terminal
   }
 });
 
+test("portal overview benchmark highlight query counts verdicts per run instead of per attempt row", () => {
+  const statement = renderSqlFragment(
+    portalBenchmarkOpsReadModelTestUtils.buildOverviewBenchmarkHighlightsQuery()
+  );
+
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'fail' then r\.id end\)/
+  );
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'invalid_result' then r\.id end\)/
+  );
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'pass' then r\.id end\)/
+  );
+});
+
 function createReadModelService(overrides?: {
   getBenchmarkDataset?: (packageId: string) => Promise<PortalBenchmarkDatasetResponse | null>;
   getBenchmarksList?: () => Promise<PortalBenchmarksListResponse>;
   getLaunchView?: () => Promise<PortalLaunchViewResponse>;
+  getOverview?: () => Promise<PortalOverviewResponse>;
   getRunDetail?: (runId: string) => Promise<PortalRunDetailResponse | null>;
   getRunsList?: (query: PortalRunsListQuery) => Promise<PortalRunsListResponse>;
   getWorkersView?: () => Promise<PortalWorkersViewResponse>;
@@ -680,11 +873,41 @@ function createReadModelService(overrides?: {
     getBenchmarksList:
       overrides?.getBenchmarksList ?? (async () => buildBenchmarksListResponse()),
     getLaunchView: overrides?.getLaunchView ?? (async () => buildLaunchViewResponse()),
+    getOverview: overrides?.getOverview ?? (async () => buildOverviewResponse()),
     getRunDetail: overrides?.getRunDetail ?? (async () => buildRunDetailResponse()),
     getRunsList: overrides?.getRunsList ?? (async (query) => buildRunsListResponse(query)),
     getWorkersView: overrides?.getWorkersView ?? (async () => buildWorkersViewResponse())
   };
 }
+
+test("GET /portal/overview returns the landing overview read model for approved helpers", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["helper"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService(),
+      resolvePortalAccess: createResolvePortalAccessStub(["helper"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/overview"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.overviewResponse.parse(response.json());
+  assert.equal(payload.summary.observedBenchmarkPackageCount, 1);
+  assert.equal(payload.summary.totalRuns, 1);
+  assert.equal(payload.recentRuns[0]?.runId, "PP-318");
+});
 
 function createResolvePortalAccessStub(
   roles: Array<"admin" | "collaborator" | "helper">

@@ -31,7 +31,6 @@ import {
 import { getApiBaseUrl } from "./api-base-url";
 import { fetchApi } from "./api-fetch";
 import { portalResultsExportHeaders } from "./results-state";
-import { isLocalHostname } from "./surface";
 
 const portalRunsSortIds: PortalRunsSortId[] = [
   "started_at_desc",
@@ -1493,10 +1492,6 @@ export function getLocalOverviewTimeline() {
 }
 
 export async function fetchPortalRunsView(query: PortalRunsListQuery) {
-  if (isLocalHostname(window.location.hostname)) {
-    return portalRunsListResponseSchema.parse(createRunsListResponse(query));
-  }
-
   const queryString = buildPortalRunsQueryString(query);
   return fetchPortalBenchmarkOpsJson(
     `/portal/runs${queryString ? `?${queryString}` : ""}`,
@@ -1505,10 +1500,6 @@ export async function fetchPortalRunsView(query: PortalRunsListQuery) {
 }
 
 export async function fetchPortalBenchmarksList() {
-  if (isLocalHostname(window.location.hostname)) {
-    return portalBenchmarksListResponseSchema.parse(buildLocalBenchmarksListResponse());
-  }
-
   return fetchPortalBenchmarkOpsJson(
     "/portal/benchmarks",
     portalBenchmarksListResponseSchema
@@ -1516,10 +1507,6 @@ export async function fetchPortalBenchmarksList() {
 }
 
 export async function fetchPortalBenchmarkDataset(packageId: string) {
-  if (isLocalHostname(window.location.hostname)) {
-    return portalBenchmarkDatasetResponseSchema.parse(buildLocalBenchmarkDataset(packageId));
-  }
-
   return fetchPortalBenchmarkOpsJson(
     `/portal/benchmarks/${encodeURIComponent(packageId)}/dataset`,
     portalBenchmarkDatasetResponseSchema
@@ -1531,24 +1518,6 @@ export async function fetchPortalBenchmarkDatasetExport(
   format: PortalBenchmarkExportFormat
 ) {
   const fallbackFileName = buildPortalBenchmarkDatasetExportFileName(packageId, format);
-
-  if (isLocalHostname(window.location.hostname)) {
-    const dataset = buildLocalBenchmarkDataset(packageId);
-    const body =
-      format === "json"
-        ? JSON.stringify(dataset, null, 2)
-        : buildPortalBenchmarkDatasetCsv(dataset);
-
-    return {
-      blob: new Blob([body], {
-        type:
-          format === "json"
-            ? "application/json;charset=utf-8"
-            : "text/csv;charset=utf-8"
-      }),
-      fileName: fallbackFileName
-    };
-  }
 
   const response = await fetchApi(
     `${getApiBaseUrl()}/portal/benchmarks/${encodeURIComponent(packageId)}/export?format=${format}`,
@@ -1573,16 +1542,6 @@ export async function fetchPortalBenchmarkDatasetExport(
 }
 
 export async function fetchPortalRunDetail(runId: string) {
-  if (isLocalHostname(window.location.hostname)) {
-    const detail = localRunDetailById[runId];
-
-    if (!detail) {
-      throw new Error(`Run ${runId} was not found.`);
-    }
-
-    return portalRunDetailResponseSchema.parse(detail);
-  }
-
   return fetchPortalBenchmarkOpsJson(
     `/portal/runs/${encodeURIComponent(runId)}`,
     portalRunDetailResponseSchema
@@ -1590,17 +1549,9 @@ export async function fetchPortalRunDetail(runId: string) {
 }
 
 export async function fetchPortalLaunchView() {
-  if (isLocalHostname(window.location.hostname)) {
-    return portalLaunchViewResponseSchema.parse(localLaunchView);
-  }
-
   return fetchPortalBenchmarkOpsJson("/portal/launch", portalLaunchViewResponseSchema);
 }
 
 export async function fetchPortalWorkersView() {
-  if (isLocalHostname(window.location.hostname)) {
-    return portalWorkersViewResponseSchema.parse(localWorkersView);
-  }
-
   return fetchPortalBenchmarkOpsJson("/portal/workers", portalWorkersViewResponseSchema);
 }

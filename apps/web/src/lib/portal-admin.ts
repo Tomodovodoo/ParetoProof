@@ -15,7 +15,6 @@ import {
 } from "@paretoproof/shared";
 import { fetchApi } from "./api-fetch";
 import { createApiFormBody } from "./api-form";
-import { isLocalHostname } from "./surface";
 
 export type AdminMutationResult =
   | { ok: true }
@@ -697,10 +696,6 @@ async function parseApiError(
 }
 
 export async function loadPortalAdminAccessRequests(apiBaseUrl: string) {
-  if (isLocalHostname(window.location.hostname)) {
-    return sortByCreatedDesc(readLocalAdminState().accessRequests.map(toAccessRequestListItem));
-  }
-
   const response = await fetchApi(`${apiBaseUrl}/portal/admin/access-requests`, {
     credentials: "include",
     headers: {
@@ -740,18 +735,6 @@ export async function loadPortalAdminAccessRequestDetail(
   apiBaseUrl: string,
   accessRequestId: string
 ) {
-  if (isLocalHostname(window.location.hostname)) {
-    const item = readLocalAdminState().accessRequests.find(
-      (candidate) => candidate.id === accessRequestId
-    );
-
-    if (!item) {
-      throw new Error("That access request is no longer available.");
-    }
-
-    return item;
-  }
-
   const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}`,
     {
@@ -801,151 +784,6 @@ export async function approvePortalAdminAccessRequest(
     };
   }
 
-  if (isLocalHostname(window.location.hostname)) {
-    const state = readLocalAdminState();
-    const requestItem = state.accessRequests.find((candidate) => candidate.id === accessRequestId);
-
-    if (!requestItem) {
-      return {
-        code: "access_request_not_found",
-        message: "That access request is no longer available.",
-        ok: false
-      };
-    }
-
-    if (requestItem.status !== "pending") {
-      return {
-        code: "access_request_not_pending",
-        message: mapAdminMutationErrorCodeToMessage("access_request_not_pending"),
-        ok: false
-      };
-    }
-
-    if (requestItem.requestKind === "access_request" && !requestItem.linkedIdentities.length) {
-      return {
-        code: "access_identity_link_required",
-        message: mapAdminMutationErrorCodeToMessage("access_identity_link_required"),
-        ok: false
-      };
-    }
-
-    if (
-      requestItem.requestKind === "identity_recovery" &&
-      requestItem.recovery?.conflictingUser
-    ) {
-      return {
-        code: "identity_recovery_identity_conflict",
-        conflictUserId: requestItem.recovery.conflictingUser.userId,
-        message: mapAdminMutationErrorCodeToMessage("identity_recovery_identity_conflict"),
-        ok: false
-      };
-    }
-
-    if (
-      requestItem.requestKind === "access_request" &&
-      requestItem.matchedUserPosture?.activeRole
-    ) {
-      return {
-        code: "access_request_stale_for_approved_user",
-        message: mapAdminMutationErrorCodeToMessage("access_request_stale_for_approved_user"),
-        ok: false
-      };
-    }
-
-    requestItem.status = "approved";
-    requestItem.reviewedAt = new Date().toISOString();
-    requestItem.reviewer = localReviewer;
-    requestItem.decisionNote = parsedInput.data.decisionNote;
-    requestItem.auditEchoes.unshift(
-      createAuditEcho(
-        `audit-${requestItem.id}-approved`,
-        "access_request.approved",
-        requestItem.reviewedAt,
-        "access_request",
-        "critical",
-        requestItem.matchedUser?.userId ?? null,
-        {
-          accessRequestId: requestItem.id,
-          approvedRole:
-            requestItem.requestKind === "identity_recovery"
-              ? requestItem.requestedRole
-              : parsedInput.data.approvedRole,
-          targetUserId: requestItem.matchedUser?.userId ?? null
-        }
-      )
-    );
-
-    const matchedUser = requestItem.matchedUser
-      ? state.users.find((candidate) => candidate.userId === requestItem.matchedUser?.userId)
-      : null;
-
-    if (matchedUser) {
-      if (requestItem.requestKind === "identity_recovery") {
-        const hasLinkedIdentity = matchedUser.linkedIdentities.some(
-          (identity) =>
-            identity.provider === requestItem.recovery?.requestedIdentityProvider &&
-            identity.providerSubject === requestItem.recovery?.requestedIdentitySubject
-        );
-
-        if (!hasLinkedIdentity && requestItem.recovery?.requestedIdentityProvider) {
-          matchedUser.linkedIdentities.push({
-            createdAt: requestItem.reviewedAt,
-            id: `identity-${requestItem.id}`,
-            lastSeenAt: requestItem.reviewedAt,
-            provider: requestItem.recovery.requestedIdentityProvider,
-            providerEmail: requestItem.email,
-            providerSubject: requestItem.recovery.requestedIdentitySubject ?? `${requestItem.id}-subject`
-          });
-          matchedUser.auditHistory.unshift(
-            createAuditEcho(
-              `audit-${requestItem.id}-linked`,
-              "user_identity.linked",
-              requestItem.reviewedAt,
-              "user_identity",
-              "critical",
-              matchedUser.userId,
-              {
-                identityProvider: requestItem.recovery.requestedIdentityProvider,
-                identitySubject: requestItem.recovery.requestedIdentitySubject,
-                targetUserId: matchedUser.userId
-              }
-            )
-          );
-        }
-      } else {
-        matchedUser.roleGrantHistory.unshift({
-          grantedAt: requestItem.reviewedAt,
-          grantedBy: localReviewer,
-          revokedAt: null,
-          revokedBy: null,
-          role: parsedInput.data.approvedRole
-        });
-      }
-
-      matchedUser.auditHistory.unshift(
-        createAuditEcho(
-          `audit-${requestItem.id}-user-approved`,
-          "access_request.approved",
-          requestItem.reviewedAt,
-          "access_request",
-          "critical",
-          matchedUser.userId,
-          {
-            accessRequestId: requestItem.id,
-            approvedRole:
-              requestItem.requestKind === "identity_recovery"
-                ? requestItem.requestedRole
-                : parsedInput.data.approvedRole,
-            targetUserId: matchedUser.userId
-          }
-        )
-      );
-    }
-
-    writeLocalAdminState(synchronizeLocalState(state));
-    return { ok: true };
-  }
-
   const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}/approve`,
     {
@@ -985,72 +823,6 @@ export async function rejectPortalAdminAccessRequest(
     };
   }
 
-  if (isLocalHostname(window.location.hostname)) {
-    const state = readLocalAdminState();
-    const requestItem = state.accessRequests.find((candidate) => candidate.id === accessRequestId);
-
-    if (!requestItem) {
-      return {
-        code: "access_request_not_found",
-        message: "That access request is no longer available.",
-        ok: false
-      };
-    }
-
-    if (requestItem.status !== "pending") {
-      return {
-        code: "access_request_not_pending",
-        message: mapAdminMutationErrorCodeToMessage("access_request_not_pending"),
-        ok: false
-      };
-    }
-
-    requestItem.status = "rejected";
-    requestItem.reviewedAt = new Date().toISOString();
-    requestItem.reviewer = localReviewer;
-    requestItem.decisionNote = parsedInput.data.decisionNote;
-    requestItem.auditEchoes.unshift(
-      createAuditEcho(
-        `audit-${requestItem.id}-rejected`,
-        "access_request.rejected",
-        requestItem.reviewedAt,
-        "access_request",
-        "warning",
-        requestItem.matchedUser?.userId ?? null,
-        {
-          accessRequestId: requestItem.id,
-          decisionNote: parsedInput.data.decisionNote,
-          targetUserId: requestItem.matchedUser?.userId ?? null
-        }
-      )
-    );
-
-    const matchedUser = requestItem.matchedUser
-      ? state.users.find((candidate) => candidate.userId === requestItem.matchedUser?.userId)
-      : null;
-
-    if (matchedUser) {
-      matchedUser.auditHistory.unshift(
-        createAuditEcho(
-          `audit-${requestItem.id}-user-rejected`,
-          "access_request.rejected",
-          requestItem.reviewedAt,
-          "access_request",
-          "warning",
-          matchedUser.userId,
-          {
-            accessRequestId: requestItem.id,
-            decisionNote: parsedInput.data.decisionNote,
-            targetUserId: matchedUser.userId
-          }
-        )
-      );
-    }
-
-    writeLocalAdminState(synchronizeLocalState(state));
-    return { ok: true };
-  }
-
   const response = await fetchApi(
     `${apiBaseUrl}/portal/admin/access-requests/${encodeURIComponent(accessRequestId)}/reject`,
     {
@@ -1073,12 +845,6 @@ export async function rejectPortalAdminAccessRequest(
 }
 
 export async function loadPortalAdminUsers(apiBaseUrl: string) {
-  if (isLocalHostname(window.location.hostname)) {
-    return [...readLocalAdminState().users]
-      .sort((left, right) => left.email.localeCompare(right.email))
-      .map(toUserListItem);
-  }
-
   const response = await fetchApi(`${apiBaseUrl}/portal/admin/users`, {
     credentials: "include",
     headers: {
@@ -1111,16 +877,6 @@ export async function loadPortalAdminUsers(apiBaseUrl: string) {
 }
 
 export async function loadPortalAdminUserDetail(apiBaseUrl: string, userId: string) {
-  if (isLocalHostname(window.location.hostname)) {
-    const item = readLocalAdminState().users.find((candidate) => candidate.userId === userId);
-
-    if (!item) {
-      throw new Error("That user record is no longer available.");
-    }
-
-    return item;
-  }
-
   const response = await fetchApi(`${apiBaseUrl}/portal/admin/users/${encodeURIComponent(userId)}`, {
     credentials: "include",
     headers: {
@@ -1165,54 +921,6 @@ export async function revokePortalAdminUserRole(
       message: mapAdminMutationErrorCodeToMessage("invalid_admin_user_revoke_payload"),
       ok: false
     };
-  }
-
-  if (isLocalHostname(window.location.hostname)) {
-    const state = readLocalAdminState();
-    const userItem = state.users.find((candidate) => candidate.userId === userId);
-
-    if (!userItem) {
-      return {
-        code: "admin_user_not_found",
-        message: "That user record is no longer available.",
-        ok: false
-      };
-    }
-
-    const activeRole = userItem.roleGrantHistory.find((roleGrant) => roleGrant.revokedAt === null);
-
-    if (!activeRole) {
-      return {
-        code: "admin_user_no_active_role",
-        message: mapAdminMutationErrorCodeToMessage("admin_user_no_active_role"),
-        ok: false
-      };
-    }
-
-    activeRole.revokedAt = new Date().toISOString();
-    activeRole.revokedBy = localReviewer;
-    userItem.sessionPosture = {
-      activeSessionCount: 0,
-      latestSessionExpiresAt: null
-    };
-    userItem.auditHistory.unshift(
-      createAuditEcho(
-        `audit-${userId}-revoked`,
-        "role_grant.revoked",
-        activeRole.revokedAt,
-        "role_grant",
-        "critical",
-        userId,
-        {
-          revocationReason: trimmedReason,
-          revokedRole: activeRole.role,
-          targetUserId: userId
-        }
-      )
-    );
-
-    writeLocalAdminState(synchronizeLocalState(state));
-    return { ok: true };
   }
 
   const response = await fetchApi(

@@ -107,6 +107,15 @@ export const apiEndpointCatalog = [
   {
     access: "approved_helper_or_higher",
     audience: "portal",
+    id: "portal.overview.read",
+    method: "GET",
+    path: "/portal/overview",
+    purpose:
+      "Return the portal landing overview read model with real benchmark activity, queue posture, and recent incident summaries."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "portal",
     id: "portal.benchmarks.list",
     method: "GET",
     path: "/portal/benchmarks",

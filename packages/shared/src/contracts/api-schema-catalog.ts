@@ -44,6 +44,7 @@ import {
   portalBenchmarkExportQuerySchema,
   portalBenchmarksListResponseSchema,
   portalLaunchViewResponseSchema,
+  portalOverviewResponseSchema,
   portalRunDetailParamsSchema,
   portalRunDetailResponseSchema,
   portalRunsListQuerySchema,
@@ -152,6 +153,12 @@ export const apiEndpointSchemaCatalog = {
     requestParams: null,
     requestQuery: null,
     responseBody: portalProfileResponseSchema
+  },
+  "portal.overview.read": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: portalOverviewResponseSchema
   },
   "portal.benchmarks.list": {
     requestBody: null,
