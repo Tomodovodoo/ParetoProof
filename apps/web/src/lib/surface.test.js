@@ -119,6 +119,22 @@ describe("surface ownership helpers", () => {
     expect(buildPublicUrl("/profile")).toBe("https://paretoproof.com/");
   });
 
+  it("routes loopback-mapped branded auth and portal hosts back to the local public apex", () => {
+    const brandedHosts = [
+      "auth.paretoproof.com",
+      "github.auth.paretoproof.com",
+      "google.auth.paretoproof.com",
+      "portal.paretoproof.com"
+    ];
+
+    for (const host of brandedHosts) {
+      setWindowUrl(`http://${host}:4173/runs`);
+
+      expect(buildPublicUrl("/")).toBe("http://paretoproof.com:4173/");
+      expect(buildPublicUrl("/project")).toBe("http://paretoproof.com:4173/project");
+    }
+  });
+
   it("preserves only portal-owned redirect targets for auth URLs", () => {
     setWindowUrl("https://paretoproof.com/");
 
