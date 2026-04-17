@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
   buildPortalBenchmarkDatasetCsv,
   buildPortalBenchmarkDatasetExportFileName,
@@ -7,10 +7,40 @@ import {
   buildRunsProviderOptions,
   defaultPortalRunsQuery,
   extractPortalRunsQueryString,
+  fetchPortalBenchmarkDataset,
+  fetchPortalBenchmarkDatasetExport,
+  fetchPortalBenchmarksList,
+  fetchPortalLaunchView,
+  fetchPortalRunDetail,
+  fetchPortalRunsView,
+  fetchPortalWorkersView,
   parsePortalRunsQuery,
-  portalBenchmarkOpsLocalTestUtils,
   sanitizePortalRunsQueryString
 } from "./portal-benchmark-ops.ts";
+
+const originalFetch = globalThis.fetch;
+const originalWindow = globalThis.window;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+
+  if (originalWindow) {
+    globalThis.window = originalWindow;
+    return;
+  }
+
+  delete globalThis.window;
+});
+
+function setLocalWindow(url = "http://127.0.0.1:4173/") {
+  globalThis.window = {
+    location: new URL(url),
+    setTimeout(callback) {
+      callback();
+      return 0;
+    }
+  };
+}
 
 describe("parsePortalRunsQuery", () => {
   it("falls back safely when the runs query contains invalid or outdated param values", () => {
@@ -368,272 +398,280 @@ describe("runs filter option builders", () => {
   });
 });
 
-describe("local benchmark ops sorting", () => {
-  it("keeps finished runs ahead of active runs for finished-at sorting", () => {
-    const sorted = portalBenchmarkOpsLocalTestUtils.sortPortalRuns(
-      [
-        {
-          authMode: "oidc",
-          benchmarkItemId: "item-running-older",
-          benchmarkLabel: "problem9 active older",
-          benchmarkPackageDigest: "sha256:def",
-          benchmarkPackageId: "problem9",
-          benchmarkPackageVersion: "2026.03",
-          benchmarkVersionId: "problem9@2026.03",
-          completedAt: null,
-          durationMs: null,
-          failure: { code: null, family: null, summary: null },
-          laneId: "lane-2",
-          latestAttemptId: "attempt-2",
-          latestJobId: "job-2",
-          lineage: {
-            attemptCount: 1,
-            attemptIds: ["attempt-2"],
-            jobCount: 1,
-            jobIds: ["job-2"],
-            latestAttemptId: "attempt-2",
-            latestJobId: "job-2"
+describe("portal benchmark ops fetchers", () => {
+  it("fetches the runs slice from the local API instead of implicit localhost fixtures", async () => {
+    const observedRequests = [];
+
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
+
+      return new Response(
+        JSON.stringify({
+          filters: {
+            modelConfigs: [],
+            providerFamilies: []
           },
-          modelConfigId: "gpt-oss",
-          modelConfigLabel: "GPT OSS",
-          modelSnapshotId: "gpt-oss-2026-03-13",
-          providerFamily: "openai",
-          runId: "PP-319",
-          runKind: "single_run",
-          runLifecycleBucket: "active",
-          runMode: "eval",
-          runState: "running",
-          startedAt: "2026-03-13T19:58:00.000Z",
-          toolProfile: "lean4-proof",
-          verdictClass: null
-        },
+          items: [],
+          query: defaultPortalRunsQuery,
+          summary: {
+            activeRuns: 0,
+            failedRuns: 0,
+            returnedCount: 0,
+            totalMatches: 0,
+            verdictCounts: {
+              fail: 0,
+              invalid_result: 0,
+              pass: 0
+            }
+          }
+        }),
         {
-          authMode: "oidc",
-          benchmarkItemId: "item-finished",
-          benchmarkLabel: "problem9 finished",
-          benchmarkPackageDigest: "sha256:abc",
-          benchmarkPackageId: "problem9",
-          benchmarkPackageVersion: "2026.03",
-          benchmarkVersionId: "problem9@2026.03",
-          completedAt: "2026-03-13T20:00:00.000Z",
-          durationMs: 120000,
-          failure: { code: null, family: null, summary: null },
-          laneId: "lane-1",
-          latestAttemptId: "attempt-1",
-          latestJobId: "job-1",
-          lineage: {
-            attemptCount: 1,
-            attemptIds: ["attempt-1"],
-            jobCount: 1,
-            jobIds: ["job-1"],
-            latestAttemptId: "attempt-1",
-            latestJobId: "job-1"
+          headers: {
+            "Content-Type": "application/json"
           },
-          modelConfigId: "gpt-oss",
-          modelConfigLabel: "GPT OSS",
-          modelSnapshotId: "gpt-oss-2026-03-13",
-          providerFamily: "openai",
-          runId: "PP-318",
-          runKind: "single_run",
-          runLifecycleBucket: "terminal_success",
-          runMode: "eval",
-          runState: "succeeded",
-          startedAt: "2026-03-13T19:57:00.000Z",
-          toolProfile: "lean4-proof",
-          verdictClass: "pass"
-        },
-        {
-          authMode: "oidc",
-          benchmarkItemId: "item-running-newer",
-          benchmarkLabel: "problem9 active newer",
-          benchmarkPackageDigest: "sha256:def",
-          benchmarkPackageId: "problem9",
-          benchmarkPackageVersion: "2026.03",
-          benchmarkVersionId: "problem9@2026.03",
-          completedAt: null,
-          durationMs: null,
-          failure: { code: null, family: null, summary: null },
-          laneId: "lane-3",
-          latestAttemptId: "attempt-3",
-          latestJobId: "job-3",
-          lineage: {
-            attemptCount: 1,
-            attemptIds: ["attempt-3"],
-            jobCount: 1,
-            jobIds: ["job-3"],
-            latestAttemptId: "attempt-3",
-            latestJobId: "job-3"
-          },
-          modelConfigId: "gpt-oss",
-          modelConfigLabel: "GPT OSS",
-          modelSnapshotId: "gpt-oss-2026-03-13",
-          providerFamily: "openai",
-          runId: "PP-321",
-          runKind: "single_run",
-          runLifecycleBucket: "active",
-          runMode: "eval",
-          runState: "running",
-          startedAt: "2026-03-13T20:02:00.000Z",
-          toolProfile: "lean4-proof",
-          verdictClass: null
+          status: 200
         }
-      ],
-      "finished_at_desc"
-    );
-
-    expect(sorted.map((item) => item.runId)).toEqual(["PP-318", "PP-321", "PP-319"]);
-  });
-
-  it("orders mixed null and non-null benchmark timestamps with nulls last", () => {
-    const items = [
-      { benchmarkPackageId: "active-only", latestCompletedAt: null },
-      { benchmarkPackageId: "completed", latestCompletedAt: "2026-03-13T20:00:00.000Z" }
-    ];
-
-    items.sort((left, right) =>
-      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestCompletedAtDesc(left, right)
-    );
-
-    expect(items.map((item) => item.benchmarkPackageId)).toEqual([
-      "completed",
-      "active-only"
-    ]);
-  });
-
-  it("ties equal benchmark timestamps by benchmark package id", () => {
-    const items = [
-      { benchmarkPackageId: "problem9-zeta", latestCompletedAt: null },
-      { benchmarkPackageId: "problem9-alpha", latestCompletedAt: null }
-    ];
-
-    items.sort((left, right) =>
-      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestCompletedAtDesc(left, right)
-    );
-
-    expect(items.map((item) => item.benchmarkPackageId)).toEqual([
-      "problem9-alpha",
-      "problem9-zeta"
-    ]);
-  });
-
-  it("ties equal latest completed times by newest started-at first", () => {
-    const newer = {
-      benchmarkPackageId: "problem9-core",
-      completedAt: "2026-03-13T20:00:00.000Z",
-      startedAt: "2026-03-13T20:02:00.000Z"
-    };
-    const older = {
-      benchmarkPackageId: "problem9-core",
-      completedAt: "2026-03-13T20:00:00.000Z",
-      startedAt: "2026-03-13T19:58:00.000Z"
+      );
     };
 
-    expect(
-      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestRunDesc(newer, older)
-    ).toBeLessThan(0);
+    const payload = await fetchPortalRunsView(defaultPortalRunsQuery);
+
+    expect(payload.items).toEqual([]);
+    expect(payload.summary.totalMatches).toBe(0);
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe("http://127.0.0.1:3000/portal/runs");
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include"
+    });
   });
 
-  it("prefers the newest active run for active-only benchmark packages", () => {
-    const newer = {
-      benchmarkPackageId: "problem9-core",
-      completedAt: null,
-      startedAt: "2026-03-13T20:02:00.000Z"
-    };
-    const older = {
-      benchmarkPackageId: "problem9-core",
-      completedAt: null,
-      startedAt: "2026-03-13T19:58:00.000Z"
-    };
+  it("fetches the workers view from the local API and preserves real empty posture", async () => {
+    const observedRequests = [];
 
-    expect(
-      portalBenchmarkOpsLocalTestUtils.compareBenchmarkLatestRunDesc(newer, older)
-    ).toBeLessThan(0);
-  });
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
 
-  it("ties equal duration values by newest started-at first", () => {
-    const sorted = portalBenchmarkOpsLocalTestUtils.sortPortalRuns(
-      [
-        {
-          authMode: "oidc",
-          benchmarkItemId: "item-running-older",
-          benchmarkLabel: "problem9 active older",
-          benchmarkPackageDigest: "sha256:def",
-          benchmarkPackageId: "problem9",
-          benchmarkPackageVersion: "2026.03",
-          benchmarkVersionId: "problem9@2026.03",
-          completedAt: null,
-          durationMs: null,
-          failure: { code: null, family: null, summary: null },
-          laneId: "lane-2",
-          latestAttemptId: "attempt-2",
-          latestJobId: "job-2",
-          lineage: {
-            attemptCount: 1,
-            attemptIds: ["attempt-2"],
-            jobCount: 1,
-            jobIds: ["job-2"],
-            latestAttemptId: "attempt-2",
-            latestJobId: "job-2"
+      return new Response(
+        JSON.stringify({
+          activeLeases: [],
+          generatedAt: "2026-04-17T03:30:00.000Z",
+          incidents: [],
+          queueSummary: {
+            activeRuns: 0,
+            cancelRequestedJobs: 0,
+            claimedJobs: 0,
+            queuedJobs: 0,
+            queuedRuns: 0,
+            runningJobs: 0
           },
-          modelConfigId: "gpt-oss",
-          modelConfigLabel: "GPT OSS",
-          modelSnapshotId: "gpt-oss-2026-03-13",
-          providerFamily: "openai",
-          runId: "PP-319",
-          runKind: "single_run",
-          runLifecycleBucket: "active",
-          runMode: "eval",
-          runState: "running",
-          startedAt: "2026-03-13T19:58:00.000Z",
-          toolProfile: "lean4-proof",
-          verdictClass: null
-        },
+          workerPools: []
+        }),
         {
-          authMode: "oidc",
-          benchmarkItemId: "item-running-newer",
-          benchmarkLabel: "problem9 active newer",
-          benchmarkPackageDigest: "sha256:def",
-          benchmarkPackageId: "problem9",
-          benchmarkPackageVersion: "2026.03",
-          benchmarkVersionId: "problem9@2026.03",
-          completedAt: null,
-          durationMs: null,
-          failure: { code: null, family: null, summary: null },
-          laneId: "lane-3",
-          latestAttemptId: "attempt-3",
-          latestJobId: "job-3",
-          lineage: {
-            attemptCount: 1,
-            attemptIds: ["attempt-3"],
-            jobCount: 1,
-            jobIds: ["job-3"],
-            latestAttemptId: "attempt-3",
-            latestJobId: "job-3"
+          headers: {
+            "Content-Type": "application/json"
           },
-          modelConfigId: "gpt-oss",
-          modelConfigLabel: "GPT OSS",
-          modelSnapshotId: "gpt-oss-2026-03-13",
-          providerFamily: "openai",
-          runId: "PP-321",
-          runKind: "single_run",
-          runLifecycleBucket: "active",
-          runMode: "eval",
-          runState: "running",
-          startedAt: "2026-03-13T20:02:00.000Z",
-          toolProfile: "lean4-proof",
-          verdictClass: null
+          status: 200
         }
-      ],
-      "duration_desc"
-    );
+      );
+    };
 
-    expect(sorted.map((item) => item.runId)).toEqual(["PP-321", "PP-319"]);
+    const payload = await fetchPortalWorkersView();
+
+    expect(payload.workerPools).toEqual([]);
+    expect(payload.queueSummary.queuedJobs).toBe(0);
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe("http://127.0.0.1:3000/portal/workers");
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include"
+    });
   });
 
-  it("keeps completed benchmark dataset runs ahead of active runs locally", () => {
-    const dataset = portalBenchmarkOpsLocalTestUtils.buildLocalBenchmarkDataset("problem9-core");
+  it("fetches the benchmarks list from the local API instead of fixture summaries", async () => {
+    const observedRequests = [];
 
-    expect(dataset.runs.map((run) => run.runId)).toEqual(["PP-318", "PP-321", "PP-319"]);
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
+
+      return new Response(
+        JSON.stringify({
+          items: []
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json"
+          },
+          status: 200
+        }
+      );
+    };
+
+    const payload = await fetchPortalBenchmarksList();
+
+    expect(payload.items).toEqual([]);
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe("http://127.0.0.1:3000/portal/benchmarks");
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include"
+    });
+  });
+
+  it("fetches the benchmark dataset from the local API instead of fixture evidence", async () => {
+    const observedRequests = [];
+
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
+
+      return new Response(
+        JSON.stringify({
+          attempts: [],
+          benchmark: {
+            benchmarkLabel: "problem9 @ 2026.03",
+            benchmarkPackageId: "problem9",
+            laneIds: [],
+            latestRunId: null,
+            modelConfigIds: [],
+            providerFamilies: [],
+            versions: []
+          },
+          jobs: [],
+          runs: [],
+          summary: {
+            attemptCount: 0,
+            jobCount: 0,
+            latestCompletedAt: null,
+            runCount: 0,
+            verdictCounts: {
+              fail: 0,
+              invalid_result: 0,
+              pass: 0
+            }
+          }
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json"
+          },
+          status: 200
+        }
+      );
+    };
+
+    const payload = await fetchPortalBenchmarkDataset("problem9/core");
+
+    expect(payload.runs).toEqual([]);
+    expect(payload.summary.runCount).toBe(0);
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe(
+      "http://127.0.0.1:3000/portal/benchmarks/problem9%2Fcore/dataset"
+    );
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include"
+    });
+  });
+
+  it("fetches the launch preflight view from the local API instead of localhost preview options", async () => {
+    const observedRequests = [];
+
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
+
+      return new Response(
+        JSON.stringify({
+          benchmarks: [],
+          governance: {
+            defaultPolicy: {
+              budget: {
+                budgetExceededTerminalState: "failed",
+                maxEstimatedUsdPerRun: 25,
+                maxInputTokensPerRun: 5000000,
+                maxOutputTokensPerRun: 1000000,
+                maxWallClockMinutesPerRun: 120
+              },
+              cancellation: {
+                cancelRequestGraceSeconds: 120,
+                forcedCancelAfterSeconds: 600,
+                heartbeatStaleSeconds: 180
+              },
+              concurrency: {
+                maxActiveRunsGlobal: 20,
+                maxActiveRunsPerContributor: 3,
+                maxConcurrentJobsPerRun: 4,
+                maxQueuedRunsPerContributor: 6
+              },
+              retry: {
+                backoffMultiplier: 2,
+                initialBackoffSeconds: 30,
+                maxAttemptsPerJob: 3,
+                maxAttemptsPerRun: 12,
+                maxBackoffSeconds: 600,
+                retryableReasons: [
+                  "worker_crash",
+                  "worker_lease_timeout",
+                  "provider_rate_limited",
+                  "provider_transport_error",
+                  "artifact_upload_transient",
+                  "internal_transient"
+                ]
+              }
+            },
+            runKindConcurrencyOverrides: []
+          },
+          modelConfigs: [],
+          redirectPattern: "/runs/:runId",
+          runKinds: [],
+          submissionMode: "preflight_only"
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json"
+          },
+          status: 200
+        }
+      );
+    };
+
+    const payload = await fetchPortalLaunchView();
+
+    expect(payload.benchmarks).toEqual([]);
+    expect(payload.runKinds).toEqual([]);
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe("http://127.0.0.1:3000/portal/launch");
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include"
+    });
+  });
+
+  it("propagates run-detail failures on localhost instead of substituting fixture evidence", async () => {
+    const observedRequests = [];
+
+    setLocalWindow();
+    globalThis.fetch = async (input) => {
+      observedRequests.push(String(input));
+      return new Response(null, { status: 404 });
+    };
+
+    await expect(fetchPortalRunDetail("PP 320")).rejects.toThrow("Request failed with 404.");
+    expect(observedRequests).toEqual(["http://127.0.0.1:3000/portal/runs/PP%20320"]);
   });
 
   it("keeps benchmark dataset exports scoped to the canonical package id in their file names", () => {
@@ -644,5 +682,40 @@ describe("local benchmark ops sorting", () => {
         new Date("2026-04-17T09:10:11.000Z")
       )
     ).toBe("paretoproof-problem9-core-2026.04-dataset-2026-04-17T09-10-11.csv");
+  });
+
+  it("fetches dataset export bytes from the local API instead of building a fixture blob", async () => {
+    const observedRequests = [];
+
+    setLocalWindow();
+    globalThis.fetch = async (input, init) => {
+      observedRequests.push({
+        init,
+        url: String(input)
+      });
+
+      return new Response("{\"runs\":[]}", {
+        headers: {
+          "Content-Disposition": "attachment; filename=\"real-export.json\"",
+          "Content-Type": "application/json"
+        },
+        status: 200
+      });
+    };
+
+    const payload = await fetchPortalBenchmarkDatasetExport("problem9/core", "json");
+
+    expect(payload.fileName).toBe("real-export.json");
+    expect(await payload.blob.text()).toBe("{\"runs\":[]}");
+    expect(observedRequests).toHaveLength(1);
+    expect(observedRequests[0]?.url).toBe(
+      "http://127.0.0.1:3000/portal/benchmarks/problem9%2Fcore/export?format=json"
+    );
+    expect(observedRequests[0]?.init).toMatchObject({
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
   });
 });
