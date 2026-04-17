@@ -120,6 +120,25 @@ describe("PortalShell benchmark ops routes", () => {
     expect(html).toContain("Loading run index.");
   });
 
+  it("puts compact run context and one control surface ahead of the run slice", async () => {
+    const html = await renderPortalShell({
+      email: "helper@paretoproof.local",
+      roles: ["helper"],
+      url: "http://127.0.0.1/runs?surface=portal&access=approved&roles=helper&email=helper%40paretoproof.local",
+      width: 320
+    });
+
+    expect(html).toContain("Runs keeps search, export, and evidence drill-down on the portal.");
+    expect(html).toContain("Open one run&#x27;s evidence from the current slice.");
+    expect(html).toContain("Slice controls");
+    expect(html).toContain("Freshness");
+    expect(html.indexOf("Runs keeps search, export, and evidence drill-down on the portal.")).toBeLessThan(
+      html.indexOf("Open one run&#x27;s evidence from the current slice.")
+    );
+    expect(html.match(/>Search<\/span>/g)?.length ?? 0).toBe(1);
+    expect(html).not.toContain("Current controls");
+  });
+
   it("renders run detail as portal-owned evidence with next-route actions", async () => {
     const html = await renderPortalShell({
       email: "helper@paretoproof.local",
