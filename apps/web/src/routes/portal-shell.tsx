@@ -3,27 +3,16 @@ import {
   getPortalActionsForRoles,
   getPortalLiveViewFreshness,
   getPortalSectionsForRoles,
-  type EvaluationVerdictClass,
   type PortalActionDefinition,
   type PortalRole,
   type PortalRouteId,
-  type PortalSectionDefinition,
-  type RunLifecycleState
+  type PortalSectionDefinition
 } from "@paretoproof/shared";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
-import {
-  buildPortalResultsQueryString,
-  evaluationVerdictLabels,
-  examplePortalResultsQueryState,
-  portalResultsExportHeaders,
-  portalResultsLifecycleBuckets,
-  portalResultsSortOptions,
-  runLifecycleStateLabels
-} from "../lib/results-state";
-import { buildPortalUrl } from "../lib/surface";
+import { buildPortalUrl, isLocalHostname } from "../lib/surface";
 import { PortalAccessRequestPanel } from "./portal-access-request-panel";
 import { PortalAdminUsersPanel } from "./portal-admin-users-panel";
 import { PortalBenchmarkOpsSurface } from "./portal-benchmark-ops-surfaces";
@@ -39,6 +28,16 @@ type PortalNavGroup = {
   id: "account" | "benchmark_ops" | "admin";
   label: string;
   sections: PortalSectionDefinition[];
+};
+
+type OverviewSurfaceRow = {
+  entryHref: string;
+  entryLabel: string;
+  freshnessLabel: string;
+  id: PortalSectionDefinition["id"];
+  scopeLabel: string;
+  sourceLabel: string;
+  summary: string;
 };
 
 const portalRoutePathById = new Map<PortalRouteId, string>(
@@ -80,72 +79,91 @@ const portalSectionIconById: Record<PortalSectionDefinition["id"], AppIconName> 
   workers: "server"
 };
 
-const overviewMetrics = [
+const defaultOverviewMetrics = [
   {
-    label: "Approval state",
-    note: "role-linked and current",
-    value: "approved"
+    label: "Live benchmark data",
+    note: "Runs remains the API-backed source for benchmark evidence and exports.",
+    value: "/runs"
   },
   {
-    label: "API health",
-    note: "Railway to Neon responding",
-    value: "green"
+    label: "Launch review",
+    note: "Launch keeps run-shape and governance preflight inside the portal.",
+    value: "/launch"
   },
   {
-    label: "Recent runs",
-    note: "2 active, 1 terminal failure",
-    value: "08"
+    label: "Worker operations",
+    note: "Workers is the API-backed view for queue, lease, and incident posture.",
+    value: "/workers"
   },
   {
-    label: "Identity links",
-    note: "GitHub and Google attached",
-    value: "02"
+    label: "Access and profile",
+    note: "Admin and profile routes stay separate from benchmark operational views.",
+    value: "portal"
   }
 ];
 
-const overviewRuns = [
+const localPreviewMetrics = [
   {
-    branch: "main",
-    id: "PP-318",
-    model: "gpt-oss",
-    runState: "succeeded" as RunLifecycleState,
-    target: "mathlib4 / simplification",
-    verdict: "pass" as EvaluationVerdictClass
+    label: "Runs route",
+    note: "Local preview fixtures keep the run index and evidence layout visible on localhost.",
+    value: "/runs"
   },
   {
-    branch: "auth-fix",
-    id: "PP-319",
-    model: "claude",
-    runState: "running" as RunLifecycleState,
-    target: "proof search / induction",
-    verdict: null
+    label: "Launch route",
+    note: "Local preview fixtures keep benchmark and governance preflight screens reviewable.",
+    value: "/launch"
   },
   {
-    branch: "railway-host",
-    id: "PP-320",
-    model: "gemini",
-    runState: "failed" as RunLifecycleState,
-    target: "worker smoke / queue handoff",
-    verdict: "invalid_result" as EvaluationVerdictClass
+    label: "Workers route",
+    note: "Local preview fixtures keep queue, lease, and incident layouts visible without the API.",
+    value: "/workers"
+  },
+  {
+    label: "Access and profile",
+    note: "Admin and profile routes are using browser-local demo state, not live records.",
+    value: "preview"
   }
 ];
 
-const overviewTimeline = [
+const defaultOverviewNotes = [
   {
     detail:
-      "A contributor linked GitHub and entered the portal without the Access handoff breaking.",
-    meta: "11:24 UTC",
-    title: "Access request approved"
+      "This overview intentionally avoids inventing live runs, incidents, or user posture. Use the deeper portal routes for API-backed state.",
+    meta: "Portal",
+    title: "Overview is route guidance"
   },
   {
-    detail: "A stale Google-only identity needs relink confirmation before approval is restored.",
-    meta: "09:10 UTC",
-    title: "Recovery check required"
+    detail:
+      "Runs, Launch, and Workers remain the benchmark-ops surfaces; access requests, users, and profile stay on their own routes.",
+    meta: "Surface boundaries",
+    title: "Operational state lives deeper"
   },
   {
-    detail: "Railway health and Neon connectivity both reported green after the last deploy.",
-    meta: "07:42 UTC",
-    title: "API host validation"
+    detail:
+      "The header shows the signed-in identity and approved roles, while the route cards below point to the appropriate next step.",
+    meta: "Account context",
+    title: "Use the route cards"
+  }
+];
+
+const localPreviewOverviewNotes = [
+  {
+    detail:
+      "This localhost portal is rendering demo fixture content kept in browser storage. Treat all identities, runs, and incidents as examples rather than live operational facts.",
+    meta: "Local preview",
+    title: "Demo data only"
+  },
+  {
+    detail:
+      "The local admin and benchmark-ops panels keep schema-faithful example states so layout and transitions can be reviewed without the API.",
+    meta: "Fixture posture",
+    title: "Schema-faithful examples"
+  },
+  {
+    detail:
+      "When the backend is available, use the same routes to review API-backed runs, users, and worker state instead of these browser-local fixtures.",
+    meta: "Route parity",
+    title: "API-backed paths stay the same"
   }
 ];
 
@@ -172,10 +190,6 @@ function coercePortalRoles(rawRoles: string[]): PortalRole[] {
 
 function getSectionHref(section: PortalSectionDefinition) {
   return buildPortalUrl(portalRoutePathById.get(section.routeId) ?? "/");
-}
-
-function buildRunDetailHref(runId: string) {
-  return buildPortalUrl(`/runs/${encodeURIComponent(runId)}`);
 }
 
 function readActiveRunId(pathname: string) {
@@ -237,12 +251,24 @@ function resolveActiveSection(
   return sections[0];
 }
 
-function formatRunLifecycleState(state: RunLifecycleState) {
-  return runLifecycleStateLabels[state];
+function getOverviewSourceLabel(sectionId: PortalSectionDefinition["id"]) {
+  if (sectionId === "profile" || sectionId === "overview") {
+    return "Account";
+  }
+
+  if (sectionId === "access_requests" || sectionId === "users") {
+    return "Admin";
+  }
+
+  return "Benchmark ops";
 }
 
-function formatVerdictClass(verdict: EvaluationVerdictClass | null) {
-  return verdict ? evaluationVerdictLabels[verdict] : "Pending";
+function getOverviewFreshnessLabel(routeId: PortalRouteId, isLocalPreview: boolean) {
+  if (isLocalPreview) {
+    return "Demo fixture";
+  }
+
+  return getPortalLiveViewFreshness(routeId) ? "API-backed" : "Navigation";
 }
 
 export function getCompactOverviewSectionOrder() {
@@ -252,6 +278,7 @@ export function getCompactOverviewSectionOrder() {
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const compactLayout = useCompactLayout();
+  const isLocalPreview = isLocalHostname(window.location.hostname);
   const approvedRoles = useMemo(() => coercePortalRoles(roles), [roles]);
   const sections = useMemo(
     () => getPortalSectionsForRoles(approvedRoles),
@@ -292,6 +319,29 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     () => getPortalLiveViewFreshness(activeRouteId),
     [activeRouteId]
   );
+  const overviewSurfaceRows = useMemo<OverviewSurfaceRow[]>(
+    () =>
+      sections
+        .filter((section) => section.id !== "overview")
+        .map((section) => {
+          const entryHref = getSectionHref(section);
+
+          return {
+            entryHref,
+            entryLabel: new URL(entryHref).pathname,
+            freshnessLabel: getOverviewFreshnessLabel(section.routeId, isLocalPreview),
+            id: section.id,
+            scopeLabel: section.description,
+            sourceLabel: getOverviewSourceLabel(section.id),
+            summary: portalSectionBodyCopy[section.id]
+          };
+        }),
+    [isLocalPreview, sections]
+  );
+  const overviewMetricsCopy = isLocalPreview ? localPreviewMetrics : defaultOverviewMetrics;
+  const overviewNotes = isLocalPreview
+    ? localPreviewOverviewNotes
+    : defaultOverviewNotes;
 
   useEffect(() => {
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
@@ -353,7 +403,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   );
   const overviewMetricStrip = (
     <section className="portal-metric-strip" aria-label="Portal metrics">
-      {overviewMetrics.map((metric) => (
+      {overviewMetricsCopy.map((metric) => (
         <article className="portal-metric-cell" key={metric.label}>
           <span>{metric.label}</span>
           <strong>{metric.value}</strong>
@@ -366,8 +416,9 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <section className="portal-overview-grid">
       <article className="portal-panel portal-overview-lead">
         <p>
-          Scan service posture, spot active benchmark work, and jump into Runs,
-          Launch, or Workers.
+          {isLocalPreview
+            ? "Review the localhost portal structure against schema-faithful demo fixtures. Real run, worker, and admin posture still belongs to the API-backed routes."
+            : "Use this overview to orient around the portal routes without inventing live operational facts. Real run, worker, and admin posture appears on the deeper API-backed surfaces."}
         </p>
         {activeFreshnessPolicy ? (
           <PortalFreshnessCard lastUpdatedAt={null} routeId={activeRouteId} />
@@ -381,50 +432,42 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     <section className="portal-overview-grid portal-overview-grid-secondary">
       <article className="portal-panel-table-flat">
         <div className="portal-panel-header">
-          <h2>Recent runs</h2>
+          <h2>Portal sections</h2>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
-            View all
+            Open runs
           </a>
         </div>
 
-        <div className="portal-table-shell" role="table" aria-label="Recent runs">
+        <div className="portal-table-shell" role="table" aria-label="Portal sections">
           <div className="portal-table-head" role="row">
-            <span>Run</span>
-            <span>Model</span>
-            <span>Target</span>
-            <span>Branch</span>
-            <span>Lifecycle</span>
-            <span>Verdict</span>
+            <span>Surface</span>
+            <span>Source</span>
+            <span>What it shows</span>
+            <span>Entry</span>
+            <span>Mode</span>
+            <span>Scope</span>
           </div>
-          {overviewRuns.map((row) => (
+          {overviewSurfaceRows.map((row) => (
             <div className="portal-table-row" key={row.id} role="row">
               <span>
-                <a className="portal-inline-link" href={buildRunDetailHref(row.id)}>
+                <a className="portal-inline-link" href={row.entryHref}>
                   {row.id}
                 </a>
               </span>
-              <span>{row.model}</span>
-              <span>{row.target}</span>
-              <span>{row.branch}</span>
-              <span className={`portal-state-badge portal-state-${row.runState}`}>
-                {formatRunLifecycleState(row.runState)}
-              </span>
-              <span
-                className={`portal-verdict-badge${
-                  row.verdict ? ` portal-verdict-${row.verdict}` : ""
-                }`}
-              >
-                {formatVerdictClass(row.verdict)}
-              </span>
+              <span>{row.sourceLabel}</span>
+              <span>{row.summary}</span>
+              <span>{row.entryLabel}</span>
+              <span>{row.freshnessLabel}</span>
+              <span>{row.scopeLabel}</span>
             </div>
           ))}
         </div>
       </article>
 
       <aside className="portal-overview-timeline">
-        <h2>Recent activity</h2>
+        <h2>{isLocalPreview ? "Local preview notes" : "Overview notes"}</h2>
         <div className="portal-timeline">
-          {overviewTimeline.map((item) => (
+          {overviewNotes.map((item) => (
             <article className="portal-timeline-item" key={item.title}>
               <strong>{item.title}</strong>
               <p>{item.detail}</p>
@@ -545,6 +588,16 @@ export function PortalShell({ email, roles }: PortalShellProps) {
             ))}
           </div>
         </header>
+
+        {isLocalPreview ? (
+          <section className="portal-panel" aria-label="Local portal preview">
+            <p className="eyebrow">Local preview</p>
+            <p>
+              This localhost portal is rendering demo fixture data stored in this browser.
+              It is not live API or operational state.
+            </p>
+          </section>
+        ) : null}
 
         {activeSection?.id === "overview" ? (
           <>

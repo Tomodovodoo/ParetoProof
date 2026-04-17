@@ -159,7 +159,7 @@ const localRunItems: PortalRunListItem[] = [
   {
     authMode: "oidc",
     benchmarkItemId: "item-simplify-001",
-    benchmarkLabel: "mathlib4 / simplification",
+    benchmarkLabel: "Local preview / simplification example",
     benchmarkPackageDigest: "sha256:3f91c1",
     benchmarkPackageId: "problem9-core",
     benchmarkPackageVersion: "2026.03.11",
@@ -194,7 +194,7 @@ const localRunItems: PortalRunListItem[] = [
   {
     authMode: "oidc",
     benchmarkItemId: "item-induction-022",
-    benchmarkLabel: "proof search / induction",
+    benchmarkLabel: "Local preview / induction example",
     benchmarkPackageDigest: "sha256:3f91c1",
     benchmarkPackageId: "problem9-core",
     benchmarkPackageVersion: "2026.03.11",
@@ -229,7 +229,7 @@ const localRunItems: PortalRunListItem[] = [
   {
     authMode: "service_token",
     benchmarkItemId: "item-queue-003",
-    benchmarkLabel: "worker smoke / queue handoff",
+    benchmarkLabel: "Local preview / worker handoff example",
     benchmarkPackageDigest: "sha256:c28a7b",
     benchmarkPackageId: "problem9-smoke",
     benchmarkPackageVersion: "2026.03.12",
@@ -239,7 +239,7 @@ const localRunItems: PortalRunListItem[] = [
     failure: {
       code: "worker_lease_lost",
       family: "provider",
-      summary: "Worker lease heartbeat expired during provider retry recovery."
+      summary: "Local preview fixture: worker lease heartbeat expired during retry recovery."
     },
     laneId: "worker-smoke",
     latestAttemptId: "ATT-320-3",
@@ -268,7 +268,7 @@ const localRunItems: PortalRunListItem[] = [
   {
     authMode: "oidc",
     benchmarkItemId: "slice-axioms-004",
-    benchmarkLabel: "axioms slice / dependency drift",
+    benchmarkLabel: "Local preview / axiom slice example",
     benchmarkPackageDigest: "sha256:3f91c1",
     benchmarkPackageId: "problem9-core",
     benchmarkPackageVersion: "2026.03.11",
@@ -365,10 +365,10 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
     ],
     recentWorkerEvents: [
       {
-        label: "Artifact upload finished",
+        label: "Local preview artifact upload finished",
         occurredAt: "2026-03-13T15:37:55.000Z",
         scope: "worker",
-        sourceId: "worker-modal-eu-1",
+        sourceId: "worker-modal-preview-1",
         state: "available"
       }
     ],
@@ -393,8 +393,8 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         lastHeartbeatAt: "2026-03-13T15:37:50.000Z",
         leaseExpiresAt: "2026-03-13T15:39:50.000Z",
         runId: "PP-318",
-        workerId: "worker-modal-eu-1",
-        workerPool: "modal-proof",
+        workerId: "worker-modal-preview-1",
+        workerPool: "modal-preview",
         workerRuntime: "modal",
         workerVersion: "2026.03.12"
       }
@@ -409,7 +409,7 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         failure: {
           code: "provider_rate_limited",
           family: "provider",
-          summary: "Anthropic rate limit hit while warming the first attempt."
+          summary: "Local preview fixture: the first attempt hit a provider rate limit during warm-up."
         },
         jobId: "JOB-319-1",
         runId: "PP-319",
@@ -446,17 +446,17 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
     ],
     recentWorkerEvents: [
       {
-        label: "Heartbeat received",
+        label: "Local preview heartbeat received",
         occurredAt: "2026-03-13T16:05:58.000Z",
         scope: "worker",
-        sourceId: "worker-modal-eu-2",
+        sourceId: "worker-modal-preview-2",
         state: "healthy"
       }
     ],
     timeline: [
       ...baseDetail(localRunItems[1]).timeline,
       {
-        label: "Attempt 1 failed with provider rate limit",
+        label: "Local preview attempt 1 hit provider rate limit",
         occurredAt: "2026-03-13T15:47:08.000Z",
         scope: "attempt",
         sourceId: "ATT-319-1",
@@ -474,8 +474,8 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         lastHeartbeatAt: "2026-03-13T16:05:58.000Z",
         leaseExpiresAt: "2026-03-13T16:07:58.000Z",
         runId: "PP-319",
-        workerId: "worker-modal-eu-2",
-        workerPool: "modal-proof",
+        workerId: "worker-modal-preview-2",
+        workerPool: "modal-preview",
         workerRuntime: "modal",
         workerVersion: "2026.03.12"
       }
@@ -502,7 +502,7 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         failure: {
           code: "worker_lease_lost",
           family: "provider",
-          summary: "Worker lease heartbeat expired during provider retry recovery."
+          summary: "Local preview fixture: worker lease heartbeat expired during retry recovery."
         },
         jobId: "JOB-320-3",
         runId: "PP-320",
@@ -519,7 +519,7 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         failure: {
           code: "worker_lease_lost",
           family: "provider",
-          summary: "Worker lease heartbeat expired during provider retry recovery."
+          summary: "Local preview fixture: worker lease heartbeat expired during retry recovery."
         },
         jobId: "JOB-320-3",
         runId: "PP-320",
@@ -534,7 +534,7 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         label: "Lease marked stale",
         occurredAt: "2026-03-13T15:03:55.000Z",
         scope: "worker",
-        sourceId: "worker-local-3",
+        sourceId: "worker-local-preview-3",
         state: "stale"
       }
     ],
@@ -559,8 +559,8 @@ const localRunDetailById: Record<string, PortalRunDetailResponse> = {
         lastHeartbeatAt: "2026-03-13T15:01:55.000Z",
         leaseExpiresAt: "2026-03-13T15:03:55.000Z",
         runId: "PP-320",
-        workerId: "worker-local-3",
-        workerPool: "local-devbox",
+        workerId: "worker-local-preview-3",
+        workerPool: "local-preview",
         workerRuntime: "local_docker",
         workerVersion: "2026.03.11"
       }
@@ -585,7 +585,7 @@ const localLaunchView: PortalLaunchViewResponse = {
   benchmarks: [
     {
       benchmarkItemCount: 128,
-      benchmarkLabel: "Problem 9 core benchmark",
+      benchmarkLabel: "Problem 9 local preview benchmark",
       benchmarkPackageDigest: "sha256:3f91c1",
       benchmarkPackageId: "problem9-core",
       benchmarkPackageVersion: "2026.03.11",
@@ -595,7 +595,7 @@ const localLaunchView: PortalLaunchViewResponse = {
     },
     {
       benchmarkItemCount: 12,
-      benchmarkLabel: "Problem 9 smoke benchmark",
+      benchmarkLabel: "Problem 9 smoke preview benchmark",
       benchmarkPackageDigest: "sha256:c28a7b",
       benchmarkPackageId: "problem9-smoke",
       benchmarkPackageVersion: "2026.03.12",
@@ -718,8 +718,8 @@ const localWorkersView: PortalWorkersViewResponse = {
       lastHeartbeatAt: "2026-03-13T16:05:58.000Z",
       leaseExpiresAt: "2026-03-13T16:07:58.000Z",
       runId: "PP-319",
-      workerId: "worker-modal-eu-2",
-      workerPool: "modal-proof",
+      workerId: "worker-modal-preview-2",
+      workerPool: "modal-preview",
       workerRuntime: "modal",
       workerVersion: "2026.03.12"
     },
@@ -733,8 +733,8 @@ const localWorkersView: PortalWorkersViewResponse = {
       lastHeartbeatAt: "2026-03-13T15:01:55.000Z",
       leaseExpiresAt: "2026-03-13T15:03:55.000Z",
       runId: "PP-320",
-      workerId: "worker-local-3",
-      workerPool: "local-devbox",
+      workerId: "worker-local-preview-3",
+      workerPool: "local-preview",
       workerRuntime: "local_docker",
       workerVersion: "2026.03.11"
     }
@@ -746,16 +746,16 @@ const localWorkersView: PortalWorkersViewResponse = {
       kind: "stale_lease",
       observedAt: "2026-03-13T15:03:55.000Z",
       severity: "critical",
-      summary: "A stale lease expired on the local-devbox pool while PP-320 was retrying.",
-      workerPool: "local-devbox"
+      summary: "Local preview fixture: a stale lease expired on the local-preview pool while PP-320 was retrying.",
+      workerPool: "local-preview"
     },
     {
       affectedRunIds: ["PP-321"],
       kind: "queue_backlog",
       observedAt: "2026-03-13T16:16:00.000Z",
       severity: "warning",
-      summary: "Queued slice work is waiting on modal-proof capacity.",
-      workerPool: "modal-proof"
+      summary: "Local preview fixture: queued slice work is waiting on modal-preview capacity.",
+      workerPool: "modal-preview"
     }
   ],
   queueSummary: {
@@ -771,7 +771,7 @@ const localWorkersView: PortalWorkersViewResponse = {
       activeLeaseCount: 1,
       activeRunIds: ["PP-319"],
       staleLeaseCount: 0,
-      workerPool: "modal-proof",
+      workerPool: "modal-preview",
       workerRuntime: "modal",
       workerVersion: "2026.03.12"
     },
@@ -779,7 +779,7 @@ const localWorkersView: PortalWorkersViewResponse = {
       activeLeaseCount: 1,
       activeRunIds: ["PP-320"],
       staleLeaseCount: 1,
-      workerPool: "local-devbox",
+      workerPool: "local-preview",
       workerRuntime: "local_docker",
       workerVersion: "2026.03.11"
     }
@@ -1447,9 +1447,19 @@ function escapeCsvValue(value: string) {
   return safeValue;
 }
 
+function buildLocalRunsListResponse(query: PortalRunsListQuery = defaultPortalRunsQuery) {
+  return portalRunsListResponseSchema.parse(createRunsListResponse(query));
+}
+
+function buildLocalWorkersViewResponse() {
+  return portalWorkersViewResponseSchema.parse(localWorkersView);
+}
+
 export const portalBenchmarkOpsLocalTestUtils = {
   buildLocalBenchmarkDataset,
   buildLocalBenchmarksListResponse,
+  buildLocalRunsListResponse,
+  buildLocalWorkersViewResponse,
   compareBenchmarkLatestCompletedAtDesc,
   compareBenchmarkLatestRunDesc,
   compareNullableTimestampDesc,
@@ -1465,14 +1475,14 @@ export function getWorkerIncidentTone(severity: PortalWorkerIncidentSeverity) {
 export function getLocalOverviewTimeline() {
   return [
     {
-      detail: "PP-319 is active on modal-proof, while PP-320 is the current worker incident anchor.",
-      meta: "Benchmark ops",
-      title: "Runs and workers share one evidence trail"
+      detail: "The local preview keeps runs and workers on one fixture-backed evidence trail so layout can be reviewed without the API.",
+      meta: "Local preview",
+      title: "Runs and workers share demo fixtures"
     },
     {
-      detail: "Problem 9 core remains the default launch package with one queued slice run ready to inspect.",
-      meta: "Launch",
-      title: "Launch stays preflight-only until create-run lands"
+      detail: "The launch route keeps schema-faithful preview benchmark options without claiming they are the current live queue.",
+      meta: "Launch preview",
+      title: "Launch keeps preview-only options"
     },
     {
       detail: "Overview routes into Runs, Launch, and Workers without duplicating their state tables.",

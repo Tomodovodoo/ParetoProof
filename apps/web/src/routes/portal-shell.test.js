@@ -75,10 +75,15 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html.indexOf("Recent runs route back into the canonical cluster.")).toBeLessThan(
-      html.indexOf("Approval state")
+    expect(html).toContain("Local preview");
+    expect(html).toContain("demo fixture data stored in this browser");
+    expect(html).toContain("Runs route");
+    expect(html).not.toContain("Live benchmark data");
+    expect(html).not.toContain(">API-backed<");
+    expect(html.indexOf("Portal sections")).toBeLessThan(
+      html.indexOf("Runs route")
     );
-    expect(html.indexOf("Recent runs route back into the canonical cluster.")).toBeLessThan(
+    expect(html.indexOf("Portal sections")).toBeLessThan(
       html.indexOf("Review runs")
     );
   });
@@ -92,7 +97,9 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html.indexOf("Approval state")).toBeLessThan(html.indexOf("Review runs"));
+    expect(html).toContain("Runs route");
+    expect(html).not.toContain("Live benchmark data");
+    expect(html.indexOf("Runs route")).toBeLessThan(html.indexOf("Review runs"));
   });
 });
 

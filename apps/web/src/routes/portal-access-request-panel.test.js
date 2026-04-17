@@ -134,11 +134,11 @@ describe("describeAccessRequestTransition", () => {
       describeAccessRequestTransition({
         reviewedAt: "2026-03-13T09:30:00.000Z",
         reviewer: {
-          label: "Portal Admin"
+          label: "Local preview reviewer"
         },
         status: "approved"
       })
-    ).toContain("Approved by Portal Admin");
+    ).toContain("Approved by Local preview reviewer");
   });
 });
 
