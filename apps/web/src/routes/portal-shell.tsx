@@ -384,14 +384,6 @@ export function buildOverviewRunPostureSegments(
     return [];
   }
 
-  const otherTerminalRuns = Math.max(
-    overviewData.summary.totalRuns -
-      overviewData.summary.activeRuns -
-      overviewData.summary.queuedRuns -
-      overviewData.summary.failedRuns,
-    0
-  );
-
   return [
     {
       accent: "indigo",
@@ -410,12 +402,6 @@ export function buildOverviewRunPostureSegments(
       count: overviewData.summary.failedRuns,
       label: "Failed runs",
       note: "Terminal runs that ended in failure."
-    },
-    {
-      accent: "mint",
-      count: otherTerminalRuns,
-      label: "Other recorded runs",
-      note: "Runs not included in the active, queued, or failed summary slices."
     }
   ];
 }
@@ -506,6 +492,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   const overviewRunPostureSegments = useMemo(
     () => buildOverviewRunPostureSegments(overviewData),
     [overviewData]
+  );
+  const overviewRunPostureScale = useMemo(
+    () => Math.max(...overviewRunPostureSegments.map((segment) => segment.count), 1),
+    [overviewRunPostureSegments]
   );
   const overviewBenchmarkVisuals = useMemo(
     () =>
@@ -646,8 +636,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           </span>
         </div>
         <p className="portal-panel-muted">
-          Visual summary of the current overview payload. The slices below use only the landing
-          summary counts already returned by <code>/portal/overview</code>.
+          Visual summary of the current overview payload. This chart only visualizes the explicit
+          active, queued, and failed counts already returned by <code>/portal/overview</code>; the
+          total badge stays separate because the remainder is not broken out by the landing
+          summary.
         </p>
         {overviewState.status === "error" ? (
           <p className="portal-panel-muted">{overviewState.message}</p>
@@ -659,28 +651,27 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           </p>
         ) : (
           <div className="portal-overview-visual-stack">
-            <div className="portal-overview-track" aria-hidden="true">
-              {overviewRunPostureSegments.map((segment) => (
-                <span
-                  className={`portal-overview-track-segment portal-overview-track-${segment.accent}`}
-                  key={segment.label}
-                  style={{
-                    width: `${(segment.count / Math.max(overviewTotalRuns, 1)) * 100}%`
-                  }}
-                />
-              ))}
-            </div>
             <div className="portal-overview-visual-list" role="list" aria-label="Run posture">
               {overviewRunPostureSegments.map((segment) => (
                 <article className="portal-overview-visual-row" key={segment.label} role="listitem">
-                  <div className="portal-overview-visual-label">
-                    <span
-                      aria-hidden="true"
-                      className={`portal-overview-swatch portal-overview-swatch-${segment.accent}`}
-                    />
-                    <div>
-                      <strong>{segment.label}</strong>
-                      <p>{segment.note}</p>
+                  <div className="portal-overview-visual-row-main">
+                    <div className="portal-overview-visual-label">
+                      <span
+                        aria-hidden="true"
+                        className={`portal-overview-swatch portal-overview-swatch-${segment.accent}`}
+                      />
+                      <div>
+                        <strong>{segment.label}</strong>
+                        <p>{segment.note}</p>
+                      </div>
+                    </div>
+                    <div className="portal-overview-track" aria-hidden="true">
+                      <span
+                        className={`portal-overview-track-segment portal-overview-track-${segment.accent}`}
+                        style={{
+                          width: `${(segment.count / overviewRunPostureScale) * 100}%`
+                        }}
+                      />
                     </div>
                   </div>
                   <strong className="portal-overview-visual-value">{segment.count}</strong>

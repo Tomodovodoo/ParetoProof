@@ -368,12 +368,6 @@ describe("PortalShell live overview helpers", () => {
         count: 4,
         label: "Failed runs",
         note: "Terminal runs that ended in failure."
-      },
-      {
-        accent: "mint",
-        count: 5,
-        label: "Other recorded runs",
-        note: "Runs not included in the active, queued, or failed summary slices."
       }
     ]);
   });

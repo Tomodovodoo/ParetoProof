@@ -1556,6 +1556,13 @@ a.button-secondary {
   gap: 10px;
 }
 
+.portal-overview-visual-row-main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
 .portal-overview-visual-label strong,
 .portal-overview-benchmark-header strong {
   display: block;
