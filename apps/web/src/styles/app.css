@@ -559,6 +559,10 @@ a.button-secondary {
   gap: 18px;
 }
 
+.site-project-section[id] {
+  scroll-margin-top: 108px;
+}
+
 .site-section-copy {
   display: grid;
   gap: 10px;
