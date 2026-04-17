@@ -12,6 +12,7 @@ import {
 
 test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allowlist", () => {
   const origins = readAllowedCorsOrigins({
+    authPublicOrigin: "https://auth.preview.paretoproof.com",
     brandedAuthOrigins: [
       "https://auth.preview.paretoproof.com",
       "https://github.auth.preview.paretoproof.com",
@@ -42,6 +43,7 @@ test("readAllowedCorsOrigins excludes branded auth hosts from the API CORS allow
 
 test("readAllowedCorsOrigins keeps the portal origin when auth and portal share one origin", () => {
   const origins = readAllowedCorsOrigins({
+    authPublicOrigin: "https://portal.preview.paretoproof.com",
     brandedAuthOrigins: ["https://portal.preview.paretoproof.com"],
     corsAllowedOrigins: [],
     mathPublicOrigin: "https://math.preview.paretoproof.com",
@@ -52,6 +54,27 @@ test("readAllowedCorsOrigins keeps the portal origin when auth and portal share 
     "https://portal.preview.paretoproof.com",
     "https://math.preview.paretoproof.com",
   ]);
+});
+
+test("readAllowedCorsOrigins excludes the default production math host when preview portal/auth origins are overridden without an explicit math override", () => {
+  const runtimeEnv = parseApiRuntimeEnv({
+    ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    AUTH_PUBLIC_ORIGIN: "https://auth.preview.paretoproof.com",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+    CF_ACCESS_PORTAL_AUD: "portal-audience",
+    CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+    DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+  });
+
+  assert.deepEqual(readAllowedCorsOrigins(runtimeEnv), [
+    "https://portal.preview.paretoproof.com",
+  ]);
+  assert.equal(
+    readAllowedCorsOrigins(runtimeEnv).includes("https://math.paretoproof.com"),
+    false,
+  );
 });
 
 test("readTrustedMutationOrigins keeps math out of the generic trusted portal mutation allowlist", () => {

@@ -2,7 +2,12 @@ import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import { sql } from "drizzle-orm";
 import Fastify from "fastify";
-import type { ApiRuntimeEnv } from "../config/runtime.js";
+import {
+  defaultApiAuthPublicOrigin,
+  defaultApiMathPublicOrigin,
+  defaultApiPortalPublicOrigin,
+  type ApiRuntimeEnv,
+} from "../config/runtime.js";
 import {
   createAccessGuard,
   runtimeEnvToAccessResolverOptions,
@@ -42,7 +47,16 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
   const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
   const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
-  const baselineOrigins = [portalPublicOrigin, mathPublicOrigin];
+  const includesDefaultSurfaceOrigins =
+    normalizeOrigin(runtimeEnv.authPublicOrigin) ===
+      normalizeOrigin(defaultApiAuthPublicOrigin) &&
+    portalPublicOrigin === normalizeOrigin(defaultApiPortalPublicOrigin);
+  const includeMathPublicOrigin =
+    mathPublicOrigin !== normalizeOrigin(defaultApiMathPublicOrigin) ||
+    includesDefaultSurfaceOrigins;
+  const baselineOrigins = includeMathPublicOrigin
+    ? [portalPublicOrigin, mathPublicOrigin]
+    : [portalPublicOrigin];
 
   return [
     ...new Set(
