@@ -111,6 +111,51 @@ function formatSubmissionMode(value: string) {
   return value.replaceAll("_", " ");
 }
 
+const launchPreflightSupportedFieldIds = new Set([
+  "benchmarkVersionId",
+  "modelConfigId"
+]);
+
+function getSupportedLaunchRunKinds(data: PortalLaunchViewResponse | null) {
+  return (data?.runKinds ?? []).filter((item) =>
+    item.requiredFields.every((fieldId) => launchPreflightSupportedFieldIds.has(fieldId))
+  );
+}
+
+function getUnsupportedLaunchRunKinds(data: PortalLaunchViewResponse | null) {
+  return (data?.runKinds ?? []).filter((item) =>
+    item.requiredFields.some((fieldId) => !launchPreflightSupportedFieldIds.has(fieldId))
+  );
+}
+
+function getEffectiveLaunchConcurrencyCap(
+  data: PortalLaunchViewResponse | null,
+  runKind: RunKind
+) {
+  const override = data?.governance.runKindConcurrencyOverrides.find((item) => item.id === runKind);
+
+  return override?.maxConcurrentJobsPerRun ?? data?.governance.defaultPolicy.concurrency.maxConcurrentJobsPerRun;
+}
+
+function formatLaunchFieldLabel(fieldId: string) {
+  switch (fieldId) {
+    case "benchmarkVersionId":
+      return "benchmark version";
+    case "modelConfigId":
+      return "model config";
+    case "benchmarkItemId":
+      return "benchmark item";
+    case "sliceDefinition":
+      return "slice definition";
+    case "benchmarkTargetId":
+      return "benchmark target";
+    case "repeatCount":
+      return "repeat count";
+    default:
+      return fieldId;
+  }
+}
+
 function toDisplayError(error: unknown) {
   return error instanceof Error ? error.message : "Request failed.";
 }
@@ -171,7 +216,7 @@ function hasLaunchOptions(data: PortalLaunchViewResponse | null) {
     data &&
       data.benchmarks.length > 0 &&
       data.modelConfigs.length > 0 &&
-      data.runKinds.length > 0
+      getSupportedLaunchRunKinds(data).length > 0
   );
 }
 
@@ -397,11 +442,15 @@ export function PortalBenchmarkOpsSurface({
       return;
     }
 
+    const supportedRunKinds = getSupportedLaunchRunKinds(launchState.data);
     setLaunchSelection((current) => ({
       benchmarkVersionId:
         current.benchmarkVersionId || launchState.data?.benchmarks[0]?.benchmarkVersionId || "",
       modelConfigId: current.modelConfigId || launchState.data?.modelConfigs[0]?.modelConfigId || "",
-      runKind: current.runKind || launchState.data?.runKinds[0]?.id || "single_run"
+      runKind:
+        supportedRunKinds.find((item) => item.id === current.runKind)?.id ??
+        supportedRunKinds[0]?.id ??
+        "full_benchmark"
     }));
   }, [launchState.data]);
 
@@ -1246,6 +1295,20 @@ export function PortalLaunchSurface({
   const modelConfig = loadState.data?.modelConfigs.find(
     (item) => item.modelConfigId === selection.modelConfigId
   );
+  const supportedRunKinds = getSupportedLaunchRunKinds(loadState.data);
+  const unsupportedRunKinds = getUnsupportedLaunchRunKinds(loadState.data);
+  const selectedRunKind =
+    supportedRunKinds.find((item) => item.id === selection.runKind) ?? supportedRunKinds[0] ?? null;
+  const effectiveConcurrencyCap = selectedRunKind
+    ? getEffectiveLaunchConcurrencyCap(loadState.data, selectedRunKind.id)
+    : loadState.data?.governance.defaultPolicy.concurrency.maxConcurrentJobsPerRun ?? null;
+  const unsupportedRequiredFields = [
+    ...new Set(
+      unsupportedRunKinds.flatMap((item) =>
+        item.requiredFields.filter((fieldId) => !launchPreflightSupportedFieldIds.has(fieldId))
+      )
+    )
+  ].map(formatLaunchFieldLabel);
   const launchEvidenceHref = benchmark
     ? buildRunDetailHref(benchmark.lastSeenRunId)
     : buildPortalUrl("/runs");
@@ -1326,7 +1389,7 @@ export function PortalLaunchSurface({
                   }}
                   value={selection.runKind}
                 >
-                  {(loadState.data?.runKinds ?? []).map((item) => (
+                  {supportedRunKinds.map((item) => (
                     <option key={item.id} value={item.id}>
                       {formatRunKind(item.id)}
                     </option>
@@ -1334,6 +1397,17 @@ export function PortalLaunchSurface({
                 </select>
               </label>
             </div>
+            {unsupportedRunKinds.length > 0 ? (
+              <div className="portal-results-contract-card">
+                <p className="section-tag">Unavailable run shapes</p>
+                <h3>Additional run kinds stay out of this preflight until target inputs land.</h3>
+                <p>
+                  {unsupportedRunKinds.map((item) => formatRunKind(item.id)).join(", ")} still need{" "}
+                  {unsupportedRequiredFields.join(", ")}
+                  .
+                </p>
+              </div>
+            ) : null}
             {isCompactLayout ? (
               <PortalFreshnessCard
                 isRefreshing={loadState.isLoading}
@@ -1359,7 +1433,9 @@ export function PortalLaunchSurface({
                 <article className="portal-results-contract-card">
                   <p className="section-tag">Benchmark</p>
                   <h3>{benchmark.benchmarkLabel}</h3>
-                  <p>{benchmark.benchmarkItemCount} items across {benchmark.laneIds.join(", ")}.</p>
+                  <p>
+                    Observed in {benchmark.benchmarkItemCount} prior runs across {benchmark.laneIds.join(", ")}.
+                  </p>
                   <a className="portal-inline-link" href={buildRunDetailHref(benchmark.lastSeenRunId)}>
                     Open last seen run
                   </a>
@@ -1372,14 +1448,20 @@ export function PortalLaunchSurface({
                 </article>
                 <article className="portal-results-contract-card">
                   <p className="section-tag">Governance</p>
-                  <h3>{formatRunKind(selection.runKind)}</h3>
+                  <h3>{selectedRunKind ? formatRunKind(selectedRunKind.id) : formatRunKind(selection.runKind)}</h3>
                   <p>
-                    Max per run: {loadState.data?.governance.defaultPolicy.concurrency.maxConcurrentJobsPerRun}
+                    Max per run: {effectiveConcurrencyCap}
                     {" "}jobs
                   </p>
                   <p>
                     Budget cap: ${loadState.data?.governance.defaultPolicy.budget.maxEstimatedUsdPerRun}
                   </p>
+                  {selectedRunKind ? (
+                    <p>
+                      Required preflight fields:{" "}
+                      {selectedRunKind.requiredFields.map(formatLaunchFieldLabel).join(", ")}
+                    </p>
+                  ) : null}
                 </article>
               </div>
             ) : (
