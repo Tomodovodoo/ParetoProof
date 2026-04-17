@@ -39,7 +39,7 @@ const publicBenchmarks = [
     description:
       "Pilot release for public statement-formalization reporting while canonical artifact and verification contracts stabilize.",
     editorialNote:
-      "Pilot release note only. Public scope and quality remain visible here, while quantitative comparisons stay out of the frontend bundle.",
+      "Pilot release note only. Public scope and quality remain visible here, while quantitative comparisons stay out of the published release summary.",
     latestReleaseLabel: "Release 2026-02",
     releaseStatus: "partial",
     scopeNote: "Published subset only while the remaining benchmark package stays withheld for methodology review.",
@@ -61,7 +61,7 @@ const publicBenchmarkReports = {
     qualityState: "complete",
     releaseLabel: "Release 2026-03",
     reportingBoundaryNote:
-      "Quantitative result tables stay off the apex site until released benchmark reporting is backed by a real public read model instead of frontend literals.",
+      "Quantitative result tables stay off the apex site until benchmark reporting ships as a released public dataset with its own evidence boundary.",
     scopeNote:
       "Includes the currently disclosed proof-generation benchmark package and released model configurations only.",
     summaryCards: [
@@ -109,7 +109,7 @@ const publicSignals = [
     value: "Release-scoped"
   },
   {
-    detail: "Container replay remains a stated goal, but the apex site does not publish fake benchmark totals while that reporting stack is incomplete.",
+    detail: "Container replay is still a planned public workflow, so the apex site stays focused on released methodology, scope, and evidence boundaries today.",
     label: "Replay posture",
     value: "Replay-planned"
   }
@@ -118,9 +118,9 @@ const publicSignals = [
 const publicBands = [
   {
     body:
-      "Every benchmark run is tied to a versioned harness, locked inputs, and full environment metadata — so results are comparable across time and models.",
+      "Every benchmark run is tied to a versioned harness, locked inputs, and full environment metadata so results are comparable across time and models.",
     eyebrow: "Reproducibility",
-    title: "Every run is verifiable"
+    title: "Execution context is published"
   },
   {
     body:
@@ -130,9 +130,9 @@ const publicBands = [
   },
   {
     body:
-      "Coming soon: fully containerized Docker images where you can replay any benchmark run locally with your own API keys and verify results independently.",
-    eyebrow: "Coming soon",
-    title: "Reproducible Docker replay"
+      "Public Docker replay is planned as a later release. Today the site publishes methodology, scope, and release posture without implying the replay workflow is already live.",
+    eyebrow: "Replay roadmap",
+    title: "Container replay is planned"
   }
 ];
 
@@ -665,9 +665,10 @@ function PublicLanding() {
           <h1>Reproducible benchmarks for frontier math reasoning.</h1>
           <p className="site-lead">
             ParetoProof measures what frontier AI systems can actually do on formal
-            mathematical tasks — with fully reproducible execution, transparent methodology,
-            and results you can verify yourself via containerized replay. Approved contributors
-            sign in directly, and new collaborators use the separate access-request path.
+            mathematical tasks, with fully reproducible execution, transparent methodology,
+            and execution packaging designed for reproducible replay as that public workflow
+            rolls out. Approved contributors sign in directly, and new collaborators use the
+            separate access-request path.
           </p>
           <div className="hero-actions">
             <a className="button" href={buildPublicUrl(benchmarksRoute)}>
@@ -770,7 +771,8 @@ function PublicBenchmarkIndex() {
         <h2>Public reporting stays release-centric.</h2>
         <p>
           Benchmark cards route into one release summary page with methodology links,
-          publication posture, and explicit evidence-boundary notes rather than fixed frontend metrics.
+          publication posture, and explicit evidence-boundary notes rather than headline scorecards
+          that imply broader public data than the release actually includes.
         </p>
       </article>
       <article className="site-band">
@@ -954,7 +956,7 @@ function PublicBenchmarkReport({
         </article>
         <article className="site-band">
           <p className="section-tag">Evidence boundary</p>
-          <h2>No fixed frontend metrics</h2>
+          <h2>No public comparison tables yet</h2>
           <p>{report.reportingBoundaryNote}</p>
           <p>Portal drilldown and per-run evidence remain out of scope for the public release page.</p>
         </article>
@@ -982,7 +984,7 @@ function PublicBenchmarkReport({
           <article className="site-panel-card">
             <div className="site-panel-copy">
               <p className="section-tag">What stays out of scope</p>
-              <h3>No fixed model score rows on the apex site</h3>
+              <h3>No public comparison tables on the apex site</h3>
               <p>{report.reportingBoundaryNote}</p>
             </div>
           </article>
@@ -1033,7 +1035,7 @@ function PublicProjectPack() {
         <h2>What is ParetoProof?</h2>
         <p className="site-lead">
           A reproducible benchmark platform for evaluating frontier AI systems on formal
-          mathematical tasks — with transparent methodology and verifiable results.
+          mathematical tasks, with transparent methodology and explicit release boundaries.
         </p>
       </div>
 
@@ -1267,7 +1269,7 @@ function PublicProjectPack() {
           <h1>About ParetoProof.</h1>
           <p className="site-lead">
             What the project is, how contributors get involved, and where to direct
-            questions — all in one place.
+            questions, all in one place.
           </p>
 
           <div className="site-pill-row" aria-label="Project pack sections">

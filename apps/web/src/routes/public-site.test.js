@@ -89,7 +89,9 @@ describe("PublicSite", () => {
 
     expect(html).toContain("Problem 9 public release");
     expect(html).toContain("Quantitative comparison tables are intentionally withheld.");
-    expect(html).toContain("No fixed frontend metrics");
+    expect(html).toContain("No public comparison tables yet");
+    expect(html).not.toContain("frontend literals");
+    expect(html).not.toContain("real public read model");
     expect(html).not.toContain("Results by model");
     expect(html).not.toContain("36 / 59 solved");
     expect(html).not.toContain("3 configs");
@@ -140,7 +142,9 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/", 320);
 
     expect(html).toContain("site-home-shell-compact");
-    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Release posture"));
+    expect(html.indexOf("Execution context is published")).toBeLessThan(
+      html.indexOf("Release posture")
+    );
   });
 
   it("keeps the wide home signal rail in the hero", async () => {
@@ -150,6 +154,8 @@ describe("PublicSite", () => {
     expect(html).not.toContain("Project signal cues stay available after the summary bands.");
     expect(html).toContain("Release posture");
     expect(html).toContain("Publication boundary");
+    expect(html).not.toContain("verify yourself via containerized replay");
+    expect(html).not.toContain("fake benchmark totals");
     expect(html).toContain(
       "The public site stays scoped to disclosed slices and release notes rather than pretending to be a live benchmark console."
     );
