@@ -47,6 +47,35 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
   const originHeader = request.headers.get("origin");
 
   if (!originHeader) {
+    const refererHeader = request.headers.get("referer");
+
+    if (!refererHeader) {
+      return null;
+    }
+
+    try {
+      const refererUrl = new URL(refererHeader);
+
+      if (
+        refererUrl.protocol === "https:" &&
+        brandedFinalizeRelayHosts.has(refererUrl.hostname)
+      ) {
+        return refererUrl.origin;
+      }
+
+      if (
+        refererUrl.protocol === "http:" &&
+        (
+          brandedFinalizeRelayHosts.has(refererUrl.hostname) ||
+          isLocalHostname(refererUrl.hostname)
+        )
+      ) {
+        return refererUrl.origin;
+      }
+    } catch {
+      return null;
+    }
+
     return null;
   }
 

@@ -354,10 +354,19 @@ describe("handleAccessFinalize", () => {
   });
 
   it("redirects back to retry without relaying when the browser Origin header is absent", async () => {
-    let fetchCalled = false;
-    globalThis.fetch = async () => {
-      fetchCalled = true;
-      return new Response(null, { status: 200 });
+    globalThis.fetch = async (_input, init) => {
+      expect((init?.headers as Headers).get("origin")).toBe(
+        "https://github.auth.paretoproof.com"
+      );
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/profile"
+        }),
+        {
+          status: 200
+        }
+      );
     };
 
     const response = await handleAccessFinalize(
@@ -367,17 +376,15 @@ describe("handleAccessFinalize", () => {
         }),
         headers: {
           "cf-access-jwt-assertion": "assertion-missing-origin",
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
+          referer: "https://github.auth.paretoproof.com/"
         },
         method: "POST"
       })
     );
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
-    );
-    expect(fetchCalled).toBe(false);
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/profile");
   });
 
   it("redirects back to retry without relaying when the browser Origin header is untrusted", async () => {
@@ -396,6 +403,93 @@ describe("handleAccessFinalize", () => {
           "cf-access-jwt-assertion": "assertion-untrusted-origin",
           "content-type": "application/x-www-form-urlencoded",
           origin: "https://evil.example"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+    );
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("redirects back to retry without relaying when both Origin and Referer are absent", async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 200 });
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-no-relay-context",
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+    );
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("relays shared-auth finalize requests when Origin is absent but Referer is trusted", async () => {
+    globalThis.fetch = async (_input, init) => {
+      expect((init?.headers as Headers).get("origin")).toBe("https://auth.paretoproof.com");
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/access-request"
+        }),
+        {
+          status: 200
+        }
+      );
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/access-request"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-shared-auth-referer",
+          "content-type": "application/x-www-form-urlencoded",
+          referer: "https://auth.paretoproof.com/"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/access-request");
+  });
+
+  it("redirects back to retry without relaying when Origin is absent and Referer is untrusted", async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 200 });
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-untrusted-referer",
+          "content-type": "application/x-www-form-urlencoded",
+          referer: "https://evil.example/path"
         },
         method: "POST"
       })
