@@ -255,6 +255,48 @@ type PortalBootstrapProps = {
   surface?: AuthenticatedSurface;
 };
 
+type PortalBootstrapRouteRedirectInput = {
+  allowApprovedRouteRedirects?: boolean;
+  pathname: string;
+  routeDeniedReason: ReturnType<typeof readRouteDeniedReason>;
+  search: string;
+  state: PortalAccessState;
+  surface: AuthenticatedSurface;
+};
+
+export function resolvePortalBootstrapRouteRedirect({
+  allowApprovedRouteRedirects = true,
+  pathname,
+  routeDeniedReason,
+  search,
+  state,
+  surface
+}: PortalBootstrapRouteRedirectInput) {
+  if (
+    state.status === "loading" ||
+    state.status === "error" ||
+    state.status === "unauthenticated"
+  ) {
+    return null;
+  }
+
+  if (state.status === "approved" && !allowApprovedRouteRedirects) {
+    return null;
+  }
+
+  return resolveSurfaceRouteRedirect({
+    pathname,
+    reason:
+      state.status === "denied"
+        ? state.reason
+        : routeDeniedReason ?? undefined,
+    roles: state.status === "approved" ? derivePortalRoles(state.role) : [],
+    search,
+    status: state.status,
+    surface
+  });
+}
+
 export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
   const initialLocalPreviewMode = isLocalDevelopmentLocation(window.location);
   const initialApiBaseUrl = getApiBaseUrl();
@@ -270,6 +312,9 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
         }
       : { status: "loading" }
   );
+  const [hasRevalidatedSessionState, setHasRevalidatedSessionState] = useState(
+    !initialApprovedHandoff
+  );
   const apiBaseUrl = useMemo(() => initialApiBaseUrl, []);
   const localPreviewMode = useMemo(() => initialLocalPreviewMode, []);
   const localApiFallback = useMemo(() => isUsingImplicitLocalPortalApi(), []);
@@ -279,26 +324,16 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
   const surfaceLabel = describeSurfaceLabel(surface);
   const routeDeniedReason = readRouteDeniedReason();
   const routeRedirectTarget = useMemo(() => {
-    if (
-      state.status === "loading" ||
-      state.status === "error" ||
-      state.status === "unauthenticated"
-    ) {
-      return null;
-    }
-
-    return resolveSurfaceRouteRedirect({
+    return resolvePortalBootstrapRouteRedirect({
+      allowApprovedRouteRedirects:
+        state.status !== "approved" || hasRevalidatedSessionState,
       pathname: window.location.pathname,
-      reason:
-        state.status === "denied"
-          ? state.reason
-          : routeDeniedReason ?? undefined,
-      roles: state.status === "approved" ? derivePortalRoles(state.role) : [],
+      routeDeniedReason,
       search: window.location.search,
-      status: state.status,
+      state,
       surface
     });
-  }, [routeDeniedReason, state, surface]);
+  }, [hasRevalidatedSessionState, routeDeniedReason, state, surface]);
 
   useEffect(() => {
     stateRef.current = state;
@@ -322,12 +357,14 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
           signal: controller.signal
         });
 
+        setHasRevalidatedSessionState(true);
         setState(nextState);
       } catch (error) {
         if (controller.signal.aborted || !active) {
           return;
         }
 
+        setHasRevalidatedSessionState(true);
         setState(
           buildPortalBootstrapErrorState(error, {
             apiBaseUrl,

@@ -12,6 +12,7 @@ import {
   derivePortalRoles,
   mapPortalMutationErrorMessage,
   recoverPortalStateAfterAuthExpiry,
+  resolvePortalBootstrapRouteRedirect,
   renderPortalDeniedCard,
   renderPortalPendingCard,
   renderLocalPortalUnauthenticatedCard,
@@ -482,5 +483,54 @@ describe("PortalBootstrap auth handoff", () => {
     expect(firstHtml).toContain("Authenticated session");
     expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
     expect(globalThis.document.cookie).toBe(handoffCookie);
+  });
+
+  it("defers insufficient-role redirects while an approved handoff is still provisional", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/admin/users?surface=portal&access=approved&role=collaborator"
+      )
+    };
+
+    expect(
+      resolvePortalBootstrapRouteRedirect({
+        allowApprovedRouteRedirects: false,
+        pathname: "/admin/users",
+        routeDeniedReason: null,
+        search: "?surface=portal&access=approved&role=collaborator",
+        state: {
+          email: null,
+          role: "collaborator",
+          status: "approved"
+        },
+        surface: "portal"
+      })
+    ).toBeNull();
+  });
+
+  it("restores insufficient-role redirects after bootstrap revalidation", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/admin/users?surface=portal&access=approved&role=collaborator"
+      )
+    };
+
+    const redirectTarget = resolvePortalBootstrapRouteRedirect({
+      pathname: "/admin/users",
+      routeDeniedReason: null,
+      search: "?surface=portal&access=approved&role=collaborator",
+      state: {
+        email: null,
+        role: "collaborator",
+        status: "approved"
+      },
+      surface: "portal"
+    });
+
+    expect(redirectTarget).not.toBeNull();
+    const redirectUrl = new URL(redirectTarget);
+
+    expect(redirectUrl.pathname).toBe("/denied");
+    expect(redirectUrl.searchParams.get("reason")).toBe("insufficient_role");
   });
 });

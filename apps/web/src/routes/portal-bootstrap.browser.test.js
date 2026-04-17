@@ -132,6 +132,107 @@ async function assertApprovedHandoffTransition({
   }
 }
 
+async function assertRestrictedRouteHandoffRevalidation({
+  port,
+  provisionalRole,
+  revalidatedRole
+}) {
+  const testServerUrl = `http://127.0.0.1:${port}`;
+  const server = startServer(port);
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    await waitForServer(`${testServerUrl}/admin/users?surface=portal`);
+
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1100 }
+    });
+    await context.addCookies([
+      {
+        name: "paretoproof_approved_auth_handoff",
+        value: encodeURIComponent(
+          JSON.stringify({
+            role: provisionalRole,
+            savedAtMs: Date.now(),
+            status: "approved",
+            surface: "portal",
+            version: 1
+          })
+        ),
+        url: `${testServerUrl}/`
+      }
+    ]);
+
+    const page = await context.newPage();
+
+    await page.route("http://127.0.0.1:3000/portal/me", async (route) => {
+      await delay(1_500);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          access: {
+            email: "reviewer@paretoproof.test",
+            role: revalidatedRole,
+            status: "approved"
+          },
+          identity: {
+            provider: "cloudflare_google"
+          }
+        })
+      });
+    });
+
+    await page.route("http://127.0.0.1:3000/portal/admin/users", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [
+            {
+              accessPosture: "approved",
+              activeRole: revalidatedRole,
+              displayName: "Ada",
+              email: "ada@example.com",
+              lastReviewedRequestStatus: null,
+              linkedIdentityProviders: ["cloudflare_google"],
+              pendingRequest: null,
+              userId: "11111111-1111-4111-8111-111111111111"
+            }
+          ]
+        })
+      });
+    });
+
+    await page.goto(`${testServerUrl}/admin/users?surface=portal`, {
+      waitUntil: "domcontentloaded"
+    });
+    await delay(1_000);
+
+    assert.equal(new URL(page.url()).pathname, "/admin/users");
+    assert.doesNotMatch(await page.locator("body").innerText(), /Access denied/);
+
+    await page.waitForFunction(
+      () =>
+        window.location.pathname === "/admin/users" &&
+        document.body.innerText.includes("reviewer@paretoproof.test") &&
+        document.body.innerText.includes("ADMIN USERS"),
+      { timeout: 10_000 }
+    );
+
+    const settledBody = await page.locator("body").innerText();
+    assert.equal(new URL(page.url()).pathname, "/admin/users");
+    assert.match(settledBody, /reviewer@paretoproof\.test/);
+    assert.match(settledBody, /ADMIN USERS/);
+    assert.doesNotMatch(settledBody, /Access denied/);
+
+    await context.close();
+  } finally {
+    await browser.close();
+    await stopServer(server);
+  }
+}
+
 test(
   "portal bootstrap replaces a provisional approved handoff when /portal/me revalidation disagrees",
   { timeout: 120_000 },
@@ -192,5 +293,17 @@ test(
         revalidationResponse: scenario.revalidationResponse
       });
     }
+  }
+);
+
+test(
+  "portal bootstrap does not preemptively redirect restricted routes before approved role revalidation",
+  { timeout: 60_000 },
+  async () => {
+    await assertRestrictedRouteHandoffRevalidation({
+      port: 4181,
+      provisionalRole: "collaborator",
+      revalidatedRole: "admin"
+    });
   }
 );
