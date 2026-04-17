@@ -45,6 +45,19 @@ type PortalOverviewMetricCopy = {
   value: string;
 };
 
+type PortalOverviewRunPostureSegment = {
+  accent: "amber" | "indigo" | "mint" | "rose";
+  count: number;
+  label: string;
+  note: string;
+};
+
+type PortalOverviewBenchmarkVisualSegment = {
+  accent: "amber" | "indigo" | "mint" | "rose";
+  count: number;
+  label: string;
+};
+
 const portalRoutePathById = new Map<PortalRouteId, string>(
   appRouteAccessMatrix
     .filter((entry) => entry.surface === "portal")
@@ -259,7 +272,7 @@ export function describePortalOverviewRecentRunsFallback(
 }
 
 export function getCompactOverviewSectionOrder() {
-  return ["recentRuns", "metrics", "overviewLead", "actions"] as const;
+  return ["recentRuns", "metrics", "visuals", "overviewLead", "actions"] as const;
 }
 
 export function createPortalOverviewPollController() {
@@ -364,6 +377,82 @@ export function startPortalOverviewPolling({
   };
 }
 
+export function buildOverviewRunPostureSegments(
+  overviewData: PortalOverviewResponse | null
+): PortalOverviewRunPostureSegment[] {
+  if (!overviewData) {
+    return [];
+  }
+
+  const otherTerminalRuns = Math.max(
+    overviewData.summary.totalRuns -
+      overviewData.summary.activeRuns -
+      overviewData.summary.queuedRuns -
+      overviewData.summary.failedRuns,
+    0
+  );
+
+  return [
+    {
+      accent: "indigo",
+      count: overviewData.summary.activeRuns,
+      label: "Active runs",
+      note: "Currently running or mid-flight."
+    },
+    {
+      accent: "amber",
+      count: overviewData.summary.queuedRuns,
+      label: "Queued runs",
+      note: "Accepted by the control plane but not started."
+    },
+    {
+      accent: "rose",
+      count: overviewData.summary.failedRuns,
+      label: "Failed runs",
+      note: "Terminal runs that ended in failure."
+    },
+    {
+      accent: "mint",
+      count: otherTerminalRuns,
+      label: "Other recorded runs",
+      note: "Runs not included in the active, queued, or failed summary slices."
+    }
+  ];
+}
+
+export function buildOverviewBenchmarkVisualSegments(
+  benchmark: PortalOverviewResponse["benchmarkHighlights"][number]
+): PortalOverviewBenchmarkVisualSegment[] {
+  const terminalVerdictCount =
+    benchmark.verdictCounts.pass +
+    benchmark.verdictCounts.fail +
+    benchmark.verdictCounts.invalid_result;
+  const inFlightCount = Math.max(benchmark.runCount - terminalVerdictCount, 0);
+
+  return [
+    {
+      accent: "mint",
+      count: benchmark.verdictCounts.pass,
+      label: "Pass verdicts"
+    },
+    {
+      accent: "rose",
+      count: benchmark.verdictCounts.fail,
+      label: "Fail verdicts"
+    },
+    {
+      accent: "amber",
+      count: benchmark.verdictCounts.invalid_result,
+      label: "Invalid-result verdicts"
+    },
+    {
+      accent: "indigo",
+      count: inFlightCount,
+      label: "Runs outside verdict counts"
+    }
+  ];
+}
+
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [overviewRefreshing, setOverviewRefreshing] = useState(false);
@@ -412,7 +501,20 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     [activeRouteId]
   );
   const overviewData = overviewState.status === "ready" ? overviewState.data : null;
+  const overviewTotalRuns = overviewData?.summary.totalRuns ?? 0;
   const overviewMetricsCopy = useMemo(() => buildOverviewMetricsCopy(overviewData), [overviewData]);
+  const overviewRunPostureSegments = useMemo(
+    () => buildOverviewRunPostureSegments(overviewData),
+    [overviewData]
+  );
+  const overviewBenchmarkVisuals = useMemo(
+    () =>
+      overviewData?.benchmarkHighlights.slice(0, 3).map((benchmark) => ({
+        benchmark,
+        segments: buildOverviewBenchmarkVisualSegments(benchmark)
+      })) ?? [],
+    [overviewData]
+  );
 
   useEffect(() => {
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
@@ -532,6 +634,127 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       </article>
 
       {!compactLayout ? overviewActionRail : null}
+    </section>
+  );
+  const overviewVisualSection = (
+    <section className="portal-overview-grid portal-overview-visual-grid">
+      <article className="portal-panel portal-overview-visual-panel">
+        <div className="portal-panel-header">
+          <h2>Run posture</h2>
+          <span className="role-chip role-chip-tonal">
+            {overviewData ? `${overviewTotalRuns} total` : "Waiting for backend"}
+          </span>
+        </div>
+        <p className="portal-panel-muted">
+          Visual summary of the current overview payload. The slices below use only the landing
+          summary counts already returned by <code>/portal/overview</code>.
+        </p>
+        {overviewState.status === "error" ? (
+          <p className="portal-panel-muted">{overviewState.message}</p>
+        ) : overviewState.status === "loading" ? (
+          <p className="portal-panel-muted">Loading run posture from the backend.</p>
+        ) : overviewTotalRuns === 0 ? (
+          <p className="portal-panel-muted">
+            No runs are recorded yet, so there is no run-state distribution to visualize.
+          </p>
+        ) : (
+          <div className="portal-overview-visual-stack">
+            <div className="portal-overview-track" aria-hidden="true">
+              {overviewRunPostureSegments.map((segment) => (
+                <span
+                  className={`portal-overview-track-segment portal-overview-track-${segment.accent}`}
+                  key={segment.label}
+                  style={{
+                    width: `${(segment.count / Math.max(overviewTotalRuns, 1)) * 100}%`
+                  }}
+                />
+              ))}
+            </div>
+            <div className="portal-overview-visual-list" role="list" aria-label="Run posture">
+              {overviewRunPostureSegments.map((segment) => (
+                <article className="portal-overview-visual-row" key={segment.label} role="listitem">
+                  <div className="portal-overview-visual-label">
+                    <span
+                      aria-hidden="true"
+                      className={`portal-overview-swatch portal-overview-swatch-${segment.accent}`}
+                    />
+                    <div>
+                      <strong>{segment.label}</strong>
+                      <p>{segment.note}</p>
+                    </div>
+                  </div>
+                  <strong className="portal-overview-visual-value">{segment.count}</strong>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </article>
+
+      <article className="portal-panel portal-overview-visual-panel">
+        <div className="portal-panel-header">
+          <h2>Benchmark activity</h2>
+          <a className="button button-secondary" href={buildPortalUrl("/runs")}>
+            Open runs
+          </a>
+        </div>
+        <p className="portal-panel-muted">
+          Top benchmark packages from the overview payload, with run counts and verdict posture.
+        </p>
+        {overviewState.status === "error" ? (
+          <p className="portal-panel-muted">{overviewState.message}</p>
+        ) : overviewState.status === "loading" ? (
+          <p className="portal-panel-muted">Loading benchmark activity from the backend.</p>
+        ) : overviewBenchmarkVisuals.length === 0 ? (
+          <p className="portal-panel-muted">
+            The backend has not observed benchmark activity yet, so there is nothing to compare.
+          </p>
+        ) : (
+          <div className="portal-overview-benchmark-visuals" role="list" aria-label="Benchmark activity">
+            {overviewBenchmarkVisuals.map(({ benchmark, segments }) => (
+              <article
+                className="portal-overview-benchmark-card"
+                key={`${benchmark.benchmarkPackageId}:${benchmark.latestRunId ?? "none"}`}
+                role="listitem"
+              >
+                <div className="portal-overview-benchmark-header">
+                  <div>
+                    <strong>{benchmark.benchmarkLabel}</strong>
+                    <p>{benchmark.benchmarkPackageId}</p>
+                  </div>
+                  <span className="role-chip role-chip-tonal">{benchmark.runCount} run(s)</span>
+                </div>
+                <div className="portal-overview-track" aria-hidden="true">
+                  {segments.map((segment) => (
+                    <span
+                      className={`portal-overview-track-segment portal-overview-track-${segment.accent}`}
+                      key={segment.label}
+                      style={{
+                        width: `${(segment.count / Math.max(benchmark.runCount, 1)) * 100}%`
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="portal-overview-benchmark-metadata">
+                  <span>Latest completion {formatPortalOverviewTimestamp(benchmark.latestCompletedAt)}</span>
+                  <span>{benchmark.versions.join(", ")}</span>
+                </div>
+                <div className="portal-overview-benchmark-segment-list">
+                  {segments.map((segment) => (
+                    <span className="portal-overview-benchmark-segment" key={segment.label}>
+                      <span
+                        aria-hidden="true"
+                        className={`portal-overview-swatch portal-overview-swatch-${segment.accent}`}
+                      />
+                      {segment.label}: {segment.count}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </article>
     </section>
   );
   const overviewRecentRunsFallback = describePortalOverviewRecentRunsFallback(overviewState);
@@ -758,7 +981,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                     actions: overviewActionRail,
                     metrics: overviewMetricStrip,
                     overviewLead: overviewLeadSection,
-                    recentRuns: overviewRecentRunsSection
+                    recentRuns: overviewRecentRunsSection,
+                    visuals: overviewVisualSection
                   };
 
                   return <Fragment key={sectionId}>{sections[sectionId]}</Fragment>;
@@ -766,6 +990,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               : (
                   <>
                     {overviewMetricStrip}
+                    {overviewVisualSection}
                     {overviewLeadSection}
                     {overviewRecentRunsSection}
                   </>
