@@ -178,6 +178,18 @@ describe("PortalShell overview ordering", () => {
     );
   });
 
+  it("keeps overview visuals in the compact overview order", async () => {
+    const { getCompactOverviewSectionOrder } = await loadPortalShellModule();
+
+    expect(getCompactOverviewSectionOrder()).toEqual([
+      "recentRuns",
+      "metrics",
+      "visuals",
+      "overviewLead",
+      "actions"
+    ]);
+  });
+
   it("keeps the wide admin overview metric strip before the action rail", async () => {
     const html = await renderPortalShell({
       email: "ada@paretoproof.local",
@@ -315,6 +327,93 @@ describe("PortalShell live overview helpers", () => {
       detail: "The synced backend has not produced any benchmark runs.",
       headline: "No runs recorded yet."
     });
+  });
+
+  it("builds run-posture segments from the overview summary without inventing extra states", async () => {
+    const { buildOverviewRunPostureSegments } = await loadPortalShellModule();
+
+    expect(
+      buildOverviewRunPostureSegments({
+        benchmarkHighlights: [],
+        generatedAt: "2026-04-17T08:00:00.000Z",
+        recentIncidents: [],
+        recentRuns: [],
+        summary: {
+          activeLeases: 2,
+          activeRuns: 3,
+          failedRuns: 4,
+          observedBenchmarkPackageCount: 2,
+          queuedJobs: 5,
+          queuedRuns: 2,
+          runningJobs: 4,
+          staleLeaseCount: 1,
+          totalRuns: 14
+        }
+      })
+    ).toEqual([
+      {
+        accent: "indigo",
+        count: 3,
+        label: "Active runs",
+        note: "Currently running or mid-flight."
+      },
+      {
+        accent: "amber",
+        count: 2,
+        label: "Queued runs",
+        note: "Accepted by the control plane but not started."
+      },
+      {
+        accent: "rose",
+        count: 4,
+        label: "Failed runs",
+        note: "Terminal runs that ended in failure."
+      }
+    ]);
+  });
+
+  it("builds benchmark-activity segments with a truthful non-terminal remainder", async () => {
+    const { buildOverviewBenchmarkVisualSegments } = await loadPortalShellModule();
+
+    expect(
+      buildOverviewBenchmarkVisualSegments({
+        attemptCount: 9,
+        benchmarkLabel: "Problem 9",
+        benchmarkPackageId: "problem9",
+        latestCompletedAt: "2026-04-17T08:00:00.000Z",
+        latestRunId: "PP-401",
+        modelConfigIds: ["gpt-5.4-pro"],
+        providerFamilies: ["openai"],
+        runCount: 8,
+        versions: ["2026.04"],
+        verdictCounts: {
+          fail: 2,
+          invalid_result: 1,
+          pass: 3
+        }
+      })
+    ).toEqual([
+      {
+        accent: "mint",
+        count: 3,
+        label: "Pass verdicts"
+      },
+      {
+        accent: "rose",
+        count: 2,
+        label: "Fail verdicts"
+      },
+      {
+        accent: "amber",
+        count: 1,
+        label: "Invalid-result verdicts"
+      },
+      {
+        accent: "indigo",
+        count: 2,
+        label: "Runs outside verdict counts"
+      }
+    ]);
   });
 });
 
