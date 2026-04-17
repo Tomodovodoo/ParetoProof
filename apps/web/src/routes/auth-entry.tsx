@@ -45,6 +45,10 @@ export function resolveAuthEntryMode(redirectPath: string) {
   return redirectPath === "/access-request" ? "access_request" : "sign_in";
 }
 
+export function resolveAuthEntryApprovedPortalTargetPath(redirectPath: string) {
+  return redirectPath === "/access-request" ? "/" : redirectPath;
+}
+
 export function buildAuthEntrySessionCheckRequestInit(signal: AbortSignal): RequestInit {
   return {
     credentials: "include",
@@ -66,13 +70,32 @@ export function shouldStayOnAuthEntryForProviderlessRecovery(
   );
 }
 
+export type AuthEntrySessionCheckAction =
+  | "redirect_access_request"
+  | "redirect_denied"
+  | "redirect_pending"
+  | "redirect_portal"
+  | "stay_on_auth_entry";
+
 export function resolveAuthEntrySessionCheckAction(
   response: Pick<Response, "ok" | "status" | "type">,
   payload: AuthEntrySessionCheckPayload | null = null
-) {
+): AuthEntrySessionCheckAction {
   if (response.ok) {
     if (shouldStayOnAuthEntryForProviderlessRecovery(payload)) {
       return "stay_on_auth_entry";
+    }
+
+    if (payload?.access.status === "pending") {
+      return "redirect_pending";
+    }
+
+    if (payload?.access.status === "denied") {
+      if (payload.access.reason === "access_request_required") {
+        return "redirect_access_request";
+      }
+
+      return "redirect_denied";
     }
 
     return "redirect_portal";
@@ -93,7 +116,13 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const accessRequestUrl = buildAccessRequestUrl();
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
-  const portalUrl = useMemo(() => buildPortalUrl(redirectPath), [redirectPath]);
+  const portalUrl = useMemo(
+    () => buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
+    [redirectPath]
+  );
+  const portalAccessRequestUrl = useMemo(() => buildPortalUrl("/access-request"), []);
+  const portalDeniedUrl = useMemo(() => buildPortalUrl("/denied"), []);
+  const portalPendingUrl = useMemo(() => buildPortalUrl("/pending"), []);
   const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
   const handoffMode = new URLSearchParams(window.location.search).get("handoff");
   const showFailedNotice = handoffMode === "failed";
@@ -118,8 +147,17 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
           response.ok ? ((await response.json()) as AuthEntrySessionCheckPayload) : null;
         const action = resolveAuthEntrySessionCheckAction(response, payload);
 
-        if (action === "redirect_portal") {
-          window.location.replace(portalUrl);
+        if (action !== "stay_on_auth_entry") {
+          const redirectTarget =
+            action === "redirect_access_request"
+              ? portalAccessRequestUrl
+              : action === "redirect_denied"
+                ? portalDeniedUrl
+                : action === "redirect_pending"
+                  ? portalPendingUrl
+                  : portalUrl;
+
+          window.location.replace(redirectTarget);
           return;
         }
       } catch (error) {
@@ -138,7 +176,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
     return () => {
       controller.abort();
     };
-  }, [apiBaseUrl, isLocal, portalUrl]);
+  }, [apiBaseUrl, isLocal, portalAccessRequestUrl, portalDeniedUrl, portalPendingUrl, portalUrl]);
 
   return (
     <main className="auth-shell">
