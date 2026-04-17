@@ -3347,6 +3347,15 @@ a.button-secondary {
     gap: 8px;
   }
 
+  .portal-grid-admin-workspace .portal-admin-record-header {
+    flex-wrap: wrap;
+  }
+
+  .portal-grid-admin-workspace .portal-admin-record-header strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .portal-grid-admin-workspace .portal-admin-meta-row {
     font-size: 0.84rem;
   }

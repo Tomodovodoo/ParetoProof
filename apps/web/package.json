@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:layout": "node --test src/routes/portal-access-request-layout.browser.test.js",
     "test:functions": "bun test functions",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "pages:deploy": "wrangler pages deploy --project-name=paretoproof-web"
@@ -18,6 +19,7 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
+    "playwright": "^1.59.1",
     "typescript": "latest",
     "vite": "latest",
     "wrangler": "^4.71.0"
