@@ -26,7 +26,8 @@ const publicBenchmarks = [
     benchmarkVersionId: "problem-9-v1",
     description:
       "Offline Lean proof-generation bundle focused on reproducible execution, failure taxonomy, and benchmark-package integrity.",
-    headlineMetric: "61% pass rate",
+    editorialNote:
+      "Release summary only. Quantitative result tables remain withheld on the public site until they come from a released reporting source.",
     latestReleaseLabel: "Release 2026-03",
     releaseStatus: "complete",
     scopeNote: "Single released slice covering the current Problem 9 proof-generation bundle.",
@@ -37,7 +38,8 @@ const publicBenchmarks = [
     benchmarkVersionId: "statement-formalization-pilot-v1",
     description:
       "Pilot release for public statement-formalization reporting while canonical artifact and verification contracts stabilize.",
-    headlineMetric: "Partial publication",
+    editorialNote:
+      "Pilot release note only. Public scope and quality remain visible here, while quantitative comparisons stay out of the frontend bundle.",
     latestReleaseLabel: "Release 2026-02",
     releaseStatus: "partial",
     scopeNote: "Published subset only while the remaining benchmark package stays withheld for methodology review.",
@@ -53,43 +55,20 @@ const publicBenchmarkReports = {
     dateLabel: "March 2026",
     description:
       "Public release for the Problem 9 proof-generation benchmark slice under the current offline run-bundle contract.",
-    includedConfigs: "3 configs",
-    latestStatus: "mixed",
     methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
       "Complete public release for the current disclosed slice. Held-out or internal-only benchmark material remains out of scope for this report.",
     qualityState: "complete",
     releaseLabel: "Release 2026-03",
-    results: [
-      {
-        displayLabel: "OpenAI GPT-OSS",
-        includedCount: "36 / 59 solved",
-        providerLabel: "OpenAI family",
-        status: "mixed",
-        updatedAt: "Updated Mar 2026"
-      },
-      {
-        displayLabel: "Claude Sonnet",
-        includedCount: "31 / 59 solved",
-        providerLabel: "Anthropic family",
-        status: "mixed",
-        updatedAt: "Updated Mar 2026"
-      },
-      {
-        displayLabel: "Gemini 2.5 Pro",
-        includedCount: "24 / 59 solved",
-        providerLabel: "Google family",
-        status: "fail",
-        updatedAt: "Updated Mar 2026"
-      }
-    ],
+    reportingBoundaryNote:
+      "Quantitative result tables stay off the apex site until released benchmark reporting is backed by a real public read model instead of frontend literals.",
     scopeNote:
       "Includes the currently disclosed proof-generation benchmark package and released model configurations only.",
     summaryCards: [
-      { label: "Configs included", value: "03" },
-      { label: "Evaluated items", value: "59" },
-      { label: "Solved count", value: "36 top score" },
-      { label: "Release state", value: "complete" }
+      { label: "Reporting posture", value: "Release note" },
+      { label: "Evidence boundary", value: "Public scope" },
+      { label: "Methodology", value: "Docs linked" },
+      { label: "Release state", value: "Complete" }
     ],
     title: "Problem 9 public release"
   },
@@ -99,73 +78,42 @@ const publicBenchmarkReports = {
     dateLabel: "February 2026",
     description:
       "Public pilot release for statement-formalization reporting while the remaining package stays withheld for methodology and verification review.",
-    includedConfigs: "2 configs",
-    latestStatus: "partial",
     methodologyHref: buildDocsUrl("benchmarks.md"),
     qualityNotice:
       "Partial publication: some intended rows are still withheld while the canonical formal-statement verification policy is finalized.",
     qualityState: "partial",
     releaseLabel: "Release 2026-02",
-    results: [
-      {
-        displayLabel: "OpenAI GPT-OSS",
-        includedCount: "18 / 34 solved",
-        providerLabel: "OpenAI family",
-        status: "mixed",
-        updatedAt: "Updated Feb 2026"
-      },
-      {
-        displayLabel: "Claude Sonnet",
-        includedCount: "14 / 34 solved",
-        providerLabel: "Anthropic family",
-        status: "mixed",
-        updatedAt: "Updated Feb 2026"
-      }
-    ],
+    reportingBoundaryNote:
+      "This pilot release keeps quantitative comparisons withheld on the apex site while the released public reporting contract is still being defined.",
     scopeNote:
       "Covers only the public pilot subset. Withheld statement sets are excluded from all shown metrics.",
     summaryCards: [
-      { label: "Configs included", value: "02" },
-      { label: "Evaluated items", value: "34" },
-      { label: "Solved count", value: "18 top score" },
-      { label: "Release state", value: "partial" }
+      { label: "Reporting posture", value: "Pilot note" },
+      { label: "Evidence boundary", value: "Partial scope" },
+      { label: "Methodology", value: "Docs linked" },
+      { label: "Release state", value: "Partial" }
     ],
     title: "Statement formalization pilot release"
   }
 } as const;
 
-export function buildPublicSignalsFromReleaseData() {
-  const reportRows = Object.values(publicBenchmarkReports);
-  const uniqueModelFamilies = new Set(
-    reportRows.flatMap((report) => report.results.map((row) => row.providerLabel))
-  );
-  const publishedReleaseLabels = [...new Set(reportRows.map((report) => report.releaseLabel))];
-  const totalReleasedItems = reportRows.reduce((sum, report) => {
-    const evaluatedItemsCard = report.summaryCards.find((card) => card.label === "Evaluated items");
-    const evaluatedItems = Number(evaluatedItemsCard?.value ?? "0");
-    return sum + (Number.isFinite(evaluatedItems) ? evaluatedItems : 0);
-  }, 0);
-
-  return [
-    {
-      detail: `Derived from the ${reportRows.length} public release summaries currently published on this site (${publishedReleaseLabels.join(", ")}).`,
-      label: "Released slices",
-      value: reportRows.length.toString()
-    },
-    {
-      detail: `Release-derived total across the currently published benchmark summaries, not a live operations counter.`,
-      label: "Released items",
-      value: totalReleasedItems.toString()
-    },
-    {
-      detail: `${uniqueModelFamilies.size} model families appear in the released summary rows currently published on this site.`,
-      label: "Model families",
-      value: uniqueModelFamilies.size.toString()
-    }
-  ] as const;
-}
-
-const publicSignals = buildPublicSignalsFromReleaseData();
+const publicSignals = [
+  {
+    detail: "Methodology, scope, and quality notes are published openly even when quantitative public reporting is still withheld.",
+    label: "Release posture",
+    value: "Methodology-linked"
+  },
+  {
+    detail: "The public site stays scoped to disclosed slices and release notes rather than pretending to be a live benchmark console.",
+    label: "Publication boundary",
+    value: "Release-scoped"
+  },
+  {
+    detail: "Container replay remains a stated goal, but the apex site does not publish fake benchmark totals while that reporting stack is incomplete.",
+    label: "Replay posture",
+    value: "Replay-planned"
+  }
+] as const;
 
 const publicBands = [
   {
@@ -192,17 +140,17 @@ const packCoverage = [
   {
     detail: "why the project exists, who it serves, and how the public/auth/portal split works",
     label: "Project overview",
-    value: "01"
+    value: "Overview"
   },
   {
     detail: "how contributor entry works without promising open self-serve access or hidden shortcuts",
     label: "Contributor path",
-    value: "02"
+    value: "Path"
   },
   {
     detail: "where public questions go, and where access recovery definitely does not go",
     label: "Contact boundary",
-    value: "03"
+    value: "Boundary"
   }
 ];
 
@@ -758,22 +706,23 @@ function PublicLanding() {
 function PublicBenchmarkIndex() {
   const isCompactLayout = useCompactLayout(480);
   const showInFlowSummary = useCompactLayout(640);
-  const benchmarkIndexLead = "Browse released benchmark slices, see which models were tested, and open detailed release summaries with methodology and results.";
+  const benchmarkIndexLead =
+    "Browse released benchmark slices and open scoped release summaries with methodology, publication posture, and evidence-boundary notes.";
   const benchmarkIndexSummaryCards: PublicBenchmarkSummaryCard[] = [
     {
       detail: "Public benchmark release summaries listed on the apex site.",
       label: "Released slices",
-      value: publicBenchmarks.length.toString().padStart(2, "0")
+      value: "Curated"
     },
     {
       detail: "Each benchmark card points at one current public release state.",
       label: "Latest reference",
-      value: "01"
+      value: "Release note"
     },
     {
       detail: "Partial publication stays visible as scope, not benchmark failure.",
       label: "Data-quality first",
-      value: "QA"
+      value: "Scope-tagged"
     }
   ];
 
@@ -795,7 +744,7 @@ function PublicBenchmarkIndex() {
               Status: <strong>{formatReleaseStatus(benchmark.releaseStatus)}</strong>
             </p>
             <p>
-              Headline metric: <strong>{benchmark.headlineMetric}</strong>
+              Editorial note: <strong>{benchmark.editorialNote}</strong>
             </p>
             <p>{benchmark.scopeNote}</p>
           </div>
@@ -813,8 +762,8 @@ function PublicBenchmarkIndex() {
         <p className="section-tag">Release flow</p>
         <h2>Public reporting stays release-centric.</h2>
         <p>
-          Benchmark cards route into one release summary page with stable top-line metrics,
-          one visible notice block, and links to methodology rather than private evidence consoles.
+          Benchmark cards route into one release summary page with methodology links,
+          publication posture, and explicit evidence-boundary notes rather than fixed frontend metrics.
         </p>
       </article>
       <article className="site-band">
@@ -997,40 +946,39 @@ function PublicBenchmarkReport({
           <p>{report.qualityNotice}</p>
         </article>
         <article className="site-band">
-          <p className="section-tag">Public scope</p>
-          <h2>{report.includedConfigs}</h2>
-          <p>
-            Outcome state: <strong>{formatReleaseStatus(report.latestStatus)}</strong>
-          </p>
+          <p className="section-tag">Evidence boundary</p>
+          <h2>No fixed frontend metrics</h2>
+          <p>{report.reportingBoundaryNote}</p>
           <p>Portal drilldown and per-run evidence remain out of scope for the public release page.</p>
         </article>
       </section>
 
-      <section className="site-project-section" aria-label="Public results table">
+      <section className="site-project-section" aria-label="Public reporting boundary">
         <div className="site-section-copy">
-          <p className="section-tag">Primary public results</p>
-          <h2>Results by model</h2>
+          <p className="section-tag">Reporting boundary</p>
+          <h2>Quantitative comparison tables are intentionally withheld.</h2>
           <p className="site-lead">
-            Each model family is evaluated under identical benchmark conditions.
+            The public site currently publishes release scope, methodology, and quality posture
+            only. Quantitative benchmark metrics will appear here only after they are wired to a
+            released public source of truth.
           </p>
         </div>
 
         <div className="site-card-grid">
-          {report.results.map((row) => (
-            <article className="site-panel-card" key={row.displayLabel}>
-              <div className="site-panel-copy">
-                <p className="section-tag">{row.providerLabel}</p>
-                <h3>{row.displayLabel}</h3>
-                <p>
-                  Solved or pass summary: <strong>{row.includedCount}</strong>
-                </p>
-                <p>
-                  Status: <strong>{formatReleaseStatus(row.status)}</strong>
-                </p>
-                <p>{row.updatedAt}</p>
-              </div>
-            </article>
-          ))}
+          <article className="site-panel-card">
+            <div className="site-panel-copy">
+              <p className="section-tag">What this page includes</p>
+              <h3>Release scope and methodology only</h3>
+              <p>{report.scopeNote}</p>
+            </div>
+          </article>
+          <article className="site-panel-card">
+            <div className="site-panel-copy">
+              <p className="section-tag">What stays out of scope</p>
+              <h3>No fixed model score rows on the apex site</h3>
+              <p>{report.reportingBoundaryNote}</p>
+            </div>
+          </article>
         </div>
       </section>
 
