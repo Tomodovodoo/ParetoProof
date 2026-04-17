@@ -429,6 +429,10 @@ function PublicHeader({
     currentPath.startsWith(reportsRoutePrefix);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [currentPath]);
+
   return (
     <header className="site-header">
       <div className="site-header-bar">
@@ -481,6 +485,9 @@ function PublicHeader({
             <span className="site-mobile-toggle-icon" aria-hidden="true">
               <AppIcon name={mobileNavOpen ? "panel-left" : "grid"} />
             </span>
+            <span className="site-mobile-toggle-label">
+              {mobileNavOpen ? "Close" : "Menu"}
+            </span>
           </button>
         </div>
       </div>
@@ -512,7 +519,7 @@ function PublicHeader({
             Docs
           </a>
           <a className="button site-mobile-nav-cta" href={buildAuthUrl("/")}>
-            Approved sign in
+            Sign in
           </a>
           <a className="button button-secondary site-mobile-nav-cta" href={buildAccessRequestUrl()}>
             Request access

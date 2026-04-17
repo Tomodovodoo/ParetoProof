@@ -256,21 +256,27 @@ a.button-secondary {
 
 .site-mobile-toggle {
   display: none;
-  width: 38px;
+  min-width: 38px;
   height: 38px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
-  padding: 0;
+  padding: 0 10px;
+  gap: 8px;
+  font-weight: 700;
 }
 
 .site-mobile-toggle-icon {
   display: inline-flex;
-  width: 100%;
-  height: 100%;
+  width: 18px;
+  height: 18px;
   align-items: center;
   justify-content: center;
+}
+
+.site-mobile-toggle-label {
+  line-height: 1;
 }
 
 .site-mobile-nav {
@@ -2676,6 +2682,21 @@ a.button-secondary {
 }
 
 @media (max-width: 640px) {
+  .site-header-actions {
+    gap: 8px;
+  }
+
+  .site-header-actions > .button,
+  .site-header-actions > a.button {
+    display: none;
+  }
+
+  .site-mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .site-header,
   .site-header-main,
   .site-header-actions,
@@ -3855,7 +3876,8 @@ a.button-secondary {
   }
 
   .site-shell.site-home-shell .site-header-actions {
-    display: none;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .site-shell.site-home-shell .site-header {

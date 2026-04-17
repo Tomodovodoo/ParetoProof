@@ -14,8 +14,8 @@ const productionProviderAuthOrigins: Record<AccessProvider, string> = {
   google: "https://google.auth.paretoproof.com"
 };
 
-function readLocalSurfaceOverride() {
-  const params = new URLSearchParams(window.location.search);
+function readLocalSurfaceOverride(search = window.location.search) {
+  const params = new URLSearchParams(search);
   const surface = params.get("surface");
 
   return surface === "public" || surface === "auth" || surface === "portal"
@@ -35,7 +35,11 @@ function isLocalOrigin(hostname = window.location.hostname) {
   return isLocalHostname(hostname);
 }
 
-export function resolveWebSurface(hostname = window.location.hostname): WebSurface {
+export function resolveWebSurfaceFromUrl(
+  locationLike: Pick<Location, "hostname" | "search"> | URL = window.location
+): WebSurface {
+  const { hostname, search } = locationLike;
+
   if (
     hostname === "auth.paretoproof.com" ||
     hostname === "github.auth.paretoproof.com" ||
@@ -49,10 +53,21 @@ export function resolveWebSurface(hostname = window.location.hostname): WebSurfa
   }
 
   if (isLocalHostname(hostname)) {
-    return readLocalSurfaceOverride() ?? "public";
+    return readLocalSurfaceOverride(search) ?? "public";
   }
 
   return "public";
+}
+
+export function resolveWebSurface(hostname = window.location.hostname): WebSurface {
+  if (hostname === window.location.hostname) {
+    return resolveWebSurfaceFromUrl(window.location);
+  }
+
+  return resolveWebSurfaceFromUrl({
+    hostname,
+    search: ""
+  });
 }
 
 function normalizeTargetPath(targetPath: string) {
