@@ -10,6 +10,8 @@ import {
   derivePortalRoles,
   mapPortalMutationErrorMessage,
   recoverPortalStateAfterAuthExpiry,
+  renderPortalDeniedCard,
+  renderPortalPendingCard,
   renderLocalPortalUnauthenticatedCard,
   renderPortalBootstrapErrorCard,
   shouldRestartPortalAuthForMissingProvider
@@ -202,6 +204,55 @@ describe("mapPortalMutationErrorMessage", () => {
     expect(html).toContain("Retry after starting API");
     expect(html).toContain("Open local auth guidance");
     expect(html).toContain("http://127.0.0.1:3000");
+  });
+
+  it("renders pending access state with a clear escape route", () => {
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/pending")
+    };
+
+    const html = renderToStaticMarkup(renderPortalPendingCard("collab@example.com"));
+
+    expect(html).toContain("Approval pending");
+    expect(html).toContain("Restart from auth guidance");
+    expect(html).toContain("guidance=1");
+    expect(html).toContain("Back to paretoproof.com");
+  });
+
+  it("renders access-request-required denied state with both request and escape routes", () => {
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/denied")
+    };
+
+    const html = renderToStaticMarkup(
+      renderPortalDeniedCard({
+        email: "collab@example.com",
+        reason: "access_request_required",
+        status: "denied"
+      })
+    );
+
+    expect(html).toContain("Request contributor access");
+    expect(html).toContain("Back to paretoproof.com");
+  });
+
+  it("renders denied access state with auth and public escape routes", () => {
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/denied")
+    };
+
+    const html = renderToStaticMarkup(
+      renderPortalDeniedCard({
+        email: "collab@example.com",
+        reason: "rejected_or_withdrawn",
+        status: "denied"
+      })
+    );
+
+    expect(html).toContain("Access denied");
+    expect(html).toContain("Restart from auth guidance");
+    expect(html).toContain("guidance=1");
+    expect(html).toContain("Back to paretoproof.com");
   });
 
   it("renders hosted portal outages with a secondary escape route back to the public site", () => {

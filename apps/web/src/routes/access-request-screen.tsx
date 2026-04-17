@@ -6,6 +6,8 @@ import {
 } from "@paretoproof/shared";
 import { useState } from "react";
 import { AppIcon } from "../components/app-icon";
+import { isLocalDevelopmentLocation } from "../lib/local-development";
+import { buildAuthGuidanceUrl, buildPublicUrl } from "../lib/surface";
 
 type AccessRequestScreenProps =
   | {
@@ -24,6 +26,13 @@ export function AccessRequestScreen({
   mode = "access_request",
   onSubmit
 }: AccessRequestScreenProps) {
+  const publicHomeLabel = isLocalDevelopmentLocation(window.location)
+    ? "Back to local home"
+    : "Back to paretoproof.com";
+  const authGuidanceTarget =
+    mode === "identity_recovery"
+      ? buildAuthGuidanceUrl("/profile")
+      : buildAuthGuidanceUrl("/access-request");
   const [requestedRole, setRequestedRole] =
     useState<PortalAccessRequestInput["requestedRole"]>("helper");
   const [rationale, setRationale] = useState("");
@@ -143,6 +152,14 @@ export function AccessRequestScreen({
                 : "Request access"}
           </button>
         </form>
+        <div className="auth-status-actions">
+          <a className="button button-secondary" href={authGuidanceTarget}>
+            Restart from auth guidance
+          </a>
+          <a className="button button-secondary" href={buildPublicUrl("/")}>
+            {publicHomeLabel}
+          </a>
+        </div>
       </section>
     </main>
   );

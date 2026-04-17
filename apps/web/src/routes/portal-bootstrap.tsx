@@ -18,6 +18,7 @@ import {
 } from "./portal-bootstrap-state";
 import {
   buildPortalUrl,
+  buildAuthGuidanceUrl,
   buildAuthUrl,
   buildPublicUrl,
   getCurrentRelativeUrl
@@ -441,13 +442,7 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "pending") {
-    return (
-      <PortalStatusCard
-        eyebrow="Portal"
-        title="Approval pending"
-        body={`Signed in${state.email ? ` as ${state.email}` : ""}, but your contributor access is still pending review.`}
-      />
-    );
+    return renderPortalPendingCard(state.email);
   }
 
   if (state.status === "denied") {
@@ -473,21 +468,7 @@ export function PortalBootstrap() {
       );
     }
 
-    return (
-      <PortalStatusCard
-        eyebrow="Portal"
-        title="Access denied"
-        body={`Signed in${state.email ? ` as ${state.email}` : ""}, but this account is not allowed to open the portal.`}
-        actions={
-          state.reason === "access_request_required"
-            ? [{
-                href: buildPortalUrl("/access-request"),
-                label: "Request contributor access"
-              }]
-            : undefined
-        }
-      />
-    );
+    return renderPortalDeniedCard(state);
   }
 
   if (
@@ -573,6 +554,61 @@ export function renderLocalPortalUnauthenticatedCard(currentRelativeUrl: string)
           variant: "secondary"
         }
       ]}
+    />
+  );
+}
+
+function buildPortalPublicReturnAction() {
+  return {
+    href: buildPublicUrl("/"),
+    label: isLocalDevelopmentLocation(window.location)
+      ? "Back to local home"
+      : "Back to paretoproof.com",
+    variant: "secondary" as const
+  };
+}
+
+export function renderPortalPendingCard(email: string | null) {
+  return (
+    <PortalStatusCard
+      eyebrow="Portal"
+      title="Approval pending"
+      body={`Signed in${email ? ` as ${email}` : ""}, but your contributor access is still pending review.`}
+      actions={[
+        {
+          href: buildAuthGuidanceUrl("/"),
+          label: "Restart from auth guidance"
+        },
+        buildPortalPublicReturnAction()
+      ]}
+    />
+  );
+}
+
+export function renderPortalDeniedCard(state: Extract<PortalAccessState, { status: "denied" }>) {
+  const actions =
+    state.reason === "access_request_required"
+      ? [
+          {
+            href: buildPortalUrl("/access-request"),
+            label: "Request contributor access"
+          },
+          buildPortalPublicReturnAction()
+        ]
+      : [
+          {
+            href: buildAuthGuidanceUrl("/"),
+            label: "Restart from auth guidance"
+          },
+          buildPortalPublicReturnAction()
+        ];
+
+  return (
+    <PortalStatusCard
+      eyebrow="Portal"
+      title="Access denied"
+      body={`Signed in${state.email ? ` as ${state.email}` : ""}, but this account is not allowed to open the portal.`}
+      actions={actions}
     />
   );
 }
