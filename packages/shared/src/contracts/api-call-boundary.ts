@@ -99,6 +99,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.overview.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "Approved helpers read the portal landing overview directly from the protected portal surface without introducing a separate backend proxy."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.benchmarks.list",
     mode: "browser_direct",
     origin: "portal_browser",
