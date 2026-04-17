@@ -72,39 +72,15 @@ describe("resolvePublicSiteRoute", () => {
   });
 });
 
-describe("buildPublicSignalsFromReleaseData", () => {
-  it("derives homepage signals from the published release data instead of standalone literals", async () => {
-    setWindow("http://127.0.0.1/");
-    const { buildPublicSignalsFromReleaseData } = await loadPublicSiteModule();
-
-    expect(buildPublicSignalsFromReleaseData()).toEqual([
-      {
-        detail:
-          "Derived from the 2 public release summaries currently published on this site (Release 2026-03, Release 2026-02).",
-        label: "Released slices",
-        value: "2"
-      },
-      {
-        detail:
-          "Release-derived total across the currently published benchmark summaries, not a live operations counter.",
-        label: "Released items",
-        value: "93"
-      },
-      {
-        detail: "3 model families appear in the released summary rows currently published on this site.",
-        label: "Model families",
-        value: "3"
-      }
-    ]);
-  });
-});
-
 describe("PublicSite", () => {
   it("renders the benchmark index on /benchmarks", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/benchmarks");
 
     expect(html).toContain("Public benchmark releases.");
     expect(html).toContain("Problem 9");
+    expect(html).toContain("Editorial note:");
+    expect(html).not.toContain("61% pass rate");
+    expect(html).not.toContain("Headline metric:");
     expect(html).not.toContain("Measure frontier reasoning with reproducible proof workflows.");
   });
 
@@ -112,7 +88,11 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/reports/problem-9-v1");
 
     expect(html).toContain("Problem 9 public release");
-    expect(html).toContain("Results by model");
+    expect(html).toContain("Quantitative comparison tables are intentionally withheld.");
+    expect(html).toContain("No fixed frontend metrics");
+    expect(html).not.toContain("Results by model");
+    expect(html).not.toContain("36 / 59 solved");
+    expect(html).not.toContain("3 configs");
     expect(html).not.toContain("site-benchmark-report-partial");
     expect(html).not.toContain("Measure frontier reasoning with reproducible proof workflows.");
   });
@@ -124,6 +104,8 @@ describe("PublicSite", () => {
 
     expect(html).toContain("Statement formalization pilot release");
     expect(html).toContain("site-benchmark-report-partial");
+    expect(html).toContain("Quantitative comparison tables are intentionally withheld.");
+    expect(html).not.toContain("18 / 34 solved");
   });
 
   it("keeps compact benchmark index release cards ahead of the support summary", async () => {
@@ -158,7 +140,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/", 320);
 
     expect(html).toContain("site-home-shell-compact");
-    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Released items"));
+    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Release posture"));
   });
 
   it("keeps the wide home signal rail in the hero", async () => {
@@ -166,10 +148,10 @@ describe("PublicSite", () => {
 
     expect(html).not.toContain("site-home-shell-compact");
     expect(html).not.toContain("Project signal cues stay available after the summary bands.");
-    expect(html).toContain("Released slices");
-    expect(html).toContain("Released items");
+    expect(html).toContain("Release posture");
+    expect(html).toContain("Publication boundary");
     expect(html).toContain(
-      "Release-derived total across the currently published benchmark summaries, not a live operations counter."
+      "The public site stays scoped to disclosed slices and release notes rather than pretending to be a live benchmark console."
     );
   });
 
