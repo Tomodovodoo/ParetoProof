@@ -35,6 +35,25 @@ function isLocalOrigin(hostname = window.location.hostname) {
   return isLocalHostname(hostname);
 }
 
+function buildLocalPublicOrigin(locationLike = window.location) {
+  const { hostname, origin, port, protocol } = locationLike;
+
+  if (!isLocalDevelopmentLocation(locationLike)) {
+    return origin;
+  }
+
+  if (
+    hostname === "auth.paretoproof.com" ||
+    hostname === "github.auth.paretoproof.com" ||
+    hostname === "google.auth.paretoproof.com" ||
+    hostname === "portal.paretoproof.com"
+  ) {
+    return `${protocol}//paretoproof.com${port ? `:${port}` : ""}`;
+  }
+
+  return origin;
+}
+
 export function resolveWebSurfaceFromUrl(
   locationLike: Pick<Location, "hostname" | "search"> | URL = window.location
 ): WebSurface {
@@ -227,7 +246,7 @@ export function buildPublicUrl(targetPath = "/", hostname = window.location.host
   const normalizedTargetPath = sanitizePublicTargetPath(targetPath);
 
   if (isLocalOrigin(hostname)) {
-    return new URL(normalizedTargetPath, window.location.origin).toString();
+    return new URL(normalizedTargetPath, buildLocalPublicOrigin()).toString();
   }
 
   return new URL(normalizedTargetPath, productionPublicOrigin).toString();

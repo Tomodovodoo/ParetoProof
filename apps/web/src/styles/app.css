@@ -1006,6 +1006,12 @@ a.button-secondary {
   width: min(840px, 100%);
 }
 
+.auth-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .auth-access-request-card {
   width: min(780px, 100%);
   border-color: var(--violet-border);
@@ -3205,6 +3211,10 @@ a.button-secondary {
     padding-top: 10px;
     gap: 10px;
     align-items: stretch;
+  }
+
+  .auth-status-actions {
+    flex-direction: column;
   }
 }
 
