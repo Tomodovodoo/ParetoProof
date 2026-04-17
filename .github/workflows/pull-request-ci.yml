@@ -95,8 +95,8 @@ jobs:
       - name: Test web auth relay functions
         run: bun --cwd apps/web test:functions
 
-      - name: Test web layout regressions
-        run: bun --cwd apps/web test:layout
+      - name: Test web UI regressions
+        run: bun --cwd apps/web test:ui
 
       - name: Typecheck workspace
         run: >-

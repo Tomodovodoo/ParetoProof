@@ -1,3 +1,4 @@
+import { useSurfaceNavigation } from "./lib/web-navigation";
 import { AccessCompletion } from "./routes/access-completion";
 import { AuthEntry } from "./routes/auth-entry";
 import { PortalBootstrap } from "./routes/portal-bootstrap";
@@ -10,6 +11,7 @@ import {
 
 export default function App() {
   const surface = resolveWebSurface();
+  useSurfaceNavigation(surface);
   const redirectPath = readPortalRedirectTarget();
   const authProvider = resolveAccessProviderHost();
 
