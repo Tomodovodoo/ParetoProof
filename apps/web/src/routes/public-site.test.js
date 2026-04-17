@@ -72,6 +72,33 @@ describe("resolvePublicSiteRoute", () => {
   });
 });
 
+describe("buildPublicSignalsFromReleaseData", () => {
+  it("derives homepage signals from the published release data instead of standalone literals", async () => {
+    setWindow("http://127.0.0.1/");
+    const { buildPublicSignalsFromReleaseData } = await loadPublicSiteModule();
+
+    expect(buildPublicSignalsFromReleaseData()).toEqual([
+      {
+        detail:
+          "Derived from the 2 public release summaries currently published on this site (Release 2026-03, Release 2026-02).",
+        label: "Released slices",
+        value: "2"
+      },
+      {
+        detail:
+          "Release-derived total across the currently published benchmark summaries, not a live operations counter.",
+        label: "Released items",
+        value: "93"
+      },
+      {
+        detail: "3 model families appear in the released summary rows currently published on this site.",
+        label: "Model families",
+        value: "3"
+      }
+    ]);
+  });
+});
+
 describe("PublicSite", () => {
   it("renders the benchmark index on /benchmarks", async () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/benchmarks");
@@ -131,7 +158,7 @@ describe("PublicSite", () => {
     const html = await renderPublicSiteAt("http://127.0.0.1/", 320);
 
     expect(html).toContain("site-home-shell-compact");
-    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Benchmark types"));
+    expect(html.indexOf("Every run is verifiable")).toBeLessThan(html.indexOf("Released items"));
   });
 
   it("keeps the wide home signal rail in the hero", async () => {
@@ -139,6 +166,11 @@ describe("PublicSite", () => {
 
     expect(html).not.toContain("site-home-shell-compact");
     expect(html).not.toContain("Project signal cues stay available after the summary bands.");
+    expect(html).toContain("Released slices");
+    expect(html).toContain("Released items");
+    expect(html).toContain(
+      "Release-derived total across the currently published benchmark summaries, not a live operations counter."
+    );
   });
 
   it("keeps the project pack route intact", async () => {

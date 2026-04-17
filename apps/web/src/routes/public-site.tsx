@@ -134,23 +134,38 @@ const publicBenchmarkReports = {
   }
 } as const;
 
-const publicSignals = [
-  {
-    detail: "versioned harness, locked inputs, full environment metadata per run",
-    label: "Reproducible runs",
-    value: "22"
-  },
-  {
-    detail: "proof generation and statement formalization with public release tracking",
-    label: "Benchmark types",
-    value: "2 active"
-  },
-  {
-    detail: "GPT, Claude, and Gemini families evaluated under identical conditions",
-    label: "Models tested",
-    value: "3 families"
-  }
-];
+export function buildPublicSignalsFromReleaseData() {
+  const reportRows = Object.values(publicBenchmarkReports);
+  const uniqueModelFamilies = new Set(
+    reportRows.flatMap((report) => report.results.map((row) => row.providerLabel))
+  );
+  const publishedReleaseLabels = [...new Set(reportRows.map((report) => report.releaseLabel))];
+  const totalReleasedItems = reportRows.reduce((sum, report) => {
+    const evaluatedItemsCard = report.summaryCards.find((card) => card.label === "Evaluated items");
+    const evaluatedItems = Number(evaluatedItemsCard?.value ?? "0");
+    return sum + (Number.isFinite(evaluatedItems) ? evaluatedItems : 0);
+  }, 0);
+
+  return [
+    {
+      detail: `Derived from the ${reportRows.length} public release summaries currently published on this site (${publishedReleaseLabels.join(", ")}).`,
+      label: "Released slices",
+      value: reportRows.length.toString()
+    },
+    {
+      detail: `Release-derived total across the currently published benchmark summaries, not a live operations counter.`,
+      label: "Released items",
+      value: totalReleasedItems.toString()
+    },
+    {
+      detail: `${uniqueModelFamilies.size} model families appear in the released summary rows currently published on this site.`,
+      label: "Model families",
+      value: uniqueModelFamilies.size.toString()
+    }
+  ] as const;
+}
+
+const publicSignals = buildPublicSignalsFromReleaseData();
 
 const publicBands = [
   {
