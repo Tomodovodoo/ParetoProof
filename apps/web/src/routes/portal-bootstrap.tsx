@@ -19,6 +19,7 @@ import {
 import {
   buildPortalUrl,
   buildAuthUrl,
+  buildPublicUrl,
   getCurrentRelativeUrl
 } from "../lib/surface";
 import { PortalShell } from "./portal-shell";
@@ -252,6 +253,7 @@ export function shouldRestartPortalAuthForMissingProvider(
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const localPreviewMode = useMemo(() => isLocalDevelopmentLocation(window.location), []);
   const localApiFallback = useMemo(() => isUsingImplicitLocalPortalApi(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
   const recoveryInFlightRef = useRef(false);
@@ -351,12 +353,12 @@ export function PortalBootstrap() {
   }, [apiBaseUrl, localApiFallback]);
 
   useEffect(() => {
-    if (state.status !== "unauthenticated") {
+    if (state.status !== "unauthenticated" || localPreviewMode) {
       return;
     }
 
     window.location.replace(buildAuthUrl(currentRelativeUrl));
-  }, [currentRelativeUrl, state]);
+  }, [currentRelativeUrl, localPreviewMode, state]);
 
   useEffect(() => {
     if (!routeRedirectTarget) {
@@ -424,12 +426,16 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "unauthenticated") {
+    if (localPreviewMode) {
+      return renderLocalPortalUnauthenticatedCard(currentRelativeUrl);
+    }
+
     return (
       <PortalStatusCard
         eyebrow="Portal"
         title="Redirecting to sign in"
         body="The portal only loads after authentication. You are being sent to the auth entrypoint now."
-        action={{ href: buildAuthUrl(currentRelativeUrl), label: "Continue to sign in" }}
+        actions={[{ href: buildAuthUrl(currentRelativeUrl), label: "Continue to sign in" }]}
       />
     );
   }
@@ -472,12 +478,12 @@ export function PortalBootstrap() {
         eyebrow="Portal"
         title="Access denied"
         body={`Signed in${state.email ? ` as ${state.email}` : ""}, but this account is not allowed to open the portal.`}
-        action={
+        actions={
           state.reason === "access_request_required"
-            ? {
+            ? [{
                 href: buildPortalUrl("/access-request"),
                 label: "Request contributor access"
-              }
+              }]
             : undefined
         }
       />
@@ -494,7 +500,7 @@ export function PortalBootstrap() {
         eyebrow="Portal"
         title="Permission denied"
         body={`Signed in${state.email ? ` as ${state.email}` : ""}, but your current portal role does not allow this area.`}
-        action={{ href: buildPortalUrl("/"), label: "Return to portal home" }}
+        actions={[{ href: buildPortalUrl("/"), label: "Return to portal home" }]}
       />
     );
   }
@@ -515,6 +521,8 @@ export function renderPortalBootstrapErrorCard(
   state: Extract<PortalAccessState, { status: "error" }>,
   currentRelativeUrl: string
 ) {
+  const localPreviewMode = isLocalDevelopmentLocation(window.location);
+
   return (
     <PortalStatusCard
       eyebrow="Portal"
@@ -524,26 +532,63 @@ export function renderPortalBootstrapErrorCard(
           : "Portal unavailable"
       }
       body={state.message}
-      action={{
-        href: buildPortalUrl(currentRelativeUrl),
-        label:
-          state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
-      }}
+      actions={[
+        {
+          href: buildPortalUrl(currentRelativeUrl),
+          label:
+            state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
+        },
+        {
+          href:
+            state.kind === "local_api_unavailable"
+              ? buildAuthUrl(currentRelativeUrl)
+              : buildPublicUrl("/"),
+          label:
+            state.kind === "local_api_unavailable"
+              ? "Open local auth guidance"
+              : localPreviewMode
+                ? "Back to local home"
+                : "Back to paretoproof.com",
+          variant: "secondary"
+        }
+      ]}
+    />
+  );
+}
+
+export function renderLocalPortalUnauthenticatedCard(currentRelativeUrl: string) {
+  return (
+    <PortalStatusCard
+      eyebrow="Portal"
+      title="Local preview needs auth context"
+      body="This localhost portal route did not receive an authenticated access state from the API. Open the local auth guidance to choose the right preview path, or return to the public site."
+      actions={[
+        {
+          href: buildAuthUrl(currentRelativeUrl),
+          label: "Open local auth guidance"
+        },
+        {
+          href: buildPublicUrl("/"),
+          label: "Back to local home",
+          variant: "secondary"
+        }
+      ]}
     />
   );
 }
 
 type PortalStatusCardProps = {
-  action?: {
+  actions?: Array<{
     href: string;
     label: string;
-  };
+    variant?: "primary" | "secondary";
+  }>;
   body: string;
   eyebrow: string;
   title: string;
 };
 
-function PortalStatusCard({ action, body, eyebrow, title }: PortalStatusCardProps) {
+function PortalStatusCard({ actions = [], body, eyebrow, title }: PortalStatusCardProps) {
   return (
     <main className="auth-shell">
       <section className="auth-card auth-card-polished auth-status-card">
@@ -555,10 +600,20 @@ function PortalStatusCard({ action, body, eyebrow, title }: PortalStatusCardProp
         </p>
         <h1>{title}</h1>
         <p>{body}</p>
-        {action ? (
-          <a className="button" href={action.href}>
-            {action.label}
-          </a>
+        {actions.length ? (
+          <div className="auth-status-actions">
+            {actions.map((action) => (
+              <a
+                className={`button${
+                  action.variant === "secondary" ? " button-secondary" : ""
+                }`}
+                href={action.href}
+                key={`${action.href}:${action.label}`}
+              >
+                {action.label}
+              </a>
+            ))}
+          </div>
         ) : null}
       </section>
     </main>

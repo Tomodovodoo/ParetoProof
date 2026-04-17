@@ -10,6 +10,7 @@ import {
   derivePortalRoles,
   mapPortalMutationErrorMessage,
   recoverPortalStateAfterAuthExpiry,
+  renderLocalPortalUnauthenticatedCard,
   renderPortalBootstrapErrorCard,
   shouldRestartPortalAuthForMissingProvider
 } from "./portal-bootstrap.tsx";
@@ -199,7 +200,65 @@ describe("mapPortalMutationErrorMessage", () => {
 
     expect(html).toContain("Local API unavailable");
     expect(html).toContain("Retry after starting API");
+    expect(html).toContain("Open local auth guidance");
     expect(html).toContain("http://127.0.0.1:3000");
+  });
+
+  it("renders hosted portal outages with a secondary escape route back to the public site", () => {
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/runs")
+    };
+
+    const html = renderToStaticMarkup(
+      renderPortalBootstrapErrorCard(
+        {
+          kind: "portal_unavailable",
+          message:
+            "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+          status: "error"
+        },
+        "/runs"
+      )
+    );
+
+    expect(html).toContain("Portal unavailable");
+    expect(html).toContain("Retry portal");
+    expect(html).toContain("Back to paretoproof.com");
+  });
+
+  it("renders localhost explicit-target outages with a secondary escape route back to the local public surface", () => {
+    globalThis.window = {
+      location: new URL("http://127.0.0.1/?surface=portal")
+    };
+
+    const html = renderToStaticMarkup(
+      renderPortalBootstrapErrorCard(
+        {
+          kind: "portal_unavailable",
+          message:
+            "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+          status: "error"
+        },
+        "/"
+      )
+    );
+
+    expect(html).toContain("Portal unavailable");
+    expect(html).toContain("Retry portal");
+    expect(html).toContain("Back to local home");
+  });
+
+  it("renders localhost unauthenticated bootstrap as guidance instead of an immediate redirect loop", () => {
+    globalThis.window = {
+      location: new URL("http://127.0.0.1/?surface=portal")
+    };
+
+    const html = renderToStaticMarkup(renderLocalPortalUnauthenticatedCard("/"));
+
+    expect(html).toContain("Local preview needs auth context");
+    expect(html).toContain("Open local auth guidance");
+    expect(html).toContain("Back to local home");
+    expect(html).not.toContain("Continue to sign in");
   });
 });
 
