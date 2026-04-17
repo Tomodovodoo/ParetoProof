@@ -55,9 +55,26 @@ const portalRoutePathById = new Map<PortalRouteId, string>(
     .map((entry) => [entry.id, entry.path] as [PortalRouteId, string])
 );
 
-export function mergeLocalPortalSearchParams(_currentSearch: string, nextSearch: string) {
+const localPortalStateParamKeys = ["surface", "access", "email", "role", "roles", "reason"] as const;
+
+export function mergeLocalPortalSearchParams(currentSearch: string, nextSearch: string) {
+  const preservedParams = new URLSearchParams();
+  const currentParams = new URLSearchParams(currentSearch);
   const nextParams = new URLSearchParams(nextSearch);
-  const mergedSearch = nextParams.toString();
+
+  for (const key of localPortalStateParamKeys) {
+    const value = currentParams.get(key);
+
+    if (value && !nextParams.has(key)) {
+      preservedParams.set(key, value);
+    }
+  }
+
+  for (const [key, value] of nextParams.entries()) {
+    preservedParams.set(key, value);
+  }
+
+  const mergedSearch = preservedParams.toString();
   return mergedSearch ? `?${mergedSearch}` : "";
 }
 

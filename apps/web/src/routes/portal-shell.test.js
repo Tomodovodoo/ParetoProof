@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
-  it("drops stale local preview params during in-app portal navigation", async () => {
+  it("preserves local portal routing params during in-app portal navigation", async () => {
     const { mergeLocalPortalSearchParams } = await loadPortalShellModule();
     const mergedSearch = mergeLocalPortalSearchParams(
       "?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local",
@@ -61,9 +61,10 @@ describe("PortalShell overview ordering", () => {
     );
     const mergedUrl = new URL(`http://127.0.0.1/${mergedSearch}`);
 
-    expect(mergedUrl.searchParams.get("role")).toBe(null);
+    expect(mergedUrl.searchParams.get("role")).toBe("collaborator");
     expect(mergedUrl.searchParams.get("tab")).toBe("history");
-    expect(mergedUrl.searchParams.has("surface")).toBe(false);
+    expect(mergedUrl.searchParams.get("surface")).toBe("portal");
+    expect(mergedUrl.searchParams.get("access")).toBe("approved");
   });
 
   it("puts compact admin recent-run evidence before the action rail", async () => {

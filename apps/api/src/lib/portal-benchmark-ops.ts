@@ -726,6 +726,190 @@ async function loadAttemptCountsByRunId(db: ReturnTypeOfCreateDbClient) {
   return new Map(rows.map((row) => [row.runId, row.total]));
 }
 
+async function loadAttemptCountsForRunIds(
+  db: ReturnTypeOfCreateDbClient,
+  runIds: string[]
+) {
+  if (runIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const rows = await db
+    .select({
+      runId: attempts.runId,
+      total: count()
+    })
+    .from(attempts)
+    .where(inArray(attempts.runId, runIds))
+    .groupBy(attempts.runId);
+
+  return new Map(rows.map((row) => [row.runId, row.total]));
+}
+
+async function loadOverviewRecentRuns(
+  db: ReturnTypeOfCreateDbClient
+): Promise<Pick<PortalOverviewResponse, "recentRuns" | "summary">> {
+  const [summary, runRows] = await Promise.all([
+    loadRunsSummary(db, undefined),
+    db
+      .select()
+      .from(runs)
+      .where(undefined)
+      .orderBy(...buildRunOrderBy(portalOverviewRunsQuery.sort))
+      .limit(portalOverviewRunsQuery.limit)
+  ]);
+  const runIds = runRows.map((runRow) => runRow.id);
+  const [jobRows, attemptRows] = await Promise.all([
+    loadJobsForRunIds(db, runIds),
+    loadAttemptsForRunIds(db, runIds)
+  ]);
+  const jobsByRunId = groupByRunId(jobRows);
+  const attemptsByRunId = groupByRunId(attemptRows);
+
+  return {
+    recentRuns: runRows.map((runRow) =>
+      buildRunListItem({
+        attemptRows: attemptsByRunId.get(runRow.id) ?? [],
+        jobRows: jobsByRunId.get(runRow.id) ?? [],
+        runRow
+      })
+    ),
+    summary: {
+      activeLeases: 0,
+      activeRuns: summary.activeRuns,
+      failedRuns: summary.failedRuns,
+      observedBenchmarkPackageCount: 0,
+      queuedJobs: 0,
+      queuedRuns: 0,
+      runningJobs: 0,
+      staleLeaseCount: 0,
+      totalRuns: summary.totalMatches
+    }
+  };
+}
+
+async function loadOverviewBenchmarkHighlights(
+  db: ReturnTypeOfCreateDbClient
+): Promise<{
+  items: PortalBenchmarkListItem[];
+  totalObservedPackageCount: number;
+}> {
+  const latestObservedAtExpression = sql<Date>`max(coalesce(${runs.completedAt}, ${runs.createdAt}))`;
+  const [summaryRows, packageRows] = await Promise.all([
+    db
+      .select({
+        totalObservedPackageCount:
+          sql<number>`cast(count(distinct ${runs.benchmarkPackageId}) as integer)`
+      })
+      .from(runs),
+    db
+      .select({
+        benchmarkPackageId: runs.benchmarkPackageId,
+        latestObservedAt: latestObservedAtExpression
+      })
+      .from(runs)
+      .groupBy(runs.benchmarkPackageId)
+      .orderBy(desc(latestObservedAtExpression))
+      .limit(5)
+  ]);
+  const packageIds = packageRows.map((row) => row.benchmarkPackageId);
+
+  if (packageIds.length === 0) {
+    return {
+      items: [],
+      totalObservedPackageCount: summaryRows[0]?.totalObservedPackageCount ?? 0
+    };
+  }
+
+  const runRows = await db
+    .select()
+    .from(runs)
+    .where(inArray(runs.benchmarkPackageId, packageIds))
+    .orderBy(desc(runs.completedAt), desc(runs.createdAt));
+  const runIds = runRows.map((runRow) => runRow.id);
+  const attemptCountsByRunId = await loadAttemptCountsForRunIds(db, runIds);
+  const packageOrder = new Set(packageIds);
+  const benchmarks = new Map<string, PortalBenchmarkListItem>();
+
+  for (const runRow of runRows) {
+    if (!packageOrder.has(runRow.benchmarkPackageId)) {
+      continue;
+    }
+
+    const existing = benchmarks.get(runRow.benchmarkPackageId);
+    const attemptCount = attemptCountsByRunId.get(runRow.id) ?? 0;
+    const completedAt = isTerminalRunState(runRow.state)
+      ? runRow.completedAt.toISOString()
+      : null;
+
+    if (!existing) {
+      const verdictCounts = createEmptyVerdictCounts();
+
+      if (isTerminalRunState(runRow.state)) {
+        incrementVerdictCounts(verdictCounts, runRow.verdictClass);
+      }
+
+      benchmarks.set(runRow.benchmarkPackageId, {
+        attemptCount,
+        benchmarkLabel: getBenchmarkPackageLabel(runRow.benchmarkPackageId, [
+          runRow.benchmarkPackageVersion
+        ]),
+        benchmarkPackageId: runRow.benchmarkPackageId,
+        latestCompletedAt: completedAt,
+        latestRunId: runRow.sourceRunId,
+        modelConfigIds: [runRow.modelConfigId],
+        providerFamilies: [runRow.providerFamily],
+        runCount: 1,
+        versions: [runRow.benchmarkPackageVersion],
+        verdictCounts
+      });
+      continue;
+    }
+
+    existing.attemptCount += attemptCount;
+    existing.runCount += 1;
+
+    if (isTerminalRunState(runRow.state)) {
+      incrementVerdictCounts(existing.verdictCounts, runRow.verdictClass);
+    }
+
+    if (!existing.latestCompletedAt && completedAt) {
+      existing.latestCompletedAt = completedAt;
+      existing.latestRunId = runRow.sourceRunId;
+    }
+
+    if (!existing.modelConfigIds.includes(runRow.modelConfigId)) {
+      existing.modelConfigIds.push(runRow.modelConfigId);
+    }
+
+    if (!existing.providerFamilies.includes(runRow.providerFamily)) {
+      existing.providerFamilies.push(runRow.providerFamily);
+    }
+
+    if (!existing.versions.includes(runRow.benchmarkPackageVersion)) {
+      existing.versions.push(runRow.benchmarkPackageVersion);
+    }
+  }
+
+  return {
+    items: packageIds
+      .map((packageId) => benchmarks.get(packageId))
+      .filter((item): item is PortalBenchmarkListItem => Boolean(item))
+      .map((item) => {
+        const versions = listSortedUnique(item.versions);
+
+        return {
+          ...item,
+          benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
+          modelConfigIds: listSortedUnique(item.modelConfigIds),
+          providerFamilies: listSortedUnique(item.providerFamilies),
+          versions
+        };
+      }),
+    totalObservedPackageCount: summaryRows[0]?.totalObservedPackageCount ?? 0
+  };
+}
+
 export function createPortalBenchmarkOpsReadModelService(
   db: ReturnTypeOfCreateDbClient
 ): PortalBenchmarkOpsReadModelService {
@@ -1209,27 +1393,27 @@ export function createPortalBenchmarkOpsReadModelService(
     },
 
     async getOverview() {
-      const [benchmarks, runsView, workersView] = await Promise.all([
-        service.getBenchmarksList(),
-        service.getRunsList(portalOverviewRunsQuery),
+      const [benchmarkHighlights, overviewRuns, workersView] = await Promise.all([
+        loadOverviewBenchmarkHighlights(db),
+        loadOverviewRecentRuns(db),
         service.getWorkersView()
       ]);
 
       return {
-        benchmarkHighlights: benchmarks.items.slice(0, 5),
+        benchmarkHighlights: benchmarkHighlights.items,
         generatedAt: workersView.generatedAt,
         recentIncidents: workersView.incidents.slice(0, 5),
-        recentRuns: runsView.items.slice(0, portalOverviewRunsQuery.limit),
+        recentRuns: overviewRuns.recentRuns,
         summary: {
           activeLeases: workersView.activeLeases.length,
-          activeRuns: runsView.summary.activeRuns,
-          failedRuns: runsView.summary.failedRuns,
-          observedBenchmarkPackageCount: benchmarks.items.length,
+          activeRuns: overviewRuns.summary.activeRuns,
+          failedRuns: overviewRuns.summary.failedRuns,
+          observedBenchmarkPackageCount: benchmarkHighlights.totalObservedPackageCount,
           queuedJobs: workersView.queueSummary.queuedJobs,
           queuedRuns: workersView.queueSummary.queuedRuns,
           runningJobs: workersView.queueSummary.runningJobs,
           staleLeaseCount: workersView.activeLeases.filter((lease) => lease.health === "stale").length,
-          totalRuns: runsView.summary.totalMatches
+          totalRuns: overviewRuns.summary.totalRuns
         }
       };
     },
