@@ -11,6 +11,10 @@ import {
 
 const originalWindow = globalThis.window;
 
+function countOccurrences(haystack, needle) {
+  return haystack.split(needle).length - 1;
+}
+
 afterEach(() => {
   if (originalWindow) {
     globalThis.window = originalWindow;
@@ -208,11 +212,7 @@ describe("buildLocalAuthEntryPreviewState", () => {
           href: "http://127.0.0.1/?surface=auth&redirect=%2Faccess-request",
           title: "Open local access-request preview"
         }
-      ],
-      footerCta: {
-        href: "http://127.0.0.1/runs/alpha?surface=portal",
-        label: "Open local portal preview"
-      }
+      ]
     });
   });
 
@@ -249,6 +249,7 @@ describe("AuthEntry local rendering", () => {
     expect(html).toContain("Open local access-request preview");
     expect(html).toContain("http://127.0.0.1/runs/alpha?surface=portal");
     expect(html).toContain("Back to local home");
+    expect(countOccurrences(html, "Open local portal preview")).toBe(1);
     expect(html).not.toContain("Continue with GitHub");
     expect(html).not.toContain("Continue with Google");
   });
@@ -264,6 +265,7 @@ describe("AuthEntry local rendering", () => {
     expect(html).toContain("Open local access-request route");
     expect(html).toContain("Open local sign-in guidance");
     expect(html).toContain("Back to local home");
+    expect(countOccurrences(html, "Open local access-request route")).toBe(1);
     expect(html).not.toContain("Use GitHub or Google to verify your identity.");
   });
 });

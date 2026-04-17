@@ -39,7 +39,7 @@ type AuthEntryAction = {
 type AuthEntryLocalExperience = {
   actions: AuthEntryAction[];
   checks: string[];
-  footerCta: {
+  footerCta?: {
     href: string;
     label: string;
   };
@@ -105,10 +105,6 @@ export function buildLocalAuthEntryPreviewState(
         }
       ],
       checks: localAccessRequestChecks,
-      footerCta: {
-        href: buildPortalUrl("/access-request"),
-        label: "Open local access-request route"
-      },
       footerText:
         "Running locally - this entry explains the request path, but the actual portal route still needs a reachable API target.",
       lead:
@@ -138,10 +134,6 @@ export function buildLocalAuthEntryPreviewState(
       }
     ],
     checks: localSignInChecks,
-    footerCta: {
-      href: buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
-      label: "Open local portal preview"
-    },
     footerText:
       "Running locally - live provider sign-in is disabled here, so use the preview routes above or return to the public site.",
     lead:
@@ -441,22 +433,21 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
                 ? "Already have an account? Use the sign-in entry instead."
                 : "New here? Request contributor access to get started."}
           </p>
-          <a
-            className="button"
-            href={
-              localExperience
-                ? localExperience.footerCta.href
-                : mode === "access_request"
-                ? approvedSignInUrl
-                : accessRequestUrl
-            }
-          >
-            {localExperience
-              ? localExperience.footerCta.label
-              : mode === "access_request"
+          {!localExperience?.footerCta ? null : (
+            <a className="button" href={localExperience.footerCta.href}>
+              {localExperience.footerCta.label}
+            </a>
+          )}
+          {!localExperience ? (
+            <a
+              className="button"
+              href={mode === "access_request" ? approvedSignInUrl : accessRequestUrl}
+            >
+              {mode === "access_request"
                 ? "Approved contributor sign in"
                 : "Request collaborator access"}
-          </a>
+            </a>
+          ) : null}
           <a className="button button-secondary" href={buildPublicUrl("/")}>
             {publicHomeLabel}
           </a>
