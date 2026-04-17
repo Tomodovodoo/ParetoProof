@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, jest } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -23,13 +23,15 @@ function setWindow(url, width) {
 
   globalThis.window = {
     addEventListener() {},
+    clearInterval: globalThis.clearInterval,
     history: {
       replaceState() {},
       state: null
     },
     location,
     matchMedia: createMatchMedia(width),
-    removeEventListener() {}
+    removeEventListener() {},
+    setInterval: globalThis.setInterval
   };
 }
 
@@ -44,6 +46,8 @@ async function renderPortalShell({ email, roles, url, width }) {
 }
 
 afterEach(() => {
+  jest.useRealTimers();
+
   if (originalWindow) {
     globalThis.window = originalWindow;
     return;
@@ -53,6 +57,92 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
+  it("blocks overlapping overview polls until the active request settles", async () => {
+    jest.useFakeTimers();
+    setWindow("http://127.0.0.1/?surface=portal&access=approved", 1280);
+
+    const { startPortalOverviewPolling } = await loadPortalShellModule();
+    const loadingStates = [];
+    const readyPayloads = [];
+    const refreshStates = [];
+    let resolveFirstRequest;
+    const fetchOverview = jest.fn(() =>
+      new Promise((resolve) => {
+        resolveFirstRequest = () =>
+          resolve({
+            benchmarkHighlights: [],
+            generatedAt: "2026-04-17T04:00:00.000Z",
+            recentIncidents: [],
+            recentRuns: [],
+            summary: {
+              activeLeases: 0,
+              activeRuns: 0,
+              failedRuns: 0,
+              observedBenchmarkPackageCount: 0,
+              queuedJobs: 0,
+              queuedRuns: 0,
+              runningJobs: 0,
+              staleLeaseCount: 0,
+              totalRuns: 0
+            }
+          });
+      })
+    );
+
+    const stopPolling = startPortalOverviewPolling({
+      fetchOverview,
+      intervalMs: 1_000,
+      onForegroundError() {},
+      onLoadingStateChange(nextState) {
+        loadingStates.push(nextState);
+      },
+      onReady(data) {
+        readyPayloads.push(data);
+      },
+      onRefreshingChange(isRefreshing) {
+        refreshStates.push(isRefreshing);
+      }
+    });
+
+    await Promise.resolve();
+    expect(fetchOverview).toHaveBeenCalledTimes(1);
+    expect(loadingStates).toEqual([{ status: "loading" }]);
+
+    jest.advanceTimersByTime(1_000);
+    await Promise.resolve();
+    expect(fetchOverview).toHaveBeenCalledTimes(1);
+
+    resolveFirstRequest();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(readyPayloads).toHaveLength(1);
+
+    jest.advanceTimersByTime(1_000);
+    await Promise.resolve();
+    expect(fetchOverview).toHaveBeenCalledTimes(2);
+    expect(refreshStates).toContain(true);
+
+    stopPolling();
+  });
+
+  it("keeps only the latest overview request active and blocks overlapping background polls", async () => {
+    const { createPortalOverviewPollController } = await loadPortalShellModule();
+    const controller = createPortalOverviewPollController();
+
+    const initialForeground = controller.begin(false);
+    expect(initialForeground).toBe(1);
+    expect(controller.begin(true)).toBeNull();
+
+    const replacementForeground = controller.begin(false);
+    expect(replacementForeground).toBe(2);
+    expect(controller.clear(initialForeground)).toBe(false);
+    expect(controller.begin(true)).toBeNull();
+    expect(controller.clear(replacementForeground)).toBe(true);
+
+    const resumedBackground = controller.begin(true);
+    expect(resumedBackground).toBe(3);
+  });
+
   it("preserves local portal routing params during in-app portal navigation", async () => {
     const { mergeLocalPortalSearchParams } = await loadPortalShellModule();
     const mergedSearch = mergeLocalPortalSearchParams(

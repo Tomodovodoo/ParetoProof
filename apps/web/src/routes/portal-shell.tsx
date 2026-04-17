@@ -297,6 +297,108 @@ export function getCompactOverviewSectionOrder() {
   return ["recentRuns", "metrics", "overviewLead", "actions"] as const;
 }
 
+export function createPortalOverviewPollController() {
+  let requestInFlight = false;
+  let requestVersion = 0;
+
+  return {
+    begin(backgroundRefresh: boolean) {
+      if (backgroundRefresh && requestInFlight) {
+        return null;
+      }
+
+      requestInFlight = true;
+      requestVersion += 1;
+      return requestVersion;
+    },
+    clear(requestToken: number) {
+      if (requestToken !== requestVersion) {
+        return false;
+      }
+
+      requestInFlight = false;
+      return true;
+    },
+    isCurrent(requestToken: number) {
+      return requestToken === requestVersion;
+    }
+  };
+}
+
+type PortalOverviewPollingHandlers = {
+  fetchOverview: typeof fetchPortalOverview;
+  intervalMs: number | null;
+  onForegroundError(message: string): void;
+  onLoadingStateChange(nextState: PortalOverviewState): void;
+  onRefreshingChange(isRefreshing: boolean): void;
+  onReady(data: PortalOverviewResponse): void;
+};
+
+export function startPortalOverviewPolling({
+  fetchOverview,
+  intervalMs,
+  onForegroundError,
+  onLoadingStateChange,
+  onReady,
+  onRefreshingChange
+}: PortalOverviewPollingHandlers) {
+  let cancelled = false;
+  const controller = createPortalOverviewPollController();
+
+  const loadOverview = async (backgroundRefresh: boolean) => {
+    const requestToken = controller.begin(backgroundRefresh);
+
+    if (requestToken === null) {
+      return;
+    }
+
+    if (backgroundRefresh) {
+      onRefreshingChange(true);
+    } else {
+      onLoadingStateChange({ status: "loading" });
+    }
+
+    try {
+      const nextOverview = await fetchOverview();
+
+      if (cancelled || !controller.isCurrent(requestToken)) {
+        return;
+      }
+
+      onReady(nextOverview);
+    } catch (error) {
+      if (cancelled || !controller.isCurrent(requestToken)) {
+        return;
+      }
+
+      if (!backgroundRefresh) {
+        onForegroundError(formatPortalOverviewError(error));
+      }
+    } finally {
+      if (!cancelled && controller.clear(requestToken)) {
+        onRefreshingChange(false);
+      }
+    }
+  };
+
+  void loadOverview(false);
+
+  if (!intervalMs) {
+    return () => {
+      cancelled = true;
+    };
+  }
+
+  const intervalId = window.setInterval(() => {
+    void loadOverview(true);
+  }, intervalMs);
+
+  return () => {
+    cancelled = true;
+    window.clearInterval(intervalId);
+  };
+}
+
 export function PortalShell({ email, roles }: PortalShellProps) {
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [overviewRefreshing, setOverviewRefreshing] = useState(false);
@@ -432,62 +534,30 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       return;
     }
 
-    let cancelled = false;
     const intervalMs =
       activeFreshnessPolicy?.mode === "polling" ? activeFreshnessPolicy.pollIntervalMs : null;
-
-    const loadOverview = async (backgroundRefresh: boolean) => {
-      if (backgroundRefresh) {
-        setOverviewRefreshing(true);
-      } else {
-        setOverviewState({ status: "loading" });
-      }
-
-      try {
-        const nextOverview = await fetchPortalOverview();
-
-        if (cancelled) {
-          return;
-        }
-
+    return startPortalOverviewPolling({
+      fetchOverview: fetchPortalOverview,
+      intervalMs,
+      onForegroundError(message) {
         setOverviewState({
-          data: nextOverview,
+          message,
+          status: "error"
+        });
+      },
+      onLoadingStateChange(nextState) {
+        setOverviewState(nextState);
+      },
+      onReady(data) {
+        setOverviewState({
+          data,
           status: "ready"
         });
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        if (!backgroundRefresh) {
-          setOverviewState({
-            message: formatPortalOverviewError(error),
-            status: "error"
-          });
-        }
-      } finally {
-        if (!cancelled) {
-          setOverviewRefreshing(false);
-        }
+      },
+      onRefreshingChange(isRefreshing) {
+        setOverviewRefreshing(isRefreshing);
       }
-    };
-
-    void loadOverview(false);
-
-    if (!intervalMs) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const intervalId = window.setInterval(() => {
-      void loadOverview(true);
-    }, intervalMs);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
+    });
   }, [
     activeFreshnessPolicy?.mode,
     activeFreshnessPolicy?.pollIntervalMs,
