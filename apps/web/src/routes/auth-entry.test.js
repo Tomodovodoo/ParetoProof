@@ -190,10 +190,10 @@ describe("buildLocalAuthEntryPreviewState", () => {
       location: new URL("http://127.0.0.1/?surface=auth")
     };
 
-    expect(buildLocalAuthEntryPreviewState("sign_in")).toMatchObject({
+    expect(buildLocalAuthEntryPreviewState("sign_in", "/runs/alpha")).toMatchObject({
       actions: [
         {
-          href: "http://127.0.0.1/?surface=portal",
+          href: "http://127.0.0.1/runs/alpha?surface=portal",
           title: "Open local portal preview"
         },
         {
@@ -202,7 +202,7 @@ describe("buildLocalAuthEntryPreviewState", () => {
         }
       ],
       footerCta: {
-        href: "http://127.0.0.1/?surface=portal",
+        href: "http://127.0.0.1/runs/alpha?surface=portal",
         label: "Open local portal preview"
       }
     });
@@ -213,7 +213,7 @@ describe("buildLocalAuthEntryPreviewState", () => {
       location: new URL("http://127.0.0.1/?surface=auth&redirect=%2Faccess-request")
     };
 
-    expect(buildLocalAuthEntryPreviewState("access_request")).toMatchObject({
+    expect(buildLocalAuthEntryPreviewState("access_request", "/access-request")).toMatchObject({
       actions: [
         {
           href: "http://127.0.0.1/access-request?surface=portal",
@@ -234,11 +234,12 @@ describe("AuthEntry local rendering", () => {
       location: new URL("http://127.0.0.1/?surface=auth")
     };
 
-    const html = renderToStaticMarkup(<AuthEntry redirectPath="/" />);
+    const html = renderToStaticMarkup(<AuthEntry redirectPath="/runs/alpha" />);
 
     expect(html).toContain("Local development bypasses live provider sign-in.");
     expect(html).toContain("Open local portal preview");
     expect(html).toContain("Open local access-request preview");
+    expect(html).toContain("http://127.0.0.1/runs/alpha?surface=portal");
     expect(html).toContain("Back to local home");
     expect(html).not.toContain("Continue with GitHub");
     expect(html).not.toContain("Continue with Google");

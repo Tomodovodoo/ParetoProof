@@ -83,7 +83,8 @@ export function resolveAuthEntryApprovedPortalTargetPath(redirectPath: string) {
 }
 
 export function buildLocalAuthEntryPreviewState(
-  mode: ReturnType<typeof resolveAuthEntryMode>
+  mode: ReturnType<typeof resolveAuthEntryMode>,
+  redirectPath: string
 ): AuthEntryLocalExperience {
   if (mode === "access_request") {
     return {
@@ -124,7 +125,7 @@ export function buildLocalAuthEntryPreviewState(
       {
         copy:
           "Open the contributor portal shell directly against your local or configured API target.",
-        href: buildPortalUrl("/"),
+        href: buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
         icon: "grid",
         title: "Open local portal preview"
       },
@@ -138,7 +139,7 @@ export function buildLocalAuthEntryPreviewState(
     ],
     checks: localSignInChecks,
     footerCta: {
-      href: buildPortalUrl("/"),
+      href: buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
       label: "Open local portal preview"
     },
     footerText:
@@ -227,8 +228,8 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
   const portalDeniedUrl = useMemo(() => buildPortalUrl("/denied"), []);
   const portalPendingUrl = useMemo(() => buildPortalUrl("/pending"), []);
   const localExperience = useMemo(
-    () => (isLocal ? buildLocalAuthEntryPreviewState(mode) : null),
-    [isLocal, mode]
+    () => (isLocal ? buildLocalAuthEntryPreviewState(mode, redirectPath) : null),
+    [isLocal, mode, redirectPath]
   );
   const publicHomeLabel = isLocal ? "Back to local home" : "Back to paretoproof.com";
   const [isCheckingSession, setIsCheckingSession] = useState(!isLocal);
