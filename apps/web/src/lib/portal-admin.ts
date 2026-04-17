@@ -38,9 +38,9 @@ type RevokeRoleInput = {
 const localAdminStateStorageKey = "paretoproof.portal.admin.workspace";
 
 const localReviewer: PortalAdminActorSummary = {
-  displayName: "Portal Admin",
-  email: "admin@paretoproof.local",
-  label: "Portal Admin",
+  displayName: "Local preview reviewer",
+  email: "reviewer@preview.paretoproof.local",
+  label: "Local preview reviewer",
   userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 };
 
@@ -123,8 +123,8 @@ function createLocalAdminState(): LocalAdminState {
           }
         )
       ],
-      displayName: "Ada Researcher",
-      email: "ada@paretoproof.local",
+      displayName: "Demo collaborator record",
+      email: "collaborator-demo@preview.paretoproof.local",
       lastReviewedRequestStatus: "approved",
       linkedIdentities: [
         {
@@ -132,7 +132,7 @@ function createLocalAdminState(): LocalAdminState {
           id: "identity-ada-github",
           lastSeenAt: "2026-03-13T19:14:00.000Z",
           provider: "cloudflare_github",
-          providerEmail: "ada@paretoproof.local",
+          providerEmail: "collaborator-demo@preview.paretoproof.local",
           providerSubject: "github-ada"
         },
         {
@@ -140,7 +140,7 @@ function createLocalAdminState(): LocalAdminState {
           id: "identity-ada-google",
           lastSeenAt: "2026-03-13T17:06:00.000Z",
           provider: "cloudflare_google",
-          providerEmail: "ada@paretoproof.local",
+          providerEmail: "collaborator-demo@preview.paretoproof.local",
           providerSubject: "google-ada-new"
         }
       ],
@@ -171,13 +171,13 @@ function createLocalAdminState(): LocalAdminState {
           linUserId,
           {
             accessRequestId: "request-lin-rejected",
-            decisionNote: "Need a stronger benchmark contribution summary.",
+            decisionNote: "Local preview rejection note for the review-state layout.",
             targetUserId: linUserId
           }
         )
       ],
-      displayName: "Lin Contributor",
-      email: "lin@paretoproof.local",
+      displayName: "Demo pending requester",
+      email: "pending-request-demo@preview.paretoproof.local",
       lastReviewedRequestStatus: "rejected",
       linkedIdentities: [
         {
@@ -185,7 +185,7 @@ function createLocalAdminState(): LocalAdminState {
           id: "identity-lin-github",
           lastSeenAt: "2026-03-13T09:18:00.000Z",
           provider: "cloudflare_github",
-          providerEmail: "lin@paretoproof.local",
+          providerEmail: "pending-request-demo@preview.paretoproof.local",
           providerSubject: "github-lin"
         }
       ],
@@ -215,14 +215,14 @@ function createLocalAdminState(): LocalAdminState {
           "critical",
           theoUserId,
           {
-            revocationReason: "Access request was approved under a stale email domain.",
+            revocationReason: "Local preview revocation note for the audit-history layout.",
             revokedRole: "helper",
             targetUserId: theoUserId
           }
         )
       ],
-      displayName: "Theo Former Helper",
-      email: "theo@paretoproof.local",
+      displayName: "Demo former helper",
+      email: "former-helper-demo@preview.paretoproof.local",
       lastReviewedRequestStatus: "approved",
       linkedIdentities: [
         {
@@ -230,7 +230,7 @@ function createLocalAdminState(): LocalAdminState {
           id: "identity-theo-google",
           lastSeenAt: "2026-03-09T12:58:00.000Z",
           provider: "cloudflare_google",
-          providerEmail: "theo@paretoproof.local",
+          providerEmail: "former-helper-demo@preview.paretoproof.local",
           providerSubject: "google-theo"
         }
       ],
@@ -270,8 +270,8 @@ function createLocalAdminState(): LocalAdminState {
           }
         )
       ],
-      displayName: "Morgan Already Approved",
-      email: "morgan@paretoproof.local",
+      displayName: "Demo approved helper",
+      email: "approved-helper-demo@preview.paretoproof.local",
       lastReviewedRequestStatus: "approved",
       linkedIdentities: [
         {
@@ -279,7 +279,7 @@ function createLocalAdminState(): LocalAdminState {
           id: "identity-stale-github",
           lastSeenAt: "2026-03-13T19:00:00.000Z",
           provider: "cloudflare_github",
-          providerEmail: "morgan@paretoproof.local",
+          providerEmail: "approved-helper-demo@preview.paretoproof.local",
           providerSubject: "github-morgan"
         }
       ],
@@ -341,12 +341,12 @@ function createLocalAdminState(): LocalAdminState {
       ],
       createdAt: "2026-03-13T18:12:00.000Z",
       decisionNote: null,
-      email: "lin@paretoproof.local",
+      email: "pending-request-demo@preview.paretoproof.local",
       id: "request-lin-pending",
       linkedIdentities: users[1].linkedIdentities,
       matchedUser: toMatchedUserSummary(users[1]),
       matchedUserPosture: toPostureSummary(users[1]),
-      rationale: "I need collaborator access to compare offline Problem 9 runs.",
+      rationale: "Local preview request used to exercise collaborator approval layout.",
       recovery: null,
       relatedRequests: [],
       requestKind: "access_request",
@@ -375,12 +375,12 @@ function createLocalAdminState(): LocalAdminState {
       ],
       createdAt: "2026-03-13T17:00:00.000Z",
       decisionNote: null,
-      email: "ada@paretoproof.local",
+      email: "collaborator-demo@preview.paretoproof.local",
       id: "request-ada-recovery",
       linkedIdentities: users[0].linkedIdentities,
       matchedUser: toMatchedUserSummary(users[0]),
       matchedUserPosture: toPostureSummary(users[0]),
-      rationale: "My Google Access identity rotated after a device reset.",
+      rationale: "Local preview recovery request for a rotated Google identity.",
       recovery: {
         conflictingUser: null,
         preserveExistingRole: "collaborator",
@@ -408,19 +408,19 @@ function createLocalAdminState(): LocalAdminState {
           linUserId,
           {
             accessRequestId: "request-lin-rejected",
-            decisionNote: "Need a stronger benchmark contribution summary.",
+            decisionNote: "Local preview rejection note for the review-state layout.",
             targetUserId: linUserId
           }
         )
       ],
       createdAt: "2026-03-12T08:18:00.000Z",
-      decisionNote: "Need a stronger benchmark contribution summary.",
-      email: "lin@paretoproof.local",
+      decisionNote: "Local preview rejection note for the review-state layout.",
+      email: "pending-request-demo@preview.paretoproof.local",
       id: "request-lin-rejected",
       linkedIdentities: users[1].linkedIdentities,
       matchedUser: toMatchedUserSummary(users[1]),
       matchedUserPosture: toPostureSummary(users[1]),
-      rationale: "I want to help with benchmark result review.",
+      rationale: "Local preview request used to exercise rejected helper review state.",
       recovery: null,
       relatedRequests: [],
       requestKind: "access_request",
@@ -449,12 +449,12 @@ function createLocalAdminState(): LocalAdminState {
       ],
       createdAt: "2026-03-13T18:25:00.000Z",
       decisionNote: null,
-      email: "morgan@paretoproof.local",
+      email: "approved-helper-demo@preview.paretoproof.local",
       id: "request-stale-pending",
       linkedIdentities: users[3].linkedIdentities,
       matchedUser: toMatchedUserSummary(users[3]),
       matchedUserPosture: toPostureSummary(users[3]),
-      rationale: "Re-open contributor access after a temporary pause.",
+      rationale: "Local preview request used to exercise pending helper review state.",
       recovery: null,
       relatedRequests: [],
       requestKind: "access_request",
@@ -1269,6 +1269,11 @@ export function summarizeUserPosture(item: PortalAdminUserListItem) {
 
   return "No active role";
 }
+
+export const portalAdminLocalTestUtils = {
+  createLocalAdminState,
+  localReviewer
+};
 
 export function toAccessRequestSummaryFromAdminItem(
   item: PortalAdminAccessRequestListItem
