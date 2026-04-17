@@ -39,5 +39,5 @@ export function reducePortalStateAfterAuthExpiry(currentState: PortalAccessState
     return currentState;
   }
 
-  return { status: "unauthenticated" } satisfies PortalAccessState;
+  return { status: "loading" } satisfies PortalAccessState;
 }

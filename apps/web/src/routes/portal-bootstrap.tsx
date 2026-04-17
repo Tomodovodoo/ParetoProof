@@ -3,7 +3,7 @@ import type {
   PortalAccessRequestInput,
   PortalRole
 } from "@paretoproof/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
@@ -106,6 +106,30 @@ export async function fetchPortalBootstrapState(
     reason: payload.access.reason ?? "unknown_identity",
     status: "denied"
   };
+}
+
+export async function recoverPortalStateAfterAuthExpiry(
+  currentState: PortalAccessState,
+  apiBaseUrl: string,
+  options?: {
+    fetcher?: PortalBootstrapFetcher;
+    signal?: AbortSignal;
+  }
+): Promise<PortalAccessState> {
+  const reducedState = reducePortalStateAfterAuthExpiry(currentState);
+
+  if (reducedState === currentState || reducedState.status !== "loading") {
+    return reducedState;
+  }
+
+  try {
+    return await fetchPortalBootstrapState(apiBaseUrl, options);
+  } catch (error) {
+    return {
+      message: formatPortalBootstrapError(error),
+      status: "error"
+    };
+  }
 }
 
 function parseDeniedReason(
@@ -230,6 +254,8 @@ export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
+  const recoveryInFlightRef = useRef(false);
+  const stateRef = useRef<PortalAccessState>(state);
   const routeDeniedReason = readRouteDeniedReason();
   const routeRedirectTarget = useMemo(() => {
     if (
@@ -253,12 +279,18 @@ export function PortalBootstrap() {
   }, [routeDeniedReason, state]);
 
   useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
     const controller = new AbortController();
+    let active = true;
     const localAccessOverride = readLocalAccessOverride();
 
     if (localAccessOverride) {
       setState(localAccessOverride);
       return () => {
+        active = false;
         controller.abort();
       };
     }
@@ -271,7 +303,7 @@ export function PortalBootstrap() {
           })
         );
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || !active) {
           return;
         }
 
@@ -284,22 +316,45 @@ export function PortalBootstrap() {
 
     void loadAccessState();
 
-    return () => {
-      controller.abort();
-    };
-  }, [apiBaseUrl]);
-
-  useEffect(() => {
     const handlePortalAuthExpired = () => {
-      setState((currentState) => reducePortalStateAfterAuthExpiry(currentState));
+      if (recoveryInFlightRef.current) {
+        return;
+      }
+
+      const currentState = stateRef.current;
+      const reducedState = reducePortalStateAfterAuthExpiry(currentState);
+
+      if (reducedState === currentState || reducedState.status !== "loading") {
+        setState(reducedState);
+        return;
+      }
+
+      recoveryInFlightRef.current = true;
+      setState(reducedState);
+
+      void recoverPortalStateAfterAuthExpiry(currentState, apiBaseUrl, {
+        signal: controller.signal
+      })
+        .then((recoveredState) => {
+          if (controller.signal.aborted || !active) {
+            return;
+          }
+
+          setState(recoveredState);
+        })
+        .finally(() => {
+          recoveryInFlightRef.current = false;
+        });
     };
 
     window.addEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
 
     return () => {
+      active = false;
+      controller.abort();
       window.removeEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
     };
-  }, []);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     if (state.status !== "unauthenticated") {

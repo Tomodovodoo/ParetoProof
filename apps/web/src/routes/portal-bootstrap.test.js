@@ -7,10 +7,11 @@ import {
   fetchPortalBootstrapState,
   derivePortalRoles,
   mapPortalMutationErrorMessage,
+  recoverPortalStateAfterAuthExpiry,
   shouldRestartPortalAuthForMissingProvider
 } from "./portal-bootstrap.tsx";
 
-describe("buildLocalPendingPortalUrl", () => {
+describe("portal bootstrap state", () => {
   it("promotes the local access state to pending and clears denial-only params", () => {
     expect(
       buildLocalPendingPortalUrl(
@@ -33,7 +34,7 @@ describe("buildLocalPendingPortalUrl", () => {
     ).toBe("/pending?surface=portal&access=pending&email=ada%40paretoproof.local");
   });
 
-  it("collapses stale approved state back to unauthenticated after auth expiry", () => {
+  it("moves stale approved state into recovery loading after auth expiry", () => {
     expect(
       reducePortalStateAfterAuthExpiry({
         email: "tomthegreatest04@gmail.com",
@@ -41,7 +42,7 @@ describe("buildLocalPendingPortalUrl", () => {
         status: "approved"
       })
     ).toEqual({
-      status: "unauthenticated"
+      status: "loading"
     });
   });
 
@@ -49,6 +50,27 @@ describe("buildLocalPendingPortalUrl", () => {
     expect(
       reducePortalStateAfterAuthExpiry({
         status: "loading"
+      })
+    ).toEqual({
+      status: "loading"
+    });
+  });
+
+  it("keeps unauthenticated state untouched after auth expiry", () => {
+    expect(
+      reducePortalStateAfterAuthExpiry({
+        status: "unauthenticated"
+      })
+    ).toEqual({
+      status: "unauthenticated"
+    });
+  });
+
+  it("moves pending portal state into recovery loading instead of immediate logout", () => {
+    expect(
+      reducePortalStateAfterAuthExpiry({
+        email: "ada@paretoproof.local",
+        status: "pending"
       })
     ).toEqual({
       status: "loading"
@@ -132,5 +154,106 @@ describe("shouldRestartPortalAuthForMissingProvider", () => {
         }
       })
     ).toBe(false);
+  });
+});
+
+describe("recoverPortalStateAfterAuthExpiry", () => {
+  it("revalidates portal bootstrap once before deciding the user is unauthenticated", async () => {
+    const state = await recoverPortalStateAfterAuthExpiry(
+      {
+        email: "owner@example.com",
+        role: "admin",
+        status: "approved"
+      },
+      "https://api.paretoproof.test",
+      {
+        fetcher: async () => ({
+          json: async () => ({
+            access: {
+              email: "owner@example.com",
+              role: "admin",
+              status: "approved"
+            },
+            identity: {
+              provider: "cloudflare_google"
+            }
+          }),
+          ok: true,
+          status: 200,
+          type: "basic"
+        })
+      }
+    );
+
+    expect(state).toEqual({
+      email: "owner@example.com",
+      role: "admin",
+      status: "approved"
+    });
+  });
+
+  it("falls through to unauthenticated only when the recovery bootstrap still returns 401", async () => {
+    const state = await recoverPortalStateAfterAuthExpiry(
+      {
+        email: "owner@example.com",
+        role: "admin",
+        status: "approved"
+      },
+      "https://api.paretoproof.test",
+      {
+        fetcher: async () => ({
+          json: async () => ({ error: "access_assertion_required" }),
+          ok: false,
+          status: 401,
+          type: "basic"
+        })
+      }
+    );
+
+    expect(state).toEqual({
+      status: "unauthenticated"
+    });
+  });
+
+  it("does not re-fetch when the current state is already unauthenticated", async () => {
+    let fetchCalled = false;
+    const state = await recoverPortalStateAfterAuthExpiry(
+      {
+        status: "unauthenticated"
+      },
+      "https://api.paretoproof.test",
+      {
+        fetcher: async () => {
+          fetchCalled = true;
+          throw new Error("should not be called");
+        }
+      }
+    );
+
+    expect(state).toEqual({
+      status: "unauthenticated"
+    });
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("does not re-fetch when bootstrap is already loading", async () => {
+    let fetchCalled = false;
+    const state = await recoverPortalStateAfterAuthExpiry(
+      {
+        status: "loading"
+      },
+      "https://api.paretoproof.test",
+      {
+        fetcher: async () => {
+          fetchCalled = true;
+          throw new Error("should not be called");
+        }
+      }
+    );
+
+    expect(state).toEqual({
+      status: "loading"
+    });
+    expect(fetchCalled).toBe(false);
   });
 });
