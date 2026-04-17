@@ -89,10 +89,10 @@ describe("portal benchmark ops route targets", () => {
 
   it("keeps the compact runs slice ahead of the deeper support panel", () => {
     expect(getCompactRunsSectionOrder()).toEqual([
-      "runsSlice",
-      "quickFilters",
       "resultsPanel",
-      "supportPanel"
+      "quickFilters",
+      "supportPanel",
+      "runsSlice"
     ]);
   });
 

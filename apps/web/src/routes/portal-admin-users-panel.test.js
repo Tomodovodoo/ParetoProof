@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getCompactAdminUsersPageOrder,
   getCompactAdminUsersSectionOrder,
   isSelectedAdminUserDetailCurrent,
   resolveSelectedAdminUserId
@@ -41,6 +42,15 @@ describe("getCompactAdminUsersSectionOrder", () => {
     expect(getCompactAdminUsersSectionOrder()).toEqual([
       "userList",
       "filterFields"
+    ]);
+  });
+});
+
+describe("getCompactAdminUsersPageOrder", () => {
+  it("keeps route context ahead of the compact workspace", () => {
+    expect(getCompactAdminUsersPageOrder()).toEqual([
+      "introPanel",
+      "layout"
     ]);
   });
 });

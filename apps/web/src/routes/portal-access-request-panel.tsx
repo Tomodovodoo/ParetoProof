@@ -100,6 +100,10 @@ export function getCompactAccessRequestSectionOrder() {
   return ["queueContent", "filterFields"] as const;
 }
 
+export function getCompactAccessRequestPageOrder() {
+  return ["introPanel", "layout"] as const;
+}
+
 export function describeAccessRequestTransition(
   detail: Pick<PortalAdminAccessRequestDetail, "reviewedAt" | "reviewer" | "status">
 ) {
@@ -738,8 +742,16 @@ export function PortalAccessRequestPanel({ email }: PortalAccessRequestPanelProp
 
   return (
     <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
-      {isCompactLayout ? layout : introPanel}
-      {isCompactLayout ? introPanel : layout}
+      {isCompactLayout
+        ? getCompactAccessRequestPageOrder().map((sectionId) => (
+            <Fragment key={sectionId}>{sectionId === "introPanel" ? introPanel : layout}</Fragment>
+          ))
+        : (
+            <>
+              {introPanel}
+              {layout}
+            </>
+          )}
     </section>
   );
 }

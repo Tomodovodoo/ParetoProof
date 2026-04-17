@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   describeAccessRequestActionState,
   describeAccessRequestTransition,
+  getCompactAccessRequestPageOrder,
   getCompactAccessRequestSectionOrder,
   isSelectedAccessRequestDetailCurrent,
   sortAccessRequestsForDisplay,
@@ -65,6 +66,15 @@ describe("getCompactAccessRequestSectionOrder", () => {
     expect(getCompactAccessRequestSectionOrder()).toEqual([
       "queueContent",
       "filterFields"
+    ]);
+  });
+});
+
+describe("getCompactAccessRequestPageOrder", () => {
+  it("keeps route context ahead of the compact review workspace", () => {
+    expect(getCompactAccessRequestPageOrder()).toEqual([
+      "introPanel",
+      "layout"
     ]);
   });
 });

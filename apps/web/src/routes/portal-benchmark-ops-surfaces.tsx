@@ -140,7 +140,7 @@ export function buildRunDetailHref(runId: string, search = "") {
 }
 
 export function getCompactRunsSectionOrder() {
-  return ["runsSlice", "quickFilters", "resultsPanel", "supportPanel"] as const;
+  return ["resultsPanel", "quickFilters", "supportPanel", "runsSlice"] as const;
 }
 
 export function isCurrentPortalRequest(requestId: number, latestRequestId: number) {
@@ -638,8 +638,8 @@ export function PortalRunsSurface({
     <article className="portal-panel portal-runs-quick-filter-panel">
       <div className="portal-panel-header">
         <div>
-          <p className="section-tag">Quick filters</p>
-          <h2>Trim the current slice before opening a detail view.</h2>
+          <p className="section-tag">Slice controls</p>
+          <h2>Refine the current slice before opening one run&apos;s evidence.</h2>
         </div>
       </div>
       <div className="portal-form-grid portal-runs-quick-filter-grid">
@@ -689,130 +689,6 @@ export function PortalRunsSurface({
             {benchmarkPackageOptions.map((packageId) => (
               <option key={packageId} value={packageId}>
                 {packageId}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-    </article>
-  );
-
-  const resultsPanel = (
-    <article className="portal-panel portal-results-panel portal-results-panel-compact">
-      <div className="portal-panel-header">
-        <div>
-          <p className="section-tag">Benchmark operations</p>
-          <h2>Runs keeps search, export, and evidence drill-down on the portal.</h2>
-        </div>
-        <div className="portal-toolbar">
-          <button
-            className="button button-secondary"
-            disabled={!loadState.data?.items.length}
-            onClick={() => {
-              if (loadState.data) {
-                downloadRunsCsv(loadState.data.items);
-              }
-            }}
-            type="button"
-          >
-            Export CSV
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
-            onClick={() => {
-              void handleDatasetExport("json");
-            }}
-            type="button"
-          >
-            {datasetExportState.format === "json" ? "Exporting JSON" : "Export package JSON"}
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
-            onClick={() => {
-              void handleDatasetExport("csv");
-            }}
-            type="button"
-          >
-            {datasetExportState.format === "csv" ? "Exporting CSV" : "Export package CSV"}
-          </button>
-          <a className="button button-secondary" href={buildPortalUrl("/")}>
-            Overview
-          </a>
-        </div>
-      </div>
-      <div className="portal-chip-row">
-        <span className="role-chip role-chip-tonal">
-          {loadState.data?.summary.totalMatches ?? 0} matches
-        </span>
-        <span className="role-chip role-chip-muted">
-          {loadState.data?.summary.activeRuns ?? 0} active
-        </span>
-        <span className="role-chip role-chip-muted">
-          {loadState.data?.summary.failedRuns ?? 0} failed
-        </span>
-        {selectedBenchmarkPackageId ? (
-          <span className="role-chip role-chip-muted">
-            package {selectedBenchmarkPackageId}
-          </span>
-        ) : null}
-      </div>
-      {datasetExportState.error ? <PortalErrorState error={datasetExportState.error} /> : null}
-    </article>
-  );
-
-  const supportPanel = (
-    <article className="portal-panel portal-runs-support-panel">
-      <div className="portal-panel-header">
-        <div>
-          <p className="section-tag">Current controls</p>
-          <h2>Refresh and refine the shared run index.</h2>
-        </div>
-      </div>
-      <p className="portal-panel-muted">
-        Filter, export, and triage runs here, then open one run&apos;s evidence in
-        <code className="portal-inline-code"> /runs/:runId</code>.
-      </p>
-      <p className="portal-panel-muted">
-        Package dataset export unlocks once one benchmark package is selected in the current slice.
-      </p>
-      <PortalFreshnessCard
-        isRefreshing={loadState.isLoading}
-        lastUpdatedAt={loadState.lastUpdatedAt}
-        onRefresh={() => {
-          void onRefresh();
-        }}
-        routeId={activeRouteId}
-      />
-      <div className="portal-form-grid">
-        <label className="portal-field">
-          <span>Search</span>
-          <input
-            className="input"
-            onChange={(event) => {
-              updateRunsQuery(pathname, query, onReplaceLocation, { q: event.target.value || null });
-            }}
-            placeholder="run id, package, model, failure"
-            type="search"
-            value={query.q ?? ""}
-          />
-        </label>
-        <label className="portal-field">
-          <span>Lifecycle bucket</span>
-          <select
-            className="input"
-            onChange={(event) => {
-              updateRunsQuery(pathname, query, onReplaceLocation, {
-                lifecycleBucket: (event.target.value || null) as PortalRunsLifecycleBucket | null
-              });
-            }}
-            value={query.lifecycleBucket ?? ""}
-          >
-            <option value="">All buckets</option>
-            {portalRunsLifecycleBuckets.map((bucket) => (
-              <option key={bucket.id} value={bucket.id}>
-                {bucket.label}
               </option>
             ))}
           </select>
@@ -902,6 +778,97 @@ export function PortalRunsSurface({
           Reset filters
         </button>
       </div>
+    </article>
+  );
+
+  const resultsPanel = (
+    <article className="portal-panel portal-results-panel portal-results-panel-compact">
+      <div className="portal-panel-header">
+        <div>
+          <p className="section-tag">Benchmark operations</p>
+          <h2>Runs keeps search, export, and evidence drill-down on the portal.</h2>
+        </div>
+        <div className="portal-toolbar">
+          <button
+            className="button button-secondary"
+            disabled={!loadState.data?.items.length}
+            onClick={() => {
+              if (loadState.data) {
+                downloadRunsCsv(loadState.data.items);
+              }
+            }}
+            type="button"
+          >
+            Export CSV
+          </button>
+          <button
+            className="button button-secondary"
+            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
+            onClick={() => {
+              void handleDatasetExport("json");
+            }}
+            type="button"
+          >
+            {datasetExportState.format === "json" ? "Exporting JSON" : "Export package JSON"}
+          </button>
+          <button
+            className="button button-secondary"
+            disabled={!selectedBenchmarkPackageId || datasetExportState.format !== null}
+            onClick={() => {
+              void handleDatasetExport("csv");
+            }}
+            type="button"
+          >
+            {datasetExportState.format === "csv" ? "Exporting CSV" : "Export package CSV"}
+          </button>
+          <a className="button button-secondary" href={buildPortalUrl("/")}>
+            Overview
+          </a>
+        </div>
+      </div>
+      <div className="portal-chip-row">
+        <span className="role-chip role-chip-tonal">
+          {loadState.data?.summary.totalMatches ?? 0} matches
+        </span>
+        <span className="role-chip role-chip-muted">
+          {loadState.data?.summary.activeRuns ?? 0} active
+        </span>
+        <span className="role-chip role-chip-muted">
+          {loadState.data?.summary.failedRuns ?? 0} failed
+        </span>
+        {selectedBenchmarkPackageId ? (
+          <span className="role-chip role-chip-muted">
+            package {selectedBenchmarkPackageId}
+          </span>
+        ) : null}
+      </div>
+      {datasetExportState.error ? <PortalErrorState error={datasetExportState.error} /> : null}
+    </article>
+  );
+
+  const supportPanel = (
+    <article className="portal-panel portal-runs-support-panel">
+      <div className="portal-panel-header">
+        <div>
+          <p className="section-tag">Freshness</p>
+          <h2>Keep the current slice grounded before drilling into one run.</h2>
+        </div>
+      </div>
+      <p className="portal-panel-muted">
+        Filter and export from the portal, then open one run&apos;s evidence in
+        <code className="portal-inline-code"> /runs/:runId</code>.
+      </p>
+      <p className="portal-panel-muted">
+        Package dataset export unlocks once one benchmark package is selected in the current slice.
+      </p>
+      <PortalFreshnessCard
+        isRefreshing={loadState.isLoading}
+        lastUpdatedAt={loadState.lastUpdatedAt}
+        onRefresh={() => {
+          void onRefresh();
+        }}
+        routeId={activeRouteId}
+      />
     </article>
   );
 
