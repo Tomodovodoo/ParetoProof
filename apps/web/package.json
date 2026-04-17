@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:layout": "node --test src/routes/portal-access-request-layout.browser.test.js src/routes/public-header-layout.browser.test.js src/routes/public-navigation.browser.test.js",
+    "test:layout": "node --test src/routes/portal-access-request-layout.browser.test.js src/routes/portal-bootstrap.browser.test.js src/routes/public-header-layout.browser.test.js src/routes/public-navigation.browser.test.js",
     "test:ui": "bun test src/lib/web-navigation.test.js src/routes/public-site.test.js && bun run test:layout",
     "test:functions": "bun test functions",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",

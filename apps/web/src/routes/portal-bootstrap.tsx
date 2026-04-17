@@ -6,6 +6,10 @@ import type {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import {
+  clearApprovedAuthHandoffCookie,
+  readApprovedAuthHandoffCookie
+} from "../lib/approved-auth-handoff";
 import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalDevelopmentLocation } from "../lib/local-development";
@@ -252,9 +256,22 @@ type PortalBootstrapProps = {
 };
 
 export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
-  const [state, setState] = useState<PortalAccessState>({ status: "loading" });
-  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
-  const localPreviewMode = useMemo(() => isLocalDevelopmentLocation(window.location), []);
+  const initialLocalPreviewMode = isLocalDevelopmentLocation(window.location);
+  const initialApiBaseUrl = getApiBaseUrl();
+  const initialApprovedHandoff = readApprovedAuthHandoffCookie(document.cookie, {
+    surface
+  });
+  const [state, setState] = useState<PortalAccessState>(
+    initialApprovedHandoff
+      ? {
+          email: null,
+          role: initialApprovedHandoff.role,
+          status: "approved"
+        }
+      : { status: "loading" }
+  );
+  const apiBaseUrl = useMemo(() => initialApiBaseUrl, []);
+  const localPreviewMode = useMemo(() => initialLocalPreviewMode, []);
   const localApiFallback = useMemo(() => isUsingImplicitLocalPortalApi(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
   const recoveryInFlightRef = useRef(false);
@@ -288,16 +305,24 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
   }, [state]);
 
   useEffect(() => {
+    if (!initialApprovedHandoff) {
+      return;
+    }
+
+    clearApprovedAuthHandoffCookie();
+  }, [initialApprovedHandoff]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
     async function loadAccessState() {
       try {
-        setState(
-          await fetchPortalBootstrapState(apiBaseUrl, {
-            signal: controller.signal
-          })
-        );
+        const nextState = await fetchPortalBootstrapState(apiBaseUrl, {
+          signal: controller.signal
+        });
+
+        setState(nextState);
       } catch (error) {
         if (controller.signal.aborted || !active) {
           return;
@@ -426,8 +451,8 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
     return (
       <PortalStatusCard
         eyebrow={surfaceLabel}
-        title="Checking access"
-        body={`Resolving your Cloudflare Access identity and ${describeSurfaceName(surface)} approval state.`}
+        title={`Opening ${describeSurfaceName(surface)}`}
+        body={`Checking your current sign-in and ${describeSurfaceName(surface)} approval state before loading the workspace.`}
       />
     );
   }

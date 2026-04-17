@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { buildApprovedAuthHandoffCookieValue } from "../lib/approved-auth-handoff.ts";
 import {
   buildLocalPendingPortalUrl,
   reducePortalStateAfterAuthExpiry
 } from "./portal-bootstrap-state.ts";
 import {
+  PortalBootstrap,
   buildPortalBootstrapErrorState,
   fetchPortalBootstrapState,
   derivePortalRoles,
@@ -18,14 +20,20 @@ import {
 } from "./portal-bootstrap.tsx";
 
 const originalWindow = globalThis.window;
+const originalDocument = globalThis.document;
 
 afterEach(() => {
   if (originalWindow) {
     globalThis.window = originalWindow;
-    return;
+  } else {
+    delete globalThis.window;
   }
 
-  delete globalThis.window;
+  if (originalDocument) {
+    globalThis.document = originalDocument;
+  } else {
+    delete globalThis.document;
+  }
 });
 
 describe("portal bootstrap state", () => {
@@ -445,5 +453,34 @@ describe("recoverPortalStateAfterAuthExpiry", () => {
       status: "loading"
     });
     expect(fetchCalled).toBe(false);
+  });
+});
+
+describe("PortalBootstrap auth handoff", () => {
+  it("renders the portal shell immediately when a fresh approved handoff is present", () => {
+    const handoffCookie = buildApprovedAuthHandoffCookieValue(
+      {
+        role: "admin",
+        status: "approved",
+        surface: "portal"
+      },
+      Date.now()
+    );
+
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/")
+    };
+    globalThis.document = {
+      cookie: handoffCookie
+    };
+
+    const firstHtml = renderToStaticMarkup(<PortalBootstrap />);
+    const secondHtml = renderToStaticMarkup(<PortalBootstrap />);
+
+    expect(firstHtml).not.toContain("Opening portal");
+    expect(firstHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(firstHtml).toContain("Authenticated session");
+    expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(globalThis.document.cookie).toBe(handoffCookie);
   });
 });

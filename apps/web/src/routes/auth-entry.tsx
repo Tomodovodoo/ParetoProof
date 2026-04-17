@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
+import {
+  type ApprovedAuthHandoff,
+  writeApprovedAuthHandoffCookie
+} from "../lib/approved-auth-handoff";
 import { fetchApi } from "../lib/api-fetch";
 import {
   buildAccessRequestUrl,
@@ -21,6 +25,7 @@ type AuthEntryProps = {
 
 type AuthEntrySessionCheckPayload = {
   access: {
+    role?: "admin" | "collaborator" | "helper" | null;
     reason?:
       | "access_request_required"
       | "identity_recovery_required"
@@ -227,6 +232,22 @@ export function resolveAuthEntrySessionCheckAction(
   return "stay_on_auth_entry";
 }
 
+export function resolveApprovedAuthEntryHandoff(
+  action: AuthEntrySessionCheckAction,
+  payload: AuthEntrySessionCheckPayload | null,
+  redirectSurface: AuthenticatedSurface
+): ApprovedAuthHandoff | null {
+  if (action !== "redirect_authenticated_app" || payload?.access.status !== "approved") {
+    return null;
+  }
+
+  return {
+    role: payload.access.role ?? null,
+    status: "approved",
+    surface: redirectSurface
+  };
+}
+
 export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
   const mode = resolveAuthEntryMode(redirectPath);
   const githubStartUrl = buildAccessStartUrl("github", redirectPath, {
@@ -290,6 +311,11 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
         const action = resolveAuthEntrySessionCheckAction(response, payload);
 
         if (action !== "stay_on_auth_entry") {
+          const approvedHandoff = resolveApprovedAuthEntryHandoff(
+            action,
+            payload,
+            redirectSurface
+          );
           const redirectTarget =
             action === "redirect_access_request"
               ? portalAccessRequestUrl
@@ -298,6 +324,10 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
                 : action === "redirect_pending"
                   ? portalPendingUrl
                   : destinationUrl;
+
+          if (approvedHandoff) {
+            writeApprovedAuthHandoffCookie(approvedHandoff);
+          }
 
           window.location.replace(redirectTarget);
           return;
@@ -325,6 +355,7 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
     portalAccessRequestUrl,
     portalDeniedUrl,
     portalPendingUrl,
+    redirectSurface,
     skipSessionCheck
   ]);
 
