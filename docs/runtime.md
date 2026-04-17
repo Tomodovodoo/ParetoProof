@@ -7,7 +7,7 @@ This repo uses a small number of runtime rules.
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
 - `bun run test:startup-validation` is the executable smoke owner for startup env validation across the currently supported runtime surfaces.
-- API portal/auth origin and shared-cookie deployment assumptions are runtime-configurable; keep non-prod hostnames and cookie policy in the API runtime instead of re-hard-coding them in route helpers.
+- API portal/auth/math origin and shared-cookie deployment assumptions are runtime-configurable; keep non-prod hostnames and cookie policy in the API runtime instead of re-hard-coding them in route helpers.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
 - Do not copy `.codex/auth.json` or other trusted-local auth artifacts into the repository, Docker build contexts, or checked-in worker fixtures.
@@ -21,7 +21,7 @@ This repo uses a small number of runtime rules.
 - GHCR holds worker images.
 - Cloudflare R2 holds larger artifacts when the flow requires object storage.
 - Hosted Cloudflare Access split:
-  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access so `portal.paretoproof.com` can make cross-origin JSON `fetch()` calls without an opaque Access redirect.
+  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access so `portal.paretoproof.com` and `math.paretoproof.com` can make cross-origin JSON `fetch()` calls without an opaque Access redirect.
   - `api.paretoproof.com/internal/*` stays behind its own Cloudflare Access app for owner and service-token callers.
 
 ## Worker rules

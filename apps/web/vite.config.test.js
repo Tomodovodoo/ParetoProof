@@ -8,6 +8,7 @@ describe("web vite host allowlist", () => {
       "auth.paretoproof.com",
       "github.auth.paretoproof.com",
       "google.auth.paretoproof.com",
+      "math.paretoproof.com",
       "portal.paretoproof.com"
     ]);
 

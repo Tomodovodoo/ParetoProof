@@ -28,6 +28,7 @@ test("parseApiRuntimeEnv accepts the documented local API runtime contract", () 
     databaseUrl: "postgres://localhost:5432/paretoproof",
     host: "0.0.0.0",
     internalAccessAudience: "portal-audience",
+    mathPublicOrigin: "https://math.paretoproof.com",
     nodeEnv: undefined,
     port: 3000,
     portalAccessAudience: "portal-audience",
@@ -56,6 +57,7 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     CORS_ALLOW_LOCALHOST: "true",
     DATABASE_URL: "postgres://railway.internal:5432/paretoproof",
     HOST: "127.0.0.1",
+    MATH_PUBLIC_ORIGIN: "https://math.preview.paretoproof.com",
     NODE_ENV: "production",
     PORT: "4310",
     PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
@@ -82,6 +84,7 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
     databaseUrl: "postgres://railway.internal:5432/paretoproof",
     host: "127.0.0.1",
     internalAccessAudience: "internal-audience",
+    mathPublicOrigin: "https://math.preview.paretoproof.com",
     nodeEnv: "production",
     port: 4310,
     portalAccessAudience: "legacy-audience",
@@ -92,6 +95,23 @@ test("parseApiRuntimeEnv accepts hosted-like API config with optional overrides"
   });
 });
 
+test("parseApiRuntimeEnv keeps preview cookie scope when portal/auth are overridden without an explicit math origin", () => {
+  const runtimeEnv = parseApiRuntimeEnv({
+    ACCESS_PROVIDER_STATE_SECRET: "state-secret",
+    AUTH_PUBLIC_ORIGIN: "https://auth.preview.paretoproof.com",
+    CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
+    CF_ACCESS_PORTAL_AUD: "portal-audience",
+    CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
+    DATABASE_URL: "postgres://railway.internal:5432/paretoproof",
+    PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
+    WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
+  });
+
+  assert.equal(runtimeEnv.mathPublicOrigin, "https://math.paretoproof.com");
+  assert.equal(runtimeEnv.accessCookieDomain, ".preview.paretoproof.com");
+  assert.equal(runtimeEnv.accessCookieSecure, true);
+});
+
 test("parseApiRuntimeEnv derives host-only insecure cookie mode from explicit local origins", () => {
   const runtimeEnv = parseApiRuntimeEnv({
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
@@ -100,6 +120,7 @@ test("parseApiRuntimeEnv derives host-only insecure cookie mode from explicit lo
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    MATH_PUBLIC_ORIGIN: "http://localhost:4174",
     PORTAL_PUBLIC_ORIGIN: "http://localhost:4173",
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
   });
@@ -123,6 +144,7 @@ test("parseApiRuntimeEnv always includes the configured auth origin in branded a
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    MATH_PUBLIC_ORIGIN: "https://math.preview.paretoproof.com",
     PORTAL_PUBLIC_ORIGIN: "https://portal.preview.paretoproof.com",
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
   });
@@ -143,6 +165,7 @@ test("parseApiRuntimeEnv avoids deriving cookie domains that are only public suf
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    MATH_PUBLIC_ORIGIN: "https://math.co.uk",
     PORTAL_PUBLIC_ORIGIN: "https://portal.co.uk",
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
   });
@@ -158,6 +181,7 @@ test("parseApiRuntimeEnv avoids deriving cookie domains that are private PSL suf
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    MATH_PUBLIC_ORIGIN: "https://math.github.io",
     PORTAL_PUBLIC_ORIGIN: "https://portal.github.io",
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token",
   });
@@ -237,6 +261,7 @@ test("parseApiRuntimeEnv rejects missing and malformed values with explicit fiel
       CORS_ALLOW_LOCALHOST: "maybe",
       DATABASE_URL: "",
       PORT: "70000",
+      MATH_PUBLIC_ORIGIN: "https://math.example.com/path",
       PORTAL_PUBLIC_ORIGIN: "https://portal.example.com/path",
       WORKER_BOOTSTRAP_TOKEN: " ",
     });
@@ -266,6 +291,10 @@ test("parseApiRuntimeEnv rejects missing and malformed values with explicit fiel
   assert.match(String(thrownError), /CORS_ALLOW_LOCALHOST: Invalid enum value/);
   assert.match(String(thrownError), /DATABASE_URL: must not be empty/);
   assert.match(String(thrownError), /PORT: must be at most 65535/);
+  assert.match(
+    String(thrownError),
+    /MATH_PUBLIC_ORIGIN: must be an origin without path, search, or hash/,
+  );
   assert.match(
     String(thrownError),
     /PORTAL_PUBLIC_ORIGIN: must be an origin without path, search, or hash/,

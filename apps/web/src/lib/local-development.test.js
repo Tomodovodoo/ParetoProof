@@ -18,6 +18,13 @@ describe("isLocalDevelopmentLocation", () => {
         protocol: "http:"
       })
     ).toBe(true);
+    expect(
+      isLocalDevelopmentLocation({
+        hostname: "math.paretoproof.com",
+        port: "4173",
+        protocol: "http:"
+      })
+    ).toBe(true);
   });
 
   it("keeps production branded hosts out of the local-dev path", () => {

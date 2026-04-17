@@ -3,8 +3,11 @@ import {
   buildAccessFinalizeUrl,
   buildAuthGuidanceUrl,
   buildAuthUrl,
+  buildMathUrl,
   buildPortalUrl,
   buildPublicUrl,
+  readAuthenticatedRedirectSurface,
+  readAuthenticatedRedirectTarget,
   readPortalRedirectTarget,
   resolveWebSurface
 } from "./surface.ts";
@@ -83,30 +86,39 @@ describe("buildPortalUrl", () => {
   });
 
   it("uses the local API finalize endpoint on loopback-mapped branded auth hosts", () => {
-    setWindowUrl("http://github.auth.paretoproof.com:4371/");
+    setWindowUrl("http://github.auth.paretoproof.com:4371/?surface=auth&app=math");
 
-    expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?redirect=%2Fprofile"
+    expect(
+      buildAccessFinalizeUrl("/launch", {
+        surface: "math"
+      })
+    ).toBe(
+      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?app=math&redirect=%2Flaunch"
     );
   });
 
   it("uses the branded finalize relay endpoint on branded auth hosts", () => {
     setWindowUrl("https://google.auth.paretoproof.com/");
 
-    expect(buildAccessFinalizeUrl("/profile")).toBe(
-      "https://google.auth.paretoproof.com/api/access/finalize?redirect=%2Fprofile"
+    expect(
+      buildAccessFinalizeUrl("/profile", {
+        surface: "portal"
+      })
+    ).toBe(
+      "https://google.auth.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fprofile"
     );
   });
 });
 
 describe("surface ownership helpers", () => {
-  it("classifies apex, auth, provider auth, portal, and local surfaces", () => {
+  it("classifies apex, auth, provider auth, portal, math, and local surfaces", () => {
     setWindowUrl("http://localhost/");
 
     expect(resolveWebSurface("paretoproof.com")).toBe("public");
     expect(resolveWebSurface("auth.paretoproof.com")).toBe("auth");
     expect(resolveWebSurface("github.auth.paretoproof.com")).toBe("auth");
     expect(resolveWebSurface("portal.paretoproof.com")).toBe("portal");
+    expect(resolveWebSurface("math.paretoproof.com")).toBe("math");
     expect(resolveWebSurface("localhost")).toBe("public");
   });
 
@@ -120,12 +132,13 @@ describe("surface ownership helpers", () => {
     expect(buildPublicUrl("/profile")).toBe("https://paretoproof.com/");
   });
 
-  it("routes loopback-mapped branded auth and portal hosts back to the local public apex", () => {
+  it("routes loopback-mapped branded auth, portal, and math hosts back to the local public apex", () => {
     const brandedHosts = [
       "auth.paretoproof.com",
       "github.auth.paretoproof.com",
       "google.auth.paretoproof.com",
-      "portal.paretoproof.com"
+      "portal.paretoproof.com",
+      "math.paretoproof.com"
     ];
 
     for (const host of brandedHosts) {
@@ -136,15 +149,31 @@ describe("surface ownership helpers", () => {
     }
   });
 
-  it("preserves only portal-owned redirect targets for auth URLs", () => {
+  it("preserves portal-owned redirect targets for auth URLs by default", () => {
     setWindowUrl("https://paretoproof.com/");
 
     expect(buildAuthUrl("/runs/run-123?tab=events#trace")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace"
     );
-    expect(buildAuthUrl("/benchmarks")).toBe("https://auth.paretoproof.com/");
-    expect(buildAuthUrl("https://math.paretoproof.com/runs/problem-9")).toBe(
-      "https://auth.paretoproof.com/"
+    expect(buildAuthUrl("/benchmarks")).toBe("https://auth.paretoproof.com/?app=portal");
+  });
+
+  it("preserves math-owned redirect targets when the caller explicitly targets math", () => {
+    setWindowUrl("https://math.paretoproof.com/launch");
+
+    expect(
+      buildAuthUrl("/launch", undefined, {
+        surface: "math"
+      })
+    ).toBe(
+      "https://auth.paretoproof.com/?app=math&redirect=%2Flaunch"
+    );
+    expect(
+      buildAuthUrl("https://math.paretoproof.com/questions/problem-9", undefined, {
+        surface: "math"
+      })
+    ).toBe(
+      "https://auth.paretoproof.com/?app=math&redirect=%2Fquestions%2Fproblem-9"
     );
   });
 
@@ -152,44 +181,70 @@ describe("surface ownership helpers", () => {
     setWindowUrl("https://paretoproof.com/");
 
     expect(buildAuthGuidanceUrl("/runs/run-123?tab=events#trace")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace&guidance=1"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fruns%2Frun-123%3Ftab%3Devents%23trace&guidance=1"
     );
     expect(buildAuthGuidanceUrl("/benchmarks")).toBe(
-      "https://auth.paretoproof.com/?guidance=1"
+      "https://auth.paretoproof.com/?app=portal&guidance=1"
     );
   });
 
-  it("preserves only portal-owned redirect targets for finalize URLs", () => {
+  it("preserves the targeted authenticated surface for finalize URLs", () => {
     setWindowUrl("https://github.auth.paretoproof.com/");
 
-    expect(buildAccessFinalizeUrl("/admin/users?tab=review")).toBe(
-      "https://github.auth.paretoproof.com/api/access/finalize?redirect=%2Fadmin%2Fusers%3Ftab%3Dreview"
+    expect(
+      buildAccessFinalizeUrl("/admin/users?tab=review", {
+        surface: "portal"
+      })
+    ).toBe(
+      "https://github.auth.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fadmin%2Fusers%3Ftab%3Dreview"
     );
-    expect(buildAccessFinalizeUrl("/project")).toBe(
-      "https://github.auth.paretoproof.com/api/access/finalize"
+    expect(
+      buildAccessFinalizeUrl("/launch", {
+        surface: "math"
+      })
+    ).toBe(
+      "https://github.auth.paretoproof.com/api/access/finalize?app=math&redirect=%2Flaunch"
     );
   });
 
-  it("rejects public-site and external redirect targets when reading auth redirect state", () => {
+  it("reads math-aware auth redirect state and keeps portal compatibility", () => {
+    expect(
+      readAuthenticatedRedirectTarget(
+        "?app=math&redirect=%2Fquestions%2Fproblem-9%3Ftab%3Dreview"
+      )
+    ).toBe("/questions/problem-9?tab=review");
+    expect(
+      readAuthenticatedRedirectSurface(
+        "?app=math&redirect=%2Fquestions%2Fproblem-9%3Ftab%3Dreview"
+      )
+    ).toBe("math");
     expect(readPortalRedirectTarget("?redirect=%2Fprofile%3Ftab%3Ddetails")).toBe(
       "/profile?tab=details"
     );
-    expect(readPortalRedirectTarget("?redirect=%2Fbenchmarks")).toBe("/");
-    expect(
-      readPortalRedirectTarget(
-        "?redirect=https%3A%2F%2Fmath.paretoproof.com%2Fruns%2Fproblem-9"
-      )
-    ).toBe("/");
-    expect(readPortalRedirectTarget("?redirect=https%3A%2F%2Fparetoproof.com%2Fprofile")).toBe(
-      "/"
-    );
   });
 
-  it("rejects public-site targets when building portal URLs", () => {
+  it("rejects invalid authenticated redirect targets when reading auth redirect state", () => {
+    expect(readAuthenticatedRedirectTarget("?redirect=%2Fbenchmarks")).toBe("/");
+    expect(readAuthenticatedRedirectSurface("?redirect=%2Fbenchmarks")).toBe("portal");
+    expect(
+      readAuthenticatedRedirectTarget(
+        "?app=math&redirect=https%3A%2F%2Fmath.paretoproof.com%2Fruns%2Fproblem-9"
+      )
+    ).toBe("/");
+    expect(
+      readAuthenticatedRedirectTarget(
+        "?redirect=https%3A%2F%2Fparetoproof.com%2Fprofile"
+      )
+    ).toBe("/");
+  });
+
+  it("keeps portal and math builders scoped to their owned routes", () => {
     setWindowUrl("https://portal.paretoproof.com/");
 
     expect(buildPortalUrl("/workers")).toBe("https://portal.paretoproof.com/workers");
     expect(buildPortalUrl("/project")).toBe("https://portal.paretoproof.com/");
-    expect(buildPortalUrl("/math/problem-9")).toBe("https://portal.paretoproof.com/");
+
+    expect(buildMathUrl("/launch")).toBe("https://math.paretoproof.com/launch");
+    expect(buildMathUrl("/workers")).toBe("https://math.paretoproof.com/");
   });
 });

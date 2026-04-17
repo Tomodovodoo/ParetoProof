@@ -1,4 +1,5 @@
 import {
+  findAppRouteBySurface,
   portalBenchmarkOpsReadModelsContract,
   portalBenchmarkDatasetParamsSchema,
   portalBenchmarkExportQuerySchema,
@@ -69,6 +70,8 @@ import {
   normalizeOrigin,
 } from "../server/trusted-mutation-origin.js";
 
+type AuthenticatedSurface = "portal" | "math";
+
 class PortalAccessRequestConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -118,12 +121,27 @@ type PortalRouteRuntimeConfig = Pick<
   | "authPublicOrigin"
   | "brandedAuthOrigins"
   | "corsAllowLocalhost"
+  | "mathPublicOrigin"
   | "portalPublicOrigin"
 >;
 
-function sanitizePortalRedirectPath(
+function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface {
+  return surface === "math" ? "math" : "portal";
+}
+
+function readAuthenticatedSurfaceOrigin(
+  runtimeConfig: PortalRouteRuntimeConfig,
+  targetSurface: AuthenticatedSurface,
+) {
+  return targetSurface === "math"
+    ? runtimeConfig.mathPublicOrigin
+    : runtimeConfig.portalPublicOrigin;
+}
+
+function sanitizeAuthenticatedRedirectPath(
   rawRedirectPath: string | null,
-  portalPublicOrigin: string,
+  targetSurface: AuthenticatedSurface,
+  runtimeConfig: PortalRouteRuntimeConfig,
 ) {
   if (!rawRedirectPath || rawRedirectPath === "/") {
     return "/";
@@ -137,12 +155,19 @@ function sanitizePortalRedirectPath(
   }
 
   try {
+    const targetOrigin = readAuthenticatedSurfaceOrigin(
+      runtimeConfig,
+      targetSurface,
+    );
     const candidateUrl = new URL(
       rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      portalPublicOrigin,
+      targetOrigin,
     );
 
-    if (candidateUrl.origin !== portalPublicOrigin) {
+    if (
+      candidateUrl.origin !== targetOrigin ||
+      !findAppRouteBySurface(targetSurface, candidateUrl.pathname)
+    ) {
       return "/";
     }
 
@@ -153,6 +178,42 @@ function sanitizePortalRedirectPath(
   } catch {
     return "/";
   }
+}
+
+function readAuthenticatedContinuation(
+  request: FastifyRequest,
+  runtimeConfig: PortalRouteRuntimeConfig,
+) {
+  const parsedBody =
+    typeof request.body === "object" && request.body !== null
+      ? (request.body as { app?: string; redirect?: string })
+      : undefined;
+  const query =
+    (request.query as { app?: string; redirect?: string } | undefined) ?? {};
+  const targetSurface = readAuthenticatedSurface(
+    parsedBody?.app ?? query.app ?? null,
+  );
+  const redirectPath = sanitizeAuthenticatedRedirectPath(
+    parsedBody?.redirect ?? query.redirect ?? null,
+    targetSurface,
+    runtimeConfig,
+  );
+
+  return {
+    redirectPath,
+    targetSurface,
+  };
+}
+
+function buildAuthenticatedContinuationUrl(
+  redirectPath: string,
+  targetSurface: AuthenticatedSurface,
+  runtimeConfig: PortalRouteRuntimeConfig,
+) {
+  return new URL(
+    redirectPath,
+    readAuthenticatedSurfaceOrigin(runtimeConfig, targetSurface),
+  );
 }
 
 function clearSignedAccessCookie(
@@ -188,6 +249,7 @@ function buildPortalAuthStartUrl(options: {
     authUrl.searchParams.set("redirect", options.redirectPath);
   }
 
+  authUrl.searchParams.set("app", "portal");
   authUrl.searchParams.set("flow", "link");
 
   return authUrl.toString();
@@ -196,8 +258,10 @@ function buildPortalAuthStartUrl(options: {
 function buildPortalAuthRetryUrl(
   redirectPath: string,
   authPublicOrigin: string,
+  targetSurface: AuthenticatedSurface,
 ) {
   const authUrl = new URL(authPublicOrigin);
+  authUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
     authUrl.searchParams.set("redirect", redirectPath);
@@ -261,8 +325,13 @@ function readTrustedBrandedAuthOrigin(
   return null;
 }
 
-function buildBrandedFinalizeRelayUrl(origin: string, redirectPath: string) {
+function buildBrandedFinalizeRelayUrl(
+  origin: string,
+  redirectPath: string,
+  targetSurface: AuthenticatedSurface,
+) {
   const relayUrl = new URL("/api/access/finalize", origin);
+  relayUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
     relayUrl.searchParams.set("redirect", redirectPath);
@@ -446,6 +515,7 @@ export function registerPortalRoutes(
     allowLocalhostOrigins?: ApiRuntimeEnv["corsAllowLocalhost"];
     authPublicOrigin?: ApiRuntimeEnv["authPublicOrigin"];
     brandedAuthOrigins?: ApiRuntimeEnv["brandedAuthOrigins"];
+    mathPublicOrigin?: ApiRuntimeEnv["mathPublicOrigin"];
     portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
     portalPublicOrigin?: ApiRuntimeEnv["portalPublicOrigin"];
     rateLimitPreHandlers?: ReturnType<typeof createRateLimitPreHandlers>;
@@ -470,6 +540,7 @@ export function registerPortalRoutes(
     authPublicOrigin: options?.authPublicOrigin,
     brandedAuthOrigins: options?.brandedAuthOrigins,
     corsAllowLocalhost: options?.allowLocalhostOrigins,
+    mathPublicOrigin: options?.mathPublicOrigin,
     portalPublicOrigin: options?.portalPublicOrigin,
   });
   const withAuthenticatedRateLimit = (guard: preHandlerHookHandler) =>
@@ -481,9 +552,9 @@ export function registerPortalRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const redirectPath = sanitizePortalRedirectPath(
-      (request.query as { redirect?: string } | undefined)?.redirect ?? null,
-      runtimeConfig.portalPublicOrigin,
+    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+      request,
+      runtimeConfig,
     );
 
     reply.header(
@@ -491,7 +562,11 @@ export function registerPortalRoutes(
       clearSignedAccessCookie("PortalAccessSession", runtimeConfig),
     );
     reply.redirect(
-      buildPortalAuthRetryUrl(redirectPath, runtimeConfig.authPublicOrigin),
+      buildPortalAuthRetryUrl(
+        redirectPath,
+        runtimeConfig.authPublicOrigin,
+        targetSurface,
+      ),
     );
   };
 
@@ -505,17 +580,15 @@ export function registerPortalRoutes(
         : undefined;
     const identity = request.accessIdentity;
     const accessContext = request.accessRbacContext;
-    const parsedBody =
-      typeof request.body === "object" && request.body !== null
-        ? (request.body as { redirect?: string })
-        : undefined;
-    const redirectPath = sanitizePortalRedirectPath(
-      parsedBody?.redirect ??
-        (request.query as { redirect?: string } | undefined)?.redirect ??
-        null,
-      runtimeConfig.portalPublicOrigin,
+    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+      request,
+      runtimeConfig,
     );
-    const portalUrl = new URL(redirectPath, runtimeConfig.portalPublicOrigin);
+    const continuationUrl = buildAuthenticatedContinuationUrl(
+      redirectPath,
+      targetSurface,
+      runtimeConfig,
+    );
     const linkIntent = verifyAccessLinkIntent(cookieHeader, {
       secret: accessProviderStateSecret,
     });
@@ -604,7 +677,7 @@ export function registerPortalRoutes(
         return "linked";
       });
 
-      portalUrl.searchParams.set("link", linkStatus);
+      continuationUrl.searchParams.set("link", linkStatus);
 
       if (linkStatus === "linked") {
         resolvedAccessContext = await resolveAccessRbacContext(db, identity);
@@ -644,16 +717,28 @@ export function registerPortalRoutes(
 
     reply.header("set-cookie", responseCookies);
 
+    const redirectUrl =
+      resolvedAccessContext?.status === "pending"
+        ? new URL("/pending", runtimeConfig.portalPublicOrigin)
+        : resolvedAccessContext?.status === "denied"
+          ? new URL(
+              resolvedAccessContext.reason === "access_request_required"
+                ? "/access-request"
+                : "/denied",
+              runtimeConfig.portalPublicOrigin,
+            )
+          : continuationUrl;
+
     if (
       typeof request.headers.accept === "string" &&
       request.headers.accept.includes("application/json")
     ) {
       return reply.send({
-        redirectTo: portalUrl.toString(),
+        redirectTo: redirectUrl.toString(),
       });
     }
 
-    reply.redirect(portalUrl.toString());
+    reply.redirect(redirectUrl.toString());
   };
 
   const handlePortalSessionFinalizeGet = async (
@@ -698,15 +783,9 @@ export function registerPortalRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const parsedBody =
-      typeof request.body === "object" && request.body !== null
-        ? (request.body as { redirect?: string })
-        : undefined;
-    const redirectPath = sanitizePortalRedirectPath(
-      parsedBody?.redirect ??
-        (request.query as { redirect?: string } | undefined)?.redirect ??
-        null,
-      runtimeConfig.portalPublicOrigin,
+    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+      request,
+      runtimeConfig,
     );
 
     try {
@@ -723,7 +802,11 @@ export function registerPortalRoutes(
             .code(307)
             .header(
               "location",
-              buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath),
+              buildBrandedFinalizeRelayUrl(
+                brandedOrigin,
+                redirectPath,
+                targetSurface,
+              ),
             );
           return reply.send();
         }
@@ -745,7 +828,11 @@ export function registerPortalRoutes(
             .code(307)
             .header(
               "location",
-              buildBrandedFinalizeRelayUrl(brandedOrigin, redirectPath),
+              buildBrandedFinalizeRelayUrl(
+                brandedOrigin,
+                redirectPath,
+                targetSurface,
+              ),
             );
           return reply.send();
         }
@@ -1379,9 +1466,10 @@ export function registerPortalRoutes(
       }
 
       const targetProvider = parsedBody.data.provider;
-      const redirectPath = sanitizePortalRedirectPath(
+      const redirectPath = sanitizeAuthenticatedRedirectPath(
         parsedBody.data.redirectPath ?? "/profile",
-        runtimeConfig.portalPublicOrigin,
+        "portal",
+        runtimeConfig,
       );
 
       if (

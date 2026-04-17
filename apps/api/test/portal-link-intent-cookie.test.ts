@@ -135,7 +135,7 @@ test("POST /portal/profile/link-intents issues a Strict PortalLinkIntent cookie 
   assert.equal(response.statusCode, 200);
   assert.equal(
     response.json().intent.startUrl,
-    "https://auth.preview.paretoproof.com/api/access/start/github?redirect=%2Fprofile%3Ftab%3Didentities&flow=link",
+    "https://auth.preview.paretoproof.com/api/access/start/github?redirect=%2Fprofile%3Ftab%3Didentities&app=portal&flow=link",
   );
   assert.equal(
     insertedAuditEvents[0]?.eventId,

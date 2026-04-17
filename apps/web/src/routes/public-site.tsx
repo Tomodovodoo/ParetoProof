@@ -138,7 +138,7 @@ const publicBands = [
 
 const packCoverage = [
   {
-    detail: "why the project exists, who it serves, and how the public/auth/portal split works",
+    detail: "why the project exists, who it serves, and how the public/auth/portal/math split works",
     label: "Project overview",
     value: "Overview"
   },
@@ -162,7 +162,7 @@ const projectOverviewPoints = [
   },
   {
     body:
-      "The public site explains released work, the auth surface handles sign-in, and the portal holds contributor and admin workflows.",
+      "The public site explains released work, the auth surface handles sign-in, the portal holds contributor and admin operations, and the math surface holds authenticated question workflow.",
     title: "How the surfaces split"
   },
   {
@@ -192,7 +192,7 @@ const contributorSteps: Array<{
   },
   {
     body:
-      "Approved contributors use the dedicated sign-in entry. GitHub and Google remain the supported human providers for reaching the portal flow.",
+      "Approved contributors use the dedicated sign-in entry. GitHub and Google remain the supported human providers for reaching either the portal or math workflow.",
     icon: "key",
     kicker: "Step 2",
     title: "Approved sign-in"
@@ -206,10 +206,10 @@ const contributorSteps: Array<{
   },
   {
     body:
-      "Approved work happens inside the portal, where profile, access, admin review, and future benchmark operations belong.",
+      "Approved work happens inside the portal or math surface, depending on whether the task is generic operations or math workflow.",
     icon: "server",
     kicker: "Step 4",
-    title: "Do the work in portal"
+    title: "Use the right authenticated surface"
   }
 ];
 
@@ -276,7 +276,7 @@ const projectResources: Array<{
   },
   {
     body:
-      "Check the route-ownership baseline for what belongs on the public apex, auth entry, and portal surfaces during MVP.",
+      "Check the route-ownership baseline for what belongs on the public apex, auth entry, portal, and math surfaces during MVP.",
     external: true,
     href: productSurfaceBoundaryDocsUrl,
     icon: "compass",
@@ -294,7 +294,7 @@ const projectResources: Array<{
   },
   {
     body:
-      "Read the short architecture summary for how the public site, auth entry, portal, API, and workers fit together.",
+      "Read the short architecture summary for how the public site, auth entry, portal, math surface, API, and workers fit together.",
     external: true,
     href: buildDocsUrl("architecture.md"),
     icon: "spark",
@@ -780,7 +780,8 @@ function PublicBenchmarkIndex() {
         <h2>No public run drilldown.</h2>
         <p>
           Per-run evidence, artifact inspection, and operational rerun context remain in the
-          authenticated portal. The public site only shows released benchmark slices.
+          authenticated portal, while math workflow stays on its dedicated host. The public site
+          only shows released benchmark slices.
         </p>
       </article>
     </section>
@@ -1048,8 +1049,8 @@ function PublicProjectPack() {
           </p>
           <p>
             That means one coherent public project route, one benchmark route, and one docs
-            index. Everything else should either live in the portal or stay in implementation
-            docs until it becomes a real user-facing surface.
+            index. Everything else should either live in portal or math, or stay in
+            implementation docs until it becomes a real user-facing surface.
           </p>
         </div>
         <div className="site-topic-list" aria-label="Project overview points">
@@ -1086,7 +1087,7 @@ function PublicProjectPack() {
         <p className="site-lead">
           Approved contributors sign in directly. New collaborators use the separate
           access-request entry, and approval stays manual before any contributor work
-          opens inside the portal.
+          opens inside portal or math.
         </p>
       </div>
 

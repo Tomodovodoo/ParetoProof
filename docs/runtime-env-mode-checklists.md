@@ -68,6 +68,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `CORS_ALLOWED_ORIGINS`
   - `CORS_ALLOW_LOCALHOST`
   - `PORTAL_PUBLIC_ORIGIN`
+  - `MATH_PUBLIC_ORIGIN`
   - `AUTH_PUBLIC_ORIGIN`
   - `BRANDED_AUTH_ORIGINS`
   - `ACCESS_COOKIE_DOMAIN`
@@ -81,10 +82,11 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `CF_ACCESS_BRANDED_AUDS` is the comma-separated allowlist of branded provider-host Access audiences accepted only on the finalize-submit handoff boundary
   - set `CORS_ALLOW_LOCALHOST=true` when you need loopback-mapped branded auth hosts such as `http://github.auth.paretoproof.com:<port>` or `http://google.auth.paretoproof.com:<port>` to post directly to the local API finalize-submit boundary during auth-flow previews
   - `PORTAL_PUBLIC_ORIGIN` defaults to `https://portal.paretoproof.com`
+  - `MATH_PUBLIC_ORIGIN` defaults to `https://math.paretoproof.com`
   - `AUTH_PUBLIC_ORIGIN` defaults to `https://auth.paretoproof.com`
   - `BRANDED_AUTH_ORIGINS` defaults to the configured auth origin plus the matching GitHub and Google branded auth origins
-  - `ACCESS_COOKIE_DOMAIN` defaults to the shared domain suffix derived from the configured portal and branded auth origins when one exists
-  - `ACCESS_COOKIE_SECURE` defaults to `true` only when every configured portal/branded auth origin is `https`
+  - `ACCESS_COOKIE_DOMAIN` defaults to the shared domain suffix derived from the configured portal, math, and branded auth origins when one exists
+  - `ACCESS_COOKIE_SECURE` defaults to `true` only when every configured portal/math/branded auth origin is `https`
   - `HOST` defaults to `0.0.0.0`
   - `PORT` defaults to `3000`
 
@@ -108,6 +110,7 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
   - `CORS_ALLOWED_ORIGINS`
   - `CORS_ALLOW_LOCALHOST`
   - `PORTAL_PUBLIC_ORIGIN`
+  - `MATH_PUBLIC_ORIGIN`
   - `AUTH_PUBLIC_ORIGIN`
   - `BRANDED_AUTH_ORIGINS`
   - `ACCESS_COOKIE_DOMAIN`
@@ -119,9 +122,9 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
 - Platform notes:
   - Railway normally supplies `PORT`
   - keep migration credentials out of the live service runtime
-  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access because the portal SPA talks to it with cross-origin `fetch()` and needs JSON `200`/`401` responses, not Access redirects
+  - `api.paretoproof.com/portal/*` must bypass Cloudflare Access because the portal and math SPAs talk to it with cross-origin `fetch()` and need JSON `200`/`401` responses, not Access redirects
   - keep `api.paretoproof.com/internal/*` on its own Cloudflare Access app for owner and service-token callers
-  - use the explicit portal/auth origin and cookie overrides when a hosted non-prod environment does not live on the canonical `*.paretoproof.com` pair
+  - use the explicit portal/auth/math origin and cookie overrides when a hosted non-prod environment does not live on the canonical `*.paretoproof.com` surface trio
 
 ### API migration mode
 

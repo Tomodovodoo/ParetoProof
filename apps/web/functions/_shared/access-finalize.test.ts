@@ -12,7 +12,7 @@ describe("handleAccessFinalize", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("relays a successful finalize response back to the portal and forwards cookies", async () => {
+  it("relays a successful portal finalize response back to the browser and forwards cookies", async () => {
     globalThis.fetch = async (input, init) => {
       expect(input).toBe("https://api.paretoproof.com/portal/session/finalize/submit");
       expect(init?.method).toBe("POST");
@@ -20,7 +20,7 @@ describe("handleAccessFinalize", () => {
       expect((init?.headers as Headers).get("cookie")).toContain("PortalAccessProvider=");
       expect((init?.headers as Headers).get("origin")).toBe("https://google.auth.paretoproof.com");
       expect(init?.redirect).toBe("manual");
-      expect(init?.body).toBe(JSON.stringify({ redirect: "/profile" }));
+      expect(init?.body).toBe(JSON.stringify({ app: "portal", redirect: "/profile" }));
 
       return new Response(
         JSON.stringify({
@@ -47,8 +47,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://google.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://google.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -77,6 +78,9 @@ describe("handleAccessFinalize", () => {
       expect((init?.headers as Headers).get("cf-access-jwt-assertion")).toBeNull();
       expect((init?.headers as Headers).get("cookie")).toContain("CF_Authorization=session-cookie");
       expect((init?.headers as Headers).get("origin")).toBe("https://github.auth.paretoproof.com");
+      expect(init?.body).toBe(
+        JSON.stringify({ app: "portal", redirect: "/access-request" })
+      );
 
       return new Response(
         JSON.stringify({
@@ -95,8 +99,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/access-request"
         }),
         headers: {
@@ -115,8 +120,9 @@ describe("handleAccessFinalize", () => {
   it("targets the API finalize-submit boundary for branded relay handoffs", async () => {
     const relayTargets: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init) => {
       relayTargets.push(String(input));
+      expect(init?.body).toBe(JSON.stringify({ app: "portal", redirect: "/profile" }));
 
       return new Response(
         JSON.stringify({
@@ -129,8 +135,9 @@ describe("handleAccessFinalize", () => {
     };
 
     await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -159,8 +166,9 @@ describe("handleAccessFinalize", () => {
       );
 
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -175,6 +183,71 @@ describe("handleAccessFinalize", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
       "https://portal.paretoproof.com/admin/users?tab=review#pending"
+    );
+  });
+
+  it("preserves a math-surface continuation when the API returns a math redirect", async () => {
+    globalThis.fetch = async (_input, init) => {
+      expect(init?.body).toBe(JSON.stringify({ app: "math", redirect: "/launch" }));
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://math.paretoproof.com/launch"
+        }),
+        {
+          status: 200
+        }
+      );
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=math", {
+        body: new URLSearchParams({
+          app: "math",
+          redirect: "/launch"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-math",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://math.paretoproof.com/launch");
+  });
+
+  it("accepts a portal canonical state redirect even when the requested surface was math", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/access-request"
+        }),
+        {
+          status: 200
+        }
+      );
+
+    const response = await handleAccessFinalize(
+      new Request("https://google.auth.paretoproof.com/api/access/finalize?app=math", {
+        body: new URLSearchParams({
+          app: "math",
+          redirect: "/questions/problem-9"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-portal-fallback",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://google.auth.paretoproof.com"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://portal.paretoproof.com/access-request"
     );
   });
 
@@ -212,8 +285,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://google.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://google.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -262,8 +336,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://google.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://google.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -285,8 +360,9 @@ describe("handleAccessFinalize", () => {
 
   it("redirects back to the branded retry surface when the branded handoff lacks both Access header and session cookie", async () => {
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -298,14 +374,15 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
   });
 
   it("redirects back to the branded retry surface when branded state cookies exist without a usable Access session", async () => {
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -318,7 +395,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
   });
 
@@ -334,8 +411,9 @@ describe("handleAccessFinalize", () => {
       );
 
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -349,7 +427,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
   });
 
@@ -370,8 +448,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -395,8 +474,9 @@ describe("handleAccessFinalize", () => {
     };
 
     const response = await handleAccessFinalize(
-      new Request("https://github.auth.paretoproof.com/api/access/finalize", {
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
         body: new URLSearchParams({
+          app: "portal",
           redirect: "/profile"
         }),
         headers: {
@@ -410,7 +490,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
     expect(fetchCalled).toBe(false);
   });
@@ -437,7 +517,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
     expect(fetchCalled).toBe(false);
   });
@@ -497,7 +577,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
     expect(fetchCalled).toBe(false);
   });

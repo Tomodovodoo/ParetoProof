@@ -9,20 +9,23 @@ import { getApiBaseUrl } from "../lib/api-base-url";
 import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalDevelopmentLocation } from "../lib/local-development";
-import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
+import { resolveSurfaceRouteRedirect } from "../lib/portal-route-access";
 import { readWebRuntimeEnv } from "../lib/runtime-env";
+import {
+  buildAuthGuidanceUrl,
+  buildAuthUrl,
+  buildMathUrl,
+  buildPublicUrl,
+  buildPortalUrl,
+  getCurrentRelativeUrl,
+  type AuthenticatedSurface
+} from "../lib/surface";
 import { AccessRequestScreen } from "./access-request-screen";
+import { MathShell } from "./math-shell";
 import {
   reducePortalStateAfterAuthExpiry,
   type PortalAccessState
 } from "./portal-bootstrap-state";
-import {
-  buildPortalUrl,
-  buildAuthGuidanceUrl,
-  buildAuthUrl,
-  buildPublicUrl,
-  getCurrentRelativeUrl
-} from "../lib/surface";
 import { PortalShell } from "./portal-shell";
 
 type PortalMeResponse = {
@@ -135,21 +138,6 @@ export async function recoverPortalStateAfterAuthExpiry(
   }
 }
 
-function parseDeniedReason(
-  reason: string | null
-): PortalMeResponse["access"]["reason"] | null {
-  if (
-    reason === "access_request_required" ||
-    reason === "identity_recovery_required" ||
-    reason === "rejected_or_withdrawn" ||
-    reason === "unknown_identity"
-  ) {
-    return reason;
-  }
-
-  return null;
-}
-
 function readRouteDeniedReason(search = window.location.search) {
   const reason = new URLSearchParams(search).get("reason");
 
@@ -251,7 +239,19 @@ export function shouldRestartPortalAuthForMissingProvider(
   );
 }
 
-export function PortalBootstrap() {
+function describeSurfaceLabel(surface: AuthenticatedSurface) {
+  return surface === "math" ? "Math" : "Portal";
+}
+
+function describeSurfaceName(surface: AuthenticatedSurface) {
+  return surface === "math" ? "math workspace" : "portal";
+}
+
+type PortalBootstrapProps = {
+  surface?: AuthenticatedSurface;
+};
+
+export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const localPreviewMode = useMemo(() => isLocalDevelopmentLocation(window.location), []);
@@ -259,6 +259,7 @@ export function PortalBootstrap() {
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
   const recoveryInFlightRef = useRef(false);
   const stateRef = useRef<PortalAccessState>(state);
+  const surfaceLabel = describeSurfaceLabel(surface);
   const routeDeniedReason = readRouteDeniedReason();
   const routeRedirectTarget = useMemo(() => {
     if (
@@ -269,17 +270,18 @@ export function PortalBootstrap() {
       return null;
     }
 
-      return resolvePortalRouteRedirect({
-        pathname: window.location.pathname,
-        reason:
-          state.status === "denied"
-            ? state.reason
-            : routeDeniedReason ?? undefined,
-        roles: state.status === "approved" ? derivePortalRoles(state.role) : [],
-        search: window.location.search,
-        status: state.status
-      });
-  }, [routeDeniedReason, state]);
+    return resolveSurfaceRouteRedirect({
+      pathname: window.location.pathname,
+      reason:
+        state.status === "denied"
+          ? state.reason
+          : routeDeniedReason ?? undefined,
+      roles: state.status === "approved" ? derivePortalRoles(state.role) : [],
+      search: window.location.search,
+      status: state.status,
+      surface
+    });
+  }, [routeDeniedReason, state, surface]);
 
   useEffect(() => {
     stateRef.current = state;
@@ -358,8 +360,12 @@ export function PortalBootstrap() {
       return;
     }
 
-    window.location.replace(buildAuthUrl(currentRelativeUrl));
-  }, [currentRelativeUrl, localPreviewMode, state]);
+    window.location.replace(
+      buildAuthUrl(currentRelativeUrl, undefined, {
+        surface
+      })
+    );
+  }, [currentRelativeUrl, localPreviewMode, state, surface]);
 
   useEffect(() => {
     if (!routeRedirectTarget) {
@@ -419,24 +425,31 @@ export function PortalBootstrap() {
   if (state.status === "loading") {
     return (
       <PortalStatusCard
-        eyebrow="Portal"
+        eyebrow={surfaceLabel}
         title="Checking access"
-        body="Resolving your Cloudflare Access identity and portal approval state."
+        body={`Resolving your Cloudflare Access identity and ${describeSurfaceName(surface)} approval state.`}
       />
     );
   }
 
   if (state.status === "unauthenticated") {
     if (localPreviewMode) {
-      return renderLocalPortalUnauthenticatedCard(currentRelativeUrl);
+      return renderLocalPortalUnauthenticatedCard(currentRelativeUrl, surface);
     }
 
     return (
       <PortalStatusCard
-        eyebrow="Portal"
+        eyebrow={surfaceLabel}
         title="Redirecting to sign in"
-        body="The portal only loads after authentication. You are being sent to the auth entrypoint now."
-        actions={[{ href: buildAuthUrl(currentRelativeUrl), label: "Continue to sign in" }]}
+        body={`The ${describeSurfaceName(surface)} only loads after authentication. You are being sent to the auth entrypoint now.`}
+        actions={[
+          {
+            href: buildAuthUrl(currentRelativeUrl, undefined, {
+              surface
+            }),
+            label: "Continue to sign in"
+          }
+        ]}
       />
     );
   }
@@ -478,16 +491,26 @@ export function PortalBootstrap() {
   ) {
     return (
       <PortalStatusCard
-        eyebrow="Portal"
+        eyebrow={surfaceLabel}
         title="Permission denied"
-        body={`Signed in${state.email ? ` as ${state.email}` : ""}, but your current portal role does not allow this area.`}
+        body={`Signed in${state.email ? ` as ${state.email}` : ""}, but your current ${surface === "math" ? "workspace" : "portal"} role does not allow this area.`}
         actions={[{ href: buildPortalUrl("/"), label: "Return to portal home" }]}
       />
     );
   }
 
   if (state.status === "error") {
-    return renderPortalBootstrapErrorCard(state, currentRelativeUrl);
+    return renderPortalBootstrapErrorCard(state, currentRelativeUrl, surface);
+  }
+
+  if (surface === "math") {
+    return (
+      <MathShell
+        email={state.email}
+        pathname={window.location.pathname}
+        roles={derivePortalRoles(state.role)}
+      />
+    );
   }
 
   return (
@@ -500,29 +523,37 @@ export function PortalBootstrap() {
 
 export function renderPortalBootstrapErrorCard(
   state: Extract<PortalAccessState, { status: "error" }>,
-  currentRelativeUrl: string
+  currentRelativeUrl: string,
+  surface: AuthenticatedSurface = "portal"
 ) {
   const localPreviewMode = isLocalDevelopmentLocation(window.location);
 
   return (
     <PortalStatusCard
-      eyebrow="Portal"
+      eyebrow={describeSurfaceLabel(surface)}
       title={
         state.kind === "local_api_unavailable"
           ? "Local API unavailable"
-          : "Portal unavailable"
+          : `${describeSurfaceLabel(surface)} unavailable`
       }
       body={state.message}
       actions={[
         {
-          href: buildPortalUrl(currentRelativeUrl),
+          href:
+            surface === "math"
+              ? buildMathUrl(currentRelativeUrl)
+              : buildPortalUrl(currentRelativeUrl),
           label:
-            state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
+            state.kind === "local_api_unavailable"
+              ? "Retry after starting API"
+              : `Retry ${surface === "math" ? "math" : "portal"}`
         },
         {
           href:
             state.kind === "local_api_unavailable"
-              ? buildAuthUrl(currentRelativeUrl)
+              ? buildAuthUrl(currentRelativeUrl, undefined, {
+                  surface
+                })
               : buildPublicUrl("/"),
           label:
             state.kind === "local_api_unavailable"
@@ -537,15 +568,20 @@ export function renderPortalBootstrapErrorCard(
   );
 }
 
-export function renderLocalPortalUnauthenticatedCard(currentRelativeUrl: string) {
+export function renderLocalPortalUnauthenticatedCard(
+  currentRelativeUrl: string,
+  surface: AuthenticatedSurface = "portal"
+) {
   return (
     <PortalStatusCard
-      eyebrow="Portal"
+      eyebrow={describeSurfaceLabel(surface)}
       title="Local preview needs auth context"
-      body="This localhost portal route did not receive an authenticated access state from the API. Open the local auth guidance to choose the right preview path, or return to the public site."
+      body={`This localhost ${surface === "math" ? "math" : "portal"} route did not receive an authenticated access state from the API. Open the local auth guidance to choose the right preview path, or return to the public site.`}
       actions={[
         {
-          href: buildAuthUrl(currentRelativeUrl),
+          href: buildAuthUrl(currentRelativeUrl, undefined, {
+            surface
+          }),
           label: "Open local auth guidance"
         },
         {

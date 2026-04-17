@@ -12,7 +12,7 @@ const checks = [
       "# Owner-ops config. Only set these when you are intentionally running owner workflows.",
       "# App runtime config for local Cloudflare Access parity and internal worker auth.",
       "# Optional local runtime overrides. Expand only for deliberate local testing.",
-      "# Optional non-prod portal/auth origin overrides. Leave unset for the canonical",
+      "# Optional non-prod portal/auth/math origin overrides. Leave unset for the canonical",
       "# Optional portal/auth coordination cookie overrides. When unset, the API",
       "# Reserved later-scope runtime placeholders. Keep commented unless a later slice explicitly uses them."
     ],
@@ -38,6 +38,7 @@ const checks = [
       { name: "CORS_ALLOWED_ORIGINS", commented: false },
       { name: "CORS_ALLOW_LOCALHOST", commented: false },
       { name: "PORTAL_PUBLIC_ORIGIN", commented: true },
+      { name: "MATH_PUBLIC_ORIGIN", commented: true },
       { name: "AUTH_PUBLIC_ORIGIN", commented: true },
       { name: "BRANDED_AUTH_ORIGINS", commented: true },
       { name: "ACCESS_COOKIE_DOMAIN", commented: true },
@@ -118,7 +119,10 @@ const docsChecks = [
   },
   {
     file: "docs/runtime.md",
-    requiredSnippets: ["runtime-env-mode-checklists.md"]
+    requiredSnippets: [
+      "runtime-env-mode-checklists.md",
+      "portal/auth/math origin"
+    ]
   },
   {
     file: "docs/runtime-env-mode-checklists.md",
@@ -136,7 +140,9 @@ const docsChecks = [
       "### Local Problem 9 attempt with `trusted_local_user`",
       "### Trusted-local devbox wrapper",
       "### Offline ingest CLI",
-      "### Hosted claim loop with `machine_api_key`"
+      "### Hosted claim loop with `machine_api_key`",
+      "`MATH_PUBLIC_ORIGIN`",
+      "portal/auth/math origin"
     ]
   }
 ];

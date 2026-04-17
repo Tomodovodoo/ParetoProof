@@ -2,23 +2,39 @@ import { findAppRouteBySurface } from "@paretoproof/shared";
 import { getApiBaseUrl } from "./api-base-url";
 import { isLocalDevelopmentLocation } from "./local-development";
 
-export type WebSurface = "public" | "auth" | "portal";
+export type WebSurface = "public" | "auth" | "portal" | "math";
+export type AuthenticatedSurface = "portal" | "math";
 export type AccessProvider = "github" | "google";
 
 const productionPublicOrigin = "https://paretoproof.com";
 const productionAuthOrigin = "https://auth.paretoproof.com";
 const productionPortalOrigin = "https://portal.paretoproof.com";
+const productionMathOrigin = "https://math.paretoproof.com";
 const localPortalStateParamKeys = ["access", "email"] as const;
+const authenticatedSurfaces = ["portal", "math"] as const;
 const productionProviderAuthOrigins: Record<AccessProvider, string> = {
   github: "https://github.auth.paretoproof.com",
   google: "https://google.auth.paretoproof.com"
+};
+const productionOriginByAuthenticatedSurface: Record<AuthenticatedSurface, string> = {
+  math: productionMathOrigin,
+  portal: productionPortalOrigin
+};
+
+type OwnedAppSurface = "public_site" | AuthenticatedSurface;
+type ResolvedOwnedTarget<TSurface extends OwnedAppSurface = OwnedAppSurface> = {
+  surface: TSurface;
+  targetPath: string;
 };
 
 function readLocalSurfaceOverride(search = window.location.search) {
   const params = new URLSearchParams(search);
   const surface = params.get("surface");
 
-  return surface === "public" || surface === "auth" || surface === "portal"
+  return surface === "public" ||
+    surface === "auth" ||
+    surface === "portal" ||
+    surface === "math"
     ? surface
     : null;
 }
@@ -46,12 +62,44 @@ function buildLocalPublicOrigin(locationLike = window.location) {
     hostname === "auth.paretoproof.com" ||
     hostname === "github.auth.paretoproof.com" ||
     hostname === "google.auth.paretoproof.com" ||
-    hostname === "portal.paretoproof.com"
+    hostname === "portal.paretoproof.com" ||
+    hostname === "math.paretoproof.com"
   ) {
     return `${protocol}//paretoproof.com${port ? `:${port}` : ""}`;
   }
 
   return origin;
+}
+
+function isAuthenticatedSurface(surface: string | null): surface is AuthenticatedSurface {
+  return surface === "portal" || surface === "math";
+}
+
+function mapAuthenticatedSurfaceToOrigin(surface: AuthenticatedSurface) {
+  return productionOriginByAuthenticatedSurface[surface];
+}
+
+function mapAuthenticatedSurfaceToLabel(surface: AuthenticatedSurface) {
+  return surface === "math" ? "math workspace" : "portal";
+}
+
+function mapWebSurfaceToAuthenticatedSurface(
+  surface: WebSurface
+): AuthenticatedSurface | null {
+  if (surface === "portal" || surface === "math") {
+    return surface;
+  }
+
+  return null;
+}
+
+function readAuthenticatedSurfaceParam(search = window.location.search) {
+  const surface = new URLSearchParams(search).get("app");
+  return isAuthenticatedSurface(surface) ? surface : null;
+}
+
+function resolvePreferredAuthenticatedSurface(hostname = window.location.hostname) {
+  return mapWebSurfaceToAuthenticatedSurface(resolveWebSurface(hostname)) ?? "portal";
 }
 
 export function resolveWebSurfaceFromUrl(
@@ -69,6 +117,10 @@ export function resolveWebSurfaceFromUrl(
 
   if (hostname === "portal.paretoproof.com") {
     return "portal";
+  }
+
+  if (hostname === "math.paretoproof.com") {
+    return "math";
   }
 
   if (isLocalHostname(hostname)) {
@@ -97,25 +149,131 @@ function normalizeTargetPath(targetPath: string) {
   return targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 }
 
-function sanitizeSurfaceTargetPath(
-  surface: "public_site" | "portal",
-  targetPath: string
-) {
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(targetPath) || targetPath.startsWith("//")) {
-    return "/";
-  }
-
+function tryResolveRelativeTarget(
+  targetPath: string,
+  allowedSurfaces: OwnedAppSurface[],
+  preferredSurface: OwnedAppSurface
+): ResolvedOwnedTarget | null {
   try {
-    const candidateUrl = new URL(normalizeTargetPath(targetPath), productionPortalOrigin);
+    const candidateUrl = new URL(
+      normalizeTargetPath(targetPath),
+      mapOwnedSurfaceToOrigin(preferredSurface)
+    );
+    const matchingSurface =
+      allowedSurfaces.find(
+        (surface) =>
+          surface === preferredSurface &&
+          findAppRouteBySurface(surface, candidateUrl.pathname)
+      ) ??
+      allowedSurfaces.find((surface) =>
+        findAppRouteBySurface(surface, candidateUrl.pathname)
+      );
 
-    if (!findAppRouteBySurface(surface, candidateUrl.pathname)) {
-      return "/";
+    if (!matchingSurface) {
+      return null;
     }
 
-    return `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/";
+    return {
+      surface: matchingSurface,
+      targetPath: `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/"
+    };
   } catch {
-    return "/";
+    return null;
   }
+}
+
+function mapOwnedSurfaceToOrigin(surface: OwnedAppSurface) {
+  if (surface === "public_site") {
+    return productionPublicOrigin;
+  }
+
+  return mapAuthenticatedSurfaceToOrigin(surface);
+}
+
+function tryResolveAbsoluteTarget(
+  targetPath: string,
+  allowedSurfaces: OwnedAppSurface[]
+): ResolvedOwnedTarget | null {
+  let candidateUrl: URL;
+
+  try {
+    candidateUrl = new URL(targetPath);
+  } catch {
+    return null;
+  }
+
+  const matchingSurface = allowedSurfaces.find((surface) => {
+    if (candidateUrl.origin !== mapOwnedSurfaceToOrigin(surface)) {
+      return false;
+    }
+
+    return findAppRouteBySurface(surface, candidateUrl.pathname);
+  });
+
+  if (!matchingSurface) {
+    return null;
+  }
+
+  return {
+    surface: matchingSurface,
+    targetPath: `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` || "/"
+  };
+}
+
+function resolveOwnedTarget(
+  targetPath: string,
+  options: {
+    allowedSurfaces: OwnedAppSurface[];
+    preferredSurface: OwnedAppSurface;
+  }
+): ResolvedOwnedTarget | null {
+  if (!targetPath || targetPath === "/") {
+    return {
+      surface: options.preferredSurface,
+      targetPath: "/"
+    };
+  }
+
+  if (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(targetPath) ||
+    targetPath.startsWith("//")
+  ) {
+    return tryResolveAbsoluteTarget(targetPath, options.allowedSurfaces);
+  }
+
+  return tryResolveRelativeTarget(
+    targetPath,
+    options.allowedSurfaces,
+    options.preferredSurface
+  );
+}
+
+function resolveAuthenticatedTarget(
+  targetPath: string,
+  options?: {
+    preferredSurface?: AuthenticatedSurface;
+    surface?: AuthenticatedSurface | null;
+  }
+) {
+  const preferredSurface =
+    options?.surface ?? options?.preferredSurface ?? "portal";
+  const allowedSurfaces = options?.surface
+    ? [options.surface]
+    : [...authenticatedSurfaces];
+
+  return resolveOwnedTarget(targetPath, {
+    allowedSurfaces,
+    preferredSurface
+  }) as ResolvedOwnedTarget<AuthenticatedSurface> | null;
+}
+
+function sanitizeSurfaceTargetPath(surface: OwnedAppSurface, targetPath: string) {
+  return (
+    resolveOwnedTarget(targetPath, {
+      allowedSurfaces: [surface],
+      preferredSurface: surface
+    })?.targetPath ?? "/"
+  );
 }
 
 function sanitizePortalTargetPath(targetPath: string) {
@@ -126,27 +284,67 @@ function sanitizePublicTargetPath(targetPath: string) {
   return sanitizeSurfaceTargetPath("public_site", targetPath);
 }
 
-export function readPortalRedirectTarget(search = window.location.search) {
+function sanitizeMathTargetPath(targetPath: string) {
+  return sanitizeSurfaceTargetPath("math", targetPath);
+}
+
+export function readAuthenticatedRedirectTarget(search = window.location.search) {
   const params = new URLSearchParams(search);
-  return sanitizePortalTargetPath(params.get("redirect") ?? "/");
+  const targetSurface = readAuthenticatedSurfaceParam(search);
+
+  return (
+    resolveAuthenticatedTarget(params.get("redirect") ?? "/", {
+      preferredSurface: targetSurface ?? "portal",
+      surface: targetSurface
+    })?.targetPath ?? "/"
+  );
+}
+
+export function readAuthenticatedRedirectSurface(search = window.location.search) {
+  const params = new URLSearchParams(search);
+  const explicitSurface = readAuthenticatedSurfaceParam(search);
+
+  return (
+    resolveAuthenticatedTarget(params.get("redirect") ?? "/", {
+      preferredSurface: explicitSurface ?? "portal",
+      surface: explicitSurface
+    })?.surface ??
+    explicitSurface ??
+    "portal"
+  );
+}
+
+export function readPortalRedirectTarget(search = window.location.search) {
+  return readAuthenticatedRedirectTarget(search);
 }
 
 function buildLocalSurfaceUrl(
   surface: Exclude<WebSurface, "public">,
   targetPath: string,
+  authenticatedSurface: AuthenticatedSurface,
   origin = window.location.origin
 ) {
-  const surfaceUrl = new URL(origin);
-  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+  if (surface === "portal" || surface === "math") {
+    const surfaceUrl = new URL(
+      surface === "portal"
+        ? sanitizePortalTargetPath(targetPath)
+        : sanitizeMathTargetPath(targetPath),
+      origin
+    );
 
-  if (surface === "portal") {
-    const portalUrl = new URL(normalizedTargetPath, origin);
-    portalUrl.searchParams.set("surface", surface);
-    copyLocalPortalState(portalUrl);
-    return portalUrl.toString();
+    surfaceUrl.searchParams.set("surface", surface);
+    copyLocalPortalState(surfaceUrl);
+    return surfaceUrl.toString();
   }
 
+  const surfaceUrl = new URL(origin);
+  const normalizedTargetPath =
+    authenticatedSurface === "math"
+      ? sanitizeMathTargetPath(targetPath)
+      : sanitizePortalTargetPath(targetPath);
+
   surfaceUrl.searchParams.set("surface", "auth");
+  surfaceUrl.searchParams.set("app", authenticatedSurface);
 
   if (normalizedTargetPath !== "/") {
     surfaceUrl.searchParams.set("redirect", normalizedTargetPath);
@@ -222,17 +420,37 @@ export function copyLocalPortalState(targetUrl: URL, currentLocation = window.lo
   }
 }
 
-export function buildAuthUrl(targetPath = "/", hostname = window.location.hostname) {
-  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+export function buildAuthUrl(
+  targetPath = "/",
+  hostname = window.location.hostname,
+  options?: {
+    surface?: AuthenticatedSurface;
+  }
+) {
+  const preferredSurface =
+    options?.surface ?? resolvePreferredAuthenticatedSurface(hostname);
+  const resolvedTarget =
+    resolveAuthenticatedTarget(targetPath, {
+      preferredSurface,
+      surface: options?.surface
+    }) ?? {
+      surface: preferredSurface,
+      targetPath: "/"
+    };
 
   if (isLocalOrigin(hostname)) {
-    return buildLocalSurfaceUrl("auth", normalizedTargetPath);
+    return buildLocalSurfaceUrl(
+      "auth",
+      resolvedTarget.targetPath,
+      resolvedTarget.surface
+    );
   }
 
   const authUrl = new URL(productionAuthOrigin);
+  authUrl.searchParams.set("app", resolvedTarget.surface);
 
-  if (normalizedTargetPath !== "/") {
-    authUrl.searchParams.set("redirect", normalizedTargetPath);
+  if (resolvedTarget.targetPath !== "/") {
+    authUrl.searchParams.set("redirect", resolvedTarget.targetPath);
   }
 
   return authUrl.toString();
@@ -240,15 +458,20 @@ export function buildAuthUrl(targetPath = "/", hostname = window.location.hostna
 
 export function buildAuthGuidanceUrl(
   targetPath = "/",
-  hostname = window.location.hostname
+  hostname = window.location.hostname,
+  options?: {
+    surface?: AuthenticatedSurface;
+  }
 ) {
-  const authUrl = new URL(buildAuthUrl(targetPath, hostname));
+  const authUrl = new URL(buildAuthUrl(targetPath, hostname, options));
   authUrl.searchParams.set("guidance", "1");
   return authUrl.toString();
 }
 
 export function buildAccessRequestUrl(hostname = window.location.hostname) {
-  return buildAuthUrl("/access-request", hostname);
+  return buildAuthUrl("/access-request", hostname, {
+    surface: "portal"
+  });
 }
 
 export function buildPublicUrl(targetPath = "/", hostname = window.location.hostname) {
@@ -265,10 +488,43 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
   const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
 
   if (isLocalOrigin(hostname)) {
-    return buildLocalSurfaceUrl("portal", normalizedTargetPath);
+    return buildLocalSurfaceUrl("portal", normalizedTargetPath, "portal");
   }
 
   return new URL(normalizedTargetPath, productionPortalOrigin).toString();
+}
+
+export function buildMathUrl(targetPath = "/", hostname = window.location.hostname) {
+  const normalizedTargetPath = sanitizeMathTargetPath(targetPath);
+
+  if (isLocalOrigin(hostname)) {
+    return buildLocalSurfaceUrl("math", normalizedTargetPath, "math");
+  }
+
+  return new URL(normalizedTargetPath, productionMathOrigin).toString();
+}
+
+export function buildAuthenticatedAppUrl(
+  targetPath = "/",
+  options?: {
+    surface?: AuthenticatedSurface;
+  },
+  hostname = window.location.hostname
+) {
+  const preferredSurface =
+    options?.surface ?? resolvePreferredAuthenticatedSurface(hostname);
+  const resolvedTarget =
+    resolveAuthenticatedTarget(targetPath, {
+      preferredSurface,
+      surface: options?.surface
+    }) ?? {
+      surface: preferredSurface,
+      targetPath: "/"
+    };
+
+  return resolvedTarget.surface === "math"
+    ? buildMathUrl(resolvedTarget.targetPath, hostname)
+    : buildPortalUrl(resolvedTarget.targetPath, hostname);
 }
 
 export function buildAccessStartUrl(
@@ -276,13 +532,31 @@ export function buildAccessStartUrl(
   targetPath = "/",
   options?: {
     flow?: "sign_in" | "link";
+    surface?: AuthenticatedSurface;
   },
   hostname = window.location.hostname
 ) {
-  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+  const preferredSurface =
+    options?.surface ?? resolvePreferredAuthenticatedSurface(hostname);
+  const resolvedTarget =
+    resolveAuthenticatedTarget(targetPath, {
+      preferredSurface,
+      surface: options?.surface
+    }) ?? {
+      surface: preferredSurface,
+      targetPath: "/"
+    };
 
   if (isLocalOrigin(hostname)) {
-    const localUrl = new URL(buildPortalUrl(normalizedTargetPath, hostname));
+    const localUrl = new URL(
+      buildAuthenticatedAppUrl(
+        resolvedTarget.targetPath,
+        {
+          surface: resolvedTarget.surface
+        },
+        hostname
+      )
+    );
     const currentParams = new URLSearchParams(window.location.search);
     const approvedRole =
       currentParams.get("role") ??
@@ -301,9 +575,10 @@ export function buildAccessStartUrl(
   }
 
   const authUrl = new URL(`/api/access/start/${provider}`, productionAuthOrigin);
+  authUrl.searchParams.set("app", resolvedTarget.surface);
 
-  if (normalizedTargetPath !== "/") {
-    authUrl.searchParams.set("redirect", normalizedTargetPath);
+  if (resolvedTarget.targetPath !== "/") {
+    authUrl.searchParams.set("redirect", resolvedTarget.targetPath);
   }
 
   if (options?.flow === "link") {
@@ -313,29 +588,48 @@ export function buildAccessStartUrl(
   return authUrl.toString();
 }
 
-export function buildAccessFinalizeUrl(targetPath = "/") {
-  const normalizedTargetPath = sanitizePortalTargetPath(targetPath);
+export function buildAccessFinalizeUrl(
+  targetPath = "/",
+  options?: {
+    surface?: AuthenticatedSurface;
+  },
+  hostname = window.location.hostname
+) {
+  const preferredSurface =
+    options?.surface ?? resolvePreferredAuthenticatedSurface(hostname);
+  const resolvedTarget =
+    resolveAuthenticatedTarget(targetPath, {
+      preferredSurface,
+      surface: options?.surface
+    }) ?? {
+      surface: preferredSurface,
+      targetPath: "/"
+    };
 
-  if (isLocalOrigin()) {
+  if (isLocalOrigin(hostname)) {
     const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
+    completionUrl.searchParams.set("app", resolvedTarget.surface);
 
-    if (normalizedTargetPath !== "/") {
-      completionUrl.searchParams.set("redirect", normalizedTargetPath);
+    if (resolvedTarget.targetPath !== "/") {
+      completionUrl.searchParams.set("redirect", resolvedTarget.targetPath);
     }
 
     return completionUrl.toString();
   }
 
   const completionUrl = new URL("/api/access/finalize", window.location.origin);
+  completionUrl.searchParams.set("app", resolvedTarget.surface);
 
-  if (normalizedTargetPath !== "/") {
-    completionUrl.searchParams.set("redirect", normalizedTargetPath);
+  if (resolvedTarget.targetPath !== "/") {
+    completionUrl.searchParams.set("redirect", resolvedTarget.targetPath);
   }
 
   return completionUrl.toString();
 }
 
-export function resolveAccessProviderHost(hostname = window.location.hostname): AccessProvider | null {
+export function resolveAccessProviderHost(
+  hostname = window.location.hostname
+): AccessProvider | null {
   if (hostname === "github.auth.paretoproof.com") {
     return "github";
   }
@@ -345,6 +639,10 @@ export function resolveAccessProviderHost(hostname = window.location.hostname): 
   }
 
   return null;
+}
+
+export function describeAuthenticatedSurface(surface: AuthenticatedSurface) {
+  return mapAuthenticatedSurfaceToLabel(surface);
 }
 
 export function getCurrentRelativeUrl(location = window.location) {

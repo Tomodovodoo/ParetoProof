@@ -170,6 +170,7 @@ const trimmedOptionalCookieDomainSchema = z.preprocess(
 
 export const defaultApiPortalPublicOrigin = "https://portal.paretoproof.com";
 export const defaultApiAuthPublicOrigin = "https://auth.paretoproof.com";
+export const defaultApiMathPublicOrigin = "https://math.paretoproof.com";
 
 function buildBrandedAuthOrigin(
   authPublicOrigin: string,
@@ -247,14 +248,18 @@ export type ApiOriginRuntimeConfig = {
   authPublicOrigin: string;
   brandedAuthOrigins: string[];
   corsAllowLocalhost: boolean;
+  mathPublicOrigin: string;
   portalPublicOrigin: string;
 };
 
 export function resolveApiOriginRuntimeConfig(
   config?: Partial<ApiOriginRuntimeConfig>,
 ): ApiOriginRuntimeConfig {
+  const usesExplicitMathPublicOrigin = config?.mathPublicOrigin !== undefined;
   const authPublicOrigin =
     config?.authPublicOrigin ?? defaultApiAuthPublicOrigin;
+  const mathPublicOrigin =
+    config?.mathPublicOrigin ?? defaultApiMathPublicOrigin;
   const portalPublicOrigin =
     config?.portalPublicOrigin ?? defaultApiPortalPublicOrigin;
   const brandedAuthOrigins = [
@@ -268,7 +273,11 @@ export function resolveApiOriginRuntimeConfig(
         .filter((origin) => origin.length > 0),
     ),
   ];
-  const cookieOrigins = [portalPublicOrigin, ...brandedAuthOrigins];
+  const cookieOrigins = [
+    portalPublicOrigin,
+    ...brandedAuthOrigins,
+    ...(usesExplicitMathPublicOrigin ? [mathPublicOrigin] : []),
+  ];
 
   return {
     accessCookieDomain:
@@ -278,6 +287,7 @@ export function resolveApiOriginRuntimeConfig(
     authPublicOrigin,
     brandedAuthOrigins,
     corsAllowLocalhost: config?.corsAllowLocalhost ?? false,
+    mathPublicOrigin,
     portalPublicOrigin,
   };
 }
@@ -298,6 +308,7 @@ const rawApiRuntimeEnvSchema = z
     CORS_ALLOW_LOCALHOST: optionalBooleanStringSchema,
     DATABASE_URL: requiredTrimmedStringSchema,
     HOST: trimmedOptionalStringSchema,
+    MATH_PUBLIC_ORIGIN: trimmedOptionalOriginSchema,
     NODE_ENV: trimmedOptionalStringSchema,
     PORT: portSchema,
     PORTAL_PUBLIC_ORIGIN: trimmedOptionalOriginSchema,
@@ -326,6 +337,7 @@ export type ApiRuntimeEnv = {
   databaseUrl: string;
   host: string;
   internalAccessAudience: string;
+  mathPublicOrigin: string;
   nodeEnv?: string;
   port: number;
   portalAccessAudience: string;
@@ -403,6 +415,7 @@ export function parseApiRuntimeEnv(
     CORS_ALLOW_LOCALHOST,
     DATABASE_URL,
     HOST,
+    MATH_PUBLIC_ORIGIN,
     NODE_ENV,
     PORT,
     PORTAL_PUBLIC_ORIGIN,
@@ -420,6 +433,7 @@ export function parseApiRuntimeEnv(
     authPublicOrigin: AUTH_PUBLIC_ORIGIN,
     brandedAuthOrigins: BRANDED_AUTH_ORIGINS,
     corsAllowLocalhost: CORS_ALLOW_LOCALHOST === "true",
+    mathPublicOrigin: MATH_PUBLIC_ORIGIN,
     portalPublicOrigin: PORTAL_PUBLIC_ORIGIN,
   });
 
@@ -435,6 +449,7 @@ export function parseApiRuntimeEnv(
     databaseUrl: DATABASE_URL,
     host: HOST ?? "0.0.0.0",
     internalAccessAudience: CF_ACCESS_INTERNAL_AUD ?? portalAccessAudience,
+    mathPublicOrigin: originRuntimeConfig.mathPublicOrigin,
     nodeEnv: NODE_ENV,
     port: PORT === undefined ? 3000 : Number(PORT),
     portalAccessAudience,

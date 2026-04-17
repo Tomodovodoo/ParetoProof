@@ -192,6 +192,41 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
   });
 });
 
+test("trusted mutation origin hook still rejects math-origin portal mutations outside the finalize-submit boundary", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      brandedAuthOrigins: [],
+    }),
+  );
+
+  app.post("/portal/profile", async () => ({ ok: true }));
+
+  const response = await app.inject({
+    method: "POST",
+    payload: {
+      displayName: "Ada",
+    },
+    url: "/portal/profile",
+    headers: {
+      origin: "https://math.preview.paretoproof.com",
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.json(), {
+    error: "trusted_origin_not_allowed",
+  });
+});
+
 test("trusted mutation origin hook only allows branded auth POSTs on the finalize-submit handoff boundary", async (t) => {
   const app = Fastify();
 

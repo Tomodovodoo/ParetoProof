@@ -63,7 +63,7 @@ test("GET /portal/session/finalize/submit redirects back to the auth retry hando
   assert.equal(response.statusCode, 302);
   assert.equal(
     response.headers.location,
-    "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry",
+    "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry",
   );
   assert.equal(mutationAttempted, false);
 });
@@ -118,7 +118,7 @@ test("GET /portal/session/finalize/submit honors a runtime-provided link-intent 
   assert.equal(response.statusCode, 302);
   assert.equal(
     response.headers.location,
-    "https://auth.preview.paretoproof.com/?redirect=%2Fprofile&handoff=retry",
+    "https://auth.preview.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry",
   );
   assert.equal(mutationAttempted, false);
 });
@@ -410,6 +410,85 @@ test("POST /portal/session/finalize/submit returns the JSON redirect payload for
   assert.equal(insertedSessions.length, 1);
 });
 
+test("POST /portal/session/finalize/submit returns a math-surface redirect for approved users when app=math", async (t) => {
+  let mutationAttempted = false;
+  const insertedSessions: Array<typeof sessions.$inferInsert> = [];
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      insert() {
+        return {
+          values: async (value: unknown) => {
+            insertedSessions.push(value as typeof sessions.$inferInsert);
+            return value;
+          },
+        };
+      },
+      query: {
+        userIdentities: {
+          findFirst: async () => ({
+            id: "identity-1",
+            provider: "cloudflare_google",
+            providerSubject: "subject-1",
+            userId: "user-1",
+          }),
+        },
+      },
+      transaction: async () => {
+        mutationAttempted = true;
+        throw new Error(
+          "math finalize submit should not hit the identity-link mutation path",
+        );
+      },
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      mathPublicOrigin: "https://math.preview.paretoproof.com",
+      resolvePortalAccess: async (request) => {
+        request.accessIdentity = {
+          email: "person@example.com",
+          issuer: "https://paretoproof.cloudflareaccess.com",
+          provider: "cloudflare_google",
+          subject: "subject-1",
+        };
+        request.accessRbacContext = {
+          email: "person@example.com",
+          identityId: "identity-1",
+          role: "helper",
+          status: "approved",
+          subject: "subject-1",
+          userId: "user-1",
+        };
+
+        return request.accessRbacContext;
+      },
+    },
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?app=math&redirect=/launch",
+    headers: {
+      accept: "application/json",
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    redirectTo: "https://math.preview.paretoproof.com/launch",
+  });
+  assert.equal(mutationAttempted, false);
+  assert.equal(insertedSessions.length, 1);
+});
+
 test("POST /portal/session/finalize/submit bounces stale direct browser handoffs back to the branded auth relay", async (t) => {
   const app = Fastify();
 
@@ -441,7 +520,7 @@ test("POST /portal/session/finalize/submit bounces stale direct browser handoffs
   assert.equal(response.statusCode, 307);
   assert.equal(
     response.headers.location,
-    "https://google.auth.paretoproof.com/api/access/finalize?redirect=%2Fprofile",
+    "https://google.auth.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fprofile",
   );
 });
 
@@ -479,7 +558,7 @@ test("POST /portal/session/finalize/submit keeps the shared auth origin relay wh
   assert.equal(response.statusCode, 307);
   assert.equal(
     response.headers.location,
-    "https://portal.preview.paretoproof.com/api/access/finalize?redirect=%2Fprofile",
+    "https://portal.preview.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fprofile",
   );
 });
 
@@ -513,7 +592,7 @@ test("POST /portal/session/finalize/submit still returns JSON auth errors for no
   assert.equal(response.json().error, "access_assertion_required");
 });
 
-test("POST /portal/session/finalize/submit clears PortalAccessSession for pending users", async (t) => {
+test("POST /portal/session/finalize/submit clears PortalAccessSession and canonicalizes pending users to /pending", async (t) => {
   const app = Fastify();
   const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
   process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
@@ -581,7 +660,7 @@ test("POST /portal/session/finalize/submit clears PortalAccessSession for pendin
   assert.equal(response.statusCode, 302);
   assert.equal(
     response.headers.location,
-    "https://portal.paretoproof.com/access-request",
+    "https://portal.paretoproof.com/pending",
   );
 
   const setCookies = response.headers["set-cookie"];
@@ -593,6 +672,73 @@ test("POST /portal/session/finalize/submit clears PortalAccessSession for pendin
   assert.match(setCookies[1], /; SameSite=Strict;/);
   assert.match(setCookies[2], /^PortalLinkIntent=;/);
   assert.match(setCookies[2], /; SameSite=Strict;/);
+});
+
+test("POST /portal/session/finalize/submit canonicalizes pending math continuation back to the portal pending route", async (t) => {
+  const app = Fastify();
+  const originalSecret = process.env.ACCESS_PROVIDER_STATE_SECRET;
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "test-secret";
+
+  t.after(async () => {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = originalSecret;
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {
+      transaction: async () => {
+        throw new Error(
+          "pending math finalize submit should not hit the identity-link mutation path",
+        );
+      },
+    } as never,
+    () => (_request, _reply, done) => {
+      done();
+    },
+    {
+      mathPublicOrigin: "https://math.preview.paretoproof.com",
+      resolvePortalAccess: async (request) => {
+        request.accessIdentity = {
+          email: "pending@example.com",
+          issuer: "https://paretoproof.cloudflareaccess.com",
+          provider: "cloudflare_google",
+          subject: "subject-pending",
+        };
+        request.accessRbacContext = {
+          email: "pending@example.com",
+          requestId: "request-pending",
+          status: "pending",
+          subject: "subject-pending",
+          userId: "user-pending",
+        };
+
+        return request.accessRbacContext;
+      },
+    },
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/portal/session/finalize/submit?app=math&redirect=/launch",
+    headers: {
+      accept: "application/json",
+      cookie: [
+        "CF_Authorization=session-cookie",
+        buildSignedAccessCookie(
+          "PortalAccessProvider",
+          "cloudflare_google|subject-pending",
+        ),
+      ].join("; "),
+      origin: "https://google.auth.paretoproof.com",
+      referer: "https://google.auth.paretoproof.com/",
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    redirectTo: "https://portal.paretoproof.com/pending",
+  });
 });
 
 test("POST /portal/session/sign-out revokes the active opaque session and clears portal cookies", async (t) => {

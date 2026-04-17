@@ -99,7 +99,7 @@ describe("resolveAuthEntrySessionCheckAction", () => {
           }
         }
       )
-    ).toBe("redirect_portal");
+    ).toBe("redirect_authenticated_app");
   });
 
   it("redirects pending users straight to the pending route", () => {
@@ -202,14 +202,14 @@ describe("buildLocalAuthEntryPreviewState", () => {
       location: new URL("http://127.0.0.1/?surface=auth")
     };
 
-    expect(buildLocalAuthEntryPreviewState("sign_in", "/runs/alpha")).toMatchObject({
+    expect(buildLocalAuthEntryPreviewState("sign_in", "/runs/alpha", "portal")).toMatchObject({
       actions: [
         {
           href: "http://127.0.0.1/runs/alpha?surface=portal",
           title: "Open local portal preview"
         },
         {
-          href: "http://127.0.0.1/?surface=auth&redirect=%2Faccess-request",
+          href: "http://127.0.0.1/?surface=auth&app=portal&redirect=%2Faccess-request",
           title: "Open local access-request preview"
         }
       ]
@@ -221,14 +221,16 @@ describe("buildLocalAuthEntryPreviewState", () => {
       location: new URL("http://127.0.0.1/?surface=auth&redirect=%2Faccess-request")
     };
 
-    expect(buildLocalAuthEntryPreviewState("access_request", "/access-request")).toMatchObject({
+    expect(
+      buildLocalAuthEntryPreviewState("access_request", "/access-request", "portal")
+    ).toMatchObject({
       actions: [
         {
           href: "http://127.0.0.1/access-request?surface=portal",
           title: "Open local access-request route"
         },
         {
-          href: "http://127.0.0.1/?surface=auth",
+          href: "http://127.0.0.1/?surface=auth&app=portal",
           title: "Open local sign-in guidance"
         }
       ]
@@ -242,7 +244,9 @@ describe("AuthEntry local rendering", () => {
       location: new URL("http://127.0.0.1/?surface=auth")
     };
 
-    const html = renderToStaticMarkup(<AuthEntry redirectPath="/runs/alpha" />);
+    const html = renderToStaticMarkup(
+      <AuthEntry redirectPath="/runs/alpha" redirectSurface="portal" />
+    );
 
     expect(html).toContain("Local development bypasses live provider sign-in.");
     expect(html).toContain("Open local portal preview");
@@ -259,7 +263,9 @@ describe("AuthEntry local rendering", () => {
       location: new URL("http://127.0.0.1/?surface=auth&redirect=%2Faccess-request")
     };
 
-    const html = renderToStaticMarkup(<AuthEntry redirectPath="/access-request" />);
+    const html = renderToStaticMarkup(
+      <AuthEntry redirectPath="/access-request" redirectSurface="portal" />
+    );
 
     expect(html).toContain("Local development bypasses provider verification here.");
     expect(html).toContain("Open local access-request route");
@@ -276,7 +282,9 @@ describe("AuthEntry hosted guidance rendering", () => {
       location: new URL("https://auth.paretoproof.com/?guidance=1&redirect=%2Fpending")
     };
 
-    const html = renderToStaticMarkup(<AuthEntry redirectPath="/pending" />);
+    const html = renderToStaticMarkup(
+      <AuthEntry redirectPath="/pending" redirectSurface="portal" />
+    );
 
     expect(html).not.toContain("Checking for an existing session...");
     expect(html).toContain("Continue with GitHub");

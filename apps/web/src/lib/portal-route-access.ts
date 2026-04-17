@@ -2,9 +2,14 @@ import {
   type AppRouteMatrixEntry,
   findAppRouteBySurface
 } from "@paretoproof/shared";
-import { buildPublicUrl, copyLocalPortalState, isLocalHostname } from "./surface";
+import {
+  buildMathUrl,
+  buildPortalUrl,
+  buildPublicUrl
+} from "./surface";
 
 type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
+type AuthenticatedSurface = "portal" | "math";
 
 type PortalRouteAccessContext = {
   pathname: string;
@@ -19,8 +24,15 @@ type PortalRouteAccessContext = {
   status: PortalAccessStatus;
 };
 
-function findPortalRoute(pathname: string) {
-  return findAppRouteBySurface("portal", pathname);
+type SurfaceRouteAccessContext = PortalRouteAccessContext & {
+  surface: AuthenticatedSurface;
+};
+
+function findSurfaceRoute<TSurface extends AuthenticatedSurface>(
+  surface: TSurface,
+  pathname: string
+) {
+  return findAppRouteBySurface(surface, pathname);
 }
 
 function hasRole(roles: string[], role: "admin" | "collaborator" | "helper") {
@@ -72,18 +84,6 @@ function canAccessRoute(
   return true;
 }
 
-function preserveLocalPortalState(targetPath: string, location = window.location) {
-  if (!isLocalHostname(location.hostname)) {
-    return targetPath;
-  }
-
-  const redirectUrl = new URL(targetPath, location.origin);
-  redirectUrl.searchParams.set("surface", "portal");
-  copyLocalPortalState(redirectUrl, location);
-
-  return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
-}
-
 function stripRouteDeniedReason(search = "") {
   const params = new URLSearchParams(search);
   params.delete("reason");
@@ -122,31 +122,32 @@ function isCurrentRedirectTarget(
 ) {
   const targetUrl = new URL(targetPath, window.location.origin);
   return (
+    targetUrl.origin === window.location.origin &&
     targetUrl.pathname === context.pathname &&
     normalizeSearch(targetUrl.search) === normalizeSearch(context.search ?? "")
   );
 }
 
-function resolveCanonicalStateTarget(context: PortalRouteAccessContext) {
+function buildCanonicalPortalStateTarget(context: PortalRouteAccessContext) {
   if (context.status === "pending") {
-    return preserveLocalPortalState("/pending");
+    return buildPortalUrl("/pending");
   }
 
   if (context.status === "denied") {
     return context.reason === "access_request_required"
-      ? preserveLocalPortalState("/access-request")
-      : preserveLocalPortalState("/denied");
+      ? buildPortalUrl("/access-request")
+      : buildPortalUrl("/denied");
   }
 
   return null;
 }
 
-export function findMatchedPortalRoute(pathname: string) {
-  return findPortalRoute(pathname) ?? null;
+function buildSurfaceHomeUrl(surface: AuthenticatedSurface) {
+  return surface === "math" ? buildMathUrl("/") : buildPortalUrl("/");
 }
 
-export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
-  const matchedRoute = findPortalRoute(context.pathname);
+function resolvePortalSurfaceRouteRedirect(context: PortalRouteAccessContext) {
+  const matchedRoute = findSurfaceRoute("portal", context.pathname);
   const routeDeniedReason = readRouteDeniedReason(context.search);
 
   if (
@@ -154,26 +155,22 @@ export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
     routeDeniedReason &&
     matchedRoute?.id !== "portal.denied"
   ) {
-    return preserveLocalPortalState(
-      `${context.pathname}${stripRouteDeniedReason(context.search)}`
-    );
+    return buildPortalUrl(`${context.pathname}${stripRouteDeniedReason(context.search)}`);
   }
 
   if (context.status === "approved" && matchedRoute?.id === "portal.pending") {
-    return preserveLocalPortalState("/");
+    return buildPortalUrl("/");
   }
 
   if (context.status === "approved" && matchedRoute?.id === "portal.access-request") {
-    return preserveLocalPortalState("/");
+    return buildPortalUrl("/");
   }
 
   if (context.status === "approved" && matchedRoute?.id === "portal.denied") {
-    return routeDeniedReason === "insufficient_role"
-      ? null
-      : preserveLocalPortalState("/");
+    return routeDeniedReason === "insufficient_role" ? null : buildPortalUrl("/");
   }
 
-  const canonicalStateTarget = resolveCanonicalStateTarget(context);
+  const canonicalStateTarget = buildCanonicalPortalStateTarget(context);
 
   if (canonicalStateTarget && !isCurrentRedirectTarget(canonicalStateTarget, context)) {
     return canonicalStateTarget;
@@ -184,20 +181,77 @@ export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
   }
 
   if (context.status === "approved") {
-    return preserveLocalPortalState("/denied?reason=insufficient_role");
+    return buildPortalUrl("/denied?reason=insufficient_role");
   }
 
   if (context.status === "pending") {
-    return preserveLocalPortalState("/pending");
+    return buildPortalUrl("/pending");
   }
 
   if (context.status === "denied") {
     return context.reason === "access_request_required"
-      ? preserveLocalPortalState("/access-request")
-      : preserveLocalPortalState("/denied");
+      ? buildPortalUrl("/access-request")
+      : buildPortalUrl("/denied");
   }
 
   return matchedRoute.redirectIfDenied === "public_home"
     ? buildPublicUrl("/")
-    : preserveLocalPortalState("/");
+    : buildPortalUrl("/");
+}
+
+export function findMatchedPortalRoute(pathname: string) {
+  return findSurfaceRoute("portal", pathname) ?? null;
+}
+
+export function findMatchedSurfaceRoute(
+  surface: AuthenticatedSurface,
+  pathname: string
+) {
+  return findSurfaceRoute(surface, pathname) ?? null;
+}
+
+export function resolveSurfaceRouteRedirect(context: SurfaceRouteAccessContext) {
+  if (context.surface === "portal") {
+    return resolvePortalSurfaceRouteRedirect(context);
+  }
+
+  const matchedRoute = findSurfaceRoute("math", context.pathname);
+  const canonicalPortalTarget = buildCanonicalPortalStateTarget(context);
+
+  if (canonicalPortalTarget && !isCurrentRedirectTarget(canonicalPortalTarget, context)) {
+    return canonicalPortalTarget;
+  }
+
+  if (!matchedRoute) {
+    return context.status === "approved" ? buildSurfaceHomeUrl("math") : null;
+  }
+
+  if (canAccessRoute(matchedRoute, context)) {
+    return null;
+  }
+
+  if (context.status === "approved") {
+    return buildSurfaceHomeUrl("math");
+  }
+
+  if (context.status === "pending") {
+    return buildPortalUrl("/pending");
+  }
+
+  if (context.status === "denied") {
+    return context.reason === "access_request_required"
+      ? buildPortalUrl("/access-request")
+      : buildPortalUrl("/denied");
+  }
+
+  return matchedRoute.redirectIfDenied === "public_home"
+    ? buildPublicUrl("/")
+    : buildSurfaceHomeUrl("math");
+}
+
+export function resolvePortalRouteRedirect(context: PortalRouteAccessContext) {
+  return resolveSurfaceRouteRedirect({
+    ...context,
+    surface: "portal"
+  });
 }

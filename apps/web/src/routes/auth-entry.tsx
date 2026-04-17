@@ -5,14 +5,18 @@ import { fetchApi } from "../lib/api-fetch";
 import {
   buildAccessRequestUrl,
   buildAccessStartUrl,
+  buildAuthenticatedAppUrl,
   buildAuthUrl,
   buildPortalUrl,
   buildPublicUrl,
+  describeAuthenticatedSurface,
+  type AuthenticatedSurface,
   isLocalHostname
 } from "../lib/surface";
 
 type AuthEntryProps = {
   redirectPath: string;
+  redirectSurface: AuthenticatedSurface;
 };
 
 type AuthEntrySessionCheckPayload = {
@@ -64,14 +68,14 @@ const accessRequestChecks = [
 
 const localSignInChecks = [
   "Local development bypasses live provider sign-in and uses this auth surface only for preview routing.",
-  "Open the portal preview when your local or configured API target is reachable.",
+  "Open the destination preview when your local or configured API target is reachable.",
   "Switch to the access-request entry preview to verify that path without a live identity handoff."
 ];
 
 const localAccessRequestChecks = [
   "Local development does not verify GitHub or Google identities before showing this entry.",
   "Use the access-request route preview when your API target is reachable and you need to inspect request-state UX.",
-  "If the API is offline, the portal surface will tell you exactly which backend target is missing."
+  "If the API is offline, the destination surface will tell you exactly which backend target is missing."
 ];
 
 export function resolveAuthEntryMode(redirectPath: string) {
@@ -84,7 +88,8 @@ export function resolveAuthEntryApprovedPortalTargetPath(redirectPath: string) {
 
 export function buildLocalAuthEntryPreviewState(
   mode: ReturnType<typeof resolveAuthEntryMode>,
-  redirectPath: string
+  redirectPath: string,
+  redirectSurface: AuthenticatedSurface
 ): AuthEntryLocalExperience {
   if (mode === "access_request") {
     return {
@@ -99,7 +104,9 @@ export function buildLocalAuthEntryPreviewState(
         {
           copy:
             "Return to the standard local auth guidance without triggering any provider handoff.",
-          href: buildAuthUrl("/"),
+          href: buildAuthUrl("/", undefined, {
+            surface: redirectSurface
+          }),
           icon: "shield",
           title: "Open local sign-in guidance"
         }
@@ -120,15 +127,27 @@ export function buildLocalAuthEntryPreviewState(
     actions: [
       {
         copy:
-          "Open the contributor portal shell directly against your local or configured API target.",
-        href: buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
+          redirectSurface === "math"
+            ? "Open the math workspace preview directly against your local or configured API target."
+            : "Open the contributor portal shell directly against your local or configured API target.",
+        href: buildAuthenticatedAppUrl(
+          resolveAuthEntryApprovedPortalTargetPath(redirectPath),
+          {
+            surface: redirectSurface
+          }
+        ),
         icon: "grid",
-        title: "Open local portal preview"
+        title:
+          redirectSurface === "math"
+            ? "Open local math preview"
+            : "Open local portal preview"
       },
       {
         copy:
           "Switch to the access-request entry preview without triggering a live provider handoff.",
-        href: buildAuthUrl("/access-request"),
+        href: buildAuthUrl("/access-request", undefined, {
+          surface: "portal"
+        }),
         icon: "key",
         title: "Open local access-request preview"
       }
@@ -137,7 +156,7 @@ export function buildLocalAuthEntryPreviewState(
     footerText:
       "Running locally - live provider sign-in is disabled here, so use the preview routes above or return to the public site.",
     lead:
-      "Local development bypasses live provider sign-in. Use this entry to move into the portal or access-request previews once your API target is reachable.",
+      "Local development bypasses live provider sign-in. Use this entry to move into the destination preview once your API target is reachable.",
     panelCopy:
       "Choose the local preview route you want to inspect next.",
     panelTag: "Local preview",
@@ -172,9 +191,9 @@ export function shouldSkipAuthEntrySessionCheck(search = window.location.search)
 
 export type AuthEntrySessionCheckAction =
   | "redirect_access_request"
+  | "redirect_authenticated_app"
   | "redirect_denied"
   | "redirect_pending"
-  | "redirect_portal"
   | "stay_on_auth_entry";
 
 export function resolveAuthEntrySessionCheckAction(
@@ -198,7 +217,7 @@ export function resolveAuthEntrySessionCheckAction(
       return "redirect_denied";
     }
 
-    return "redirect_portal";
+    return "redirect_authenticated_app";
   }
 
   if (response.type === "opaqueredirect" || response.status === 401) {
@@ -208,24 +227,37 @@ export function resolveAuthEntrySessionCheckAction(
   return "stay_on_auth_entry";
 }
 
-export function AuthEntry({ redirectPath }: AuthEntryProps) {
+export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
   const mode = resolveAuthEntryMode(redirectPath);
-  const githubStartUrl = buildAccessStartUrl("github", redirectPath);
-  const googleStartUrl = buildAccessStartUrl("google", redirectPath);
-  const approvedSignInUrl = buildAuthUrl("/");
+  const githubStartUrl = buildAccessStartUrl("github", redirectPath, {
+    surface: redirectSurface
+  });
+  const googleStartUrl = buildAccessStartUrl("google", redirectPath, {
+    surface: redirectSurface
+  });
+  const approvedSignInUrl = buildAuthUrl("/", undefined, {
+    surface: "portal"
+  });
   const accessRequestUrl = buildAccessRequestUrl();
   const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
-  const portalUrl = useMemo(
-    () => buildPortalUrl(resolveAuthEntryApprovedPortalTargetPath(redirectPath)),
-    [redirectPath]
+  const destinationUrl = useMemo(
+    () =>
+      buildAuthenticatedAppUrl(
+        resolveAuthEntryApprovedPortalTargetPath(redirectPath),
+        {
+          surface: redirectSurface
+        }
+      ),
+    [redirectPath, redirectSurface]
   );
+  const destinationLabel = describeAuthenticatedSurface(redirectSurface);
   const portalAccessRequestUrl = useMemo(() => buildPortalUrl("/access-request"), []);
   const portalDeniedUrl = useMemo(() => buildPortalUrl("/denied"), []);
   const portalPendingUrl = useMemo(() => buildPortalUrl("/pending"), []);
   const localExperience = useMemo(
-    () => (isLocal ? buildLocalAuthEntryPreviewState(mode, redirectPath) : null),
-    [isLocal, mode, redirectPath]
+    () => (isLocal ? buildLocalAuthEntryPreviewState(mode, redirectPath, redirectSurface) : null),
+    [isLocal, mode, redirectPath, redirectSurface]
   );
   const publicHomeLabel = isLocal ? "Back to local home" : "Back to paretoproof.com";
   const skipSessionCheck = shouldSkipAuthEntrySessionCheck();
@@ -265,7 +297,7 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
                 ? portalDeniedUrl
                 : action === "redirect_pending"
                   ? portalPendingUrl
-                  : portalUrl;
+                  : destinationUrl;
 
           window.location.replace(redirectTarget);
           return;
@@ -288,11 +320,11 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
     };
   }, [
     apiBaseUrl,
+    destinationUrl,
     isLocal,
     portalAccessRequestUrl,
     portalDeniedUrl,
     portalPendingUrl,
-    portalUrl,
     skipSessionCheck
   ]);
 
@@ -308,19 +340,19 @@ export function AuthEntry({ redirectPath }: AuthEntryProps) {
             <span className="inline-icon" aria-hidden="true">
               <AppIcon name="shield" />
             </span>
-            ParetoProof portal
+            ParetoProof workspace
           </p>
           <h1>
             {mode === "access_request"
               ? "Request contributor access."
-              : "Sign in to the contributor portal."}
+              : "Sign in to your ParetoProof workspace."}
           </h1>
           <p className="auth-lead">
             {localExperience
               ? localExperience.lead
               : mode === "access_request"
                 ? "Use GitHub or Google to verify your identity. After that, we will take you to the access request form."
-                : "Use GitHub or Google to continue. If you already have an active session, we will take you straight into the portal."}
+                : `Use GitHub or Google to continue. If you already have an active session, we will take you straight into the ${destinationLabel}.`}
           </p>
           {showRetryNotice ? (
             <p className="auth-panel-copy">

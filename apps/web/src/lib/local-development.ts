@@ -3,6 +3,7 @@ export const paretoProofBrandedHosts = [
   "auth.paretoproof.com",
   "github.auth.paretoproof.com",
   "google.auth.paretoproof.com",
+  "math.paretoproof.com",
   "portal.paretoproof.com"
 ] as const;
 
