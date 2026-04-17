@@ -517,7 +517,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
     expect(fetchCalled).toBe(false);
   });
@@ -577,7 +577,7 @@ describe("handleAccessFinalize", () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "https://auth.paretoproof.com/?redirect=%2Fprofile&handoff=retry"
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
     );
     expect(fetchCalled).toBe(false);
   });
