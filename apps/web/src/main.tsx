@@ -1,13 +1,9 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { readWebRuntimeEnv } from "./lib/runtime-env";
-import "./styles/app.css";
+import { startParetoProof } from "./start-app";
 
-readWebRuntimeEnv();
+const rootElement = document.getElementById("root");
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+if (!rootElement) {
+  throw new Error("ParetoProof could not find the web root element.");
+}
+
+void startParetoProof(rootElement);
