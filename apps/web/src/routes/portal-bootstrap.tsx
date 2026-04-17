@@ -8,7 +8,9 @@ import { AppIcon } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
+import { isLocalDevelopmentLocation } from "../lib/local-development";
 import { resolvePortalRouteRedirect } from "../lib/portal-route-access";
+import { readWebRuntimeEnv } from "../lib/runtime-env";
 import { AccessRequestScreen } from "./access-request-screen";
 import {
   reducePortalStateAfterAuthExpiry,
@@ -111,6 +113,7 @@ export async function recoverPortalStateAfterAuthExpiry(
   apiBaseUrl: string,
   options?: {
     fetcher?: PortalBootstrapFetcher;
+    localApiFallback?: boolean;
     signal?: AbortSignal;
   }
 ): Promise<PortalAccessState> {
@@ -123,10 +126,10 @@ export async function recoverPortalStateAfterAuthExpiry(
   try {
     return await fetchPortalBootstrapState(apiBaseUrl, options);
   } catch (error) {
-    return {
-      message: formatPortalBootstrapError(error),
-      status: "error"
-    };
+    return buildPortalBootstrapErrorState(error, {
+      apiBaseUrl,
+      localApiFallback: options?.localApiFallback ?? false
+    });
   }
 }
 
@@ -151,16 +154,60 @@ function readRouteDeniedReason(search = window.location.search) {
   return reason === "insufficient_role" ? reason : null;
 }
 
-function formatPortalBootstrapError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "Failed to fetch") {
-      return "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
-    }
+type PortalBootstrapErrorContext = {
+  apiBaseUrl: string;
+  localApiFallback: boolean;
+};
 
-    return "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.";
+function isNetworkFetchFailure(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
   }
 
-  return "The portal could not finish loading right now. Try again in a moment.";
+  return /failed to fetch|fetch failed|load failed|networkerror|network request failed/i.test(
+    error.message
+  );
+}
+
+function isUsingImplicitLocalPortalApi() {
+  return isLocalDevelopmentLocation(window.location) && !readWebRuntimeEnv().apiBaseUrl;
+}
+
+export function buildPortalBootstrapErrorState(
+  error: unknown,
+  context: PortalBootstrapErrorContext
+): Extract<PortalAccessState, { status: "error" }> {
+  if (isNetworkFetchFailure(error) && context.localApiFallback) {
+    return {
+      kind: "local_api_unavailable",
+      message: `This local portal preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.`,
+      status: "error"
+    };
+  }
+
+  if (isNetworkFetchFailure(error)) {
+    return {
+      kind: "portal_unavailable",
+      message:
+        "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      status: "error"
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      kind: "portal_unavailable",
+      message:
+        "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      status: "error"
+    };
+  }
+
+  return {
+    kind: "portal_unavailable",
+    message: "The portal could not finish loading right now. Try again in a moment.",
+    status: "error"
+  };
 }
 
 export function mapPortalMutationErrorMessage(
@@ -205,6 +252,7 @@ export function shouldRestartPortalAuthForMissingProvider(
 export function PortalBootstrap() {
   const [state, setState] = useState<PortalAccessState>({ status: "loading" });
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const localApiFallback = useMemo(() => isUsingImplicitLocalPortalApi(), []);
   const currentRelativeUrl = useMemo(() => getCurrentRelativeUrl(), []);
   const recoveryInFlightRef = useRef(false);
   const stateRef = useRef<PortalAccessState>(state);
@@ -250,10 +298,12 @@ export function PortalBootstrap() {
           return;
         }
 
-        setState({
-          message: formatPortalBootstrapError(error),
-          status: "error"
-        });
+        setState(
+          buildPortalBootstrapErrorState(error, {
+            apiBaseUrl,
+            localApiFallback
+          })
+        );
       }
     }
 
@@ -276,6 +326,7 @@ export function PortalBootstrap() {
       setState(reducedState);
 
       void recoverPortalStateAfterAuthExpiry(currentState, apiBaseUrl, {
+        localApiFallback,
         signal: controller.signal
       })
         .then((recoveredState) => {
@@ -297,7 +348,7 @@ export function PortalBootstrap() {
       controller.abort();
       window.removeEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
     };
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, localApiFallback]);
 
   useEffect(() => {
     if (state.status !== "unauthenticated") {
@@ -449,20 +500,35 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "error") {
-    return (
-      <PortalStatusCard
-        eyebrow="Portal"
-        title="Portal unavailable"
-        body={state.message}
-        action={{ href: buildPortalUrl(currentRelativeUrl), label: "Retry portal" }}
-      />
-    );
+    return renderPortalBootstrapErrorCard(state, currentRelativeUrl);
   }
 
   return (
     <PortalShell
       email={state.email}
       roles={derivePortalRoles(state.role)}
+    />
+  );
+}
+
+export function renderPortalBootstrapErrorCard(
+  state: Extract<PortalAccessState, { status: "error" }>,
+  currentRelativeUrl: string
+) {
+  return (
+    <PortalStatusCard
+      eyebrow="Portal"
+      title={
+        state.kind === "local_api_unavailable"
+          ? "Local API unavailable"
+          : "Portal unavailable"
+      }
+      body={state.message}
+      action={{
+        href: buildPortalUrl(currentRelativeUrl),
+        label:
+          state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
+      }}
     />
   );
 }

@@ -12,7 +12,11 @@ export type PortalAccessState =
         | "unknown_identity";
       status: "denied";
     }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      kind?: "local_api_unavailable" | "portal_unavailable";
+      message: string;
+    };
 
 export function buildLocalPendingPortalUrl(currentSearch = window.location.search) {
   const currentParams = new URLSearchParams(currentSearch);
