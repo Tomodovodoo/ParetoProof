@@ -147,6 +147,21 @@ export function isCurrentPortalRequest(requestId: number, latestRequestId: numbe
   return requestId === latestRequestId;
 }
 
+export function getPortalBenchmarkOpsUnavailableTitle(
+  activeSectionId: PortalBenchmarkOpsSurfaceProps["activeSectionId"],
+  activeRunId: string | null
+) {
+  if (activeSectionId === "runs") {
+    return activeRunId ? "Run evidence is unavailable." : "Run index is unavailable.";
+  }
+
+  if (activeSectionId === "workers") {
+    return "Worker operations are unavailable.";
+  }
+
+  return "Launch options are not ready yet.";
+}
+
 function isAwaitingFirstLoad<TData>(loadState: LoadState<TData>) {
   return !loadState.data && !loadState.error && loadState.lastUpdatedAt === null;
 }
@@ -442,7 +457,7 @@ type SurfaceProps<TData> = {
   onRefresh: () => Promise<void>;
 };
 
-function PortalRunsSurface({
+export function PortalRunsSurface({
   activeRouteId,
   loadState,
   onRefresh,
@@ -613,7 +628,7 @@ function PortalRunsSurface({
       ) : (
         <PortalEmptyState
           description="Refresh the route to reload the current benchmark-operations run index."
-          title="Run index is unavailable."
+          title={getPortalBenchmarkOpsUnavailableTitle("runs", null)}
         />
       )}
     </article>
@@ -1081,7 +1096,7 @@ function PortalRunsSurface({
   );
 }
 
-function PortalRunDetailSurface({
+export function PortalRunDetailSurface({
   activeRouteId,
   loadState,
   onRefresh,
@@ -1216,7 +1231,7 @@ function PortalRunDetailSurface({
         ) : (
           <PortalEmptyState
             description="Refresh the route or return to the shared run index to reopen evidence."
-            title="Run evidence is unavailable."
+            title={getPortalBenchmarkOpsUnavailableTitle("runs", "__detail__")}
           />
         )}
       </article>
@@ -1246,7 +1261,7 @@ function PortalRunDetailSurface({
   );
 }
 
-function PortalLaunchSurface({
+export function PortalLaunchSurface({
   activeRouteId,
   loadState,
   onRefresh,
@@ -1410,7 +1425,7 @@ function PortalLaunchSurface({
         ) : (
           <PortalEmptyState
             description="Refresh the route once benchmark packages, model configs, and run kinds are available again."
-            title="Launch options are not ready yet."
+            title={getPortalBenchmarkOpsUnavailableTitle("launch", null)}
           />
         )}
       </article>
@@ -1440,7 +1455,7 @@ function PortalLaunchSurface({
   );
 }
 
-function PortalWorkersSurface({
+export function PortalWorkersSurface({
   activeRouteId,
   loadState,
   onRefresh
@@ -1597,7 +1612,7 @@ function PortalWorkersSurface({
         ) : (
           <PortalEmptyState
             description="Refresh the route to reload queue posture, worker pools, and active leases."
-            title="Worker operations are unavailable."
+            title={getPortalBenchmarkOpsUnavailableTitle("workers", null)}
           />
         )}
       </article>
