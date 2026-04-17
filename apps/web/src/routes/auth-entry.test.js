@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   AuthEntry,
   buildLocalAuthEntryPreviewState,
+  resolveApprovedAuthEntryHandoff,
   resolveAuthEntryApprovedPortalTargetPath,
   resolveAuthEntrySessionCheckAction,
   shouldSkipAuthEntrySessionCheck,
@@ -183,6 +184,63 @@ describe("resolveAuthEntrySessionCheckAction", () => {
         }
       )
     ).toBe("redirect_denied");
+  });
+});
+
+describe("resolveApprovedAuthEntryHandoff", () => {
+  it("builds a portal handoff only for approved authenticated redirects", () => {
+    expect(
+      resolveApprovedAuthEntryHandoff(
+        "redirect_authenticated_app",
+        {
+          access: {
+            role: "admin",
+            status: "approved"
+          },
+          identity: {
+            provider: "cloudflare_google"
+          }
+        },
+        "portal"
+      )
+    ).toEqual({
+      role: "admin",
+      status: "approved",
+      surface: "portal"
+    });
+  });
+
+  it("does not build a handoff for pending or denied states", () => {
+    expect(
+      resolveApprovedAuthEntryHandoff(
+        "redirect_pending",
+        {
+          access: {
+            status: "pending"
+          },
+          identity: {
+            provider: "cloudflare_google"
+          }
+        },
+        "portal"
+      )
+    ).toBeNull();
+
+    expect(
+      resolveApprovedAuthEntryHandoff(
+        "redirect_denied",
+        {
+          access: {
+            reason: "rejected_or_withdrawn",
+            status: "denied"
+          },
+          identity: {
+            provider: "cloudflare_google"
+          }
+        },
+        "portal"
+      )
+    ).toBeNull();
   });
 });
 

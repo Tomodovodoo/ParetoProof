@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { buildApprovedAuthHandoffCookieValue } from "../lib/approved-auth-handoff.ts";
 import {
   buildLocalPendingPortalUrl,
   reducePortalStateAfterAuthExpiry
 } from "./portal-bootstrap-state.ts";
 import {
+  PortalBootstrap,
   buildPortalBootstrapErrorState,
   fetchPortalBootstrapState,
   derivePortalRoles,
   mapPortalMutationErrorMessage,
   recoverPortalStateAfterAuthExpiry,
+  resolvePortalBootstrapRouteRedirect,
   renderPortalDeniedCard,
   renderPortalPendingCard,
   renderLocalPortalUnauthenticatedCard,
@@ -18,14 +21,20 @@ import {
 } from "./portal-bootstrap.tsx";
 
 const originalWindow = globalThis.window;
+const originalDocument = globalThis.document;
 
 afterEach(() => {
   if (originalWindow) {
     globalThis.window = originalWindow;
-    return;
+  } else {
+    delete globalThis.window;
   }
 
-  delete globalThis.window;
+  if (originalDocument) {
+    globalThis.document = originalDocument;
+  } else {
+    delete globalThis.document;
+  }
 });
 
 describe("portal bootstrap state", () => {
@@ -445,5 +454,83 @@ describe("recoverPortalStateAfterAuthExpiry", () => {
       status: "loading"
     });
     expect(fetchCalled).toBe(false);
+  });
+});
+
+describe("PortalBootstrap auth handoff", () => {
+  it("renders the portal shell immediately when a fresh approved handoff is present", () => {
+    const handoffCookie = buildApprovedAuthHandoffCookieValue(
+      {
+        role: "admin",
+        status: "approved",
+        surface: "portal"
+      },
+      Date.now()
+    );
+
+    globalThis.window = {
+      location: new URL("https://portal.paretoproof.com/")
+    };
+    globalThis.document = {
+      cookie: handoffCookie
+    };
+
+    const firstHtml = renderToStaticMarkup(<PortalBootstrap />);
+    const secondHtml = renderToStaticMarkup(<PortalBootstrap />);
+
+    expect(firstHtml).not.toContain("Opening portal");
+    expect(firstHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(firstHtml).toContain("Authenticated session");
+    expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(globalThis.document.cookie).toBe(handoffCookie);
+  });
+
+  it("defers insufficient-role redirects while an approved handoff is still provisional", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/admin/users?surface=portal&access=approved&role=collaborator"
+      )
+    };
+
+    expect(
+      resolvePortalBootstrapRouteRedirect({
+        allowApprovedRouteRedirects: false,
+        pathname: "/admin/users",
+        routeDeniedReason: null,
+        search: "?surface=portal&access=approved&role=collaborator",
+        state: {
+          email: null,
+          role: "collaborator",
+          status: "approved"
+        },
+        surface: "portal"
+      })
+    ).toBeNull();
+  });
+
+  it("restores insufficient-role redirects after bootstrap revalidation", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/admin/users?surface=portal&access=approved&role=collaborator"
+      )
+    };
+
+    const redirectTarget = resolvePortalBootstrapRouteRedirect({
+      pathname: "/admin/users",
+      routeDeniedReason: null,
+      search: "?surface=portal&access=approved&role=collaborator",
+      state: {
+        email: null,
+        role: "collaborator",
+        status: "approved"
+      },
+      surface: "portal"
+    });
+
+    expect(redirectTarget).not.toBeNull();
+    const redirectUrl = new URL(redirectTarget);
+
+    expect(redirectUrl.pathname).toBe("/denied");
+    expect(redirectUrl.searchParams.get("reason")).toBe("insufficient_role");
   });
 });
