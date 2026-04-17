@@ -194,6 +194,130 @@ describe("PortalShell overview ordering", () => {
   });
 });
 
+describe("PortalShell live overview helpers", () => {
+  it("derives truthful zero-run metrics from the live overview payload", async () => {
+    const { buildOverviewMetricsCopy } = await loadPortalShellModule();
+
+    expect(
+      buildOverviewMetricsCopy({
+        benchmarkHighlights: [],
+        generatedAt: "2026-04-17T08:00:00.000Z",
+        recentIncidents: [],
+        recentRuns: [],
+        summary: {
+          activeLeases: 0,
+          activeRuns: 0,
+          failedRuns: 0,
+          observedBenchmarkPackageCount: 0,
+          queuedJobs: 0,
+          queuedRuns: 0,
+          runningJobs: 0,
+          staleLeaseCount: 0,
+          totalRuns: 0
+        }
+      })
+    ).toEqual([
+      {
+        label: "Total runs",
+        note: "No benchmark runs have been recorded yet.",
+        value: "0"
+      },
+      {
+        label: "Active runs",
+        note: "0 failed run(s) recorded in the current aggregate.",
+        value: "0"
+      },
+      {
+        label: "Queued jobs",
+        note: "0 queued run(s), 0 running job(s).",
+        value: "0"
+      },
+      {
+        label: "Active leases",
+        note: "0 stale lease(s), 0 recent incident(s).",
+        value: "0"
+      }
+    ]);
+  });
+
+  it("describes overview lead copy for loading, error, and ready states", async () => {
+    const { describePortalOverviewLead } = await loadPortalShellModule();
+
+    expect(describePortalOverviewLead({ status: "loading" })).toContain("Loading the live portal overview");
+    expect(
+      describePortalOverviewLead({
+        message: "Overview request failed.",
+        status: "error"
+      })
+    ).toBe("Overview request failed.");
+    expect(
+      describePortalOverviewLead({
+        data: {
+          benchmarkHighlights: [],
+          generatedAt: "2026-04-17T08:00:00.000Z",
+          recentIncidents: [],
+          recentRuns: [],
+          summary: {
+            activeLeases: 0,
+            activeRuns: 0,
+            failedRuns: 0,
+            observedBenchmarkPackageCount: 0,
+            queuedJobs: 0,
+            queuedRuns: 0,
+            runningJobs: 0,
+            staleLeaseCount: 0,
+            totalRuns: 0
+          }
+        },
+        status: "ready"
+      })
+    ).toContain("Railway/Neon read models");
+  });
+
+  it("describes the recent-runs fallback row for loading, error, and zero-run states", async () => {
+    const { describePortalOverviewRecentRunsFallback } = await loadPortalShellModule();
+
+    expect(describePortalOverviewRecentRunsFallback({ status: "loading" })).toEqual({
+      detail: "Loading recent run history from the backend.",
+      headline: "Loading overview."
+    });
+    expect(
+      describePortalOverviewRecentRunsFallback({
+        message: "Overview request failed.",
+        status: "error"
+      })
+    ).toEqual({
+      detail: "Overview request failed.",
+      headline: "Overview unavailable."
+    });
+    expect(
+      describePortalOverviewRecentRunsFallback({
+        data: {
+          benchmarkHighlights: [],
+          generatedAt: "2026-04-17T08:00:00.000Z",
+          recentIncidents: [],
+          recentRuns: [],
+          summary: {
+            activeLeases: 0,
+            activeRuns: 0,
+            failedRuns: 0,
+            observedBenchmarkPackageCount: 0,
+            queuedJobs: 0,
+            queuedRuns: 0,
+            runningJobs: 0,
+            staleLeaseCount: 0,
+            totalRuns: 0
+          }
+        },
+        status: "ready"
+      })
+    ).toEqual({
+      detail: "The synced backend has not produced any benchmark runs.",
+      headline: "No runs recorded yet."
+    });
+  });
+});
+
 describe("PortalShell benchmark ops routes", () => {
   it("renders the runs route as the shared portal index with an explicit loading state", async () => {
     const html = await renderPortalShell({

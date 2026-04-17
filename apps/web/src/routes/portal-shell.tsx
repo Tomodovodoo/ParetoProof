@@ -34,20 +34,16 @@ type PortalNavGroup = {
   sections: PortalSectionDefinition[];
 };
 
-type OverviewSurfaceRow = {
-  entryHref: string;
-  entryLabel: string;
-  freshnessLabel: string;
-  id: PortalSectionDefinition["id"];
-  scopeLabel: string;
-  sourceLabel: string;
-  summary: string;
-};
-
 type PortalOverviewState =
   | { status: "loading" }
   | { data: PortalOverviewResponse; status: "ready" }
   | { message: string; status: "error" };
+
+type PortalOverviewMetricCopy = {
+  label: string;
+  note: string;
+  value: string;
+};
 
 const portalRoutePathById = new Map<PortalRouteId, string>(
   appRouteAccessMatrix
@@ -89,93 +85,6 @@ const portalSectionIconById: Record<PortalSectionDefinition["id"], AppIconName> 
   workers: "server"
 };
 
-const defaultOverviewMetrics = [
-  {
-    label: "Live benchmark data",
-    note: "Runs remains the API-backed source for benchmark evidence and exports.",
-    value: "/runs"
-  },
-  {
-    label: "Launch review",
-    note: "Launch keeps run-shape and governance preflight inside the portal.",
-    value: "/launch"
-  },
-  {
-    label: "Worker operations",
-    note: "Workers is the API-backed view for queue, lease, and incident posture.",
-    value: "/workers"
-  },
-  {
-    label: "Access and profile",
-    note: "Admin and profile routes stay separate from benchmark operational views.",
-    value: "portal"
-  }
-];
-
-const localPreviewMetrics = [
-  {
-    label: "Runs route",
-    note: "Local preview fixtures keep the run index and evidence layout visible on localhost.",
-    value: "/runs"
-  },
-  {
-    label: "Launch route",
-    note: "Local preview fixtures keep benchmark and governance preflight screens reviewable.",
-    value: "/launch"
-  },
-  {
-    label: "Workers route",
-    note: "Local preview fixtures keep queue, lease, and incident layouts visible without the API.",
-    value: "/workers"
-  },
-  {
-    label: "Access and profile",
-    note: "Admin and profile routes are using browser-local demo state, not live records.",
-    value: "preview"
-  }
-];
-
-const defaultOverviewNotes = [
-  {
-    detail:
-      "This overview intentionally avoids inventing live runs, incidents, or user posture. Use the deeper portal routes for API-backed state.",
-    meta: "Portal",
-    title: "Overview is route guidance"
-  },
-  {
-    detail:
-      "Runs, Launch, and Workers remain the benchmark-ops surfaces; access requests, users, and profile stay on their own routes.",
-    meta: "Surface boundaries",
-    title: "Operational state lives deeper"
-  },
-  {
-    detail:
-      "The header shows the signed-in identity and approved roles, while the route cards below point to the appropriate next step.",
-    meta: "Account context",
-    title: "Use the route cards"
-  }
-];
-
-const localPreviewOverviewNotes = [
-  {
-    detail:
-      "This localhost portal is rendering demo fixture content kept in browser storage. Treat all identities, runs, and incidents as examples rather than live operational facts.",
-    meta: "Local preview",
-    title: "Demo data only"
-  },
-  {
-    detail:
-      "The local admin and benchmark-ops panels keep schema-faithful example states so layout and transitions can be reviewed without the API.",
-    meta: "Fixture posture",
-    title: "Schema-faithful examples"
-  },
-  {
-    detail:
-      "When the backend is available, use the same routes to review API-backed runs, users, and worker state instead of these browser-local fixtures.",
-    meta: "Route parity",
-    title: "API-backed paths stay the same"
-  }
-];
 
 const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
@@ -261,22 +170,6 @@ function resolveActiveSection(
   return sections[0];
 }
 
-function getOverviewSourceLabel(sectionId: PortalSectionDefinition["id"]) {
-  if (sectionId === "profile" || sectionId === "overview") {
-    return "Account";
-  }
-
-  if (sectionId === "access_requests" || sectionId === "users") {
-    return "Admin";
-  }
-
-  return "Benchmark ops";
-}
-
-function getOverviewFreshnessLabel(routeId: PortalRouteId) {
-  return getPortalLiveViewFreshness(routeId) ? "API-backed" : "Navigation";
-}
-
 function formatPortalOverviewError(error: unknown) {
   if (error instanceof Error && error.message.length > 0) {
     return error.message;
@@ -291,6 +184,78 @@ function formatPortalOverviewTimestamp(value: string | null) {
   }
 
   return value.replace("T", " ").replace(".000Z", "Z");
+}
+
+export function buildOverviewMetricsCopy(
+  overviewData: PortalOverviewResponse | null
+): PortalOverviewMetricCopy[] {
+  return [
+    {
+      label: "Total runs",
+      note: overviewData
+        ? overviewData.summary.totalRuns === 0
+          ? "No benchmark runs have been recorded yet."
+          : `${overviewData.summary.observedBenchmarkPackageCount} benchmark package(s) have recorded run history.`
+        : "Loading run history.",
+      value: overviewData ? String(overviewData.summary.totalRuns) : "-"
+    },
+    {
+      label: "Active runs",
+      note: overviewData
+        ? `${overviewData.summary.failedRuns} failed run(s) recorded in the current aggregate.`
+        : "Loading run posture.",
+      value: overviewData ? String(overviewData.summary.activeRuns) : "-"
+    },
+    {
+      label: "Queued jobs",
+      note: overviewData
+        ? `${overviewData.summary.queuedRuns} queued run(s), ${overviewData.summary.runningJobs} running job(s).`
+        : "Loading queue posture.",
+      value: overviewData ? String(overviewData.summary.queuedJobs) : "-"
+    },
+    {
+      label: "Active leases",
+      note: overviewData
+        ? `${overviewData.summary.staleLeaseCount} stale lease(s), ${overviewData.recentIncidents.length} recent incident(s).`
+        : "Loading worker lease posture.",
+      value: overviewData ? String(overviewData.summary.activeLeases) : "-"
+    }
+  ];
+}
+
+export function describePortalOverviewLead(state: PortalOverviewState) {
+  if (state.status === "error") {
+    return state.message;
+  }
+
+  if (state.status === "ready") {
+    return "This landing view is backed by the same Railway/Neon read models as Runs, Workers, and Launch. Use it for current queue posture, recent run evidence, and incident follow-up.";
+  }
+
+  return "Loading the live portal overview from the same backend read models that power Runs, Workers, and Launch.";
+}
+
+export function describePortalOverviewRecentRunsFallback(
+  state: PortalOverviewState
+): { detail: string; headline: string } {
+  if (state.status === "error") {
+    return {
+      detail: state.message,
+      headline: "Overview unavailable."
+    };
+  }
+
+  if (state.status === "ready") {
+    return {
+      detail: "The synced backend has not produced any benchmark runs.",
+      headline: "No runs recorded yet."
+    };
+  }
+
+  return {
+    detail: "Loading recent run history from the backend.",
+    headline: "Loading overview."
+  };
 }
 
 export function getCompactOverviewSectionOrder() {
@@ -446,61 +411,8 @@ export function PortalShell({ email, roles }: PortalShellProps) {
     () => getPortalLiveViewFreshness(activeRouteId),
     [activeRouteId]
   );
-  const overviewSurfaceRows = useMemo<OverviewSurfaceRow[]>(
-    () =>
-      sections
-        .filter((section) => section.id !== "overview")
-        .map((section) => {
-          const entryHref = getSectionHref(section);
-
-          return {
-            entryHref,
-            entryLabel: new URL(entryHref).pathname,
-            freshnessLabel: getOverviewFreshnessLabel(section.routeId),
-            id: section.id,
-            scopeLabel: section.description,
-            sourceLabel: getOverviewSourceLabel(section.id),
-            summary: portalSectionBodyCopy[section.id]
-          };
-        }),
-    [sections]
-  );
   const overviewData = overviewState.status === "ready" ? overviewState.data : null;
-  const overviewMetricsCopy = useMemo(
-    () => [
-      {
-        label: "Total runs",
-        note: overviewData
-          ? overviewData.summary.totalRuns === 0
-            ? "No benchmark runs have been recorded yet."
-            : `${overviewData.summary.observedBenchmarkPackageCount} benchmark package(s) have recorded run history.`
-          : "Loading run history.",
-        value: overviewData ? String(overviewData.summary.totalRuns) : "-"
-      },
-      {
-        label: "Active runs",
-        note: overviewData
-          ? `${overviewData.summary.failedRuns} failed run(s) recorded in the current aggregate.`
-          : "Loading run posture.",
-        value: overviewData ? String(overviewData.summary.activeRuns) : "-"
-      },
-      {
-        label: "Queued jobs",
-        note: overviewData
-          ? `${overviewData.summary.queuedRuns} queued run(s), ${overviewData.summary.runningJobs} running job(s).`
-          : "Loading queue posture.",
-        value: overviewData ? String(overviewData.summary.queuedJobs) : "-"
-      },
-      {
-        label: "Active leases",
-        note: overviewData
-          ? `${overviewData.summary.staleLeaseCount} stale lease(s), ${overviewData.recentIncidents.length} recent incident(s).`
-          : "Loading worker lease posture.",
-        value: overviewData ? String(overviewData.summary.activeLeases) : "-"
-      }
-    ],
-    [overviewData]
-  );
+  const overviewMetricsCopy = useMemo(() => buildOverviewMetricsCopy(overviewData), [overviewData]);
 
   useEffect(() => {
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
@@ -609,13 +521,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   const overviewLeadSection = (
     <section className="portal-overview-grid">
       <article className="portal-panel portal-overview-lead">
-        <p>
-          {overviewState.status === "error"
-            ? overviewState.message
-            : overviewState.status === "ready"
-              ? "This landing view is backed by the same Railway/Neon read models as Runs, Workers, and Launch. Use it for current queue posture, recent run evidence, and incident follow-up."
-              : "Loading the live portal overview from the same backend read models that power Runs, Workers, and Launch."}
-        </p>
+        <p>{describePortalOverviewLead(overviewState)}</p>
         {activeFreshnessPolicy ? (
           <PortalFreshnessCard
             isRefreshing={overviewRefreshing}
@@ -628,6 +534,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       {!compactLayout ? overviewActionRail : null}
     </section>
   );
+  const overviewRecentRunsFallback = describePortalOverviewRecentRunsFallback(overviewState);
   const overviewRecentRunsSection = (
     <section className="portal-overview-grid portal-overview-grid-secondary">
       <article className="portal-panel-table-flat">
@@ -665,28 +572,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
                 {run.verdictClass ? evaluationVerdictLabels[run.verdictClass] : "In progress"}
               </span>
             </div>
-          )) : overviewState.status === "error" ? (
+          )) : (
             <div className="portal-table-row" role="row">
-              <span>Overview unavailable.</span>
-              <span>{overviewState.message}</span>
-              <span>-</span>
-              <span>-</span>
-              <span>-</span>
-              <span>-</span>
-            </div>
-          ) : overviewData ? (
-            <div className="portal-table-row" role="row">
-              <span>No runs recorded yet.</span>
-              <span>The synced backend has not produced any benchmark runs.</span>
-              <span>-</span>
-              <span>-</span>
-              <span>-</span>
-              <span>-</span>
-            </div>
-          ) : (
-            <div className="portal-table-row" role="row">
-              <span>Loading overview.</span>
-              <span>Loading recent run history from the backend.</span>
+              <span>{overviewRecentRunsFallback.headline}</span>
+              <span>{overviewRecentRunsFallback.detail}</span>
               <span>-</span>
               <span>-</span>
               <span>-</span>

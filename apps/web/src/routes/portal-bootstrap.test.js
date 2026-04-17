@@ -4,6 +4,7 @@ import {
   reducePortalStateAfterAuthExpiry
 } from "./portal-bootstrap-state.ts";
 import {
+  buildPortalBootstrapErrorState,
   fetchPortalBootstrapState,
   derivePortalRoles,
   mapPortalMutationErrorMessage,
@@ -123,6 +124,48 @@ describe("mapPortalMutationErrorMessage", () => {
       "Access recovery failed with 500."
     );
   });
+
+  it("describes missing local API wiring explicitly for localhost portal previews", () => {
+    expect(
+      buildPortalBootstrapErrorState(new Error("Failed to fetch"), {
+        apiBaseUrl: "http://127.0.0.1:3000",
+        localApiFallback: true
+      })
+    ).toEqual({
+      kind: "local_api_unavailable",
+      message:
+        "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+      status: "error"
+    });
+  });
+
+  it("treats alternate browser network-failure strings as local API availability errors", () => {
+    expect(
+      buildPortalBootstrapErrorState(new Error("Load failed"), {
+        apiBaseUrl: "http://127.0.0.1:3000",
+        localApiFallback: true
+      })
+    ).toEqual({
+      kind: "local_api_unavailable",
+      message:
+        "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+      status: "error"
+    });
+  });
+
+  it("keeps the generic outage wording for hosted or explicitly configured API targets", () => {
+    expect(
+      buildPortalBootstrapErrorState(new Error("Failed to fetch"), {
+        apiBaseUrl: "https://api.paretoproof.com",
+        localApiFallback: false
+      })
+    ).toEqual({
+      kind: "portal_unavailable",
+      message:
+        "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      status: "error"
+    });
+  });
 });
 
 describe("shouldRestartPortalAuthForMissingProvider", () => {
@@ -167,6 +210,7 @@ describe("recoverPortalStateAfterAuthExpiry", () => {
       },
       "https://api.paretoproof.test",
       {
+        localApiFallback: true,
         fetcher: async () => ({
           json: async () => ({
             access: {
@@ -201,6 +245,7 @@ describe("recoverPortalStateAfterAuthExpiry", () => {
       },
       "https://api.paretoproof.test",
       {
+        localApiFallback: false,
         fetcher: async () => ({
           json: async () => ({ error: "access_assertion_required" }),
           ok: false,
