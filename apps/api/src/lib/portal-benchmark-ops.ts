@@ -12,6 +12,7 @@ import {
   type PortalLaunchBenchmarkOption,
   type PortalLaunchModelConfigOption,
   type PortalLaunchViewResponse,
+  type PortalOverviewResponse,
   type PortalRunArtifactSummary,
   type PortalRunAttemptSummary,
   type PortalRunDetailResponse,
@@ -49,6 +50,7 @@ export type PortalBenchmarkOpsReadModelService = {
   getBenchmarkDataset(packageId: string): Promise<PortalBenchmarkDatasetResponse | null>;
   getBenchmarksList(): Promise<PortalBenchmarksListResponse>;
   getLaunchView(): Promise<PortalLaunchViewResponse>;
+  getOverview(): Promise<PortalOverviewResponse>;
   getRunDetail(runId: string): Promise<PortalRunDetailResponse | null>;
   getRunsList(query: PortalRunsListQuery): Promise<PortalRunsListResponse>;
   getWorkersView(): Promise<PortalWorkersViewResponse>;
@@ -617,6 +619,29 @@ function buildEmptyRunsListResponse(query: PortalRunsListQuery): PortalRunsListR
   };
 }
 
+const portalOverviewRunsQuery: PortalRunsListQuery = {
+  attemptId: null,
+  authMode: null,
+  benchmarkPackageDigest: null,
+  benchmarkPackageId: null,
+  benchmarkPackageVersion: null,
+  failureCode: null,
+  failureFamily: null,
+  jobId: null,
+  lifecycleBucket: null,
+  limit: 5,
+  modelConfigId: null,
+  providerFamily: null,
+  q: null,
+  runId: null,
+  runKind: null,
+  runLifecycle: [],
+  runMode: null,
+  sort: "started_at_desc",
+  toolProfile: null,
+  verdict: []
+};
+
 function buildRunsSummarySelect() {
   return {
     activeRuns: sql<number>`cast(coalesce(sum(case when ${runs.state} in ('running', 'cancel_requested') then 1 else 0 end), 0) as integer)`,
@@ -704,7 +729,7 @@ async function loadAttemptCountsByRunId(db: ReturnTypeOfCreateDbClient) {
 export function createPortalBenchmarkOpsReadModelService(
   db: ReturnTypeOfCreateDbClient
 ): PortalBenchmarkOpsReadModelService {
-  return {
+  const service: PortalBenchmarkOpsReadModelService = {
     async getBenchmarksList() {
       const [runRows, attemptCountsByRunId] = await Promise.all([
         db
@@ -1183,6 +1208,31 @@ export function createPortalBenchmarkOpsReadModelService(
       };
     },
 
+    async getOverview() {
+      const [benchmarks, runsView, workersView] = await Promise.all([
+        service.getBenchmarksList(),
+        service.getRunsList(portalOverviewRunsQuery),
+        service.getWorkersView()
+      ]);
+
+      return {
+        benchmarkHighlights: benchmarks.items.slice(0, 5),
+        generatedAt: workersView.generatedAt,
+        recentIncidents: workersView.incidents.slice(0, 5),
+        recentRuns: runsView.items.slice(0, portalOverviewRunsQuery.limit),
+        summary: {
+          activeLeases: workersView.activeLeases.length,
+          activeRuns: runsView.summary.activeRuns,
+          benchmarkPackageCount: benchmarks.items.length,
+          failedRuns: runsView.summary.failedRuns,
+          queuedJobs: workersView.queueSummary.queuedJobs,
+          queuedRuns: workersView.queueSummary.queuedRuns,
+          runningJobs: workersView.queueSummary.runningJobs,
+          staleLeaseCount: workersView.activeLeases.filter((lease) => lease.health === "stale").length
+        }
+      };
+    },
+
     async getWorkersView() {
       const [
         [{ total: activeRuns }],
@@ -1390,4 +1440,6 @@ export function createPortalBenchmarkOpsReadModelService(
       };
     }
   };
+
+  return service;
 }

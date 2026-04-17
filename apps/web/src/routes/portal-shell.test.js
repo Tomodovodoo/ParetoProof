@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
-  it("preserves a singular local approved role across in-app portal navigation state", async () => {
+  it("drops stale local preview params during in-app portal navigation", async () => {
     const { mergeLocalPortalSearchParams } = await loadPortalShellModule();
     const mergedSearch = mergeLocalPortalSearchParams(
       "?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local",
@@ -61,9 +61,9 @@ describe("PortalShell overview ordering", () => {
     );
     const mergedUrl = new URL(`http://127.0.0.1/${mergedSearch}`);
 
-    expect(mergedUrl.searchParams.get("role")).toBe("collaborator");
+    expect(mergedUrl.searchParams.get("role")).toBe(null);
     expect(mergedUrl.searchParams.get("tab")).toBe("history");
-    expect(mergedUrl.searchParams.has("roles")).toBe(false);
+    expect(mergedUrl.searchParams.has("surface")).toBe(false);
   });
 
   it("puts compact admin recent-run evidence before the action rail", async () => {
@@ -75,15 +75,14 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html).toContain("Local preview");
-    expect(html).toContain("demo fixture data stored in this browser");
-    expect(html).toContain("Runs route");
-    expect(html).not.toContain("Live benchmark data");
-    expect(html).not.toContain(">API-backed<");
-    expect(html.indexOf("Portal sections")).toBeLessThan(
-      html.indexOf("Runs route")
+    expect(html).toContain("Benchmark packages");
+    expect(html).toContain("Loading overview.");
+    expect(html).not.toContain("Local preview");
+    expect(html).not.toContain("demo fixture data stored in this browser");
+    expect(html.indexOf("Recent runs")).toBeLessThan(
+      html.indexOf("Benchmark packages")
     );
-    expect(html.indexOf("Portal sections")).toBeLessThan(
+    expect(html.indexOf("Recent runs")).toBeLessThan(
       html.indexOf("Review runs")
     );
   });
@@ -97,9 +96,10 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html).toContain("Runs route");
-    expect(html).not.toContain("Live benchmark data");
-    expect(html.indexOf("Runs route")).toBeLessThan(html.indexOf("Review runs"));
+    expect(html).toContain("Benchmark packages");
+    expect(html).toContain("Loading the live portal overview");
+    expect(html).not.toContain("demo fixture data stored in this browser");
+    expect(html.indexOf("Benchmark packages")).toBeLessThan(html.indexOf("Review runs"));
   });
 });
 

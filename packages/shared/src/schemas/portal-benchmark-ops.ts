@@ -430,3 +430,20 @@ export const portalWorkersViewResponseSchema = z.object({
   }),
   workerPools: z.array(portalWorkerPoolSummarySchema)
 });
+
+export const portalOverviewResponseSchema = z.object({
+  benchmarkHighlights: z.array(portalBenchmarkListItemSchema),
+  generatedAt: timestampSchema,
+  recentIncidents: z.array(portalWorkerIncidentSchema),
+  recentRuns: z.array(portalRunListItemSchema),
+  summary: z.object({
+    activeLeases: z.number().int().nonnegative(),
+    activeRuns: z.number().int().nonnegative(),
+    benchmarkPackageCount: z.number().int().nonnegative(),
+    failedRuns: z.number().int().nonnegative(),
+    queuedJobs: z.number().int().nonnegative(),
+    queuedRuns: z.number().int().nonnegative(),
+    runningJobs: z.number().int().nonnegative(),
+    staleLeaseCount: z.number().int().nonnegative()
+  })
+});

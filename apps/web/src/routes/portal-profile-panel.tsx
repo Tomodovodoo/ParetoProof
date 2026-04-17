@@ -13,7 +13,6 @@ import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { getApiBaseUrl } from "../lib/api-base-url";
 import { fetchApi } from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
-import { isLocalHostname } from "../lib/surface";
 import { useCompactLayout } from "../lib/use-compact-layout";
 
 type PortalProfilePanelProps = {
@@ -60,74 +59,6 @@ function normalizeIdentityProvider(provider: string) {
   }
 
   return "cloudflare_one_time_pin";
-}
-
-function getLocalProfileStorageKey(email: string | null) {
-  return `paretoproof.portal.profile.displayName:${email ?? "anonymous"}`;
-}
-
-function getLocalIdentityStorageKey(email: string | null) {
-  return `paretoproof.portal.profile.identities:${email ?? "anonymous"}`;
-}
-
-function readLocalDisplayName(email: string | null) {
-  return window.localStorage.getItem(getLocalProfileStorageKey(email));
-}
-
-function readLocalIdentities(email: string | null): PortalProfile["identities"] {
-  const rawValue = window.localStorage.getItem(getLocalIdentityStorageKey(email));
-
-  if (!rawValue) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as PortalProfile["identities"];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalDisplayName(email: string | null, displayName: string | null) {
-  const storageKey = getLocalProfileStorageKey(email);
-
-  if (!displayName) {
-    window.localStorage.removeItem(storageKey);
-    return;
-  }
-
-  window.localStorage.setItem(storageKey, displayName);
-}
-
-function writeLocalIdentities(email: string | null, identities: PortalProfile["identities"]) {
-  window.localStorage.setItem(getLocalIdentityStorageKey(email), JSON.stringify(identities));
-}
-
-function buildLocalProfile(email: string | null): PortalProfile {
-  const storedIdentities = readLocalIdentities(email);
-
-  if (email && storedIdentities.length === 0) {
-    writeLocalIdentities(email, [
-      {
-        createdAt: new Date().toISOString(),
-        current: true,
-        id: "local-development-identity",
-        lastSeenAt: new Date().toISOString(),
-        provider: "cloudflare_github",
-        providerEmail: email
-      }
-    ]);
-  }
-
-  return {
-    createdAt: null,
-    displayName: readLocalDisplayName(email),
-    email,
-    identities: readLocalIdentities(email),
-    linkedUserId: null,
-    updatedAt: null
-  };
 }
 
 const profileLinkStatusHistoryKey = "portalProfileLinkStatusMessage";
@@ -236,19 +167,6 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       }
 
       try {
-        if (isLocalHostname(window.location.hostname)) {
-          const localProfile = buildLocalProfile(email);
-
-          if (!cancelled) {
-            setDisplayNameInput(localProfile.displayName ?? "");
-            setLinkMessage(linkStatus.message);
-            setLastUpdatedAt(new Date().toISOString());
-            setProfile(localProfile);
-            setIsLoading(false);
-          }
-          return;
-        }
-
         const response = await fetchApi(`${apiBaseUrl}/portal/profile`, {
           credentials: "include",
           headers: {
@@ -306,29 +224,6 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
       setLinkMessage(null);
       setLinkingProvider(provider);
 
-      if (isLocalHostname(window.location.hostname)) {
-        const localProfile = buildLocalProfile(email);
-
-        if (!localProfile.identities.some((identity) => identity.provider === provider)) {
-          writeLocalIdentities(email, [
-            ...localProfile.identities,
-            {
-              createdAt: new Date().toISOString(),
-              current: false,
-              id: `local-${provider}`,
-              lastSeenAt: new Date().toISOString(),
-              provider,
-              providerEmail: email
-            }
-          ]);
-        }
-
-        setProfile(buildLocalProfile(email));
-        setLastUpdatedAt(new Date().toISOString());
-        setLinkMessage("The new sign-in method has been linked to this local profile.");
-        return;
-      }
-
       const response = await fetchApi(`${apiBaseUrl}/portal/profile/link-intents`, {
         body: createApiFormBody({
           provider: parsed.data.provider,
@@ -374,15 +269,6 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
     try {
       setErrorMessage(null);
       setIsSaving(true);
-
-      if (isLocalHostname(window.location.hostname)) {
-        writeLocalDisplayName(email, parsed.data.displayName);
-        const nextProfile = buildLocalProfile(email);
-        setDisplayNameInput(nextProfile.displayName ?? "");
-        setLastUpdatedAt(new Date().toISOString());
-        setProfile(nextProfile);
-        return;
-      }
 
       const response = await fetchApi(`${apiBaseUrl}/portal/profile`, {
         body: createApiFormBody({

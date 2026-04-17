@@ -978,6 +978,21 @@ export function registerPortalRoutes(
   );
 
   app.get(
+    "/portal/overview",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.overviewResponse,
+      },
+      preHandler: [
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_helper_or_higher"),
+        ),
+      ],
+    },
+    async () => portalBenchmarkOpsReadModels.getOverview(),
+  );
+
+  app.get(
     "/portal/benchmarks",
     {
       config: {
