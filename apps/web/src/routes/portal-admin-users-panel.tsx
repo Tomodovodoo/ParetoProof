@@ -51,6 +51,10 @@ export function getCompactAdminUsersSectionOrder() {
   return ["userList", "filterFields"] as const;
 }
 
+export function getCompactAdminUsersPageOrder() {
+  return ["introPanel", "layout"] as const;
+}
+
 export function isSelectedAdminUserDetailCurrent(
   detailItem: Awaited<ReturnType<typeof loadPortalAdminUserDetail>> | null,
   selectedUserId: string | null
@@ -658,8 +662,16 @@ export function PortalAdminUsersPanel({ email }: PortalAdminUsersPanelProps) {
 
   return (
     <section className="portal-grid portal-grid-stack portal-grid-admin-workspace">
-      {isCompactLayout ? layout : introPanel}
-      {isCompactLayout ? introPanel : layout}
+      {isCompactLayout
+        ? getCompactAdminUsersPageOrder().map((sectionId) => (
+            <Fragment key={sectionId}>{sectionId === "introPanel" ? introPanel : layout}</Fragment>
+          ))
+        : (
+            <>
+              {introPanel}
+              {layout}
+            </>
+          )}
     </section>
   );
 }
