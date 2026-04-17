@@ -350,16 +350,18 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   const overviewMetricsCopy = useMemo(
     () => [
       {
-        label: "Benchmark packages",
+        label: "Total runs",
         note: overviewData
-          ? `${overviewData.benchmarkHighlights.length} highlighted package(s) on the landing view.`
-          : "Loading benchmark coverage.",
-        value: overviewData ? String(overviewData.summary.benchmarkPackageCount) : "-"
+          ? overviewData.summary.totalRuns === 0
+            ? "No benchmark runs have been recorded yet."
+            : `${overviewData.summary.observedBenchmarkPackageCount} benchmark package(s) have recorded run history.`
+          : "Loading run history.",
+        value: overviewData ? String(overviewData.summary.totalRuns) : "-"
       },
       {
         label: "Active runs",
         note: overviewData
-          ? `${overviewData.summary.failedRuns} failed run(s) in the current aggregate.`
+          ? `${overviewData.summary.failedRuns} failed run(s) recorded in the current aggregate.`
           : "Loading run posture.",
         value: overviewData ? String(overviewData.summary.activeRuns) : "-"
       },
@@ -585,10 +587,19 @@ export function PortalShell({ email, roles }: PortalShellProps) {
               <span>-</span>
               <span>-</span>
             </div>
+          ) : overviewData ? (
+            <div className="portal-table-row" role="row">
+              <span>No runs recorded yet.</span>
+              <span>The synced backend has not produced any benchmark runs.</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+              <span>-</span>
+            </div>
           ) : (
             <div className="portal-table-row" role="row">
               <span>Loading overview.</span>
-              <span>Waiting for recent run evidence.</span>
+              <span>Loading recent run history from the backend.</span>
               <span>-</span>
               <span>-</span>
               <span>-</span>

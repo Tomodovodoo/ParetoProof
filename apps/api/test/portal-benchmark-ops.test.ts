@@ -493,12 +493,13 @@ function buildOverviewResponse(): PortalOverviewResponse {
     summary: {
       activeLeases: workers.activeLeases.length,
       activeRuns: runs.summary.activeRuns,
-      benchmarkPackageCount: benchmarks.items.length,
       failedRuns: runs.summary.failedRuns,
+      observedBenchmarkPackageCount: benchmarks.items.length,
       queuedJobs: workers.queueSummary.queuedJobs,
       queuedRuns: workers.queueSummary.queuedRuns,
       runningJobs: workers.queueSummary.runningJobs,
-      staleLeaseCount: 0
+      staleLeaseCount: 0,
+      totalRuns: runs.summary.totalMatches
     }
   };
 }
@@ -757,7 +758,8 @@ test("GET /portal/overview returns the landing overview read model for approved 
 
   assert.equal(response.statusCode, 200);
   const payload = portalBenchmarkOpsReadModelsContract.overviewResponse.parse(response.json());
-  assert.equal(payload.summary.benchmarkPackageCount, 1);
+  assert.equal(payload.summary.observedBenchmarkPackageCount, 1);
+  assert.equal(payload.summary.totalRuns, 1);
   assert.equal(payload.recentRuns[0]?.runId, "PP-318");
 });
 

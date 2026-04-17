@@ -439,11 +439,12 @@ export const portalOverviewResponseSchema = z.object({
   summary: z.object({
     activeLeases: z.number().int().nonnegative(),
     activeRuns: z.number().int().nonnegative(),
-    benchmarkPackageCount: z.number().int().nonnegative(),
     failedRuns: z.number().int().nonnegative(),
+    observedBenchmarkPackageCount: z.number().int().nonnegative(),
     queuedJobs: z.number().int().nonnegative(),
     queuedRuns: z.number().int().nonnegative(),
     runningJobs: z.number().int().nonnegative(),
-    staleLeaseCount: z.number().int().nonnegative()
+    staleLeaseCount: z.number().int().nonnegative(),
+    totalRuns: z.number().int().nonnegative()
   })
 });

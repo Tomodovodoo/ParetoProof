@@ -408,11 +408,12 @@ export type PortalOverviewResponse = {
   summary: {
     activeLeases: number;
     activeRuns: number;
-    benchmarkPackageCount: number;
     failedRuns: number;
+    observedBenchmarkPackageCount: number;
     queuedJobs: number;
     queuedRuns: number;
     runningJobs: number;
     staleLeaseCount: number;
+    totalRuns: number;
   };
 };

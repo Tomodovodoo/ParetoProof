@@ -1223,12 +1223,13 @@ export function createPortalBenchmarkOpsReadModelService(
         summary: {
           activeLeases: workersView.activeLeases.length,
           activeRuns: runsView.summary.activeRuns,
-          benchmarkPackageCount: benchmarks.items.length,
           failedRuns: runsView.summary.failedRuns,
+          observedBenchmarkPackageCount: benchmarks.items.length,
           queuedJobs: workersView.queueSummary.queuedJobs,
           queuedRuns: workersView.queueSummary.queuedRuns,
           runningJobs: workersView.queueSummary.runningJobs,
-          staleLeaseCount: workersView.activeLeases.filter((lease) => lease.health === "stale").length
+          staleLeaseCount: workersView.activeLeases.filter((lease) => lease.health === "stale").length,
+          totalRuns: runsView.summary.totalMatches
         }
       };
     },

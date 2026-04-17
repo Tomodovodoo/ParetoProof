@@ -75,12 +75,12 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html).toContain("Benchmark packages");
+    expect(html).toContain("Total runs");
     expect(html).toContain("Loading overview.");
     expect(html).not.toContain("Local preview");
     expect(html).not.toContain("demo fixture data stored in this browser");
     expect(html.indexOf("Recent runs")).toBeLessThan(
-      html.indexOf("Benchmark packages")
+      html.indexOf("Total runs")
     );
     expect(html.indexOf("Recent runs")).toBeLessThan(
       html.indexOf("Review runs")
@@ -96,10 +96,10 @@ describe("PortalShell overview ordering", () => {
     });
 
     expect(html).toContain("Review access requests");
-    expect(html).toContain("Benchmark packages");
+    expect(html).toContain("Total runs");
     expect(html).toContain("Loading the live portal overview");
     expect(html).not.toContain("demo fixture data stored in this browser");
-    expect(html.indexOf("Benchmark packages")).toBeLessThan(html.indexOf("Review runs"));
+    expect(html.indexOf("Total runs")).toBeLessThan(html.indexOf("Review runs"));
   });
 });
 
