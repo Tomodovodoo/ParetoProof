@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+﻿import { afterEach, describe, expect, it } from "bun:test";
 import {
   approvePortalAdminAccessRequest,
   loadPortalAdminAccessRequestDetail,
@@ -32,7 +32,7 @@ describe("portal admin summaries", () => {
         requestedRole: "collaborator",
         status: "pending"
       })
-    ).toBe("Recovery review pending · preserve collaborator");
+    ).toBe("Recovery review pending - preserve collaborator");
   });
 
   it("summarizes active role and pending request posture from live admin records", () => {
@@ -338,3 +338,4 @@ describe("portal admin summaries", () => {
     });
   });
 });
+

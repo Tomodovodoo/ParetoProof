@@ -229,10 +229,10 @@ export function describePortalOverviewLead(state: PortalOverviewState) {
   }
 
   if (state.status === "ready") {
-    return "This landing view is backed by the same Railway/Neon read models as Runs, Workers, and Launch. Use it for current queue posture, recent run evidence, and incident follow-up.";
+    return "This landing view is backed by the same portal API read models as Runs, Workers, and Launch. Use it for current queue posture, recent run evidence, and incident follow-up.";
   }
 
-  return "Loading the live portal overview from the same backend read models that power Runs, Workers, and Launch.";
+  return "Loading the live portal overview from the same portal API-backed read models that power Runs, Workers, and Launch.";
 }
 
 export function describePortalOverviewRecentRunsFallback(

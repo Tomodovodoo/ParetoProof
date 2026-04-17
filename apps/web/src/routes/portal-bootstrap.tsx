@@ -500,28 +500,35 @@ export function PortalBootstrap() {
   }
 
   if (state.status === "error") {
-    return (
-      <PortalStatusCard
-        eyebrow="Portal"
-        title={
-          state.kind === "local_api_unavailable"
-            ? "Local API unavailable"
-            : "Portal unavailable"
-        }
-        body={state.message}
-        action={{
-          href: buildPortalUrl(currentRelativeUrl),
-          label:
-            state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
-        }}
-      />
-    );
+    return renderPortalBootstrapErrorCard(state, currentRelativeUrl);
   }
 
   return (
     <PortalShell
       email={state.email}
       roles={derivePortalRoles(state.role)}
+    />
+  );
+}
+
+export function renderPortalBootstrapErrorCard(
+  state: Extract<PortalAccessState, { status: "error" }>,
+  currentRelativeUrl: string
+) {
+  return (
+    <PortalStatusCard
+      eyebrow="Portal"
+      title={
+        state.kind === "local_api_unavailable"
+          ? "Local API unavailable"
+          : "Portal unavailable"
+      }
+      body={state.message}
+      action={{
+        href: buildPortalUrl(currentRelativeUrl),
+        label:
+          state.kind === "local_api_unavailable" ? "Retry after starting API" : "Retry portal"
+      }}
     />
   );
 }

@@ -1,4 +1,4 @@
-import {
+﻿import {
   portalAdminAccessRequestApproveInputSchema,
   portalAdminAccessRequestRejectInputSchema,
   portalAdminReadModelsContract,
@@ -361,11 +361,11 @@ export function summarizeAccessRequestStatus(
 ) {
   if (item.requestKind === "identity_recovery") {
     return item.status === "pending"
-      ? `Recovery review pending · preserve ${item.requestedRole}`
-      : `Recovery ${item.status} · preserve ${item.requestedRole}`;
+      ? `Recovery review pending - preserve ${item.requestedRole}`
+      : `Recovery ${item.status} - preserve ${item.requestedRole}`;
   }
 
-  return `${item.requestedRole} request · ${item.status}`;
+  return `${item.requestedRole} request - ${item.status}`;
 }
 
 export function summarizeUserPosture(item: PortalAdminUserListItem) {
@@ -405,3 +405,4 @@ export function toAccessRequestSummaryFromAdminItem(
     status: item.status
   };
 }
+

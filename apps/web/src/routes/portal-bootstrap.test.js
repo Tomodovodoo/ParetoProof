@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildLocalPendingPortalUrl,
   reducePortalStateAfterAuthExpiry
@@ -9,8 +10,20 @@ import {
   derivePortalRoles,
   mapPortalMutationErrorMessage,
   recoverPortalStateAfterAuthExpiry,
+  renderPortalBootstrapErrorCard,
   shouldRestartPortalAuthForMissingProvider
 } from "./portal-bootstrap.tsx";
+
+const originalWindow = globalThis.window;
+
+afterEach(() => {
+  if (originalWindow) {
+    globalThis.window = originalWindow;
+    return;
+  }
+
+  delete globalThis.window;
+});
 
 describe("portal bootstrap state", () => {
   it("promotes the local access state to pending and clears denial-only params", () => {
@@ -165,6 +178,28 @@ describe("mapPortalMutationErrorMessage", () => {
         "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
       status: "error"
     });
+  });
+
+  it("renders the local API unavailable bootstrap card with the explicit recovery action", () => {
+    globalThis.window = {
+      location: new URL("http://127.0.0.1/?surface=portal&access=approved")
+    };
+
+    const html = renderToStaticMarkup(
+      renderPortalBootstrapErrorCard(
+        {
+          kind: "local_api_unavailable",
+          message:
+            "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+          status: "error"
+        },
+        "/"
+      )
+    );
+
+    expect(html).toContain("Local API unavailable");
+    expect(html).toContain("Retry after starting API");
+    expect(html).toContain("http://127.0.0.1:3000");
   });
 });
 

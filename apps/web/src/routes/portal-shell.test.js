@@ -271,7 +271,7 @@ describe("PortalShell live overview helpers", () => {
         },
         status: "ready"
       })
-    ).toContain("Railway/Neon read models");
+    ).toContain("portal API read models");
   });
 
   it("describes the recent-runs fallback row for loading, error, and zero-run states", async () => {
