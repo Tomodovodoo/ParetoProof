@@ -454,6 +454,7 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  buildOverviewBenchmarkHighlightsQuery,
   buildRunsSummarySelect,
   buildBenchmarkDatasetRunOrderBy,
   buildRunOrderBy,
@@ -788,125 +789,120 @@ async function loadOverviewRecentRuns(
   };
 }
 
+function buildOverviewBenchmarkHighlightsQuery() {
+  return sql`
+    with top_packages as (
+      select
+        ${runs.benchmarkPackageId} as benchmark_package_id,
+        max(coalesce(${runs.completedAt}, ${runs.createdAt})) as latest_observed_at
+      from ${runs}
+      group by ${runs.benchmarkPackageId}
+      order by latest_observed_at desc, ${runs.benchmarkPackageId} asc
+      limit 5
+    ),
+    latest_terminal_runs as (
+      select distinct on (${runs.benchmarkPackageId})
+        ${runs.benchmarkPackageId} as benchmark_package_id,
+        ${runs.sourceRunId} as source_run_id
+      from ${runs}
+      where ${runs.benchmarkPackageId} in (select benchmark_package_id from top_packages)
+        and ${runs.state} in ('succeeded', 'failed', 'cancelled')
+      order by
+        ${runs.benchmarkPackageId},
+        ${runs.completedAt} desc,
+        ${runs.createdAt} desc
+    ),
+    latest_observed_runs as (
+      select distinct on (${runs.benchmarkPackageId})
+        ${runs.benchmarkPackageId} as benchmark_package_id,
+        ${runs.sourceRunId} as source_run_id
+      from ${runs}
+      where ${runs.benchmarkPackageId} in (select benchmark_package_id from top_packages)
+      order by
+        ${runs.benchmarkPackageId},
+        coalesce(${runs.completedAt}, ${runs.createdAt}) desc,
+        ${runs.createdAt} desc
+    ),
+    package_totals as (
+      select cast(count(distinct ${runs.benchmarkPackageId}) as integer) as total_observed_package_count
+      from ${runs}
+    )
+    select
+      tp.benchmark_package_id as "benchmarkPackageId",
+      cast(count(distinct r.id) as integer) as "runCount",
+      cast(count(a.id) as integer) as "attemptCount",
+      max(case when r.state in ('succeeded', 'failed', 'cancelled') then r.completed_at end) as "latestCompletedAt",
+      coalesce(ltr.source_run_id, lor.source_run_id) as "latestRunId",
+      array_agg(distinct r.model_config_id order by r.model_config_id) as "modelConfigIds",
+      array_agg(distinct r.provider_family order by r.provider_family) as "providerFamilies",
+      array_agg(distinct r.benchmark_package_version order by r.benchmark_package_version) as "versions",
+      cast(count(distinct case when r.state in ('succeeded', 'failed', 'cancelled') and r.verdict_class = 'fail' then r.id end) as integer) as "verdictFailCount",
+      cast(count(distinct case when r.state in ('succeeded', 'failed', 'cancelled') and r.verdict_class = 'invalid_result' then r.id end) as integer) as "verdictInvalidResultCount",
+      cast(count(distinct case when r.state in ('succeeded', 'failed', 'cancelled') and r.verdict_class = 'pass' then r.id end) as integer) as "verdictPassCount",
+      pt.total_observed_package_count as "totalObservedPackageCount"
+    from top_packages tp
+    join ${runs} r on r.benchmark_package_id = tp.benchmark_package_id
+    left join ${attempts} a on a.run_id = r.id
+    left join latest_terminal_runs ltr on ltr.benchmark_package_id = tp.benchmark_package_id
+    left join latest_observed_runs lor on lor.benchmark_package_id = tp.benchmark_package_id
+    cross join package_totals pt
+    group by
+      tp.benchmark_package_id,
+      tp.latest_observed_at,
+      ltr.source_run_id,
+      lor.source_run_id,
+      pt.total_observed_package_count
+    order by tp.latest_observed_at desc, tp.benchmark_package_id asc
+  `;
+}
+
 async function loadOverviewBenchmarkHighlights(
   db: ReturnTypeOfCreateDbClient
 ): Promise<{
   items: PortalBenchmarkListItem[];
   totalObservedPackageCount: number;
 }> {
-  const latestObservedAtExpression = sql<Date>`max(coalesce(${runs.completedAt}, ${runs.createdAt}))`;
-  const [summaryRows, packageRows] = await Promise.all([
-    db
-      .select({
-        totalObservedPackageCount:
-          sql<number>`cast(count(distinct ${runs.benchmarkPackageId}) as integer)`
-      })
-      .from(runs),
-    db
-      .select({
-        benchmarkPackageId: runs.benchmarkPackageId,
-        latestObservedAt: latestObservedAtExpression
-      })
-      .from(runs)
-      .groupBy(runs.benchmarkPackageId)
-      .orderBy(desc(latestObservedAtExpression))
-      .limit(5)
-  ]);
-  const packageIds = packageRows.map((row) => row.benchmarkPackageId);
+  type OverviewBenchmarkHighlightRow = {
+    attemptCount: number;
+    benchmarkPackageId: string;
+    latestCompletedAt: Date | null;
+    latestRunId: string | null;
+    modelConfigIds: string[];
+    providerFamilies: string[];
+    runCount: number;
+    totalObservedPackageCount: number;
+    versions: string[];
+    verdictFailCount: number;
+    verdictInvalidResultCount: number;
+    verdictPassCount: number;
+  };
 
-  if (packageIds.length === 0) {
-    return {
-      items: [],
-      totalObservedPackageCount: summaryRows[0]?.totalObservedPackageCount ?? 0
-    };
-  }
-
-  const runRows = await db
-    .select()
-    .from(runs)
-    .where(inArray(runs.benchmarkPackageId, packageIds))
-    .orderBy(desc(runs.completedAt), desc(runs.createdAt));
-  const runIds = runRows.map((runRow) => runRow.id);
-  const attemptCountsByRunId = await loadAttemptCountsForRunIds(db, runIds);
-  const packageOrder = new Set(packageIds);
-  const benchmarks = new Map<string, PortalBenchmarkListItem>();
-
-  for (const runRow of runRows) {
-    if (!packageOrder.has(runRow.benchmarkPackageId)) {
-      continue;
-    }
-
-    const existing = benchmarks.get(runRow.benchmarkPackageId);
-    const attemptCount = attemptCountsByRunId.get(runRow.id) ?? 0;
-    const completedAt = isTerminalRunState(runRow.state)
-      ? runRow.completedAt.toISOString()
-      : null;
-
-    if (!existing) {
-      const verdictCounts = createEmptyVerdictCounts();
-
-      if (isTerminalRunState(runRow.state)) {
-        incrementVerdictCounts(verdictCounts, runRow.verdictClass);
-      }
-
-      benchmarks.set(runRow.benchmarkPackageId, {
-        attemptCount,
-        benchmarkLabel: getBenchmarkPackageLabel(runRow.benchmarkPackageId, [
-          runRow.benchmarkPackageVersion
-        ]),
-        benchmarkPackageId: runRow.benchmarkPackageId,
-        latestCompletedAt: completedAt,
-        latestRunId: runRow.sourceRunId,
-        modelConfigIds: [runRow.modelConfigId],
-        providerFamilies: [runRow.providerFamily],
-        runCount: 1,
-        versions: [runRow.benchmarkPackageVersion],
-        verdictCounts
-      });
-      continue;
-    }
-
-    existing.attemptCount += attemptCount;
-    existing.runCount += 1;
-
-    if (isTerminalRunState(runRow.state)) {
-      incrementVerdictCounts(existing.verdictCounts, runRow.verdictClass);
-    }
-
-    if (!existing.latestCompletedAt && completedAt) {
-      existing.latestCompletedAt = completedAt;
-      existing.latestRunId = runRow.sourceRunId;
-    }
-
-    if (!existing.modelConfigIds.includes(runRow.modelConfigId)) {
-      existing.modelConfigIds.push(runRow.modelConfigId);
-    }
-
-    if (!existing.providerFamilies.includes(runRow.providerFamily)) {
-      existing.providerFamilies.push(runRow.providerFamily);
-    }
-
-    if (!existing.versions.includes(runRow.benchmarkPackageVersion)) {
-      existing.versions.push(runRow.benchmarkPackageVersion);
-    }
-  }
+  const rows = (await db.execute(
+    buildOverviewBenchmarkHighlightsQuery()
+  )) as OverviewBenchmarkHighlightRow[];
 
   return {
-    items: packageIds
-      .map((packageId) => benchmarks.get(packageId))
-      .filter((item): item is PortalBenchmarkListItem => Boolean(item))
-      .map((item) => {
-        const versions = listSortedUnique(item.versions);
+    items: rows.map((row) => {
+      const versions = listSortedUnique(row.versions);
 
-        return {
-          ...item,
-          benchmarkLabel: getBenchmarkPackageLabel(item.benchmarkPackageId, versions),
-          modelConfigIds: listSortedUnique(item.modelConfigIds),
-          providerFamilies: listSortedUnique(item.providerFamilies),
-          versions
-        };
-      }),
-    totalObservedPackageCount: summaryRows[0]?.totalObservedPackageCount ?? 0
+      return {
+        attemptCount: row.attemptCount,
+        benchmarkLabel: getBenchmarkPackageLabel(row.benchmarkPackageId, versions),
+        benchmarkPackageId: row.benchmarkPackageId,
+        latestCompletedAt: toIso(row.latestCompletedAt),
+        latestRunId: row.latestRunId,
+        modelConfigIds: listSortedUnique(row.modelConfigIds),
+        providerFamilies: listSortedUnique(row.providerFamilies),
+        runCount: row.runCount,
+        versions,
+        verdictCounts: {
+          fail: row.verdictFailCount,
+          invalid_result: row.verdictInvalidResultCount,
+          pass: row.verdictPassCount
+        }
+      };
+    }),
+    totalObservedPackageCount: rows[0]?.totalObservedPackageCount ?? 0
   };
 }
 

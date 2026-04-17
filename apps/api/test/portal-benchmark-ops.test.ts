@@ -627,11 +627,21 @@ function createRunsListDbStub(options: {
 }
 
 function createOverviewDbStub(options: {
-  attemptCountRows: Array<{ runId: string; total: number }>;
-  benchmarkHighlightRunRows: Array<Record<string, unknown>>;
-  benchmarkPackageRows: Array<{ benchmarkPackageId: string; latestObservedAt: Date }>;
+  overviewBenchmarkRows: Array<{
+    attemptCount: number;
+    benchmarkPackageId: string;
+    latestCompletedAt: Date | null;
+    latestRunId: string | null;
+    modelConfigIds: string[];
+    providerFamilies: string[];
+    runCount: number;
+    totalObservedPackageCount: number;
+    versions: string[];
+    verdictFailCount: number;
+    verdictInvalidResultCount: number;
+    verdictPassCount: number;
+  }>;
   recentRunRows: Array<Record<string, unknown>>;
-  totalObservedPackageCount: number;
   summaryRow: {
     activeRuns: number;
     failedRuns: number;
@@ -642,21 +652,10 @@ function createOverviewDbStub(options: {
   };
 }) {
   return {
+    execute: async () => options.overviewBenchmarkRows,
     select(selection?: Record<string, unknown>) {
       return {
         from(table: unknown) {
-          if (
-            table === runs &&
-            selection &&
-            "totalObservedPackageCount" in selection
-          ) {
-            return Promise.resolve([
-              {
-                totalObservedPackageCount: options.totalObservedPackageCount
-              }
-            ]);
-          }
-
           if (
             table === runs &&
             selection &&
@@ -669,52 +668,15 @@ function createOverviewDbStub(options: {
             };
           }
 
-          if (
-            table === runs &&
-            selection &&
-            "benchmarkPackageId" in selection &&
-            "latestObservedAt" in selection
-          ) {
-            return {
-              groupBy() {
-                return {
-                  orderBy() {
-                    return {
-                      limit: async () => options.benchmarkPackageRows
-                    };
-                  }
-                };
-              }
-            };
-          }
-
           if (table === runs) {
             return {
               where() {
                 return {
                   orderBy() {
                     return {
-                      limit: async () => options.recentRunRows,
-                      then(resolve: (value: Array<Record<string, unknown>>) => unknown) {
-                        return Promise.resolve(options.benchmarkHighlightRunRows).then(resolve);
-                      }
+                      limit: async () => options.recentRunRows
                     };
                   }
-                };
-              }
-            };
-          }
-
-          if (
-            table === attempts &&
-            selection &&
-            "runId" in selection &&
-            "total" in selection
-          ) {
-            return {
-              where() {
-                return {
-                  groupBy: async () => options.attemptCountRows
                 };
               }
             };
@@ -808,26 +770,20 @@ test("getRunsList summary counts stay aggregate when the returned page is limite
 test("getOverview uses dedicated overview queries instead of the heavier runs and benchmarks paths", async () => {
   const readModels = createPortalBenchmarkOpsReadModelService(
     createOverviewDbStub({
-      attemptCountRows: [
+      overviewBenchmarkRows: [
         {
-          runId: "run-row-1",
-          total: 2
-        }
-      ],
-      benchmarkHighlightRunRows: [
-        buildRunRow(),
-        buildRunRow({
-          benchmarkPackageVersion: "2026.04",
-          completedAt: new Date("2026-03-14T20:00:00.000Z"),
-          createdAt: new Date("2026-03-14T19:58:00.000Z"),
-          id: "run-row-2",
-          sourceRunId: "PP-319"
-        })
-      ],
-      benchmarkPackageRows: [
-        {
+          attemptCount: 2,
           benchmarkPackageId: "problem9",
-          latestObservedAt: new Date("2026-03-14T20:00:00.000Z")
+          latestCompletedAt: new Date("2026-03-14T20:00:00.000Z"),
+          latestRunId: "PP-319",
+          modelConfigIds: ["gpt-oss"],
+          providerFamilies: ["openai"],
+          runCount: 2,
+          totalObservedPackageCount: 7,
+          versions: ["2026.03", "2026.04"],
+          verdictFailCount: 0,
+          verdictInvalidResultCount: 0,
+          verdictPassCount: 2
         }
       ],
       recentRunRows: [
@@ -840,7 +796,6 @@ test("getOverview uses dedicated overview queries instead of the heavier runs an
           verdictClass: null
         })
       ],
-      totalObservedPackageCount: 7,
       summaryRow: {
         activeRuns: 1,
         failedRuns: 0,
@@ -882,6 +837,25 @@ test("portal benchmark ops runs summary verdict aggregation only counts terminal
     assert.match(statement, /"runs"\."state" in \('succeeded', 'failed', 'cancelled'\)/);
     assert.match(statement, /"runs"\."verdict_class"/);
   }
+});
+
+test("portal overview benchmark highlight query counts verdicts per run instead of per attempt row", () => {
+  const statement = renderSqlFragment(
+    portalBenchmarkOpsReadModelTestUtils.buildOverviewBenchmarkHighlightsQuery()
+  );
+
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'fail' then r\.id end\)/
+  );
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'invalid_result' then r\.id end\)/
+  );
+  assert.match(
+    statement,
+    /count\(distinct case when r\.state in \('succeeded', 'failed', 'cancelled'\) and r\.verdict_class = 'pass' then r\.id end\)/
+  );
 });
 
 function createReadModelService(overrides?: {
