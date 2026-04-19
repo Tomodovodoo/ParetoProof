@@ -77,8 +77,9 @@ test("readAllowedCorsOrigins excludes the default production math host when prev
   );
 });
 
-test("readTrustedMutationOrigins keeps math out of the generic trusted portal mutation allowlist", () => {
+test("readTrustedMutationOrigins keeps portal and math mutation allowlists scoped to their own surfaces", () => {
   const origins = readTrustedMutationOrigins({
+    authPublicOrigin: "https://auth.preview.paretoproof.com",
     brandedAuthOrigins: [
       "https://auth.preview.paretoproof.com",
       "https://github.auth.preview.paretoproof.com",
@@ -94,13 +95,16 @@ test("readTrustedMutationOrigins keeps math out of the generic trusted portal mu
     portalPublicOrigin: "https://portal.preview.paretoproof.com",
   } as never);
 
-  assert.deepEqual(origins, [
-    "https://portal.preview.paretoproof.com",
-    "https://portal-canary.preview.paretoproof.com",
-  ]);
-  assert.equal(origins.includes("https://math.preview.paretoproof.com"), false);
+  assert.deepEqual(origins, {
+    math: ["https://math.preview.paretoproof.com"],
+    portal: [
+      "https://portal.preview.paretoproof.com",
+      "https://portal-canary.preview.paretoproof.com",
+    ],
+  });
+  assert.equal(origins.portal.includes("https://math.preview.paretoproof.com"), false);
   assert.equal(
-    origins.includes("https://github.auth.preview.paretoproof.com"),
+    origins.portal.includes("https://github.auth.preview.paretoproof.com"),
     false,
   );
 });

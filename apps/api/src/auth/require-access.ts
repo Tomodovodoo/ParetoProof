@@ -16,6 +16,7 @@ import {
   type ResolvedPortalAccessSession
 } from "./portal-access-session.js";
 import type { ApiRuntimeEnv } from "../config/runtime.js";
+import { usesAuthenticatedSurfaceSession } from "../lib/authenticated-surface.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 type RouteAccessRequirement =
@@ -112,7 +113,7 @@ async function resolveRequestAccess(
     typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
 
   if (!assertion) {
-    if (routePath.startsWith("/portal/")) {
+    if (usesAuthenticatedSurfaceSession(routePath)) {
       const cachedSession = await resolvePortalAccessSession(db, cookieHeader, {
         teamDomain: options?.teamDomain
       });

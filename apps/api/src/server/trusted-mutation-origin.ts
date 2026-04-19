@@ -3,6 +3,10 @@ import type {
   FastifyRequest,
   HookHandlerDoneFunction,
 } from "fastify";
+import {
+  readAuthenticatedSurfaceRouteFamily,
+  type AuthenticatedSurface,
+} from "../lib/authenticated-surface.js";
 
 export function normalizeOrigin(value: string) {
   return value.replace(/\/+$/, "");
@@ -61,21 +65,32 @@ export function shouldEnforceTrustedMutationOrigin(
   method: string,
   routePath: string,
 ) {
-  return (
-    method !== "GET" &&
-    method !== "HEAD" &&
-    method !== "OPTIONS" &&
-    routePath.startsWith("/portal/")
-  );
+  return readTrustedMutationSurface(method, routePath) !== null;
 }
 
 function allowsBrandedFinalizeSubmitOrigin(method: string, routePath: string) {
   return method === "POST" && routePath === "/portal/session/finalize/submit";
 }
 
+function readTrustedMutationSurface(
+  method: string,
+  routePath: string,
+): AuthenticatedSurface | null {
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return null;
+  }
+
+  return readAuthenticatedSurfaceRouteFamily(routePath);
+}
+
+export type TrustedMutationOriginsBySurface = Record<
+  AuthenticatedSurface,
+  string[]
+>;
+
 export function createTrustedMutationOriginHook(options: {
   allowLocalhostOrigins: boolean;
-  allowedOrigins: string[];
+  allowedOriginsBySurface: TrustedMutationOriginsBySurface;
   brandedAuthOrigins?: string[];
 }) {
   return (
@@ -84,8 +99,9 @@ export function createTrustedMutationOriginHook(options: {
     done: HookHandlerDoneFunction,
   ) => {
     const routePath = request.routeOptions.url ?? request.raw.url ?? "";
+    const trustedSurface = readTrustedMutationSurface(request.method, routePath);
 
-    if (!shouldEnforceTrustedMutationOrigin(request.method, routePath)) {
+    if (!trustedSurface) {
       done();
       return;
     }
@@ -110,7 +126,10 @@ export function createTrustedMutationOriginHook(options: {
       origin: requestOrigin,
     });
     const originAllowed =
-      (options.allowedOrigins.includes(requestOrigin) && !brandedAuthOrigin) ||
+      (
+        options.allowedOriginsBySurface[trustedSurface].includes(requestOrigin) &&
+        !brandedAuthOrigin
+      ) ||
       (brandedAuthOrigin &&
         allowsBrandedFinalizeSubmitOrigin(request.method, routePath)) ||
       (isAllowedBrandedAuthOrigin({

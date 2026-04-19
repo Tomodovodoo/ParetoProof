@@ -3,6 +3,11 @@ import test from "node:test";
 import Fastify from "fastify";
 import { createTrustedMutationOriginHook } from "../src/server/trusted-mutation-origin.ts";
 
+const allowedOriginsBySurface = {
+  math: ["https://math.preview.paretoproof.com"],
+  portal: ["https://portal.preview.paretoproof.com"],
+};
+
 test("trusted mutation origin hook rejects state-changing portal requests without an Origin header", async (t) => {
   const app = Fastify();
 
@@ -14,7 +19,7 @@ test("trusted mutation origin hook rejects state-changing portal requests withou
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -46,7 +51,7 @@ test("trusted mutation origin hook rejects state-changing portal requests from u
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -84,7 +89,7 @@ test("trusted mutation origin hook also protects admin role revocation mutations
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -121,7 +126,7 @@ test("trusted mutation origin hook also protects portal-admin offline ingest mut
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -158,7 +163,7 @@ test("trusted mutation origin hook allows trusted portal origins and safe GET re
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -203,7 +208,7 @@ test("trusted mutation origin hook still rejects math-origin portal mutations ou
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [],
     }),
   );
@@ -238,12 +243,15 @@ test("trusted mutation origin hook only allows branded auth POSTs on the finaliz
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: false,
-      allowedOrigins: [
-        "https://auth.preview.paretoproof.com",
-        "https://github.auth.preview.paretoproof.com",
-        "https://google.auth.preview.paretoproof.com",
-        "https://portal.preview.paretoproof.com",
-      ],
+      allowedOriginsBySurface: {
+        math: ["https://math.preview.paretoproof.com"],
+        portal: [
+          "https://auth.preview.paretoproof.com",
+          "https://github.auth.preview.paretoproof.com",
+          "https://google.auth.preview.paretoproof.com",
+          "https://portal.preview.paretoproof.com",
+        ],
+      },
       brandedAuthOrigins: [
         "https://auth.preview.paretoproof.com",
         "https://github.auth.preview.paretoproof.com",
@@ -314,7 +322,7 @@ test("trusted mutation origin hook only allows loopback-mapped branded auth orig
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: true,
-      allowedOrigins: ["https://portal.preview.paretoproof.com"],
+      allowedOriginsBySurface,
       brandedAuthOrigins: [
         "https://auth.preview.paretoproof.com",
         "https://github.auth.preview.paretoproof.com",
@@ -355,5 +363,57 @@ test("trusted mutation origin hook only allows loopback-mapped branded auth orig
   assert.equal(profileResponse.statusCode, 403);
   assert.deepEqual(profileResponse.json(), {
     error: "trusted_origin_not_allowed",
+  });
+});
+
+test("trusted mutation origin hook rejects portal-surface callers for math mutations but allows the math surface", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOriginsBySurface,
+      brandedAuthOrigins: [],
+    }),
+  );
+
+  app.post("/math/submissions/sub_123/review-gates/policy_review", async () => ({
+    ok: true,
+  }));
+
+  const portalOriginResponse = await app.inject({
+    method: "POST",
+    payload: {
+      status: "satisfied",
+    },
+    url: "/math/submissions/sub_123/review-gates/policy_review",
+    headers: {
+      origin: "https://portal.preview.paretoproof.com",
+    },
+  });
+
+  const mathOriginResponse = await app.inject({
+    method: "POST",
+    payload: {
+      status: "satisfied",
+    },
+    url: "/math/submissions/sub_123/review-gates/policy_review",
+    headers: {
+      origin: "https://math.preview.paretoproof.com",
+    },
+  });
+
+  assert.equal(portalOriginResponse.statusCode, 403);
+  assert.deepEqual(portalOriginResponse.json(), {
+    error: "trusted_origin_not_allowed",
+  });
+  assert.equal(mathOriginResponse.statusCode, 200);
+  assert.deepEqual(mathOriginResponse.json(), {
+    ok: true,
   });
 });

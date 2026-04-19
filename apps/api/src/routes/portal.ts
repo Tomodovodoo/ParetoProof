@@ -1,5 +1,4 @@
 import {
-  findAppRouteBySurface,
   portalBenchmarkOpsReadModelsContract,
   portalBenchmarkDatasetParamsSchema,
   portalBenchmarkExportQuerySchema,
@@ -38,6 +37,12 @@ import {
   matchesUserIdentityProviderSubject,
 } from "../lib/identity-binding.js";
 import {
+  buildAuthenticatedContinuationUrl,
+  readAuthenticatedContinuation,
+  sanitizeAuthenticatedRedirectPath,
+  type AuthenticatedSurface,
+} from "../lib/authenticated-surface.js";
+import {
   createPortalBenchmarkOpsReadModelService,
   type PortalBenchmarkOpsReadModelService,
 } from "../lib/portal-benchmark-ops.js";
@@ -69,8 +74,6 @@ import {
   isAllowedBrandedAuthOrigin,
   normalizeOrigin,
 } from "../server/trusted-mutation-origin.js";
-
-type AuthenticatedSurface = "portal" | "math";
 
 class PortalAccessRequestConflictError extends Error {
   constructor(message: string) {
@@ -125,62 +128,7 @@ type PortalRouteRuntimeConfig = Pick<
   | "portalPublicOrigin"
 >;
 
-function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface {
-  return surface === "math" ? "math" : "portal";
-}
-
-function readAuthenticatedSurfaceOrigin(
-  runtimeConfig: PortalRouteRuntimeConfig,
-  targetSurface: AuthenticatedSurface,
-) {
-  return targetSurface === "math"
-    ? runtimeConfig.mathPublicOrigin
-    : runtimeConfig.portalPublicOrigin;
-}
-
-function sanitizeAuthenticatedRedirectPath(
-  rawRedirectPath: string | null,
-  targetSurface: AuthenticatedSurface,
-  runtimeConfig: PortalRouteRuntimeConfig,
-) {
-  if (!rawRedirectPath || rawRedirectPath === "/") {
-    return "/";
-  }
-
-  if (
-    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) ||
-    rawRedirectPath.startsWith("//")
-  ) {
-    return "/";
-  }
-
-  try {
-    const targetOrigin = readAuthenticatedSurfaceOrigin(
-      runtimeConfig,
-      targetSurface,
-    );
-    const candidateUrl = new URL(
-      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      targetOrigin,
-    );
-
-    if (
-      candidateUrl.origin !== targetOrigin ||
-      !findAppRouteBySurface(targetSurface, candidateUrl.pathname)
-    ) {
-      return "/";
-    }
-
-    return (
-      `${candidateUrl.pathname}${candidateUrl.search}${candidateUrl.hash}` ||
-      "/"
-    );
-  } catch {
-    return "/";
-  }
-}
-
-function readAuthenticatedContinuation(
+function readRequestAuthenticatedContinuation(
   request: FastifyRequest,
   runtimeConfig: PortalRouteRuntimeConfig,
 ) {
@@ -190,29 +138,12 @@ function readAuthenticatedContinuation(
       : undefined;
   const query =
     (request.query as { app?: string; redirect?: string } | undefined) ?? {};
-  const targetSurface = readAuthenticatedSurface(
-    parsedBody?.app ?? query.app ?? null,
-  );
-  const redirectPath = sanitizeAuthenticatedRedirectPath(
-    parsedBody?.redirect ?? query.redirect ?? null,
-    targetSurface,
+  return readAuthenticatedContinuation(
+    {
+      body: parsedBody,
+      query,
+    },
     runtimeConfig,
-  );
-
-  return {
-    redirectPath,
-    targetSurface,
-  };
-}
-
-function buildAuthenticatedContinuationUrl(
-  redirectPath: string,
-  targetSurface: AuthenticatedSurface,
-  runtimeConfig: PortalRouteRuntimeConfig,
-) {
-  return new URL(
-    redirectPath,
-    readAuthenticatedSurfaceOrigin(runtimeConfig, targetSurface),
   );
 }
 
@@ -552,7 +483,7 @@ export function registerPortalRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+    const { redirectPath, targetSurface } = readRequestAuthenticatedContinuation(
       request,
       runtimeConfig,
     );
@@ -580,7 +511,7 @@ export function registerPortalRoutes(
         : undefined;
     const identity = request.accessIdentity;
     const accessContext = request.accessRbacContext;
-    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+    const { redirectPath, targetSurface } = readRequestAuthenticatedContinuation(
       request,
       runtimeConfig,
     );
@@ -783,7 +714,7 @@ export function registerPortalRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    const { redirectPath, targetSurface } = readAuthenticatedContinuation(
+    const { redirectPath, targetSurface } = readRequestAuthenticatedContinuation(
       request,
       runtimeConfig,
     );
