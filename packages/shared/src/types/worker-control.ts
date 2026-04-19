@@ -8,7 +8,7 @@ import type {
   WorkerTerminalFailureRunLifecycleState
 } from "./run-control.js";
 import type {
-  Problem9HostedAuthMode,
+  Problem9LocalAuthMode,
   Problem9ProviderFamily,
   Problem9RunMode,
   Problem9ToolProfile
@@ -157,7 +157,7 @@ export type WorkerRunTarget =
       sliceDefinition: string;
     }
   | {
-      authMode: Problem9HostedAuthMode;
+      authMode: Problem9LocalAuthMode;
       benchmarkItemId: string;
       benchmarkPackageDigest: string;
       benchmarkPackageId: string;
@@ -229,23 +229,25 @@ export type WorkerClaimResponse =
   | {
       leaseStatus: "active";
       pollAfterSeconds: number;
-      workerJob: {
-        attemptId: string;
-        heartbeatIntervalSeconds: number;
-        heartbeatTimeoutSeconds: number;
-        jobId: string;
-        jobToken: string;
-        jobTokenExpiresAt: string;
-        jobTokenScopes: WorkerJobTokenScope[];
-        leaseExpiresAt: string;
-        leaseId: string;
-        offlineBundleCompatible: true;
-        requiredArtifactRoles: WorkerBundleArtifactRole[];
-        runBundleSchemaVersion: string;
-        runId: string;
-        target: WorkerRunTarget;
-      };
+      workerJob: WorkerActiveJob;
     };
+
+export type WorkerActiveJob = {
+  attemptId: string;
+  heartbeatIntervalSeconds: number;
+  heartbeatTimeoutSeconds: number;
+  jobId: string;
+  jobToken: string;
+  jobTokenExpiresAt: string;
+  jobTokenScopes: WorkerJobTokenScope[];
+  leaseExpiresAt: string;
+  leaseId: string;
+  offlineBundleCompatible: true;
+  requiredArtifactRoles: WorkerBundleArtifactRole[];
+  runBundleSchemaVersion: string;
+  runId: string;
+  target: WorkerRunTarget;
+};
 
 export type WorkerHeartbeatRequest = {
   attemptId: string;

@@ -112,7 +112,7 @@ async function resolveRequestAccess(
     typeof request.headers.cookie === "string" ? request.headers.cookie : undefined;
 
   if (!assertion) {
-    if (routePath.startsWith("/portal/")) {
+    if (routePath.startsWith("/portal/") || routePath.startsWith("/math/")) {
       const cachedSession = await resolvePortalAccessSession(db, cookieHeader, {
         teamDomain: options?.teamDomain
       });

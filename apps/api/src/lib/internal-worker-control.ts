@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from "node:crypto";
 import {
   and,
   asc,
@@ -17,6 +16,7 @@ import {
 import type {
   Problem9HostedAuthMode,
   Problem9ProviderFamily,
+  WorkerActiveJob,
   WorkerArtifactManifestRequest,
   WorkerArtifactManifestResponse,
   WorkerBundleArtifactRole,
@@ -43,29 +43,18 @@ import {
   workerPoolDefinitions
 } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
-
-const idlePollAfterSeconds = 30;
-const heartbeatIntervalSeconds = 60;
-const heartbeatTimeoutSeconds = 180;
-const runBundleSchemaVersion = "1";
-const requiredProblem9ArtifactRoles = [
-  "package_reference",
-  "prompt_package",
-  "candidate_source",
-  "verdict_record",
-  "compiler_output",
-  "compiler_diagnostics",
-  "verifier_output",
-  "environment_snapshot"
-] satisfies WorkerBundleArtifactRole[];
-const issuedJobTokenScopes = [
-  "heartbeat",
-  "event_append",
-  "artifact_manifest_write",
-  "verifier_verdict_write",
-  "result_finalize",
-  "failure_finalize"
-] satisfies WorkerJobTokenScope[];
+import {
+  addSeconds,
+  createProblem9JobTokenExpiry,
+  createProblem9WorkerActiveJob,
+  issuedProblem9JobTokenScopes as issuedJobTokenScopes,
+  issueWorkerJobToken as issueJobToken,
+  problem9WorkerHeartbeatIntervalSeconds as heartbeatIntervalSeconds,
+  problem9WorkerHeartbeatTimeoutSeconds as heartbeatTimeoutSeconds,
+  problem9WorkerIdlePollAfterSeconds as idlePollAfterSeconds,
+  requiredProblem9ArtifactRoles,
+  sha256Text
+} from "./problem9-worker-assignment.js";
 
 type DbClient = ReturnTypeOfCreateDbClient;
 type SelectExecutor = Pick<DbClient, "select">;
@@ -180,23 +169,6 @@ export class InternalWorkerControlError extends Error {
   }
 }
 
-function addSeconds(timestamp: Date, seconds: number) {
-  return new Date(timestamp.getTime() + seconds * 1000);
-}
-
-function sha256Text(value: string) {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function issueJobToken() {
-  const token = randomBytes(32).toString("base64url");
-
-  return {
-    token,
-    tokenHash: sha256Text(token)
-  };
-}
-
 function buildIdleClaimResponse(): WorkerClaimResponse {
   return {
     leaseStatus: "idle",
@@ -302,10 +274,6 @@ async function selectNextClaimCandidate(tx: SelectExecutor): Promise<CandidateCl
     runState: candidate.runState,
     toolProfile: candidate.toolProfile
   };
-}
-
-function createJobTokenExpiry(now: Date) {
-  return addSeconds(now, heartbeatTimeoutSeconds);
 }
 
 function resolveCancelRequestedLeaseExpiry(lease: LeaseStateRow) {
@@ -1546,7 +1514,7 @@ export function createInternalWorkerControlService(db: DbClient) {
           }
 
           const leaseExpiresAt = addSeconds(now, heartbeatTimeoutSeconds);
-          const jobTokenExpiresAt = createJobTokenExpiry(now);
+          const jobTokenExpiresAt = createProblem9JobTokenExpiry(now);
           const { token, tokenHash } = issueJobToken();
 
           const [lease] = await tx
@@ -1593,47 +1561,43 @@ export function createInternalWorkerControlService(db: DbClient) {
               .where(eq(runs.id, candidate.runRowId));
           }
 
+          const target: WorkerActiveJob["target"] = {
+            authMode: candidate.authMode,
+            benchmarkItemId: candidate.benchmarkItemId,
+            benchmarkPackageDigest: candidate.benchmarkPackageDigest,
+            benchmarkPackageId: candidate.benchmarkPackageId,
+            benchmarkPackageVersion: candidate.benchmarkPackageVersion,
+            harnessRevision: candidate.harnessRevision,
+            laneId: candidate.laneId,
+            modelConfigId: candidate.modelConfigId,
+            modelSnapshotId: candidate.modelSnapshotId,
+            promptPackageDigest: candidate.promptPackageDigest,
+            promptProtocolVersion: candidate.promptProtocolVersion,
+            providerFamily: candidate.providerFamily,
+            runKind: "single_run",
+            runMode: candidate.runMode as
+              | "single_pass_probe"
+              | "pass_k_probe"
+              | "bounded_agentic_attempt",
+            toolProfile: candidate.toolProfile as
+              | "no_tools"
+              | "lean_mcp_readonly"
+              | "workspace_edit_limited"
+          };
+
           return {
             leaseStatus: "active",
             pollAfterSeconds: 0,
-            workerJob: {
+            workerJob: createProblem9WorkerActiveJob({
               attemptId: candidate.attemptId,
-              heartbeatIntervalSeconds,
-              heartbeatTimeoutSeconds,
               jobId: candidate.jobId,
               jobToken: token,
-              jobTokenExpiresAt: jobTokenExpiresAt.toISOString(),
-              jobTokenScopes: [...issuedJobTokenScopes],
-              leaseExpiresAt: leaseExpiresAt.toISOString(),
+              jobTokenExpiresAt,
+              leaseExpiresAt,
               leaseId: lease.id,
-              offlineBundleCompatible: true,
-              requiredArtifactRoles: [...requiredProblem9ArtifactRoles],
-              runBundleSchemaVersion,
               runId: candidate.runId,
-              target: {
-                authMode: candidate.authMode,
-                benchmarkItemId: candidate.benchmarkItemId,
-                benchmarkPackageDigest: candidate.benchmarkPackageDigest,
-                benchmarkPackageId: candidate.benchmarkPackageId,
-                benchmarkPackageVersion: candidate.benchmarkPackageVersion,
-                harnessRevision: candidate.harnessRevision,
-                laneId: candidate.laneId,
-                modelConfigId: candidate.modelConfigId,
-                modelSnapshotId: candidate.modelSnapshotId,
-                promptPackageDigest: candidate.promptPackageDigest,
-                promptProtocolVersion: candidate.promptProtocolVersion,
-                providerFamily: candidate.providerFamily,
-                runKind: "single_run",
-                runMode: candidate.runMode as
-                  | "single_pass_probe"
-                  | "pass_k_probe"
-                  | "bounded_agentic_attempt",
-                toolProfile: candidate.toolProfile as
-                  | "no_tools"
-                  | "lean_mcp_readonly"
-                  | "workspace_edit_limited"
-              }
-            }
+              target
+            })
           } satisfies WorkerClaimResponse;
         });
       } catch (error) {

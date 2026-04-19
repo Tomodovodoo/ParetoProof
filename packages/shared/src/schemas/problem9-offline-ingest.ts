@@ -313,7 +313,8 @@ export const problem9OfflineIngestBundleSchema = z.union([
 
 export const problem9OfflineIngestRequestSchema = z.object({
   bundle: problem9OfflineIngestBundleSchema,
-  ingestRequestSchemaVersion: z.literal("1")
+  ingestRequestSchemaVersion: z.literal("1"),
+  mathLaunchId: z.string().uuid().nullable().default(null)
 });
 
 export const problem9OfflineIngestResponseSchema = z.object({

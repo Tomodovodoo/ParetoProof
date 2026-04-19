@@ -65,7 +65,7 @@ export function shouldEnforceTrustedMutationOrigin(
     method !== "GET" &&
     method !== "HEAD" &&
     method !== "OPTIONS" &&
-    routePath.startsWith("/portal/")
+    (routePath.startsWith("/portal/") || routePath.startsWith("/math/"))
   );
 }
 
@@ -77,6 +77,7 @@ export function createTrustedMutationOriginHook(options: {
   allowLocalhostOrigins: boolean;
   allowedOrigins: string[];
   brandedAuthOrigins?: string[];
+  mathAllowedOrigins?: string[];
 }) {
   return (
     request: FastifyRequest,
@@ -103,6 +104,9 @@ export function createTrustedMutationOriginHook(options: {
       return;
     }
 
+    const routeAllowedOrigins = routePath.startsWith("/math/")
+      ? options.mathAllowedOrigins ?? []
+      : options.allowedOrigins;
     const brandedAuthOrigins = options.brandedAuthOrigins ?? [];
     const brandedAuthOrigin = isAllowedBrandedAuthOrigin({
       allowLocalhostOrigins: false,
@@ -110,7 +114,7 @@ export function createTrustedMutationOriginHook(options: {
       origin: requestOrigin,
     });
     const originAllowed =
-      (options.allowedOrigins.includes(requestOrigin) && !brandedAuthOrigin) ||
+      (routeAllowedOrigins.includes(requestOrigin) && !brandedAuthOrigin) ||
       (brandedAuthOrigin &&
         allowsBrandedFinalizeSubmitOrigin(request.method, routePath)) ||
       (isAllowedBrandedAuthOrigin({

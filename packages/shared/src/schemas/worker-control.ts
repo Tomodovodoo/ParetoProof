@@ -9,7 +9,7 @@ import {
   workerTerminalFailureRunLifecycleStateSchema
 } from "./run-control.js";
 import {
-  problem9HostedAuthModes,
+  problem9LocalAuthModes,
   problem9ProviderFamilies,
   problem9RunModes,
   problem9ToolProfiles
@@ -183,7 +183,7 @@ export const workerRunTargetSchema = z.discriminatedUnion("runKind", [
     sliceDefinition: z.string().min(1)
   }),
   z.object({
-    authMode: z.enum(problem9HostedAuthModes),
+    authMode: z.enum(problem9LocalAuthModes),
     benchmarkItemId: z.string().min(1),
     benchmarkPackageDigest: sha256Schema,
     benchmarkPackageId: z.string().min(1),
@@ -247,6 +247,23 @@ export const workerClaimRequestSchema = z.object({
   workerVersion: z.string().min(1)
 });
 
+export const workerActiveJobSchema = z.object({
+  attemptId: z.string().min(1),
+  heartbeatIntervalSeconds: z.number().int().positive(),
+  heartbeatTimeoutSeconds: z.number().int().positive(),
+  jobId: z.string().min(1),
+  jobToken: z.string().min(1),
+  jobTokenExpiresAt: timestampSchema,
+  jobTokenScopes: z.array(workerJobTokenScopeSchema).min(1),
+  leaseExpiresAt: timestampSchema,
+  leaseId: z.string().min(1),
+  offlineBundleCompatible: z.literal(true),
+  requiredArtifactRoles: z.array(workerBundleArtifactRoleSchema).min(1),
+  runBundleSchemaVersion: z.string().min(1),
+  runId: z.string().min(1),
+  target: workerRunTargetSchema
+});
+
 export const workerClaimResponseSchema = z.union([
   z.object({
     leaseStatus: z.literal("idle"),
@@ -256,22 +273,7 @@ export const workerClaimResponseSchema = z.union([
   z.object({
     leaseStatus: z.literal("active"),
     pollAfterSeconds: z.number().int().min(0),
-    workerJob: z.object({
-      attemptId: z.string().min(1),
-      heartbeatIntervalSeconds: z.number().int().positive(),
-      heartbeatTimeoutSeconds: z.number().int().positive(),
-      jobId: z.string().min(1),
-      jobToken: z.string().min(1),
-      jobTokenExpiresAt: timestampSchema,
-      jobTokenScopes: z.array(workerJobTokenScopeSchema).min(1),
-      leaseExpiresAt: timestampSchema,
-      leaseId: z.string().min(1),
-      offlineBundleCompatible: z.literal(true),
-      requiredArtifactRoles: z.array(workerBundleArtifactRoleSchema).min(1),
-      runBundleSchemaVersion: z.string().min(1),
-      runId: z.string().min(1),
-      target: workerRunTargetSchema
-    })
+    workerJob: workerActiveJobSchema
   })
 ]);
 

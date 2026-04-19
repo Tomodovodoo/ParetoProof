@@ -206,6 +206,20 @@ export const benchmarkReleaseVisibilityEnum = pgEnum("benchmark_release_visibili
   "public"
 ]);
 
+export const mathLaunchModeEnum = pgEnum("math_launch_mode", [
+  "hosted",
+  "local_connected",
+  "offline_export"
+]);
+
+export const mathLaunchStatusEnum = pgEnum("math_launch_status", [
+  "hosted_enqueued",
+  "local_bootstrap_issued",
+  "local_bootstrap_redeemed",
+  "offline_exported",
+  "offline_ingested"
+]);
+
 export const users = pgTable(
   "users",
   {
@@ -884,6 +898,103 @@ export const workerJobLeases = pgTable(
       table.workerInstanceId
     ),
     leaseExpiryIndex: index("worker_job_leases_lease_expires_at_idx").on(table.leaseExpiresAt)
+  })
+);
+
+export const mathLaunchRecords = pgTable(
+  "math_launch_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    mathQuestionId: text("math_question_id").notNull(),
+    benchmarkVersionId: text("benchmark_version_id")
+      .notNull()
+      .references(() => benchmarkVersions.benchmarkVersionId),
+    launchMode: mathLaunchModeEnum("launch_mode").notNull(),
+    status: mathLaunchStatusEnum("status").notNull(),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    runId: uuid("run_id").references(() => runs.id, {
+      onDelete: "set null"
+    }),
+    configSourceRunId: text("config_source_run_id").notNull(),
+    sourceRunId: text("source_run_id").notNull(),
+    sourceJobId: text("source_job_id"),
+    sourceAttemptId: text("source_attempt_id").notNull(),
+    benchmarkPackageId: text("benchmark_package_id").notNull(),
+    benchmarkPackageVersion: text("benchmark_package_version").notNull(),
+    benchmarkPackageDigest: text("benchmark_package_digest").notNull(),
+    benchmarkItemId: text("benchmark_item_id").notNull(),
+    laneId: text("lane_id").notNull(),
+    promptProtocolVersion: text("prompt_protocol_version").notNull(),
+    promptPackageDigest: text("prompt_package_digest").notNull(),
+    runMode: text("run_mode").notNull(),
+    toolProfile: text("tool_profile").notNull(),
+    harnessRevision: text("harness_revision").notNull(),
+    verifierVersion: text("verifier_version").notNull(),
+    providerFamily: text("provider_family").notNull(),
+    authMode: text("auth_mode").notNull(),
+    modelConfigId: text("model_config_id").notNull(),
+    modelSnapshotId: text("model_snapshot_id").notNull(),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    questionIndex: index("math_launch_records_question_idx").on(table.mathQuestionId),
+    benchmarkVersionIndex: index("math_launch_records_benchmark_version_id_idx").on(
+      table.benchmarkVersionId
+    ),
+    requestedByUserIndex: index("math_launch_records_requested_by_user_id_idx").on(
+      table.requestedByUserId
+    ),
+    statusIndex: index("math_launch_records_status_idx").on(table.status),
+    sourceRunUnique: uniqueIndex("math_launch_records_source_run_id_unique").on(table.sourceRunId),
+    sourceAttemptUnique: uniqueIndex("math_launch_records_source_attempt_id_unique").on(
+      table.sourceAttemptId
+    ),
+    runUnique: uniqueIndex("math_launch_records_run_id_unique")
+      .on(table.runId)
+      .where(sql`${table.runId} is not null`)
+  })
+);
+
+export const mathRunnerBootstrapSessions = pgTable(
+  "math_runner_bootstrap_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    mathLaunchRecordId: uuid("math_launch_record_id")
+      .notNull()
+      .references(() => mathLaunchRecords.id, { onDelete: "cascade" }),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    sessionTokenHash: text("session_token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => ({
+    launchRecordUnique: uniqueIndex("math_runner_bootstrap_sessions_launch_unique").on(
+      table.mathLaunchRecordId
+    ),
+    sessionTokenHashUnique: uniqueIndex("math_runner_bootstrap_sessions_token_hash_unique").on(
+      table.sessionTokenHash
+    ),
+    expiresAtIndex: index("math_runner_bootstrap_sessions_expires_at_idx").on(table.expiresAt),
+    requestedByUserIndex: index("math_runner_bootstrap_sessions_requested_by_user_id_idx").on(
+      table.requestedByUserId
+    )
   })
 );
 

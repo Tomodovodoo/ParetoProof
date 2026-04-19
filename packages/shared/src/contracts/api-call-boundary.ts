@@ -163,6 +163,38 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "math.question-launch.read",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Math question pages fetch their own launch-readiness payload directly from the authenticated math surface without detouring through the portal."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.hosted-launch.create",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Question-centric hosted launch starts from the authenticated math browser, but the backend still creates the durable run records inside the shared execution kernel."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.local-bootstrap.create",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "The math browser may initiate local connected launch, but it receives only a short-lived bootstrap token instead of raw provider credentials."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.offline-export.create",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Offline export is a math-surface launch action that reserves immutable run metadata while keeping provider credentials outside the browser and platform."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.workers.read",
     mode: "browser_direct",
     origin: "portal_browser",
@@ -376,6 +408,14 @@ export const apiCallBoundaryCatalog = [
     origin: "portal_browser",
     rationale:
       "Publication is the final admin-controlled reporting mutation and remains on the existing Access cookie boundary."
+  },
+  {
+    credential: "runner_bootstrap_token",
+    endpointId: "internal.math-runner-bootstrap.redeem",
+    mode: "internal_service_only",
+    origin: "local_runner",
+    rationale:
+      "A local connected runner redeems a short-lived bootstrap token once to receive the per-job worker credential and concrete run target."
   },
   {
     credential: "worker_bootstrap_token",

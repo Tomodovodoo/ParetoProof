@@ -13,6 +13,7 @@ import type {
 export type Problem9OfflineIngestRequest = {
   ingestRequestSchemaVersion: "1";
   bundle: Problem9OfflineIngestBundle;
+  mathLaunchId: string | null;
 };
 
 export type Problem9BenchmarkSourceFiles = {

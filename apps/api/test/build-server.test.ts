@@ -7,6 +7,7 @@ import {
   readBrandedAuthOrigins,
   readCorsRoutePath,
   readAllowedCorsOrigins,
+  readMathTrustedMutationOrigins,
   readTrustedMutationOrigins,
 } from "../src/server/build-server.ts";
 
@@ -99,6 +100,34 @@ test("readTrustedMutationOrigins keeps math out of the generic trusted portal mu
     "https://portal-canary.preview.paretoproof.com",
   ]);
   assert.equal(origins.includes("https://math.preview.paretoproof.com"), false);
+  assert.equal(
+    origins.includes("https://github.auth.preview.paretoproof.com"),
+    false,
+  );
+});
+
+test("readMathTrustedMutationOrigins keeps portal out of the math mutation allowlist", () => {
+  const origins = readMathTrustedMutationOrigins({
+    brandedAuthOrigins: [
+      "https://auth.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+      "https://google.auth.preview.paretoproof.com",
+    ],
+    corsAllowedOrigins: [
+      "https://portal.preview.paretoproof.com",
+      "https://math.preview.paretoproof.com",
+      "https://math-canary.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+    ],
+    mathPublicOrigin: "https://math.preview.paretoproof.com",
+    portalPublicOrigin: "https://portal.preview.paretoproof.com",
+  } as never);
+
+  assert.deepEqual(origins, [
+    "https://math.preview.paretoproof.com",
+    "https://math-canary.preview.paretoproof.com",
+  ]);
+  assert.equal(origins.includes("https://portal.preview.paretoproof.com"), false);
   assert.equal(
     origins.includes("https://github.auth.preview.paretoproof.com"),
     false,
