@@ -12,7 +12,9 @@ If a mode is not listed here, do not infer support from a placeholder variable n
 - hosted secrets stay in the platform that runs the process, not in checked-in `.env` files
 - empty strings are treated as missing values by the runtime validators
 - required CLI flags such as `--access-jwt` are part of the operational checklist even when they are not environment variables
-- `bun run test:startup-validation` is the required smoke suite for startup env validation across the documented web, API, worker, and local Docker paths; update it when any checklist item changes
+- `bun run check:env-contract` is the static guard for checked-in env examples and runtime-doc cross-references
+- `bun run test:startup-validation` is the required startup smoke suite for the specific web, API, worker, and local Docker checks it executes; it is not a full hosted-readiness proof for every documented surface
+- `PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER=1` is a local fallback only; CI must keep the non-skipped Docker startup lane green
 
 ## Web modes
 

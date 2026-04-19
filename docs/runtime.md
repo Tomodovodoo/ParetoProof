@@ -6,7 +6,8 @@ This repo uses a small number of runtime rules.
 
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
-- `bun run test:startup-validation` is the executable smoke owner for startup env validation across the currently supported runtime surfaces.
+- `bun run check:env-contract` is the checked-in contract guard for `.env.example` shape and the required runtime-doc cross-references.
+- `bun run test:startup-validation` is the startup smoke suite for the specific web, API, worker, and local-Docker checks it explicitly executes; it is not a full deployed-readiness proof for every hosted surface.
 - API portal/auth/math origin and shared-cookie deployment assumptions are runtime-configurable; keep non-prod hostnames and cookie policy in the API runtime instead of re-hard-coding them in route helpers.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
@@ -42,6 +43,15 @@ This repo uses a small number of runtime rules.
 ## Main-Branch Promotion Gate
 
 Use the PR's `Pull Request CI / ci` run as the pre-merge promotion gate for worker, image, auth, and runtime slices.
+
+PR-template completion is a separate merge-time governance record:
+
+- `Linked issues`
+- `Verification`
+- `Security and cost review`
+- `Rollout and rollback`
+
+Those sections must contain real content rather than untouched template defaults, but they do not substitute for the named kernel-proof steps below.
 
 Required kernel evidence comes from these named steps:
 

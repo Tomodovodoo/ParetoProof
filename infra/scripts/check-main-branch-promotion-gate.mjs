@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDirectory, "..", "..");
-
-function readText(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
-}
-
-function fail(message) {
-  console.error(`Main-branch promotion gate check failed: ${message}`);
-  process.exit(1);
-}
+import {
+  assertIncludesAll,
+  getJobSteps,
+  getStepRun,
+  getWorkflowJob,
+  isDirectExecution,
+  listUploadArtifactNames,
+  normalizeStringList,
+  normalizeWorkflowTriggers,
+  parseCommonCliOptions,
+  readRepoJson,
+  readRepoText,
+  readWorkflow,
+  requireStep
+} from "./lib/workflow-utils.mjs";
 
 const runtimeDocPath = "docs/runtime.md";
 const checklistDocPath = "docs/runtime-env-mode-checklists.md";
@@ -24,90 +24,169 @@ const publishWorkerWorkflowPath = ".github/workflows/publish-worker-image.yml";
 const publishDevboxWorkflowPath = ".github/workflows/publish-problem9-devbox-image.yml";
 const packageJsonPath = "package.json";
 
-const runtimeDoc = readText(runtimeDocPath);
-const checklistDoc = readText(checklistDocPath);
-const projectManagementDoc = readText(projectManagementDocPath);
-const prCiWorkflow = readText(prCiWorkflowPath);
-const publishWorkerWorkflow = readText(publishWorkerWorkflowPath);
-const publishDevboxWorkflow = readText(publishDevboxWorkflowPath);
-const packageJson = JSON.parse(readText(packageJsonPath));
-
 const requiredPrCiSteps = [
-  "Build Problem 9 execution image smoke target",
-  "Verify Problem 9 execution image smoke target",
-  "Build Problem 9 devbox image smoke target",
-  "Verify Problem 9 devbox image smoke target",
-  "Run deterministic Problem 9 verifier smoke",
-  "Run deterministic Problem 9 local-stub attempt smoke",
-  "Check runtime env examples",
-  "Check trusted-local auth boundaries",
-  "Test API auth handoff routes",
-  "Test web auth relay functions"
+  {
+    name: "Build Problem 9 execution image smoke target",
+    runSnippets: [
+      "node infra/scripts/build-problem9-image.mjs",
+      "--target problem9-execution",
+      "--tag paretoproof-problem9-execution:pr-smoke"
+    ]
+  },
+  {
+    name: "Verify Problem 9 execution image smoke target",
+    runSnippets: [
+      "node infra/scripts/verify-problem9-image-toolchains.mjs",
+      "--target problem9-execution",
+      "--image paretoproof-problem9-execution:pr-smoke"
+    ]
+  },
+  {
+    name: "Build Problem 9 devbox image smoke target",
+    runSnippets: [
+      "node infra/scripts/build-problem9-image.mjs",
+      "--target problem9-devbox",
+      "--tag paretoproof-problem9-devbox:pr-smoke"
+    ]
+  },
+  {
+    name: "Verify Problem 9 devbox image smoke target",
+    runSnippets: [
+      "node infra/scripts/verify-problem9-image-toolchains.mjs",
+      "--target problem9-devbox",
+      "--image paretoproof-problem9-devbox:pr-smoke"
+    ]
+  },
+  {
+    name: "Run deterministic Problem 9 verifier smoke",
+    runSnippets: ["bun run test:worker:verifier-smoke"]
+  },
+  {
+    name: "Run deterministic Problem 9 local-stub attempt smoke",
+    runSnippets: [
+      "node infra/scripts/run-problem9-attempt-smoke.mjs",
+      "--image paretoproof-problem9-devbox:pr-smoke"
+    ]
+  },
+  {
+    name: "Check runtime env examples",
+    runSnippets: ["node infra/scripts/check-runtime-env-examples.mjs"]
+  },
+  {
+    name: "Check trusted-local auth boundaries",
+    runSnippets: ["node infra/scripts/check-trusted-local-boundaries.mjs"]
+  },
+  {
+    name: "Test API auth handoff routes",
+    runSnippets: ["bun run test:api"]
+  },
+  {
+    name: "Test web auth relay functions",
+    runSnippets: ["bun --cwd apps/web test:functions"]
+  }
 ];
 
-for (const stepName of requiredPrCiSteps) {
-  if (!prCiWorkflow.includes(stepName)) {
-    fail(`${prCiWorkflowPath} is missing required PR CI step "${stepName}"`);
+const requiredGovernanceSteps = [
+  {
+    name: "Check PR governance body",
+    runSnippets: ["node infra/scripts/check-pr-governance-body.mjs"]
+  },
+  {
+    name: "Test governance guard fixtures",
+    runSnippets: ["bun run test:governance-guards"]
   }
-
-  if (!runtimeDoc.includes(stepName)) {
-    fail(`${runtimeDocPath} is missing required promotion-evidence step "${stepName}"`);
-  }
-
-  if (!checklistDoc.includes(stepName)) {
-    fail(`${checklistDocPath} is missing required promotion-evidence step "${stepName}"`);
-  }
-}
-
-const requiredRuntimeDocSnippets = [
-  "Pull Request CI / ci",
-  "do not substitute for the named kernel-proof steps",
-  "problem9-image-digests",
-  "problem9-devbox-image-digest"
 ];
 
-for (const snippet of requiredRuntimeDocSnippets) {
-  if (!runtimeDoc.includes(snippet)) {
-    fail(`${runtimeDocPath} is missing required snippet "${snippet}"`);
+export function validateMainBranchPromotionGate(repoRoot) {
+  const runtimeDoc = readRepoText(repoRoot, runtimeDocPath);
+  const checklistDoc = readRepoText(repoRoot, checklistDocPath);
+  const projectManagementDoc = readRepoText(repoRoot, projectManagementDocPath);
+  const prCiWorkflow = readWorkflow(repoRoot, prCiWorkflowPath);
+  const publishWorkerWorkflow = readWorkflow(repoRoot, publishWorkerWorkflowPath);
+  const publishDevboxWorkflow = readWorkflow(repoRoot, publishDevboxWorkflowPath);
+  const packageJson = readRepoJson(repoRoot, packageJsonPath);
+
+  const prTriggers = normalizeWorkflowTriggers(prCiWorkflow);
+  if (!prTriggers.has("pull_request")) {
+    throw new Error(`${prCiWorkflowPath} must trigger on pull_request`);
+  }
+
+  const pullRequestConfig = prCiWorkflow.on?.pull_request ?? prCiWorkflow["on"]?.pull_request;
+  const protectedBranches = normalizeStringList(pullRequestConfig?.branches);
+  if (!protectedBranches.includes("main")) {
+    throw new Error(`${prCiWorkflowPath} pull_request trigger must protect branch "main"`);
+  }
+
+  const ciJob = getWorkflowJob(prCiWorkflow, "ci", prCiWorkflowPath);
+  for (const requiredStep of requiredPrCiSteps) {
+    const step = requireStep(ciJob, requiredStep.name, prCiWorkflowPath);
+    assertIncludesAll(getStepRun(step), requiredStep.runSnippets, `${prCiWorkflowPath} step "${requiredStep.name}"`);
+
+    if (!runtimeDoc.includes(requiredStep.name)) {
+      throw new Error(`${runtimeDocPath} must reference promotion-evidence step "${requiredStep.name}"`);
+    }
+
+    if (!checklistDoc.includes(requiredStep.name)) {
+      throw new Error(`${checklistDocPath} must reference promotion-evidence step "${requiredStep.name}"`);
+    }
+  }
+
+  for (const requiredStep of requiredGovernanceSteps) {
+    const step = requireStep(ciJob, requiredStep.name, prCiWorkflowPath);
+    assertIncludesAll(getStepRun(step), requiredStep.runSnippets, `${prCiWorkflowPath} step "${requiredStep.name}"`);
+  }
+
+  const workerPublishArtifacts = listUploadArtifactNames(
+    getWorkflowJob(publishWorkerWorkflow, "publish", publishWorkerWorkflowPath)
+  );
+  if (!workerPublishArtifacts.includes("problem9-image-digests")) {
+    throw new Error(`${publishWorkerWorkflowPath} must upload the problem9-image-digests artifact`);
+  }
+
+  const devboxPublishArtifacts = listUploadArtifactNames(
+    getWorkflowJob(publishDevboxWorkflow, "publish", publishDevboxWorkflowPath)
+  );
+  if (!devboxPublishArtifacts.includes("problem9-devbox-image-digest")) {
+    throw new Error(`${publishDevboxWorkflowPath} must upload the problem9-devbox-image-digest artifact`);
+  }
+
+  assertIncludesAll(
+    runtimeDoc,
+    ["Pull Request CI / ci", "problem9-image-digests", "problem9-devbox-image-digest"],
+    runtimeDocPath
+  );
+  assertIncludesAll(
+    checklistDoc,
+    ["Pull Request CI / ci", "sample promotion path", "problem9-image-digests", "problem9-devbox-image-digest"],
+    checklistDocPath
+  );
+  assertIncludesAll(
+    projectManagementDoc,
+    ["[runtime.md](./runtime.md)", "`Pull Request CI` workflow", "pre-merge PR smoke gate"],
+    projectManagementDocPath
+  );
+
+  const packageScript = packageJson.scripts?.["check:main-branch-promotion-gate"];
+  if (packageScript !== "node infra/scripts/check-main-branch-promotion-gate.mjs") {
+    throw new Error(`${packageJsonPath} is missing script check:main-branch-promotion-gate`);
+  }
+
+  if (!getJobSteps(ciJob).length) {
+    throw new Error(`${prCiWorkflowPath} ci job must declare steps`);
   }
 }
 
-const requiredChecklistSnippets = [
-  "sample promotion path",
-  "do not sign off main-branch promotion from generic success signals alone",
-  "problem9-image-digests",
-  "problem9-devbox-image-digest"
-];
-
-for (const snippet of requiredChecklistSnippets) {
-  if (!checklistDoc.includes(snippet)) {
-    fail(`${checklistDocPath} is missing required snippet "${snippet}"`);
+function main() {
+  try {
+    const { repoRoot } = parseCommonCliOptions(import.meta.url);
+    validateMainBranchPromotionGate(repoRoot);
+    console.log("Main-branch promotion gate check passed.");
+  } catch (error) {
+    console.error(`Main-branch promotion gate check failed: ${error.message}`);
+    process.exit(1);
   }
 }
 
-const requiredProjectManagementSnippets = [
-  "a slice is not promotion-ready just because the PR is generally green",
-  "the required pre-merge evidence source is the `Pull Request CI` workflow",
-  "they do not replace the pre-merge PR smoke gate"
-];
-
-for (const snippet of requiredProjectManagementSnippets) {
-  if (!projectManagementDoc.includes(snippet)) {
-    fail(`${projectManagementDocPath} is missing required snippet "${snippet}"`);
-  }
+if (isDirectExecution(import.meta.url)) {
+  main();
 }
-
-if (!publishWorkerWorkflow.includes("problem9-image-digests")) {
-  fail(`${publishWorkerWorkflowPath} must upload the problem9-image-digests artifact`);
-}
-
-if (!publishDevboxWorkflow.includes("problem9-devbox-image-digest")) {
-  fail(`${publishDevboxWorkflowPath} must upload the problem9-devbox-image-digest artifact`);
-}
-
-const packageScript = packageJson.scripts?.["check:main-branch-promotion-gate"];
-if (packageScript !== "node infra/scripts/check-main-branch-promotion-gate.mjs") {
-  fail(`${packageJsonPath} is missing script check:main-branch-promotion-gate`);
-}
-
-console.log("Main-branch promotion gate check passed.");

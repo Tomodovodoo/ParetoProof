@@ -19,6 +19,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check PR governance body
+        run: node infra/scripts/check-pr-governance-body.mjs
+
       - name: Check for hidden Unicode control characters
         run: node infra/scripts/check-bidi-chars.mjs
 
@@ -45,8 +56,11 @@ jobs:
       - name: Check deployment workflow Node runtimes
         run: node infra/scripts/check-deployment-workflow-node-runtime.mjs
 
-      - name: Check main-branch promotion gate docs
+      - name: Check main-branch promotion gate policy
         run: node infra/scripts/check-main-branch-promotion-gate.mjs
+
+      - name: Test governance guard fixtures
+        run: bun run test:governance-guards
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -62,14 +76,6 @@ jobs:
 
       - name: Verify Problem 9 devbox image smoke target
         run: node infra/scripts/verify-problem9-image-toolchains.mjs --target problem9-devbox --image paretoproof-problem9-devbox:pr-smoke
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.10
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
 
       - name: Install Playwright Chromium for web layout regressions
         run: cd apps/web && bunx playwright install --with-deps chromium

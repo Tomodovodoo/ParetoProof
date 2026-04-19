@@ -26,6 +26,7 @@ A scoping issue is only complete when it produces a clear implementation path. I
 
 - execution work should land through a PR, not a direct push to `main`
 - PRs should link the issue they implement with real issue references
+- PR bodies must replace the template defaults in `Linked issues`, `Verification`, `Security and cost review`, and `Rollout and rollback`; untouched template sections do not count as governance evidence
 - a slice is not promotion-ready just because the PR is generally green; reviewers must check the specific promotion evidence listed in [runtime.md](./runtime.md) when worker, image, auth, or runtime surfaces move
 - if review uncovers more work than the current issue covers, open a follow-up issue instead of hiding it in comments
 - if a PR is superseded, preserve any still-actionable review findings in the replacement PR or a linked issue
