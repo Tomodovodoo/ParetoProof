@@ -1594,10 +1594,13 @@ export function PortalWorkersSurface({
             {data.workerPools.length ? (
               <div className="portal-results-contract-grid">
                 {data.workerPools.map((pool) => (
-                  <article className="portal-results-contract-card" key={pool.workerPool}>
+                  <article
+                    className="portal-results-contract-card"
+                    key={`${pool.workerPool}:${pool.workerRuntime}:${pool.workerVersion ?? "unseen"}`}
+                  >
                     <p className="section-tag">Worker pool</p>
                     <h3>{pool.workerPool}</h3>
-                    <p>{pool.workerRuntime} / {pool.workerVersion}</p>
+                    <p>{pool.workerRuntime} / {pool.workerVersion ?? "no workers seen yet"}</p>
                     <p>
                       Active leases: {pool.activeLeaseCount} / stale leases: {pool.staleLeaseCount}
                     </p>

@@ -839,6 +839,80 @@ test("portal benchmark ops runs summary verdict aggregation only counts terminal
   }
 });
 
+test("portal worker-pool summaries include registered pools even before any worker lease is active", () => {
+  const workerPools = portalBenchmarkOpsReadModelTestUtils.buildWorkerPoolSummaries({
+    activeLeases: [],
+    registeredWorkerPools: [
+      {
+        workerPool: "modal-dev",
+        workerRuntime: "modal"
+      },
+      {
+        workerPool: "modal-staging",
+        workerRuntime: "modal"
+      }
+    ]
+  });
+
+  assert.deepEqual(workerPools, [
+    {
+      activeLeaseCount: 0,
+      activeRunIds: [],
+      staleLeaseCount: 0,
+      workerPool: "modal-dev",
+      workerRuntime: "modal",
+      workerVersion: null
+    },
+    {
+      activeLeaseCount: 0,
+      activeRunIds: [],
+      staleLeaseCount: 0,
+      workerPool: "modal-staging",
+      workerRuntime: "modal",
+      workerVersion: null
+    }
+  ]);
+});
+
+test("portal worker-pool summaries do not add duplicate registered-only rows when leases already exist", () => {
+  const workerPools = portalBenchmarkOpsReadModelTestUtils.buildWorkerPoolSummaries({
+    activeLeases: [
+      {
+        attemptId: "attempt-1",
+        heartbeatIntervalSeconds: 60,
+        heartbeatTimeoutSeconds: 180,
+        health: "healthy",
+        jobId: "job-1",
+        lastEventSequence: 2,
+        lastHeartbeatAt: "2026-03-13T20:00:00.000Z",
+        leaseExpiresAt: "2026-03-13T20:03:00.000Z",
+        runId: "PP-318",
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1"
+      }
+    ],
+    registeredWorkerPools: [
+      {
+        workerPool: "modal-dev",
+        workerRuntime: "modal"
+      }
+    ]
+  });
+
+  assert.deepEqual(workerPools, [
+    {
+      activeLeaseCount: 1,
+      activeRunIds: ["PP-318"],
+      staleLeaseCount: 0,
+      workerPool: "modal-dev",
+      workerRuntime: "modal",
+      workerVersion: "worker.v1"
+    }
+  ]);
+});
+
 test("portal overview benchmark highlight query counts verdicts per run instead of per attempt row", () => {
   const statement = renderSqlFragment(
     portalBenchmarkOpsReadModelTestUtils.buildOverviewBenchmarkHighlightsQuery()

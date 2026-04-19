@@ -4,6 +4,7 @@ import {
   getRunLifecycleStateLabel,
   defaultRunControlPolicy,
   portalRunsLifecycleBuckets,
+  type HostedWorkerPoolRegistryEntry,
   type PortalBenchmarkDatasetResponse,
   type PortalBenchmarkListItem,
   type PortalBenchmarksListResponse,
@@ -38,6 +39,10 @@ import {
   workerJobLeases
 } from "../db/schema.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
+import {
+  createHostedWorkerPoolRegistryService,
+  type HostedWorkerPoolRegistryService
+} from "./hosted-worker-pool-registry.js";
 
 type RunRow = typeof runs.$inferSelect;
 type JobRow = typeof jobs.$inferSelect;
@@ -454,6 +459,7 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  buildWorkerPoolSummaries,
   buildOverviewBenchmarkHighlightsQuery,
   buildRunsSummarySelect,
   buildBenchmarkDatasetRunOrderBy,
@@ -465,6 +471,99 @@ export const portalBenchmarkOpsReadModelTestUtils = {
   getJobLifecycleStateLabel,
   getAttemptLifecycleStateLabel
 };
+
+function compareNullableStringAscNullsLast(left: string | null, right: string | null) {
+  if (left === right) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return left.localeCompare(right);
+}
+
+function compareWorkerPoolSummary(
+  left: PortalWorkersViewResponse["workerPools"][number],
+  right: PortalWorkersViewResponse["workerPools"][number]
+) {
+  const workerPoolComparison = left.workerPool.localeCompare(right.workerPool);
+
+  if (workerPoolComparison !== 0) {
+    return workerPoolComparison;
+  }
+
+  const runtimeComparison = left.workerRuntime.localeCompare(right.workerRuntime);
+
+  if (runtimeComparison !== 0) {
+    return runtimeComparison;
+  }
+
+  return compareNullableStringAscNullsLast(left.workerVersion, right.workerVersion);
+}
+
+type RegisteredWorkerPoolSeed = Pick<HostedWorkerPoolRegistryEntry, "workerPool" | "workerRuntime">;
+
+function buildWorkerPoolSummaries(options: {
+  activeLeases: PortalWorkersViewResponse["activeLeases"];
+  registeredWorkerPools: RegisteredWorkerPoolSeed[];
+}): PortalWorkersViewResponse["workerPools"] {
+  const workerPools = new Map<string, PortalWorkersViewResponse["workerPools"][number]>();
+  const seenPoolRuntimeKeys = new Set<string>();
+
+  for (const lease of options.activeLeases) {
+    const poolRuntimeKey = [lease.workerPool, lease.workerRuntime].join(":");
+    const poolKey = [poolRuntimeKey, lease.workerVersion].join(":");
+    const existingPool = workerPools.get(poolKey);
+    seenPoolRuntimeKeys.add(poolRuntimeKey);
+
+    if (!existingPool) {
+      workerPools.set(poolKey, {
+        activeLeaseCount: 1,
+        activeRunIds: [lease.runId],
+        staleLeaseCount: lease.health === "stale" ? 1 : 0,
+        workerPool: lease.workerPool,
+        workerRuntime: lease.workerRuntime,
+        workerVersion: lease.workerVersion
+      });
+      continue;
+    }
+
+    existingPool.activeLeaseCount += 1;
+    existingPool.staleLeaseCount += lease.health === "stale" ? 1 : 0;
+
+    if (!existingPool.activeRunIds.includes(lease.runId)) {
+      existingPool.activeRunIds.push(lease.runId);
+    }
+  }
+
+  for (const registeredWorkerPool of options.registeredWorkerPools) {
+    const poolRuntimeKey = [
+      registeredWorkerPool.workerPool,
+      registeredWorkerPool.workerRuntime
+    ].join(":");
+
+    if (seenPoolRuntimeKeys.has(poolRuntimeKey)) {
+      continue;
+    }
+
+    workerPools.set(`${poolRuntimeKey}:registered`, {
+      activeLeaseCount: 0,
+      activeRunIds: [],
+      staleLeaseCount: 0,
+      workerPool: registeredWorkerPool.workerPool,
+      workerRuntime: registeredWorkerPool.workerRuntime,
+      workerVersion: null
+    });
+  }
+
+  return [...workerPools.values()].sort(compareWorkerPoolSummary);
+}
 
 async function loadJobsForRunIds(
   db: ReturnTypeOfCreateDbClient,
@@ -907,8 +1006,13 @@ async function loadOverviewBenchmarkHighlights(
 }
 
 export function createPortalBenchmarkOpsReadModelService(
-  db: ReturnTypeOfCreateDbClient
+  db: ReturnTypeOfCreateDbClient,
+  options?: {
+    hostedWorkerPoolRegistry?: HostedWorkerPoolRegistryService;
+  }
 ): PortalBenchmarkOpsReadModelService {
+  const hostedWorkerPoolRegistry =
+    options?.hostedWorkerPoolRegistry ?? createHostedWorkerPoolRegistryService();
   const service: PortalBenchmarkOpsReadModelService = {
     async getBenchmarksList() {
       const [runRows, attemptCountsByRunId] = await Promise.all([
@@ -1465,6 +1569,12 @@ export function createPortalBenchmarkOpsReadModelService(
           .from(workerJobLeases)
           .where(isNull(workerJobLeases.revokedAt))
       ]);
+      const registeredWorkerPools = (await hostedWorkerPoolRegistry.getCatalog()).items.map(
+        ({ workerPool, workerRuntime }) => ({
+          workerPool,
+          workerRuntime
+        })
+      );
       const runIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.runId))];
       const jobIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.jobId))];
       const attemptIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.attemptId))];
@@ -1512,31 +1622,10 @@ export function createPortalBenchmarkOpsReadModelService(
             workerLeaseRow
           })
         );
-      const workerPools = new Map<string, PortalWorkersViewResponse["workerPools"][number]>();
-
-      for (const lease of activeLeases) {
-        const poolKey = [lease.workerPool, lease.workerRuntime, lease.workerVersion].join(":");
-        const existingPool = workerPools.get(poolKey);
-
-        if (!existingPool) {
-          workerPools.set(poolKey, {
-            activeLeaseCount: 1,
-            activeRunIds: [lease.runId],
-            staleLeaseCount: lease.health === "stale" ? 1 : 0,
-            workerPool: lease.workerPool,
-            workerRuntime: lease.workerRuntime,
-            workerVersion: lease.workerVersion
-          });
-          continue;
-        }
-
-        existingPool.activeLeaseCount += 1;
-        existingPool.staleLeaseCount += lease.health === "stale" ? 1 : 0;
-
-        if (!existingPool.activeRunIds.includes(lease.runId)) {
-          existingPool.activeRunIds.push(lease.runId);
-        }
-      }
+      const workerPools = buildWorkerPoolSummaries({
+        activeLeases,
+        registeredWorkerPools
+      });
 
       const incidents: PortalWorkerIncident[] = [];
 
@@ -1551,7 +1640,7 @@ export function createPortalBenchmarkOpsReadModelService(
         });
       }
 
-      for (const pool of workerPools.values()) {
+      for (const pool of workerPools) {
         if (pool.staleLeaseCount === 0) {
           continue;
         }
@@ -1617,7 +1706,7 @@ export function createPortalBenchmarkOpsReadModelService(
           queuedRuns,
           runningJobs
         },
-        workerPools: [...workerPools.values()]
+        workerPools
       };
     }
   };

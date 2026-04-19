@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "workerPool": "modal-dev",
+      "workerRuntime": "modal",
+      "defaultRolloutClass": "stable",
+      "ownershipSummary": "ParetoProof-owned hosted worker pool for dev Problem 9 integration and fleet validation.",
+      "deploymentTargets": [
+        {
+          "environment": "dev",
+          "modalAppName": "paretoproof-worker-dev-modal-dev",
+          "secretName": "paretoproof-worker-modal-dev"
+        }
+      ],
+      "notes": [
+        "Current repo-owned canonical development pool for the hosted Problem 9 worker lane.",
+        "The control plane still uses environment-scoped pool ids today; a later migration can normalize those ids if needed."
+      ]
+    },
+    {
+      "workerPool": "modal-staging",
+      "workerRuntime": "modal",
+      "defaultRolloutClass": "stable",
+      "ownershipSummary": "ParetoProof-owned hosted worker pool for staging verification and rollout proof.",
+      "deploymentTargets": [
+        {
+          "environment": "staging",
+          "modalAppName": "paretoproof-worker-staging-modal-staging",
+          "secretName": "paretoproof-worker-modal-staging"
+        }
+      ],
+      "notes": [
+        "Canonical staging pool for digest-pinned rollout verification before production promotion."
+      ]
+    },
+    {
+      "workerPool": "modal-prod",
+      "workerRuntime": "modal",
+      "defaultRolloutClass": "stable",
+      "ownershipSummary": "ParetoProof-owned hosted worker pool for production Problem 9 execution.",
+      "deploymentTargets": [
+        {
+          "environment": "prod",
+          "modalAppName": "paretoproof-worker-prod-modal-prod",
+          "secretName": "paretoproof-worker-modal-prod"
+        }
+      ],
+      "notes": [
+        "Canonical production pool for the current hosted worker slice."
+      ]
+    }
+  ]
+}

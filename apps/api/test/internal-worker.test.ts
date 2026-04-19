@@ -3991,6 +3991,44 @@ test("claim reuses existing worker pool definitions without hot-row updates", as
   assert.equal(poolInsertUsedConflictDoNothing, true);
 });
 
+test("claim rejects worker pools outside the registered hosted worker fleet", async () => {
+  const control = createInternalWorkerControlService(
+    {
+      transaction: async () => {
+        throw new Error("claim should fail before opening a transaction");
+      }
+    } as never,
+    {
+      hostedWorkerPoolRegistry: {
+        async getCatalog() {
+          return {
+            items: [],
+            version: 1
+          };
+        },
+        async getWorkerPool() {
+          return null;
+        }
+      }
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      control.claim({
+        ...buildClaimRequest(),
+        workerPool: "unknown-modal-pool"
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof InternalWorkerControlError);
+      assert.equal(error.code, "worker_pool_not_registered");
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.issues?.[0]?.path, "workerPool");
+      return true;
+    }
+  );
+});
+
 test("claim rejects worker runtime mismatches against existing pool definitions", async () => {
   let selectCount = 0;
   let insertCount = 0;

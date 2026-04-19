@@ -413,7 +413,7 @@ export const portalWorkerPoolSummarySchema = z.object({
   staleLeaseCount: z.number().int().nonnegative(),
   workerPool: z.string(),
   workerRuntime: z.enum(["local_docker", "modal"]),
-  workerVersion: z.string()
+  workerVersion: z.string().nullable()
 });
 
 export const portalWorkersViewResponseSchema = z.object({

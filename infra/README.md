@@ -19,4 +19,5 @@ Pull-request image smoke:
 Problem 9 image policy:
 - `infra/docker/problem9-image-policy.json`: authoritative manifest for the repository-owned Problem 9 image targets, local tags, published GHCR names, and owning workflows.
 - `infra/docker/harness-registry.seed.json`: authoritative seed manifest for product-facing harness registry entries and their mapping onto approved image targets.
+- `infra/modal/worker-pools.seed.json`: authoritative seed manifest for the currently approved hosted worker pools and their Modal app targets.
 - `infra/problem9-image-policy.md`: operator-facing policy for mutable tags, immutable provenance tags, workflow ownership, and rollback by digest.
