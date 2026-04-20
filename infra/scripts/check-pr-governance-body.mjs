@@ -90,6 +90,30 @@ function hasMeaningfulNarrative(body) {
   return /[a-z]/i.test(prose);
 }
 
+function hasLinkedIssueReference(body) {
+  return /(^|\n)-\s*(?:closes|close|fixes|fix|resolves|resolve|related:?)\s+#\d+\b/im.test(
+    normalizeSectionBody(body)
+  );
+}
+
+function hasConcreteVerificationEvidence(body) {
+  const normalized = normalizeSectionBody(body);
+  const codeBlockMatches = [...normalized.matchAll(/```(?:[\w-]+)?\n([\s\S]*?)```/g)];
+  const codeBlocks = codeBlockMatches.map((match) => match[1].trim()).filter(Boolean);
+  const commandLikeEvidence = codeBlocks.some((block) =>
+    block
+      .split("\n")
+      .map((line) => line.trim())
+      .some((line) => /^(?:\$|>|PS>)?\s*(?:bun|node|npm|pnpm|yarn|gh|docker|python|pytest|uv|cargo|go)\b/i.test(line))
+  );
+  const workflowLikeEvidence = /(actions\/runs\/\d+|job\/\d+|pull request ci|workflow run)/i.test(normalized);
+  const artifactLikeEvidence =
+    /(?:^|\s)(?:[A-Za-z]:\\|\/|\.\/|\.\.\/)[^\s]+/m.test(normalized) ||
+    /\b[\w./-]+\.(?:png|jpg|jpeg|log|txt|md|json|html)\b/i.test(normalized);
+
+  return commandLikeEvidence || workflowLikeEvidence || artifactLikeEvidence;
+}
+
 function readBodyFromEventFile(eventFilePath) {
   const payload = JSON.parse(readFileSync(eventFilePath, "utf8"));
   const body = payload?.pull_request?.body;
@@ -172,7 +196,7 @@ export function validatePrGovernanceBody(repoRoot, bodyMarkdown) {
     throw new Error('PR body section "Linked issues" still contains the placeholder "Closes #"');
   }
 
-  if (!/#\d+\b/.test(linkedIssues) && !/\b(no issue|not applicable|intentionally no issue)\b/i.test(linkedIssues)) {
+  if (!hasLinkedIssueReference(linkedIssues) && !/\b(no issue|not applicable|intentionally no issue)\b/i.test(linkedIssues)) {
     throw new Error(
       'PR body section "Linked issues" must contain a real issue reference like "#123" or explicitly say no issue applies'
     );
@@ -189,6 +213,12 @@ export function validatePrGovernanceBody(repoRoot, bodyMarkdown) {
 
   if (!hasCheckedChecklist(verification)) {
     throw new Error('PR body section "Verification" must mark its checklist items as completed');
+  }
+
+  if (!hasConcreteVerificationEvidence(verification)) {
+    throw new Error(
+      'PR body section "Verification" must include concrete evidence such as commands, workflow runs, or artifact paths'
+    );
   }
 
   for (const sectionTitle of ["Security and cost review", "Rollout and rollback"]) {

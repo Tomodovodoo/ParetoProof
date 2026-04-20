@@ -64,6 +64,26 @@ test("validateMainBranchPromotionGate rejects a PR workflow that does not rerun 
   }
 });
 
+test("validateMainBranchPromotionGate rejects a workflow that omits startup validation", () => {
+  const tempRoot = createTempRepo(requiredFiles);
+
+  try {
+    replaceInRepoFile(
+      tempRoot,
+      ".github/workflows/pull-request-ci.yml",
+      "      - name: Smoke startup validation across runtime surfaces\n        run: bun run test:startup-validation\n",
+      ""
+    );
+
+    assert.throws(
+      () => validateMainBranchPromotionGate(tempRoot),
+      /Smoke startup validation across runtime surfaces/
+    );
+  } finally {
+    disposeTempRepo(tempRoot);
+  }
+});
+
 test("check-main-branch-promotion-gate CLI supports --repo-root", () => {
   const tempRoot = createTempRepo(requiredFiles);
 

@@ -41,6 +41,18 @@ test("validatePrGovernanceBody rejects invalid linked-issue references", () => {
   );
 });
 
+test("validatePrGovernanceBody rejects numeric hashtags that are not issue linkage", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace(
+    "- Closes #1021",
+    "- Build log shard #123 exceeded the previous timeout threshold."
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /must contain a real issue reference/
+  );
+});
+
 test("validatePrGovernanceBody rejects governance sections with checked boxes but no real note", () => {
   const weakBody = readFileSync(validBodyPath, "utf8")
     .replace(
@@ -68,6 +80,18 @@ test("validatePrGovernanceBody rejects governance sections with checked boxes bu
   assert.throws(
     () => validatePrGovernanceBody(repoRoot, weakBody),
     /brief explanatory note|unchecked checklist items/
+  );
+});
+
+test("validatePrGovernanceBody rejects verification sections without concrete evidence", () => {
+  const weakBody = readFileSync(validBodyPath, "utf8").replace(
+    /```text[\s\S]*?```/,
+    "```text\nok\n```"
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, weakBody),
+    /must include concrete evidence/
   );
 });
 

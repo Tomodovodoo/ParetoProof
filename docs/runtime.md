@@ -7,7 +7,7 @@ This repo uses a small number of runtime rules.
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
 - `bun run check:env-contract` is the checked-in contract guard for `.env.example` shape and the required runtime-doc cross-references.
-- `bun run test:startup-validation` is the startup smoke suite for the specific web, API, worker, and local-Docker checks it explicitly executes; it is not a full deployed-readiness proof for every hosted surface.
+- `bun run test:startup-validation` is the startup smoke suite behind the `Smoke startup validation across runtime surfaces` PR-CI step for the specific web, API, worker, and local-Docker checks it explicitly executes; it is not a full deployed-readiness proof for every hosted surface.
 - API portal/auth/math origin and shared-cookie deployment assumptions are runtime-configurable; keep non-prod hostnames and cookie policy in the API runtime instead of re-hard-coding them in route helpers.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
@@ -66,6 +66,7 @@ Required kernel evidence comes from these named steps:
 - directly coupled auth or runtime gates:
   - `Check runtime env examples`
   - `Check trusted-local auth boundaries`
+  - `Smoke startup validation across runtime surfaces`
   - `Test API auth handoff routes`
   - `Test web auth relay functions`
 

@@ -12,6 +12,16 @@ const skipDockerStartupSmoke = (() => {
   const rawValue = process.env.PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER?.trim().toLowerCase();
   return rawValue === "1" || rawValue === "true";
 })();
+const runningInCi = (() => {
+  const rawValue = process.env.CI?.trim().toLowerCase();
+  return rawValue === "1" || rawValue === "true";
+})();
+
+if (skipDockerStartupSmoke && runningInCi) {
+  throw new Error(
+    "PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER must not be set in CI because the Docker startup lane is mandatory there."
+  );
+}
 
 await runLane("web startup smoke", async () => {
   await expectPass("web startup accepts an omitted VITE_API_BASE_URL", () => {

@@ -83,6 +83,10 @@ const requiredPrCiSteps = [
   {
     name: "Test web auth relay functions",
     runSnippets: ["bun --cwd apps/web test:functions"]
+  },
+  {
+    name: "Smoke startup validation across runtime surfaces",
+    runSnippets: ["bun run test:startup-validation"]
   }
 ];
 
