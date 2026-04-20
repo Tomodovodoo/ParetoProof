@@ -118,6 +118,9 @@ Peer review outcomes are:
 - `changes_requested`
 - `rejected`
 - `escalated`
+- `withdrawn`
+- `invalid`
+- `superseded`
 
 ### 3. Editor review
 
@@ -140,6 +143,9 @@ Editor review outcomes are:
 - `rejected`
 - `hold_for_policy`
 - `escalated`
+- `withdrawn`
+- `invalid`
+- `superseded`
 
 ### 4. Release decision
 
@@ -159,8 +165,21 @@ Release decision outcomes are:
 - `deferred`
 - `publish_ready`
 - `rejected`
+- `withdrawn`
+- `invalid`
+- `superseded`
 
 `publish_ready` means the package candidate is approved to enter downstream repo-sync, freeze, version, and publication workflow. It is the workflow's canonical publish-facing outcome, but it still does not mean already published.
+
+## Administrative close outcomes
+
+The workflow also allows canonical administrative close outcomes when a subject should stop progressing without being interpreted as a substantive acceptance-or-rejection judgment.
+
+These administrative close outcomes may be used from peer review, editor review, or release decision, and later implementation may also expose them in triage where needed:
+
+- `withdrawn` means the submitter or responsible owner explicitly pulled the current immutable subject out of the workflow after the round had already entered a substantive stage
+- `invalid` means the subject should not continue because it is no longer a valid review target for the current workflow, even though that fact was discovered after handoff from triage
+- `superseded` means a newer immutable successor subject has replaced the current one; the closing event should record the successor reference instead of overloading `rejected`
 
 ## Reviewable subjects
 
@@ -278,6 +297,7 @@ The backend must enforce the following minimum rules:
 - the submitter may not peer-review, editor-review, or release-decide their own submission
 - the author of a directly reviewed `math_question_revision` may not be the sole approving editor for that revision
 - a peer reviewer may not be the sole release decider for the downstream package candidate derived from the same work
+- the author of a directly reviewed `math_question_revision` may not be the sole release decider for the downstream `math_package_candidate` derived from that revision
 - escalation must move authority upward to editor or admin handling rather than sideways to another peer as a silent substitute for policy review
 - admin override actions must be recorded as overrides rather than disguised as ordinary peer or editor actions
 
