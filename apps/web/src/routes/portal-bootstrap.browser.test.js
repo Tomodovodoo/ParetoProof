@@ -107,7 +107,10 @@ async function assertApprovedHandoffTransition({
     await delay(1_000);
 
     const provisionalBody = await page.locator("body").innerText();
-    assert.match(provisionalBody, /Formal benchmark operations and contributor tooling\./);
+    assert.match(provisionalBody, /Portal landing summary for current run activity/);
+    assert.match(provisionalBody, /Requests/);
+    assert.match(provisionalBody, /Users/);
+    assert.doesNotMatch(provisionalBody, /Formal benchmark operations and contributor tooling\./);
     assert.doesNotMatch(provisionalBody, /Opening portal/);
 
     await page.waitForFunction(
