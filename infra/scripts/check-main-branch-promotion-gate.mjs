@@ -117,6 +117,13 @@ export function validateMainBranchPromotionGate(repoRoot) {
     throw new Error(`${prCiWorkflowPath} pull_request trigger must protect branch "main"`);
   }
 
+  const pullRequestTypes = normalizeStringList(pullRequestConfig?.types);
+  assertIncludesAll(
+    pullRequestTypes,
+    ["opened", "reopened", "synchronize", "edited", "ready_for_review"],
+    `${prCiWorkflowPath} pull_request trigger types`
+  );
+
   const ciJob = getWorkflowJob(prCiWorkflow, "ci", prCiWorkflowPath);
   for (const requiredStep of requiredPrCiSteps) {
     const step = requireStep(ciJob, requiredStep.name, prCiWorkflowPath);

@@ -49,6 +49,47 @@ export function normalizeSectionBody(body) {
   return body.replace(/\r\n/g, "\n").trim();
 }
 
+function listMeaningfulLines(body) {
+  return normalizeSectionBody(body)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function hasUncheckedChecklist(body) {
+  return /(^|\n)- \[ \]/m.test(normalizeSectionBody(body));
+}
+
+function hasCheckedChecklist(body) {
+  return /(^|\n)- \[[xX]\]/m.test(normalizeSectionBody(body));
+}
+
+function hasMeaningfulNarrative(body) {
+  const prose = listMeaningfulLines(body)
+    .filter((line) => !line.match(/^- \[[ xX]\]/))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!prose) {
+    return false;
+  }
+
+  if (/\b(not applicable|n\/a)\b/i.test(prose)) {
+    return true;
+  }
+
+  if (prose.length < 16) {
+    return false;
+  }
+
+  if (/^(note|later|todo|tbd|pending|follow up)$/i.test(prose)) {
+    return false;
+  }
+
+  return /[a-z]/i.test(prose);
+}
+
 function readBodyFromEventFile(eventFilePath) {
   const payload = JSON.parse(readFileSync(eventFilePath, "utf8"));
   const body = payload?.pull_request?.body;
@@ -131,9 +172,43 @@ export function validatePrGovernanceBody(repoRoot, bodyMarkdown) {
     throw new Error('PR body section "Linked issues" still contains the placeholder "Closes #"');
   }
 
+  if (!/#\d+\b/.test(linkedIssues) && !/\b(no issue|not applicable|intentionally no issue)\b/i.test(linkedIssues)) {
+    throw new Error(
+      'PR body section "Linked issues" must contain a real issue reference like "#123" or explicitly say no issue applies'
+    );
+  }
+
   const verification = bodySections.get("Verification");
   if (verification.includes("# Paste exact commands")) {
     throw new Error('PR body section "Verification" still contains the placeholder command block');
+  }
+
+  if (hasUncheckedChecklist(verification)) {
+    throw new Error('PR body section "Verification" still contains unchecked checklist items');
+  }
+
+  if (!hasCheckedChecklist(verification)) {
+    throw new Error('PR body section "Verification" must mark its checklist items as completed');
+  }
+
+  for (const sectionTitle of ["Security and cost review", "Rollout and rollback"]) {
+    const sectionBody = bodySections.get(sectionTitle);
+
+    if (hasUncheckedChecklist(sectionBody)) {
+      throw new Error(`PR body section "${sectionTitle}" still contains unchecked checklist items`);
+    }
+
+    if (!/\b(?:not applicable|n\/a)\b/i.test(sectionBody) && !hasCheckedChecklist(sectionBody)) {
+      throw new Error(
+        `PR body section "${sectionTitle}" must either check the checklist items or explicitly state not applicable`
+      );
+    }
+
+    if (!hasMeaningfulNarrative(sectionBody)) {
+      throw new Error(
+        `PR body section "${sectionTitle}" must include a brief explanatory note or an explicit not-applicable statement`
+      );
+    }
   }
 }
 

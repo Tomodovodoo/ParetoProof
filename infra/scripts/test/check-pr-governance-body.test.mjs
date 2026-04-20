@@ -32,6 +32,45 @@ test("validatePrGovernanceBody rejects untouched template defaults", () => {
   );
 });
 
+test("validatePrGovernanceBody rejects invalid linked-issue references", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace("- Closes #1021", "- Closes #abc");
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /must contain a real issue reference/
+  );
+});
+
+test("validatePrGovernanceBody rejects governance sections with checked boxes but no real note", () => {
+  const weakBody = readFileSync(validBodyPath, "utf8")
+    .replace(
+      /## Security and cost review[\s\S]*?## Rollout and rollback/,
+      `## Security and cost review
+
+- [x] No new auth, CSRF, secret-handling, or data-exposure risk was introduced without mitigation or a linked follow-up issue
+- [x] For security-sensitive changes, the threat boundary and mitigation are described below
+- [x] Cost or rate-limit impact is described below when relevant
+- later
+
+## Rollout and rollback`
+    )
+    .replace(
+      /## Rollout and rollback[\s\S]*?## Notes/,
+      `## Rollout and rollback
+
+- [x] Rollout plan is described or marked not applicable
+- [x] Rollback plan is described or marked not applicable
+- note
+
+## Notes`
+    );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, weakBody),
+    /brief explanatory note|unchecked checklist items/
+  );
+});
+
 test("check-pr-governance-body CLI accepts --body-file fixtures", () => {
   const result = runCli("infra/scripts/check-pr-governance-body.mjs", ["--body-file", validBodyPath]);
   assert.equal(result.status, 0, result.stderr || result.stdout);

@@ -44,6 +44,26 @@ test("validateMainBranchPromotionGate rejects a missing PR governance step comma
   }
 });
 
+test("validateMainBranchPromotionGate rejects a PR workflow that does not rerun on body edits", () => {
+  const tempRoot = createTempRepo(requiredFiles);
+
+  try {
+    replaceInRepoFile(
+      tempRoot,
+      ".github/workflows/pull-request-ci.yml",
+      "      - edited",
+      "      - labeled"
+    );
+
+    assert.throws(
+      () => validateMainBranchPromotionGate(tempRoot),
+      /pull_request trigger types.*edited/
+    );
+  } finally {
+    disposeTempRepo(tempRoot);
+  }
+});
+
 test("check-main-branch-promotion-gate CLI supports --repo-root", () => {
   const tempRoot = createTempRepo(requiredFiles);
 
