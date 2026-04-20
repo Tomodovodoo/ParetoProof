@@ -18,8 +18,6 @@ const requiredSections = [
 
 const rawHtmlBlockTagsPattern =
   "address|article|aside|blockquote|details|dialog|div|dl|fieldset|figcaption|figure|footer|form|header|iframe|main|menu|nav|ol|p|pre|script|section|style|table|tbody|td|textarea|tfoot|th|thead|tr|ul";
-const rawHtmlLiteralTags = new Set(["pre", "script", "style", "textarea"]);
-
 export function parseMarkdownSections(markdown) {
   return collectMarkdownSections(markdown).sections;
 }
@@ -108,7 +106,7 @@ function updateRawHtmlBlockState(line, activeBlock) {
 
   return {
     tag,
-    mode: rawHtmlLiteralTags.has(tag) ? "until_close" : "until_blank_or_close"
+    mode: "until_close"
   };
 }
 

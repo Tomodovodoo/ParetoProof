@@ -535,6 +535,23 @@ Closes #9999
   assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
 });
 
+test("validatePrGovernanceBody keeps details blocks opaque across blank lines", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+<details>
+
+## Linked issues
+Closes #9999
+
+</details>
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
 test("validatePrGovernanceBody ignores required-looking headings inside table html blocks", () => {
   const validBody = readFileSync(validBodyPath, "utf8").replace(
     /## Notes[\s\S]*$/,
