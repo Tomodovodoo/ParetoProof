@@ -93,6 +93,15 @@ test("validatePrGovernanceBody accepts ordered-list linked-issue references", ()
   assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
 });
 
+test("validatePrGovernanceBody accepts required sections written with setext headings", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    "## Linked issues\n\n- Closes #1021",
+    "Linked issues\n-------------\n\n- Closes #1021"
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
 test("validatePrGovernanceBody accepts explicit non-bulleted no-issue declarations", () => {
   const validBody = readFileSync(validBodyPath, "utf8").replace("- Closes #1021", "No issue.");
 
@@ -348,6 +357,237 @@ test("validatePrGovernanceBody rejects plain workflow-run text without a run ide
   assert.throws(
     () => validatePrGovernanceBody(repoRoot, invalidBody),
     /must include concrete evidence/
+  );
+});
+
+test("validatePrGovernanceBody rejects duplicate required headings even if the later copy is filled correctly", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Linked issues[\s\S]*?## Verification/,
+    `## Linked issues
+
+Closes #
+
+## Linked issues
+
+- Closes #1021
+
+## Verification`
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /duplicate required section heading "Linked issues"/
+  );
+});
+
+test("validatePrGovernanceBody rejects semantically equivalent duplicate required headings", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Linked issues[\s\S]*?## Verification/,
+    `## Linked issues ##
+
+Closes #
+
+## Linked issues
+
+- Closes #1021
+
+## Verification`
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /duplicate required section heading "Linked issues"/
+  );
+});
+
+test("validatePrGovernanceBody rejects duplicate required headings with commonmark indentation", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Linked issues[\s\S]*?## Verification/,
+    `   ## Linked issues
+
+Closes #
+
+## Linked issues
+
+- Closes #1021
+
+## Verification`
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /duplicate required section heading "Linked issues"/
+  );
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside fenced code blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+\`\`\`md
+## Linked issues
+Closes #9999
+\`\`\`
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside longer nested fences", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+\`\`\`\`md
+\`\`\`md
+## Linked issues
+Closes #9999
+\`\`\`
+\`\`\`\`
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody accepts nested verification fences under list items", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /```text[\s\S]*?```/,
+    "- Commands run:\n\n    ```text\n    bun run test:governance-guards\n    ```"
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody accepts tilded verification code fences", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /```text[\s\S]*?```/,
+    "~~~text\nbun run test:governance-guards\n~~~"
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody does not treat four-space-indented fences as section delimiters", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Verification[\s\S]*?## Security and cost review/,
+    `## Verification
+
+    \`\`\`\`
+    ## Linked issues
+    Closes #9999
+    \`\`\`\`
+
+- [x] Validation complete.
+
+https://github.com/Tomodovodoo/ParetoProof/actions/runs/123456789
+
+## Security and cost review`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside html comments", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+<!--
+## Linked issues
+Closes #9999
+-->
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside raw html blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+<pre>
+## Linked issues
+Closes #9999
+</pre>
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside details blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+<details>
+## Linked issues
+Closes #9999
+</details>
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody ignores required-looking headings inside table html blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+<table>
+## Linked issues
+Closes #9999
+</table>
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody still recognizes closing fences after html-looking lines inside code blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Verification[\s\S]*?## Security and cost review/,
+    `## Verification
+
+- [x] Validation complete.
+
+\`\`\`text
+<details>
+## Linked issues
+</details>
+bun run test:governance-guards
+\`\`\`
+
+## Security and cost review`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody rejects duplicate required headings written with setext syntax", () => {
+  const invalidBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Linked issues[\s\S]*?## Verification/,
+    `## Linked issues
+
+Closes #
+
+Linked issues
+-------------
+
+- Closes #1021
+
+## Verification`
+  );
+
+  assert.throws(
+    () => validatePrGovernanceBody(repoRoot, invalidBody),
+    /duplicate required section heading "Linked issues"/
   );
 });
 

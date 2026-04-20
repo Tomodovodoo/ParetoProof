@@ -16,20 +16,183 @@ const requiredSections = [
   "Rollout and rollback"
 ];
 
+const rawHtmlBlockTagsPattern =
+  "address|article|aside|blockquote|details|dialog|div|dl|fieldset|figcaption|figure|footer|form|header|iframe|main|menu|nav|ol|p|pre|script|section|style|table|tbody|td|textarea|tfoot|th|thead|tr|ul";
+const rawHtmlLiteralTags = new Set(["pre", "script", "style", "textarea"]);
+
 export function parseMarkdownSections(markdown) {
+  return collectMarkdownSections(markdown).sections;
+}
+
+function normalizeHeadingTitle(rawTitle) {
+  return rawTitle
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/\s+#+\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripHtmlCommentsFromLine(line, commentState) {
+  let remaining = line;
+  let inComment = commentState;
+  let visible = "";
+
+  while (remaining.length > 0) {
+    if (inComment) {
+      const commentEnd = remaining.indexOf("-->");
+      if (commentEnd === -1) {
+        return { visible, inComment: true };
+      }
+
+      remaining = remaining.slice(commentEnd + 3);
+      inComment = false;
+      continue;
+    }
+
+    const commentStart = remaining.indexOf("<!--");
+    if (commentStart === -1) {
+      visible += remaining;
+      return { visible, inComment: false };
+    }
+
+    visible += remaining.slice(0, commentStart);
+    remaining = remaining.slice(commentStart + 4);
+    inComment = true;
+  }
+
+  return { visible, inComment };
+}
+
+function matchFenceLine(line, { maxIndent = 3 } = {}) {
+  const match = line.match(/^([ ]*)((`{3,}|~{3,}))(.*)$/);
+  if (!match) {
+    return null;
+  }
+
+  if (match[1].length > maxIndent) {
+    return null;
+  }
+
+  return {
+    marker: match[2],
+    character: match[3][0],
+    length: match[3].length,
+    suffix: match[4]
+  };
+}
+
+function updateRawHtmlBlockState(line, activeBlock) {
+  if (activeBlock) {
+    const closePattern = new RegExp(`</${activeBlock.tag}\\s*>`, "i");
+    if (closePattern.test(line)) {
+      return null;
+    }
+
+    if (activeBlock.mode === "until_blank_or_close" && !line.trim()) {
+      return null;
+    }
+
+    return activeBlock;
+  }
+
+  const openMatch = line.match(new RegExp(`^\\s{0,3}<(${rawHtmlBlockTagsPattern})\\b[^>]*>`, "i"));
+  if (!openMatch) {
+    return null;
+  }
+
+  const tag = openMatch[1].toLowerCase();
+  const closePattern = new RegExp(`</${tag}\\s*>`, "i");
+  if (closePattern.test(line)) {
+    return null;
+  }
+
+  return {
+    tag,
+    mode: rawHtmlLiteralTags.has(tag) ? "until_close" : "until_blank_or_close"
+  };
+}
+
+function collectMarkdownSections(markdown) {
   const sections = new Map();
+  const duplicateTitles = new Set();
   let currentTitle = null;
   let currentLines = [];
+  let activeFence = null;
+  let inHtmlComment = false;
+  let activeRawHtmlBlock = null;
+  const lines = markdown.split(/\r?\n/);
 
-  for (const line of markdown.split(/\r?\n/)) {
-    const headingMatch = line.match(/^##\s+(.+?)\s*$/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
+    const fenceMatch = matchFenceLine(visibleLine);
+    if (activeFence) {
+      if (
+        fenceMatch &&
+        activeFence.character === fenceMatch.character &&
+        fenceMatch.length >= activeFence.length &&
+        !fenceMatch.suffix.trim()
+      ) {
+        activeFence = null;
+      }
+
+      if (currentTitle) {
+        currentLines.push(line);
+      }
+      continue;
+    }
+
+    if (fenceMatch) {
+      activeFence = {
+        character: fenceMatch.character,
+        length: fenceMatch.length
+      };
+      if (currentTitle) {
+        currentLines.push(line);
+      }
+      continue;
+    }
+
+    const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
+    if (activeRawHtmlBlock || nextRawHtmlBlock) {
+      activeRawHtmlBlock = nextRawHtmlBlock;
+      if (currentTitle) {
+        currentLines.push(line);
+      }
+      continue;
+    }
+
+    let headingTitle = null;
+    let consumeNextLine = false;
+    const headingMatch = visibleLine.match(/^\s{0,3}##\s+(.+?)\s*$/);
     if (headingMatch) {
+      headingTitle = normalizeHeadingTitle(headingMatch[1]);
+    } else if (visibleLine.trim()) {
+      const nextLine = lines[index + 1];
+      if (typeof nextLine === "string") {
+        const nextStrippedLine = stripHtmlCommentsFromLine(nextLine, false);
+        if (/^\s{0,3}-{3,}\s*$/.test(nextStrippedLine.visible)) {
+          headingTitle = normalizeHeadingTitle(visibleLine);
+          consumeNextLine = true;
+        }
+      }
+    }
+
+    if (headingTitle) {
       if (currentTitle) {
         sections.set(currentTitle, currentLines.join("\n").trim());
       }
 
-      currentTitle = headingMatch[1];
+      currentTitle = headingTitle;
+      if (sections.has(currentTitle) || duplicateTitles.has(currentTitle)) {
+        duplicateTitles.add(currentTitle);
+      }
       currentLines = [];
+      if (consumeNextLine) {
+        index += 1;
+      }
       continue;
     }
 
@@ -42,7 +205,130 @@ export function parseMarkdownSections(markdown) {
     sections.set(currentTitle, currentLines.join("\n").trim());
   }
 
-  return sections;
+  return { sections, duplicateTitles };
+}
+
+function collectFencedCodeBlocks(markdown) {
+  const blocks = [];
+  let activeFence = null;
+  let currentLines = [];
+  let inHtmlComment = false;
+  let activeRawHtmlBlock = null;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
+    const fenceMatch = matchFenceLine(visibleLine, { maxIndent: Number.MAX_SAFE_INTEGER });
+    if (activeFence) {
+      if (
+        fenceMatch &&
+        activeFence.character === fenceMatch.character &&
+        fenceMatch.length >= activeFence.length &&
+        !fenceMatch.suffix.trim()
+      ) {
+        blocks.push(currentLines.join("\n").trim());
+        activeFence = null;
+        currentLines = [];
+        continue;
+      }
+
+      currentLines.push(line);
+      continue;
+    }
+
+    if (fenceMatch) {
+      activeFence = {
+        character: fenceMatch.character,
+        length: fenceMatch.length
+      };
+      currentLines = [];
+      continue;
+    }
+
+    const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
+    if (activeRawHtmlBlock || nextRawHtmlBlock) {
+      activeRawHtmlBlock = nextRawHtmlBlock;
+      continue;
+    }
+  }
+
+  return blocks.filter(Boolean);
+}
+
+function countRequiredHeadingOccurrences(markdown) {
+  const counts = new Map(requiredSections.map((sectionTitle) => [sectionTitle, 0]));
+  const lines = markdown.split(/\r?\n/);
+  let activeFence = null;
+  let inHtmlComment = false;
+  let activeRawHtmlBlock = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
+    const fenceMatch = matchFenceLine(visibleLine);
+    if (activeFence) {
+      if (
+        fenceMatch &&
+        activeFence.character === fenceMatch.character &&
+        fenceMatch.length >= activeFence.length &&
+        !fenceMatch.suffix.trim()
+      ) {
+        activeFence = null;
+      }
+      continue;
+    }
+
+    if (fenceMatch) {
+      activeFence = {
+        character: fenceMatch.character,
+        length: fenceMatch.length
+      };
+      continue;
+    }
+
+    const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
+    if (activeRawHtmlBlock || nextRawHtmlBlock) {
+      activeRawHtmlBlock = nextRawHtmlBlock;
+      continue;
+    }
+
+    const atxHeadingMatch = visibleLine.match(/^\s{0,3}##\s+(.+?)\s*$/);
+    if (atxHeadingMatch) {
+      const normalizedTitle = normalizeHeadingTitle(atxHeadingMatch[1]);
+      if (counts.has(normalizedTitle)) {
+        counts.set(normalizedTitle, counts.get(normalizedTitle) + 1);
+      }
+      continue;
+    }
+
+    if (!visibleLine.trim()) {
+      continue;
+    }
+
+    const nextLine = lines[index + 1];
+    if (typeof nextLine !== "string") {
+      continue;
+    }
+
+    const nextStrippedLine = stripHtmlCommentsFromLine(nextLine, false);
+    const setextUnderlineMatch = nextStrippedLine.visible.match(/^\s{0,3}-{3,}\s*$/);
+    if (!setextUnderlineMatch) {
+      continue;
+    }
+
+    const normalizedTitle = normalizeHeadingTitle(visibleLine);
+    if (!counts.has(normalizedTitle)) {
+      continue;
+    }
+
+    counts.set(normalizedTitle, counts.get(normalizedTitle) + 1);
+    index += 1;
+  }
+
+  return counts;
 }
 
 export function normalizeSectionBody(body) {
@@ -142,8 +428,7 @@ function hasExplicitNoIssueDeclaration(body) {
 
 function hasConcreteVerificationEvidence(body) {
   const normalized = normalizeSectionBody(body);
-  const codeBlockMatches = [...normalized.matchAll(/```(?:[\w-]+)?\n([\s\S]*?)```/g)];
-  const codeBlocks = codeBlockMatches.map((match) => match[1].trim()).filter(Boolean);
+  const codeBlocks = collectFencedCodeBlocks(normalized);
   const commandLikeEvidence = codeBlocks.some((block) =>
     block
       .split("\n")
@@ -221,8 +506,24 @@ function resolveBodySource(args) {
 
 export function validatePrGovernanceBody(repoRoot, bodyMarkdown) {
   const templatePath = ".github/PULL_REQUEST_TEMPLATE.md";
-  const templateSections = parseMarkdownSections(readRepoText(repoRoot, templatePath));
-  const bodySections = parseMarkdownSections(bodyMarkdown);
+  const templateMarkdown = readRepoText(repoRoot, templatePath);
+  const templateParseResult = collectMarkdownSections(templateMarkdown);
+  const bodyParseResult = collectMarkdownSections(bodyMarkdown);
+  const templateHeadingCounts = countRequiredHeadingOccurrences(templateMarkdown);
+  const bodyHeadingCounts = countRequiredHeadingOccurrences(bodyMarkdown);
+
+  for (const sectionTitle of requiredSections) {
+    if (templateParseResult.duplicateTitles.has(sectionTitle) || templateHeadingCounts.get(sectionTitle) > 1) {
+      throw new Error(`${templatePath} contains duplicate required section heading "${sectionTitle}"`);
+    }
+
+    if (bodyParseResult.duplicateTitles.has(sectionTitle) || bodyHeadingCounts.get(sectionTitle) > 1) {
+      throw new Error(`PR body contains duplicate required section heading "${sectionTitle}"`);
+    }
+  }
+
+  const templateSections = templateParseResult.sections;
+  const bodySections = bodyParseResult.sections;
 
   for (const sectionTitle of requiredSections) {
     const templateBody = templateSections.get(sectionTitle);
