@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { parseApiRuntimeEnv } from "../../apps/api/src/config/runtime.ts";
-import { buildServer } from "../../apps/api/src/server/build-server.ts";
-import { parseWebRuntimeEnv } from "../../apps/web/src/lib/runtime-env.ts";
-import { parseWorkerRuntimeEnv } from "../../apps/worker/src/lib/runtime.ts";
 
 const startupSmokeExecutionImage =
   process.env.PARETOPROOF_STARTUP_SMOKE_EXECUTION_IMAGE ??
@@ -22,6 +18,14 @@ if (skipDockerStartupSmoke && runningInCi) {
     "PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER must not be set in CI because the Docker startup lane is mandatory there."
   );
 }
+
+const [{ parseApiRuntimeEnv }, { buildServer }, { parseWebRuntimeEnv }, { parseWorkerRuntimeEnv }] =
+  await Promise.all([
+    import("../../apps/api/src/config/runtime.ts"),
+    import("../../apps/api/src/server/build-server.ts"),
+    import("../../apps/web/src/lib/runtime-env.ts"),
+    import("../../apps/worker/src/lib/runtime.ts")
+  ]);
 
 await runLane("web startup smoke", async () => {
   await expectPass("web startup accepts an omitted VITE_API_BASE_URL", () => {
