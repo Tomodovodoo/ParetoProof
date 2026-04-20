@@ -147,6 +147,14 @@ Editor review outcomes are:
 - `invalid`
 - `superseded`
 
+`approved_for_release_decision` is not just a label on the editor round. It must also bind the workflow to exactly one downstream `math_package_candidate` before release decision can start. The handoff may:
+
+- create a new package candidate
+- select an existing package candidate to continue
+- reopen the correct existing package candidate
+
+Whichever path is used, the editor-closing event must record the target `math_package_candidate` id so the release-decision queue is never left pointing at an undefined downstream object.
+
 ### 4. Release decision
 
 Release decision is the final review layer before downstream repo-sync, freeze, and publication workflow. It applies to `math_package_candidate`, not directly to a raw submission.
@@ -211,6 +219,14 @@ The workflow should use:
 - one `math_review_record` per subject and review kind
 - one active open round at a time for that record
 - immutable historical rounds once a round is closed or superseded
+
+In this baseline, `triage` is itself a review kind with its own record, queue, assignments, rounds, and close outcome. It is not implicit pre-state on the later substantive review record.
+
+That means the normal v1 records are:
+
+- `math_submission`: triage, peer review, editor review
+- `math_question_revision`: triage, editor review
+- `math_package_candidate`: triage, release decision
 
 Each round may accumulate:
 
