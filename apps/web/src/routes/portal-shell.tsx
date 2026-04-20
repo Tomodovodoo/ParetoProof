@@ -926,6 +926,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       <aside
         aria-label="Portal navigation"
         aria-hidden={compactSidebarClosed ? true : undefined}
+        inert={compactSidebarClosed || undefined}
         className={`portal-sidebar${
           desktopSidebarCollapsed ? " portal-sidebar-collapsed" : ""
         }${

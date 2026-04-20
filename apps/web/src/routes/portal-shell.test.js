@@ -87,6 +87,7 @@ describe("PortalShell overview ordering", () => {
     expect(html).toContain("portal-shell-compact-nav-closed");
     expect(html).toContain("portal-sidebar-hidden");
     expect(html).toContain("portal-topbar-nav-toggle");
+    expect(html).toContain("inert=\"\"");
     expect(html).toContain(">Menu<");
   });
 
