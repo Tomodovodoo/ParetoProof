@@ -85,15 +85,21 @@ Triage outcomes are:
 
 Triage outcome semantics are:
 
-- `routed_to_peer_review` means the current subject is reviewable and should enter the peer-review queue
-- `routed_to_editor_review` means the current subject is reviewable and should enter the editor-review queue
-- `routed_to_release_decision` means the current subject is reviewable and should enter the release-decision queue
+- `routed_to_peer_review` means a `math_submission` is reviewable and should enter the peer-review queue; triage must not use this outcome for `math_question_revision` or `math_package_candidate`
+- `routed_to_editor_review` means a `math_question_revision` is reviewable and should enter the editor-review queue; triage must not use this outcome to skip a `math_submission` past peer review or to route a `math_package_candidate`
+- `routed_to_release_decision` means a `math_package_candidate` is reviewable and should enter the release-decision queue; triage must not use this outcome for a `math_submission` or `math_question_revision`
 - `incomplete` means required artifacts, metadata, or evidence are still missing
 - `withdrawn` means the submitter or responsible actor explicitly pulled the subject from the current review flow
 - `invalid` means the subject is not a valid review target for the current workflow and should not proceed without creating or selecting the correct durable object
 - `escalated` means triage is explicitly handing the item upward because policy, conflict, or ambiguity requires higher-authority handling before normal progression
 
 Triage should not use free-form route notes as a substitute for one of these outcomes. Every triage close or handoff action must record one canonical triage outcome.
+
+The accepted first-slice subject-to-stage mapping is:
+
+- `math_submission` triage may route only to peer review, or close as `incomplete`, `withdrawn`, `invalid`, or `escalated`
+- `math_question_revision` triage may route only to editor review, or close as `incomplete`, `withdrawn`, `invalid`, or `escalated`
+- `math_package_candidate` triage may route only to release decision, or close as `incomplete`, `withdrawn`, `invalid`, or `escalated`
 
 ### 2. Peer review
 
@@ -199,8 +205,8 @@ Assignment is not optional workflow metadata in v1. It is the explicit record of
 
 Use a new round when:
 
-- the same immutable review subject needs reassignment
-- the same immutable subject needs a continued review attempt after escalation or reviewer turnover
+- the same immutable review subject needs a new substantive review attempt after an earlier attempt already produced comments, escalation state, or a closing decision
+- the same immutable subject needs a continued review attempt after escalation that should remain audibly separate from the earlier attempt
 - the system needs to preserve multiple review attempts on the same subject without overwriting history
 
 Do not use a new round to hide a changed subject.
@@ -237,7 +243,8 @@ Reassignment rules are:
 
 - reassignment must preserve prior assignment history as immutable audit data
 - reassignment closes the prior active assignment and creates a new active assignment entry; it does not overwrite the previous assignee in place
-- reassignment does not create a new round by itself unless the workflow intentionally wants to preserve a separate review attempt
+- reassignment within an in-progress round does not create a new round by itself; ordinary staffing turnover stays in the current round unless the workflow intentionally opens a separate review attempt
+- when the workflow wants reassignment to mark a fresh substantive attempt on the same immutable subject, it must open a new round instead of silently continuing the old one
 - abandonment, recusals, and conflict removals must be represented as explicit assignment-state changes rather than silent disappearance from the record
 
 ## Authority model
