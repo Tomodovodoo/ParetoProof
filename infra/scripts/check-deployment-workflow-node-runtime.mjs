@@ -133,10 +133,54 @@ export function validateDeploymentWorkflowNodeRuntime(repoRoot) {
       "Upload image digest artifact": "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"
     };
 
+    if (workflowPath === publishWorkerWorkflowPath) {
+      expectedActions["Generate execution image metadata"] = "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf";
+      expectedActions["Generate worker image metadata"] = "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf";
+      expectedActions["Build and publish Problem 9 execution image"] =
+        "docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294";
+      expectedActions["Build and publish worker image"] =
+        "docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294";
+    }
+
+    if (workflowPath === publishDevboxWorkflowPath) {
+      expectedActions["Generate devbox image metadata"] = "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf";
+      expectedActions["Build and publish devbox image"] =
+        "docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294";
+    }
+
     for (const [stepName, expectedAction] of Object.entries(expectedActions)) {
       const step = requireStep(publishJob, stepName, workflowPath);
       if (getStepUses(step) !== expectedAction) {
         throw new Error(`${workflowPath} step "${stepName}" must use ${expectedAction}`);
+      }
+    }
+
+    const seenApprovedPublishStepNames = new Set();
+
+    for (const step of publishJob.steps ?? []) {
+      const stepUses = getStepUses(step);
+      const normalizedStepUses = stepUses.toLowerCase();
+      const stepName = step?.name;
+      const isPinnedPublishAction =
+        normalizedStepUses.startsWith("docker/metadata-action@") ||
+        normalizedStepUses.startsWith("docker/build-push-action@");
+
+      if (!isPinnedPublishAction) {
+        continue;
+      }
+
+      if (stepName && expectedActions[stepName]) {
+        if (seenApprovedPublishStepNames.has(stepName)) {
+          throw new Error(`${workflowPath} step "${stepName}" must not appear more than once`);
+        }
+
+        seenApprovedPublishStepNames.add(stepName);
+      }
+
+      if (!stepName || !expectedActions[stepName] || expectedActions[stepName] !== stepUses) {
+        throw new Error(
+          `${workflowPath} step "${stepName ?? "<unnamed>"}" is not an approved pinned Docker publish step`
+        );
       }
     }
   }

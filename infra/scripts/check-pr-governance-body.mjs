@@ -49,24 +49,44 @@ export function normalizeSectionBody(body) {
   return body.replace(/\r\n/g, "\n").trim();
 }
 
+function stripListPrefix(line) {
+  return line.trim().replace(/^(?:(?:[-*+]\s*)+|\d+\.\s*)/, "").trim();
+}
+
+function normalizeGuidanceLine(line) {
+  return stripListPrefix(line).replace(/`/g, "").replace(/\s+/g, " ").trim();
+}
+
+function isTemplateGuidanceLine(line) {
+  const stripped = normalizeGuidanceLine(line);
+  return stripped === "Replace the placeholder with real issue references before opening or merging." ||
+    stripped ===
+      "Use literal markdown such as Closes #123 or Related: #456; do not leave the placeholder blank and do not paste escaped \\n text." ||
+    stripped === "If there is intentionally no issue, say so explicitly here." ||
+    stripped === "CI rejects untouched placeholder text in this section." ||
+    stripped ===
+      "Replace the checklist-only default with checked items and a brief note or not applicable; CI rejects untouched default sections here.";
+}
+
 function listMeaningfulLines(body) {
   return normalizeSectionBody(body)
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => !isTemplateGuidanceLine(line));
 }
 
 function hasUncheckedChecklist(body) {
-  return /(^|\n)- \[ \]/m.test(normalizeSectionBody(body));
+  return /(^|\n)\s*(?:(?:[-*+]\s*)|\d+\.\s*)\[[ ]\]/m.test(normalizeSectionBody(body));
 }
 
 function hasCheckedChecklist(body) {
-  return /(^|\n)- \[[xX]\]/m.test(normalizeSectionBody(body));
+  return /(^|\n)\s*(?:(?:[-*+]\s*)|\d+\.\s*)\[[xX]\]/m.test(normalizeSectionBody(body));
 }
 
 function hasMeaningfulNarrative(body) {
   const prose = listMeaningfulLines(body)
-    .filter((line) => !line.match(/^- \[[ xX]\]/))
+    .filter((line) => !line.match(/^(?:(?:[-*+])\s*|\d+\.\s*)\[[ xX]\]/))
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
@@ -91,9 +111,33 @@ function hasMeaningfulNarrative(body) {
 }
 
 function hasLinkedIssueReference(body) {
-  return /(^|\n)-\s*(?:closes|close|fixes|fix|resolves|resolve|related:?)\s+#\d+\b/im.test(
+  return /(^|\n)\s*(?:(?:[-*+]\s*)|\d+\.\s*)?(?:closes|close|fixes|fix|resolves|resolve|related:?)\s+#\d+\b/im.test(
     normalizeSectionBody(body)
   );
+}
+
+function hasExplicitNoIssueDeclaration(body) {
+  return listMeaningfulLines(body)
+    .map((line) => stripListPrefix(line))
+    .some((line) => {
+      const match = line.match(
+        /^(?:no issue(?: applies)?|no linked issue(?: applies)?|intentionally no issue(?: applies)?|there is no issue(?: applies)?|there is intentionally no issue(?: applies)?)(.*)$/i
+      );
+
+      if (!match) {
+        return false;
+      }
+
+      const suffix = match[1].trim();
+      return (
+        suffix === "" ||
+        /^[.;]$/.test(suffix) ||
+        /^[(),:;.-]\s*.+$/.test(suffix) ||
+        /^(?:because|since|as|for|to|on|in|within|across|through|due to|under|during|here|there|this|that|these|those|where|when)\b.+$/i.test(
+          suffix
+        )
+      );
+    });
 }
 
 function hasConcreteVerificationEvidence(body) {
@@ -104,9 +148,14 @@ function hasConcreteVerificationEvidence(body) {
     block
       .split("\n")
       .map((line) => line.trim())
-      .some((line) => /^(?:\$|>|PS>)?\s*(?:bun|node|npm|pnpm|yarn|gh|docker|python|pytest|uv|cargo|go)\b/i.test(line))
+      .some((line) =>
+        /^(?:\$|>|PS>)?\s*(?:bun|bunx|node|npm|npx|pnpm|yarn|gh|docker|python|pytest|uv|cargo|go)\b/i.test(line)
+      )
   );
-  const workflowLikeEvidence = /(actions\/runs\/\d+|job\/\d+|pull request ci|workflow run)/i.test(normalized);
+  const workflowLikeEvidence =
+    /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/actions\/runs\/\d+/i.test(normalized) ||
+    /actions\/runs\/\d+/i.test(normalized) ||
+    /job\/\d+/i.test(normalized);
   const artifactLikeEvidence =
     /(?:^|\s)(?:[A-Za-z]:\\|\/|\.\/|\.\.\/)[^\s]+/m.test(normalized) ||
     /\b[\w./-]+\.(?:png|jpg|jpeg|log|txt|md|json|html)\b/i.test(normalized);
@@ -192,11 +241,11 @@ export function validatePrGovernanceBody(repoRoot, bodyMarkdown) {
   }
 
   const linkedIssues = bodySections.get("Linked issues");
-  if (/(^|\n)-\s*Closes #\s*(\n|$)/m.test(linkedIssues)) {
+  if (/(^|\n)\s*(?:(?:[-*+]\s*)|\d+\.\s*)?Closes #\s*(\n|$)/im.test(linkedIssues)) {
     throw new Error('PR body section "Linked issues" still contains the placeholder "Closes #"');
   }
 
-  if (!hasLinkedIssueReference(linkedIssues) && !/\b(no issue|not applicable|intentionally no issue)\b/i.test(linkedIssues)) {
+  if (!hasLinkedIssueReference(linkedIssues) && !hasExplicitNoIssueDeclaration(linkedIssues)) {
     throw new Error(
       'PR body section "Linked issues" must contain a real issue reference like "#123" or explicitly say no issue applies'
     );
