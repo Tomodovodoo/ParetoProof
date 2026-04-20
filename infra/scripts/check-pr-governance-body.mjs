@@ -124,16 +124,13 @@ function collectMarkdownSections(markdown) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
-    inHtmlComment = strippedLine.inComment;
-    const visibleLine = strippedLine.visible;
-    const fenceMatch = matchFenceLine(visibleLine);
+    const rawFenceMatch = matchFenceLine(line);
     if (activeFence) {
       if (
-        fenceMatch &&
-        activeFence.character === fenceMatch.character &&
-        fenceMatch.length >= activeFence.length &&
-        !fenceMatch.suffix.trim()
+        rawFenceMatch &&
+        activeFence.character === rawFenceMatch.character &&
+        rawFenceMatch.length >= activeFence.length &&
+        !rawFenceMatch.suffix.trim()
       ) {
         activeFence = null;
       }
@@ -144,10 +141,10 @@ function collectMarkdownSections(markdown) {
       continue;
     }
 
-    if (fenceMatch) {
+    if (rawFenceMatch) {
       activeFence = {
-        character: fenceMatch.character,
-        length: fenceMatch.length
+        character: rawFenceMatch.character,
+        length: rawFenceMatch.length
       };
       if (currentTitle) {
         currentLines.push(line);
@@ -155,6 +152,9 @@ function collectMarkdownSections(markdown) {
       continue;
     }
 
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
     const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
     if (activeRawHtmlBlock || nextRawHtmlBlock) {
       activeRawHtmlBlock = nextRawHtmlBlock;
@@ -216,16 +216,13 @@ function collectFencedCodeBlocks(markdown) {
   let activeRawHtmlBlock = null;
 
   for (const line of markdown.split(/\r?\n/)) {
-    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
-    inHtmlComment = strippedLine.inComment;
-    const visibleLine = strippedLine.visible;
-    const fenceMatch = matchFenceLine(visibleLine, { maxIndent: Number.MAX_SAFE_INTEGER });
+    const rawFenceMatch = matchFenceLine(line, { maxIndent: Number.MAX_SAFE_INTEGER });
     if (activeFence) {
       if (
-        fenceMatch &&
-        activeFence.character === fenceMatch.character &&
-        fenceMatch.length >= activeFence.length &&
-        !fenceMatch.suffix.trim()
+        rawFenceMatch &&
+        activeFence.character === rawFenceMatch.character &&
+        rawFenceMatch.length >= activeFence.length &&
+        !rawFenceMatch.suffix.trim()
       ) {
         blocks.push(currentLines.join("\n").trim());
         activeFence = null;
@@ -237,15 +234,18 @@ function collectFencedCodeBlocks(markdown) {
       continue;
     }
 
-    if (fenceMatch) {
+    if (rawFenceMatch) {
       activeFence = {
-        character: fenceMatch.character,
-        length: fenceMatch.length
+        character: rawFenceMatch.character,
+        length: rawFenceMatch.length
       };
       currentLines = [];
       continue;
     }
 
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
     const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
     if (activeRawHtmlBlock || nextRawHtmlBlock) {
       activeRawHtmlBlock = nextRawHtmlBlock;
@@ -265,30 +265,30 @@ function countRequiredHeadingOccurrences(markdown) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
-    inHtmlComment = strippedLine.inComment;
-    const visibleLine = strippedLine.visible;
-    const fenceMatch = matchFenceLine(visibleLine);
+    const rawFenceMatch = matchFenceLine(line);
     if (activeFence) {
       if (
-        fenceMatch &&
-        activeFence.character === fenceMatch.character &&
-        fenceMatch.length >= activeFence.length &&
-        !fenceMatch.suffix.trim()
+        rawFenceMatch &&
+        activeFence.character === rawFenceMatch.character &&
+        rawFenceMatch.length >= activeFence.length &&
+        !rawFenceMatch.suffix.trim()
       ) {
         activeFence = null;
       }
       continue;
     }
 
-    if (fenceMatch) {
+    if (rawFenceMatch) {
       activeFence = {
-        character: fenceMatch.character,
-        length: fenceMatch.length
+        character: rawFenceMatch.character,
+        length: rawFenceMatch.length
       };
       continue;
     }
 
+    const strippedLine = stripHtmlCommentsFromLine(line, inHtmlComment);
+    inHtmlComment = strippedLine.inComment;
+    const visibleLine = strippedLine.visible;
     const nextRawHtmlBlock = updateRawHtmlBlockState(visibleLine, activeRawHtmlBlock);
     if (activeRawHtmlBlock || nextRawHtmlBlock) {
       activeRawHtmlBlock = nextRawHtmlBlock;

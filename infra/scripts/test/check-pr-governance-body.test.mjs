@@ -570,6 +570,24 @@ bun run test:governance-guards
   assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
 });
 
+test("validatePrGovernanceBody still recognizes closing fences after html comment tokens inside code blocks", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Verification[\s\S]*?## Security and cost review/,
+    `## Verification
+
+- [x] Validation complete.
+
+\`\`\`text <!--
+## Linked issues
+bun run test:governance-guards
+\`\`\`
+
+## Security and cost review`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
 test("validatePrGovernanceBody rejects duplicate required headings written with setext syntax", () => {
   const invalidBody = readFileSync(validBodyPath, "utf8").replace(
     /## Linked issues[\s\S]*?## Verification/,
