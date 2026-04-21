@@ -1574,10 +1574,6 @@ export function createInternalWorkerControlService(
     },
 
     async claim(request: WorkerClaimRequest): Promise<WorkerClaimResponse> {
-      const registeredWorkerPool = await hostedWorkerPoolRegistry.getWorkerPool(
-        request.workerPool
-      );
-
       if (
         request.workerRuntime === "local_docker" &&
         !request.workerPool.startsWith(localDockerWorkerPoolPrefix)
@@ -1586,6 +1582,14 @@ export function createInternalWorkerControlService(
           "worker_pool_namespace_invalid",
           `Local Docker worker pools must use the reserved ${localDockerWorkerPoolPrefix}* namespace.`,
           "workerPool"
+        );
+      }
+
+      let registeredWorkerPool: RegisteredHostedWorkerPool = null;
+
+      if (request.workerRuntime === "modal") {
+        registeredWorkerPool = await hostedWorkerPoolRegistry.getWorkerPool(
+          request.workerPool
         );
       }
 

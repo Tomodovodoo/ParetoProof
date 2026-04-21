@@ -5,6 +5,7 @@
     "buildCommand": "bun run build:api:railway",
     "watchPatterns": [
       "/apps/api/**",
+      "/infra/modal/worker-pools.seed.json",
       "/packages/shared/**",
       "/bun.lock",
       "/package.json",

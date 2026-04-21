@@ -4234,7 +4234,7 @@ test("claim allows local_docker pools to use the existing DB-backed admission pa
           };
         },
         async getWorkerPool() {
-          return null;
+          throw new Error("local_docker claims should not consult the hosted registry");
         }
       }
     }
