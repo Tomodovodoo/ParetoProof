@@ -12,7 +12,8 @@ import {
 } from "drizzle-orm";
 import {
   problem9HostedAuthModes,
-  problem9HostedProviderFamilies
+  problem9HostedProviderFamilies,
+  type HostedWorkerPoolEnvironment
 } from "@paretoproof/shared";
 import type {
   Problem9HostedAuthMode,
@@ -79,6 +80,7 @@ type MutationExecutor = Pick<DbClient, "insert" | "select" | "update">;
 type RegisteredHostedWorkerPool = Awaited<
   ReturnType<HostedWorkerPoolRegistryService["getWorkerPool"]>
 >;
+const localDockerWorkerPoolPrefix = "local-";
 
 type CandidateClaimRow = {
   authMode: Problem9HostedAuthMode;
@@ -227,6 +229,17 @@ function supportsCurrentProblem9Assignment(request: WorkerClaimRequest) {
 
   return requiredProblem9ArtifactRoles.every((role) =>
     request.supportedArtifactRoles.includes(role)
+  );
+}
+
+function isHostedWorkerPoolAvailableInEnvironment(
+  registeredWorkerPool: RegisteredHostedWorkerPool,
+  environment: HostedWorkerPoolEnvironment
+) {
+  return (
+    registeredWorkerPool?.deploymentTargets.some(
+      (target) => target.environment === environment
+    ) ?? false
   );
 }
 
@@ -1485,11 +1498,15 @@ export const internalWorkerControlTestUtils = {
 export function createInternalWorkerControlService(
   db: DbClient,
   options?: {
+    hostedWorkerPoolEnvironment?: HostedWorkerPoolEnvironment;
     hostedWorkerPoolRegistry?: HostedWorkerPoolRegistryService;
+    requireScopedHostedWorkerPools?: boolean;
   }
 ) {
+  const hostedWorkerPoolEnvironment = options?.hostedWorkerPoolEnvironment;
   const hostedWorkerPoolRegistry =
     options?.hostedWorkerPoolRegistry ?? createHostedWorkerPoolRegistryService();
+  const requireScopedHostedWorkerPools = options?.requireScopedHostedWorkerPools ?? false;
 
   return {
     async authenticateJobToken(
@@ -1557,9 +1574,22 @@ export function createInternalWorkerControlService(
     },
 
     async claim(request: WorkerClaimRequest): Promise<WorkerClaimResponse> {
-      const registeredWorkerPool = await hostedWorkerPoolRegistry.getWorkerPool(request.workerPool);
+      const registeredWorkerPool = await hostedWorkerPoolRegistry.getWorkerPool(
+        request.workerPool
+      );
 
-      if (!registeredWorkerPool) {
+      if (
+        request.workerRuntime === "local_docker" &&
+        !request.workerPool.startsWith(localDockerWorkerPoolPrefix)
+      ) {
+        throw createConflictError(
+          "worker_pool_namespace_invalid",
+          `Local Docker worker pools must use the reserved ${localDockerWorkerPoolPrefix}* namespace.`,
+          "workerPool"
+        );
+      }
+
+      if (request.workerRuntime === "modal" && !registeredWorkerPool) {
         throw createConflictError(
           "worker_pool_not_registered",
           `Worker pool ${request.workerPool} is not part of the registered hosted worker fleet.`,
@@ -1567,7 +1597,35 @@ export function createInternalWorkerControlService(
         );
       }
 
-      if (registeredWorkerPool.workerRuntime !== request.workerRuntime) {
+      if (
+        request.workerRuntime === "modal" &&
+        requireScopedHostedWorkerPools &&
+        !hostedWorkerPoolEnvironment
+      ) {
+        throw createConflictError(
+          "worker_pool_environment_not_configured",
+          "Hosted worker pool environment is not configured for modal worker claims.",
+          "workerPool"
+        );
+      }
+
+      if (
+        request.workerRuntime === "modal" &&
+        registeredWorkerPool &&
+        hostedWorkerPoolEnvironment &&
+        !isHostedWorkerPoolAvailableInEnvironment(
+          registeredWorkerPool,
+          hostedWorkerPoolEnvironment
+        )
+      ) {
+        throw createConflictError(
+          "worker_pool_environment_mismatch",
+          `Worker pool ${request.workerPool} is not registered for hosted environment ${hostedWorkerPoolEnvironment}.`,
+          "workerPool"
+        );
+      }
+
+      if (registeredWorkerPool && registeredWorkerPool.workerRuntime !== request.workerRuntime) {
         throw createConflictError(
           "worker_pool_runtime_mismatch",
           `Worker pool ${request.workerPool} is registered for runtime ${registeredWorkerPool.workerRuntime}.`,

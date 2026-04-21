@@ -43,6 +43,7 @@ const checks = [
       { name: "BRANDED_AUTH_ORIGINS", commented: true },
       { name: "ACCESS_COOKIE_DOMAIN", commented: true },
       { name: "ACCESS_COOKIE_SECURE", commented: true },
+      { name: "HOSTED_WORKER_POOL_ENVIRONMENT", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_ID", commented: true },
       { name: "CF_INTERNAL_API_SERVICE_TOKEN_SECRET", commented: true },
       { name: "R2_ACCESS_KEY_ID", commented: true },

@@ -62,6 +62,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `WORKER_BOOTSTRAP_TOKEN`
 - Optional env:
   - `HOST`
+  - `HOSTED_WORKER_POOL_ENVIRONMENT`
   - `PORT`
   - `NODE_ENV`
   - `CF_ACCESS_INTERNAL_AUD`
@@ -87,6 +88,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
   - `BRANDED_AUTH_ORIGINS` defaults to the configured auth origin plus the matching GitHub and Google branded auth origins
   - `ACCESS_COOKIE_DOMAIN` defaults to the shared domain suffix derived from the configured portal, math, and branded auth origins when one exists
   - `ACCESS_COOKIE_SECURE` defaults to `true` only when every configured portal/math/branded auth origin is `https`
+  - set `HOSTED_WORKER_POOL_ENVIRONMENT` to `dev`, `staging`, or `prod` when locally exercising hosted Modal claim routing or portal worker-pool visibility against the seeded hosted fleet catalog
   - `HOST` defaults to `0.0.0.0`
   - `PORT` defaults to `3000`
 
@@ -104,6 +106,7 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
   - `WORKER_BOOTSTRAP_TOKEN`
 - Optional env:
   - `HOST`
+  - `HOSTED_WORKER_POOL_ENVIRONMENT`
   - `PORT`
   - `NODE_ENV`
   - `CF_ACCESS_INTERNAL_AUD`
@@ -122,6 +125,7 @@ Use this mode for the hosted `api.paretoproof.com` control plane.
 - Platform notes:
   - Railway normally supplies `PORT`
   - keep migration credentials out of the live service runtime
+  - set `HOSTED_WORKER_POOL_ENVIRONMENT` to the deployed control-plane environment (`dev`, `staging`, or `prod`) whenever the hosted control plane should admit Modal workers or show zero-lease registered pools; when it is omitted, hosted Modal claims fail closed and the portal does not synthesize zero-lease registry pools
   - `api.paretoproof.com/portal/*` must bypass Cloudflare Access because the portal and math SPAs talk to it with cross-origin `fetch()` and need JSON `200`/`401` responses, not Access redirects
   - keep `api.paretoproof.com/internal/*` on its own Cloudflare Access app for owner and service-token callers
   - use the explicit portal/auth/math origin and cookie overrides when a hosted non-prod environment does not live on the canonical `*.paretoproof.com` surface trio

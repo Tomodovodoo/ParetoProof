@@ -4,6 +4,8 @@ import {
   getRunLifecycleStateLabel,
   defaultRunControlPolicy,
   portalRunsLifecycleBuckets,
+  type HostedWorkerPoolEnvironment,
+  type HostedWorkerPoolRegistryCatalog,
   type HostedWorkerPoolRegistryEntry,
   type PortalBenchmarkDatasetResponse,
   type PortalBenchmarkListItem,
@@ -460,6 +462,7 @@ function buildTimeline(options: {
 
 export const portalBenchmarkOpsReadModelTestUtils = {
   buildWorkerPoolSummaries,
+  readRegisteredWorkerPoolsForEnvironment,
   buildOverviewBenchmarkHighlightsQuery,
   buildRunsSummarySelect,
   buildBenchmarkDatasetRunOrderBy,
@@ -509,9 +512,25 @@ function compareWorkerPoolSummary(
 
 type RegisteredWorkerPoolSeed = Pick<HostedWorkerPoolRegistryEntry, "workerPool" | "workerRuntime">;
 
+function readRegisteredWorkerPoolsForEnvironment(options: {
+  catalog: HostedWorkerPoolRegistryCatalog;
+  environment: HostedWorkerPoolEnvironment;
+}): RegisteredWorkerPoolSeed[] {
+  return options.catalog.items
+    .filter((entry) =>
+      entry.deploymentTargets.some(
+        (target) => target.environment === options.environment
+      )
+    )
+    .map(({ workerPool, workerRuntime }) => ({
+      workerPool,
+      workerRuntime
+    }));
+}
+
 function buildWorkerPoolSummaries(options: {
   activeLeases: PortalWorkersViewResponse["activeLeases"];
-  registeredWorkerPools: RegisteredWorkerPoolSeed[];
+  registeredWorkerPools?: RegisteredWorkerPoolSeed[];
 }): PortalWorkersViewResponse["workerPools"] {
   const workerPools = new Map<string, PortalWorkersViewResponse["workerPools"][number]>();
   const seenPoolRuntimeKeys = new Set<string>();
@@ -542,7 +561,7 @@ function buildWorkerPoolSummaries(options: {
     }
   }
 
-  for (const registeredWorkerPool of options.registeredWorkerPools) {
+  for (const registeredWorkerPool of options.registeredWorkerPools ?? []) {
     const poolRuntimeKey = [
       registeredWorkerPool.workerPool,
       registeredWorkerPool.workerRuntime
@@ -1008,6 +1027,7 @@ async function loadOverviewBenchmarkHighlights(
 export function createPortalBenchmarkOpsReadModelService(
   db: ReturnTypeOfCreateDbClient,
   options?: {
+    hostedWorkerPoolEnvironment?: HostedWorkerPoolEnvironment;
     hostedWorkerPoolRegistry?: HostedWorkerPoolRegistryService;
   }
 ): PortalBenchmarkOpsReadModelService {
@@ -1569,12 +1589,12 @@ export function createPortalBenchmarkOpsReadModelService(
           .from(workerJobLeases)
           .where(isNull(workerJobLeases.revokedAt))
       ]);
-      const registeredWorkerPools = (await hostedWorkerPoolRegistry.getCatalog()).items.map(
-        ({ workerPool, workerRuntime }) => ({
-          workerPool,
-          workerRuntime
-        })
-      );
+      const registeredWorkerPools = options?.hostedWorkerPoolEnvironment
+        ? readRegisteredWorkerPoolsForEnvironment({
+            catalog: await hostedWorkerPoolRegistry.getCatalog(),
+            environment: options.hostedWorkerPoolEnvironment
+          })
+        : [];
       const runIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.runId))];
       const jobIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.jobId))];
       const attemptIds = [...new Set(leaseRows.map((leaseRow) => leaseRow.attemptId))];

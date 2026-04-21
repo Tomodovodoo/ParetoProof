@@ -243,6 +243,7 @@ export async function buildServer(
     allowLocalhostOrigins: runtimeEnv.corsAllowLocalhost,
     authPublicOrigin: runtimeEnv.authPublicOrigin,
     brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
+    hostedWorkerPoolEnvironment: runtimeEnv.hostedWorkerPoolEnvironment,
     mathPublicOrigin: runtimeEnv.mathPublicOrigin,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
     rateLimitPreHandlers,

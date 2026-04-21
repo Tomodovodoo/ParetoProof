@@ -515,6 +515,7 @@ export function registerPortalRoutes(
     allowLocalhostOrigins?: ApiRuntimeEnv["corsAllowLocalhost"];
     authPublicOrigin?: ApiRuntimeEnv["authPublicOrigin"];
     brandedAuthOrigins?: ApiRuntimeEnv["brandedAuthOrigins"];
+    hostedWorkerPoolEnvironment?: ApiRuntimeEnv["hostedWorkerPoolEnvironment"];
     mathPublicOrigin?: ApiRuntimeEnv["mathPublicOrigin"];
     portalBenchmarkOpsReadModels?: PortalBenchmarkOpsReadModelService;
     portalPublicOrigin?: ApiRuntimeEnv["portalPublicOrigin"];
@@ -531,7 +532,9 @@ export function registerPortalRoutes(
     createAccessResolver(db, accessResolverOptions);
   const portalBenchmarkOpsReadModels =
     options?.portalBenchmarkOpsReadModels ??
-    createPortalBenchmarkOpsReadModelService(db);
+    createPortalBenchmarkOpsReadModelService(db, {
+      hostedWorkerPoolEnvironment: options?.hostedWorkerPoolEnvironment,
+    });
   const harnessRegistry = createHarnessRegistryService();
   const rateLimitPreHandlers = options?.rateLimitPreHandlers;
   const runtimeConfig = resolveApiOriginRuntimeConfig({

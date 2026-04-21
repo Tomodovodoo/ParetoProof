@@ -40,15 +40,23 @@ const supportedArtifactRoles = [
   "execution_trace"
 ] as const;
 
-function buildRuntimeEnv() {
-  return parseApiRuntimeEnv({
+function buildRuntimeEnv(overrides: Record<string, string | undefined> = {}) {
+  const env = {
     ACCESS_PROVIDER_STATE_SECRET: "state-secret",
     CF_ACCESS_BRANDED_AUDS: "github-audience,google-audience",
     CF_ACCESS_PORTAL_AUD: "portal-audience",
     CF_ACCESS_TEAM_DOMAIN: "paretoproof.cloudflareaccess.com",
     DATABASE_URL: "postgres://localhost:5432/paretoproof",
+    HOSTED_WORKER_POOL_ENVIRONMENT: "dev",
+    ...overrides,
     WORKER_BOOTSTRAP_TOKEN: "worker-bootstrap-token"
-  });
+  };
+
+  return parseApiRuntimeEnv(
+    Object.fromEntries(
+      Object.entries(env).filter(([, value]) => value !== undefined)
+    )
+  );
 }
 
 function buildClaimRequest(): WorkerClaimRequest {
@@ -536,6 +544,76 @@ test("POST /internal/worker/claims returns idle when another claimer wins the le
     workerJob: null
   });
 });
+
+test(
+  "POST /internal/worker/claims rejects modal pools when hosted worker environment is unset",
+  async (t) => {
+    const app = Fastify();
+    const fakeDb = {
+      transaction: async () => {
+        throw new Error("claim should fail before opening a transaction");
+      }
+    };
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    registerInternalWorkerRoutes(
+      app,
+      fakeDb as never,
+      buildRuntimeEnv({ HOSTED_WORKER_POOL_ENVIRONMENT: undefined })
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer worker-bootstrap-token"
+      },
+      payload: buildClaimRequest(),
+      url: "/internal/worker/claims"
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error, "worker_pool_environment_not_configured");
+    assert.equal(response.json().issues?.[0]?.path, "workerPool");
+  }
+);
+
+test(
+  "POST /internal/worker/claims rejects modal pools outside the configured hosted worker environment",
+  async (t) => {
+    const app = Fastify();
+    const fakeDb = {
+      transaction: async () => {
+        throw new Error("claim should fail before opening a transaction");
+      }
+    };
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    registerInternalWorkerRoutes(
+      app,
+      fakeDb as never,
+      buildRuntimeEnv({ HOSTED_WORKER_POOL_ENVIRONMENT: "staging" })
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer worker-bootstrap-token"
+      },
+      payload: buildClaimRequest(),
+      url: "/internal/worker/claims"
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error, "worker_pool_environment_mismatch");
+    assert.equal(response.json().issues?.[0]?.path, "workerPool");
+  }
+);
 
 test("POST /internal/worker/claims reclaims stale unstarted work without queued rewinds", async (t) => {
   const app = Fastify();
@@ -3991,7 +4069,7 @@ test("claim reuses existing worker pool definitions without hot-row updates", as
   assert.equal(poolInsertUsedConflictDoNothing, true);
 });
 
-test("claim rejects worker pools outside the registered hosted worker fleet", async () => {
+test("claim rejects unregistered modal worker pools", async () => {
   const control = createInternalWorkerControlService(
     {
       transaction: async () => {
@@ -4026,6 +4104,252 @@ test("claim rejects worker pools outside the registered hosted worker fleet", as
       assert.equal(error.issues?.[0]?.path, "workerPool");
       return true;
     }
+  );
+});
+
+test("claim allows local_docker pools to use the existing DB-backed admission path", async () => {
+  let selectCount = 0;
+  let insertCount = 0;
+  let poolInsertUsedConflictDoNothing = false;
+  const fakeDb = {
+    transaction: async (callback: (tx: unknown) => Promise<WorkerClaimResponse>) => {
+      const tx = {
+        select() {
+          selectCount += 1;
+
+          if (selectCount === 1) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  where() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          if (selectCount === 2) {
+            return {
+              from() {
+                return {
+                  innerJoin() {
+                    return this;
+                  },
+                  leftJoin() {
+                    return this;
+                  },
+                  where() {
+                    return this;
+                  },
+                  orderBy() {
+                    return this;
+                  },
+                  limit() {
+                    return Promise.resolve([]);
+                  }
+                };
+              }
+            };
+          }
+
+          return {
+            from() {
+              return {
+                where() {
+                  return this;
+                },
+                limit() {
+                  return Promise.resolve([{ id: "pool-def-1", workerRuntime: "local_docker" }]);
+                }
+              };
+            }
+          };
+        },
+        update() {
+          throw new Error("idle claims should not issue updates");
+        },
+        insert() {
+          insertCount += 1;
+
+          return {
+            values() {
+              if (insertCount === 1) {
+                return {
+                  onConflictDoNothing() {
+                    poolInsertUsedConflictDoNothing = true;
+
+                    return {
+                      returning() {
+                        return Promise.resolve([]);
+                      }
+                    };
+                  }
+                };
+              }
+
+              return {
+                onConflictDoUpdate() {
+                  return {
+                    returning() {
+                      return Promise.resolve([{ id: "worker-instance-1" }]);
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+
+      return callback(tx);
+    }
+  };
+  const control = createInternalWorkerControlService(
+    fakeDb as never,
+    {
+      hostedWorkerPoolRegistry: {
+        async getCatalog() {
+          return {
+            items: [
+              {
+                defaultRolloutClass: "stable",
+                deploymentTargets: [
+                  {
+                    environment: "dev",
+                    modalAppName: "paretoproof-worker-dev-modal-dev",
+                    secretName: "paretoproof-worker-modal-dev"
+                  }
+                ],
+                notes: [],
+                ownershipSummary: null,
+                workerPool: "modal-dev",
+                workerRuntime: "modal"
+              }
+            ],
+            version: 1
+          };
+        },
+        async getWorkerPool() {
+          return null;
+        }
+      }
+    }
+  );
+
+  const response = await control.claim({
+    ...buildClaimRequest(),
+    workerPool: "local-docker-dev",
+    workerRuntime: "local_docker"
+  });
+
+  assert.equal(response.leaseStatus, "idle");
+  assert.equal(selectCount, 3);
+  assert.equal(insertCount, 2);
+  assert.equal(poolInsertUsedConflictDoNothing, true);
+});
+
+test("claim rejects local_docker pools outside the reserved local namespace", async () => {
+  const control = createInternalWorkerControlService(
+    {
+      transaction: async () => {
+        throw new Error("claim should fail before opening a transaction");
+      }
+    } as never,
+    {
+      hostedWorkerPoolRegistry: {
+        async getCatalog() {
+          return {
+            items: [],
+            version: 1
+          };
+        },
+        async getWorkerPool() {
+          return null;
+        }
+      }
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      control.claim({
+        ...buildClaimRequest(),
+        workerPool: "future-hosted-pool",
+        workerRuntime: "local_docker"
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof InternalWorkerControlError);
+      assert.equal(error.code, "worker_pool_namespace_invalid");
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.issues?.[0]?.path, "workerPool");
+      return true;
+    }
+  );
+});
+
+test("claim rejects local_docker workers that try to reuse a hosted modal pool id", async () => {
+  const control = createInternalWorkerControlService(
+    {
+      transaction: async () => {
+        throw new Error("claim should fail before opening a transaction");
+      }
+    } as never,
+    {
+      hostedWorkerPoolRegistry: {
+        async getCatalog() {
+          return {
+            items: [
+              {
+                defaultRolloutClass: "stable",
+                deploymentTargets: [
+                  {
+                    environment: "dev",
+                    modalAppName: "paretoproof-worker-dev-modal-dev",
+                    secretName: "paretoproof-worker-modal-dev"
+                  }
+                ],
+                notes: [],
+                ownershipSummary: null,
+                workerPool: "modal-dev",
+                workerRuntime: "modal"
+              }
+            ],
+            version: 1
+          };
+        },
+        async getWorkerPool() {
+          return {
+            defaultRolloutClass: "stable",
+            deploymentTargets: [
+              {
+                environment: "dev",
+                modalAppName: "paretoproof-worker-dev-modal-dev",
+                secretName: "paretoproof-worker-modal-dev"
+              }
+            ],
+            notes: [],
+            ownershipSummary: null,
+            workerPool: "modal-dev",
+            workerRuntime: "modal"
+          };
+        }
+      }
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      control.claim({
+        ...buildClaimRequest(),
+        workerRuntime: "local_docker"
+      }),
+    (error: unknown) =>
+      error instanceof InternalWorkerControlError &&
+      error.code === "worker_pool_namespace_invalid"
   );
 });
 

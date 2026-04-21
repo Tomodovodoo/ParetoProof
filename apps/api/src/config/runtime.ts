@@ -1,4 +1,8 @@
 import { isIP } from "node:net";
+import {
+  hostedWorkerPoolEnvironmentSchema,
+  type HostedWorkerPoolEnvironment,
+} from "@paretoproof/shared";
 import { getPublicSuffix } from "tldts";
 import { z } from "zod";
 
@@ -308,6 +312,10 @@ const rawApiRuntimeEnvSchema = z
     CORS_ALLOW_LOCALHOST: optionalBooleanStringSchema,
     DATABASE_URL: requiredTrimmedStringSchema,
     HOST: trimmedOptionalStringSchema,
+    HOSTED_WORKER_POOL_ENVIRONMENT: z.preprocess(
+      normalizeOptionalEnvValue,
+      hostedWorkerPoolEnvironmentSchema.optional(),
+    ),
     MATH_PUBLIC_ORIGIN: trimmedOptionalOriginSchema,
     NODE_ENV: trimmedOptionalStringSchema,
     PORT: portSchema,
@@ -336,6 +344,7 @@ export type ApiRuntimeEnv = {
   corsAllowLocalhost: boolean;
   databaseUrl: string;
   host: string;
+  hostedWorkerPoolEnvironment?: HostedWorkerPoolEnvironment;
   internalAccessAudience: string;
   mathPublicOrigin: string;
   nodeEnv?: string;
@@ -415,6 +424,7 @@ export function parseApiRuntimeEnv(
     CORS_ALLOW_LOCALHOST,
     DATABASE_URL,
     HOST,
+    HOSTED_WORKER_POOL_ENVIRONMENT,
     MATH_PUBLIC_ORIGIN,
     NODE_ENV,
     PORT,
@@ -448,6 +458,11 @@ export function parseApiRuntimeEnv(
     corsAllowLocalhost: originRuntimeConfig.corsAllowLocalhost,
     databaseUrl: DATABASE_URL,
     host: HOST ?? "0.0.0.0",
+    ...(HOSTED_WORKER_POOL_ENVIRONMENT
+      ? {
+          hostedWorkerPoolEnvironment: HOSTED_WORKER_POOL_ENVIRONMENT,
+        }
+      : {}),
     internalAccessAudience: CF_ACCESS_INTERNAL_AUD ?? portalAccessAudience,
     mathPublicOrigin: originRuntimeConfig.mathPublicOrigin,
     nodeEnv: NODE_ENV,
