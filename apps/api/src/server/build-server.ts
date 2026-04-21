@@ -17,6 +17,7 @@ import { registerAdminRoutes } from "../routes/admin.js";
 import { registerBenchmarkWorkflowRoutes } from "../routes/benchmark-workflow.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
+import { registerMathRoutes } from "../routes/math.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
@@ -83,6 +84,24 @@ export function readTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
           (origin) =>
             origin === portalPublicOrigin ||
             (origin !== mathPublicOrigin && !brandedAuthOrigins.has(origin)),
+        ),
+    ),
+  ];
+}
+
+export function readMathTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
+  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
+  const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
+
+  return [
+    ...new Set(
+      [mathPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
+        .map(normalizeOrigin)
+        .filter(
+          (origin) =>
+            origin === mathPublicOrigin ||
+            (origin !== portalPublicOrigin && !brandedAuthOrigins.has(origin)),
         ),
     ),
   ];
@@ -182,6 +201,7 @@ export async function buildServer(
   );
   const corsAllowedOrigins = readAllowedCorsOrigins(runtimeEnv);
   const trustedMutationOrigins = readTrustedMutationOrigins(runtimeEnv);
+  const mathTrustedMutationOrigins = readMathTrustedMutationOrigins(runtimeEnv);
   const brandedAuthOrigins = readBrandedAuthOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
   const checkReadiness =
@@ -228,6 +248,7 @@ export async function buildServer(
       allowLocalhostOrigins: allowLocalhostCors,
       allowedOrigins: trustedMutationOrigins,
       brandedAuthOrigins,
+      mathAllowedOrigins: mathTrustedMutationOrigins,
     }),
   );
 
@@ -245,6 +266,9 @@ export async function buildServer(
     brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
     mathPublicOrigin: runtimeEnv.mathPublicOrigin,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
+    rateLimitPreHandlers,
+  });
+  registerMathRoutes(app, db, requireAccess, {
     rateLimitPreHandlers,
   });
   registerAdminRoutes(app, db, requireAccess, {

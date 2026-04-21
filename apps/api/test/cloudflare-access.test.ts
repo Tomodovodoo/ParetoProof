@@ -238,6 +238,117 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
   }
 });
 
+test("createAccessResolver reuses opaque PortalAccessSession cookies for math routes too", async () => {
+  const originalEnv = {
+    ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
+    CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
+    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN,
+  };
+
+  try {
+    process.env.ACCESS_PROVIDER_STATE_SECRET = "runtime-secret";
+    process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
+    process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
+    process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
+    process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+
+    let touchedSession = false;
+    const resolveAccess = createAccessResolver(
+      {
+        query: {
+          sessions: {
+            findFirst: async () => ({
+              expiresAt: new Date("2099-03-13T16:00:00.000Z"),
+              id: "session-1",
+              identity: {
+                id: "identity-1",
+                provider: "cloudflare_google",
+                providerEmail: "person@example.com",
+                providerSubject: "subject-1",
+                user: {
+                  email: "person@example.com",
+                  id: "user-1",
+                },
+              },
+              revokedAt: null,
+            }),
+          },
+          userIdentities: {
+            findFirst: async () => ({
+              id: "identity-1",
+              provider: "cloudflare_google",
+              providerEmail: "person@example.com",
+              providerSubject: "subject-1",
+              user: {
+                email: "person@example.com",
+                id: "user-1",
+              },
+            }),
+          },
+        },
+        select() {
+          return {
+            from() {
+              return {
+                where: async () => [{ role: "helper" }],
+              };
+            },
+          };
+        },
+        update() {
+          return {
+            set() {
+              return {
+                where: async () => {
+                  touchedSession = true;
+                },
+              };
+            },
+          };
+        },
+      } as never,
+      {
+        accessProviderStateSecret: "runtime-secret",
+        teamDomain: "paretoproof.cloudflareaccess.com",
+        verifiers: {
+          brandedRelay: { audiences: ["branded"] },
+          internal: { audiences: ["internal"] },
+          portal: { audiences: ["portal"] },
+        } as never,
+      },
+    );
+    const request = {
+      accessIdentity: null,
+      accessRbacContext: null,
+      headers: {
+        cookie: "PortalAccessSession=opaque-session-token",
+      },
+      raw: {
+        url: "/math/questions/problem-9/launch",
+      },
+      routeOptions: {
+        url: "/math/questions/problem-9/launch",
+      },
+    } as never;
+
+    const context = await resolveAccess(request);
+
+    assert.deepEqual(context, {
+      email: "person@example.com",
+      identityId: "identity-1",
+      role: "helper",
+      status: "approved",
+      subject: "subject-1",
+      userId: "user-1",
+    });
+    assert.equal(touchedSession, true);
+  } finally {
+    Object.assign(process.env, originalEnv);
+  }
+});
+
 test("createAccessGuard ranks singular approved roles across helper, collaborator, and admin requirements", async (t) => {
   const app = Fastify();
 

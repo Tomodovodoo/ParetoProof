@@ -26,6 +26,7 @@ import {
   jobs,
   runs,
 } from "../db/schema.js";
+import { createMathLaunchService, type MathLaunchService } from "./math-launch.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
 const requiredManifestPathsBase = [
@@ -177,6 +178,7 @@ type Problem9OfflineIngestPlan = {
   artifacts: Problem9OfflineIngestArtifactDraft[];
   attempt: Problem9OfflineAttemptInsert;
   job: Problem9OfflineJobInsert;
+  mathLaunchId: string | null;
   sourceStopReason: string;
   run: Problem9OfflineRunInsert;
 };
@@ -215,8 +217,14 @@ export class Problem9OfflineIngestDuplicateError extends Error {
 }
 
 export function createProblem9OfflineIngestService(
-  db: ReturnTypeOfCreateDbClient
+  db: ReturnTypeOfCreateDbClient,
+  options?: {
+    mathLaunchService?: Pick<MathLaunchService, "attachOfflineIngestToLaunch">;
+  }
 ): Problem9OfflineIngestService {
+  const mathLaunchService =
+    options?.mathLaunchService ?? createMathLaunchService(db);
+
   return async (rawRequest, actorUserId) => {
     const plan = buildProblem9OfflineIngestPlan(rawRequest);
 
@@ -275,6 +283,15 @@ export function createProblem9OfflineIngestService(
 
         if (!persistedAttempt) {
           throw new Error("Failed to persist the imported attempt record.");
+        }
+
+        if (plan.mathLaunchId) {
+          await mathLaunchService.attachOfflineIngestToLaunch({
+            executor: tx,
+            mathLaunchId: plan.mathLaunchId,
+            runRowId: persistedRun.id,
+            sourceRunId: persistedRun.sourceRunId
+          });
         }
 
         await tx.insert(artifacts).values(
@@ -575,6 +592,7 @@ export function buildProblem9OfflineIngestPlan(rawRequest: unknown): Problem9Off
       stopReason,
       verdictClass
     },
+    mathLaunchId: request.mathLaunchId,
     sourceStopReason: bundle.runBundle.stopReason,
     run: {
       authMode: bundle.runBundle.authMode,

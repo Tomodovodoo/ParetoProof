@@ -177,6 +177,42 @@ export const apiEndpointCatalog = [
       "Return the official harness registry catalog, including runtime class, auth posture, and published image identity metadata."
   },
   {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.question-launch.read",
+    method: "GET",
+    path: "/math/questions/:questionId/launch",
+    purpose:
+      "Return question-centric launch readiness, benchmark-version posture, and launch configuration templates for one math question."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.hosted-launch.create",
+    method: "POST",
+    path: "/math/questions/:questionId/launches/hosted",
+    purpose:
+      "Create one hosted run from the math question surface while keeping durable execution evidence on the existing run kernel."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.local-bootstrap.create",
+    method: "POST",
+    path: "/math/questions/:questionId/launches/local-connected",
+    purpose:
+      "Create a short-lived local runner bootstrap session for one question-centric launch without vending provider secrets through the browser."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.offline-export.create",
+    method: "POST",
+    path: "/math/questions/:questionId/launches/offline-export",
+    purpose:
+      "Reserve one offline export launch record and return the immutable run metadata needed to execute and later ingest the run outside the hosted control plane."
+  },
+  {
     access: "approved_collaborator_or_higher",
     audience: "portal",
     id: "portal.workers.read",
@@ -415,6 +451,15 @@ export const apiEndpointCatalog = [
     path: "/portal/admin/benchmark-releases/:benchmarkReleaseId/publish",
     purpose:
       "Publish one approved public benchmark release so it can appear on the public reporting surface."
+  },
+  {
+    access: "service_token",
+    audience: "internal",
+    id: "internal.math-runner-bootstrap.redeem",
+    method: "POST",
+    path: "/internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem",
+    purpose:
+      "Redeem a short-lived local runner bootstrap session, create the durable run rows, and return the leased job token plus launch target."
   },
   {
     access: "service_token",

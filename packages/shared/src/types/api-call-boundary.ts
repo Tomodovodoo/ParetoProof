@@ -10,13 +10,16 @@ export type ApiCallCredential =
   | "none"
   | "cloudflare_access_jwt"
   | "cloudflare_service_token"
+  | "runner_bootstrap_token"
   | "worker_bootstrap_token"
   | "worker_job_token";
 
 export type ApiCallOrigin =
   | "public_browser"
   | "portal_browser"
+  | "math_browser"
   | "portal_server"
+  | "local_runner"
   | "worker_service"
   | "admin_service";
 
