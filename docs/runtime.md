@@ -6,7 +6,8 @@ This repo uses a small number of runtime rules.
 
 - `apps/api/.env.example`, `apps/web/.env.example`, and `apps/worker/.env.example` are the local examples.
 - [runtime-env-mode-checklists.md](./runtime-env-mode-checklists.md) is the operator-facing per-mode checklist for the supported local, hosted, and owner-only runtime paths.
-- `bun run test:startup-validation` is the executable smoke owner for startup env validation across the currently supported runtime surfaces.
+- `bun run check:env-contract` is the checked-in contract guard for `.env.example` shape and the required runtime-doc cross-references.
+- `bun run test:startup-validation` is the startup smoke suite behind the `Smoke startup validation across runtime surfaces` PR-CI step for the specific web, API, worker, and local-Docker checks it explicitly executes; it is not a full deployed-readiness proof for every hosted surface.
 - API portal/auth/math origin and shared-cookie deployment assumptions are runtime-configurable; keep non-prod hostnames and cookie policy in the API runtime instead of re-hard-coding them in route helpers.
 - Keep browser env separate from Pages function secrets and worker machine credentials.
 - Do not store short-lived access assertions, human session data, or local auth caches in committed env files.
@@ -41,7 +42,24 @@ This repo uses a small number of runtime rules.
 
 ## Main-Branch Promotion Gate
 
-Use the PR's `Pull Request CI / ci` run as the pre-merge promotion gate for worker, image, auth, and runtime slices.
+Use the PR's `Pull Request CI / ci` run as the pre-merge PR smoke gate for worker, image, auth, and runtime slices.
+
+Use `Pull Request Trusted Governance / governance` as the workflow-governance gate for the candidate PR-template contract, deployment-workflow policy, and main-branch promotion-policy wiring.
+
+Changes to the trusted-governance workflow and validator implementation itself stay solely CODEOWNERS-owned by `@Tomodovodoo`.
+
+The trusted workflow evaluates candidate policy files with trusted-base validator logic; it does not trust candidate validator implementation from the PR head.
+
+Bootstrap rollout caveat: the PR that first introduces or replaces these protections still needs explicit owner review on the current base branch because new `CODEOWNERS` rules and `pull_request_target` gates only apply after merge.
+
+PR-template completion is a separate merge-time governance record:
+
+- `Linked issues`
+- `Verification`
+- `Security and cost review`
+- `Rollout and rollback`
+
+Those sections must contain real content rather than untouched template defaults, but they do not substitute for the named kernel-proof steps below.
 
 Required kernel evidence comes from these named steps:
 
@@ -56,6 +74,7 @@ Required kernel evidence comes from these named steps:
 - directly coupled auth or runtime gates:
   - `Check runtime env examples`
   - `Check trusted-local auth boundaries`
+  - `Smoke startup validation across runtime surfaces`
   - `Test API auth handoff routes`
   - `Test web auth relay functions`
 

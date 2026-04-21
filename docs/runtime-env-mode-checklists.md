@@ -12,7 +12,9 @@ If a mode is not listed here, do not infer support from a placeholder variable n
 - hosted secrets stay in the platform that runs the process, not in checked-in `.env` files
 - empty strings are treated as missing values by the runtime validators
 - required CLI flags such as `--access-jwt` are part of the operational checklist even when they are not environment variables
-- `bun run test:startup-validation` is the required smoke suite for startup env validation across the documented web, API, worker, and local Docker paths; update it when any checklist item changes
+- `bun run check:env-contract` is the static guard for checked-in env examples and runtime-doc cross-references
+- `bun run test:startup-validation` is the required startup smoke suite behind the `Smoke startup validation across runtime surfaces` PR-CI step for the specific web, API, worker, and local Docker checks it executes; it is not a full hosted-readiness proof for every documented surface
+- `PARETOPROOF_STARTUP_SMOKE_SKIP_DOCKER=1` is a local fallback only; CI must keep the non-skipped Docker startup lane green
 
 ## Web modes
 
@@ -314,10 +316,12 @@ These names may appear in examples as commented placeholders, but they are not p
 - before treating a PR as promotion-ready for `main`, read the successful `Pull Request CI / ci` run on the exact merge head and confirm the named smoke evidence in [runtime.md](runtime.md):
   - image smoke: `Build Problem 9 execution image smoke target`, `Verify Problem 9 execution image smoke target`, `Build Problem 9 devbox image smoke target`, and `Verify Problem 9 devbox image smoke target`
   - worker smoke: `Run deterministic Problem 9 verifier smoke` and `Run deterministic Problem 9 local-stub attempt smoke`
-  - coupled auth/runtime gates when those surfaces changed: `Check runtime env examples`, `Check trusted-local auth boundaries`, `Test API auth handoff routes`, and `Test web auth relay functions`
+  - coupled auth/runtime gates when those surfaces changed: `Check runtime env examples`, `Check trusted-local auth boundaries`, `Smoke startup validation across runtime surfaces`, `Test API auth handoff routes`, and `Test web auth relay functions`
+- also require a successful `Pull Request Trusted Governance / governance` run on the same head before treating workflow-governance or PR-template obligations as satisfied
 - do not sign off main-branch promotion from generic success signals alone such as typecheck, build, or unrelated frontend checks when the slice changes worker or runtime kernel paths
 - sample promotion path:
   - review the PR and wait for `Pull Request CI / ci` on the final head
+  - wait for `Pull Request Trusted Governance / governance` on the final head
   - confirm the named smoke evidence above for the touched surfaces
   - merge to `main`
   - if the merge triggers image publication, attach the `problem9-image-digests` or `problem9-devbox-image-digest` artifact from the publish workflow to the release packet as the post-merge digest record
