@@ -325,7 +325,7 @@ function sortJsonValue(value: unknown): unknown {
   return value;
 }
 
-function hasProblem9RepoSourceSignal(sourceRoot: string) {
+function hasStrongProblem9RepoSourceSignal(sourceRoot: string) {
   const sourceSignalRelativePaths = [
     "benchmark-package.json",
     "statements/problem.md",
@@ -342,9 +342,11 @@ function hasProblem9RepoSourceSignal(sourceRoot: string) {
   return presentSignalCount >= 4;
 }
 
-function resolveRepoRoot() {
-  const candidateRoots = [process.cwd(), fallbackRepoRoot];
+function resolveRepoRoot(options?: { candidateRoots?: readonly string[] }) {
+  const candidateRoots = options?.candidateRoots ?? [process.cwd(), fallbackRepoRoot];
+  const canonicalCandidateRoot = candidateRoots[candidateRoots.length - 1] ?? null;
   const checkedRoots = new Set<string>();
+  let canonicalViableRoot: string | null = null;
 
   for (const candidateRoot of candidateRoots) {
     if (checkedRoots.has(candidateRoot)) {
@@ -362,16 +364,22 @@ function resolveRepoRoot() {
     const promptBenchmarkPath = path.join(promptRoot, "benchmark.md");
     const promptSystemPath = path.join(promptRoot, "system.md");
 
-    if (
-      !existsSync(problem9SourceRoot) ||
-      !existsSync(promptBenchmarkPath) ||
-      !existsSync(promptSystemPath) ||
-      !hasProblem9RepoSourceSignal(problem9SourceRoot)
-    ) {
+    if (!existsSync(problem9SourceRoot) || !existsSync(promptBenchmarkPath) || !existsSync(promptSystemPath)) {
       continue;
     }
 
-    return candidateRoot;
+    if (candidateRoot === canonicalCandidateRoot) {
+      canonicalViableRoot = candidateRoot;
+      continue;
+    }
+
+    if (hasStrongProblem9RepoSourceSignal(problem9SourceRoot)) {
+      return candidateRoot;
+    }
+  }
+
+  if (canonicalViableRoot) {
+    return canonicalViableRoot;
   }
 
   throw new Error("Unable to resolve the Problem 9 benchmark source tree.");
@@ -426,14 +434,19 @@ function hasExpectedProblem9SourceTreeShape(sourceRoot: string) {
   return stableStringify(discoveredPaths) === stableStringify(expectedPaths);
 }
 
-function loadProblem9SourceBundle(options?: { useCache?: boolean }) {
+function loadProblem9SourceBundle(options?: {
+  candidateRoots?: readonly string[];
+  useCache?: boolean;
+}) {
   const useCache = options?.useCache ?? true;
 
   if (useCache && cachedProblem9SourceBundle) {
     return cachedProblem9SourceBundle;
   }
 
-  const repoRoot = resolveRepoRoot();
+  const repoRoot = resolveRepoRoot({
+    candidateRoots: options?.candidateRoots
+  });
   const sourceRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9");
   const promptRoot = path.join(repoRoot, "apps", "worker", "prompts", "problem9");
   const sourceManifestPath = path.join(sourceRoot, "benchmark-package.json");
@@ -908,6 +921,7 @@ async function loadLaunchContext(
   questionId: string,
   options?: {
     disableProblem9SourceBundleCache?: boolean;
+    problem9RepoRootCandidatesForTests?: readonly string[];
   }
 ): Promise<LaunchContext | null> {
   if (questionId !== "problem-9") {
@@ -915,6 +929,7 @@ async function loadLaunchContext(
   }
 
   const source = loadProblem9SourceBundle({
+    candidateRoots: options?.problem9RepoRootCandidatesForTests,
     useCache: !options?.disableProblem9SourceBundleCache
   });
   const question = buildQuestionSummary(source);
@@ -1424,6 +1439,7 @@ export function createMathLaunchService(
   options?: {
     disableProblem9SourceBundleCache?: boolean;
     harnessRegistry?: HarnessRegistryService;
+    problem9RepoRootCandidatesForTests?: readonly string[];
   }
 ): MathLaunchService {
   const harnessRegistry = options?.harnessRegistry ?? createHarnessRegistryService();
@@ -1431,14 +1447,16 @@ export function createMathLaunchService(
   return {
     async getQuestionLaunchView(questionId) {
       const context = await loadLaunchContext(db, harnessRegistry, questionId, {
-        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache,
+        problem9RepoRootCandidatesForTests: options?.problem9RepoRootCandidatesForTests
       });
       return context?.view ?? null;
     },
 
     async createHostedLaunch(questionId, input, actorUserId) {
       const context = await loadLaunchContext(db, harnessRegistry, questionId, {
-        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache,
+        problem9RepoRootCandidatesForTests: options?.problem9RepoRootCandidatesForTests
       });
 
       if (!context) {
@@ -1494,7 +1512,8 @@ export function createMathLaunchService(
 
     async createLocalBootstrap(questionId, input, actorUserId) {
       const context = await loadLaunchContext(db, harnessRegistry, questionId, {
-        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache,
+        problem9RepoRootCandidatesForTests: options?.problem9RepoRootCandidatesForTests
       });
 
       if (!context) {
@@ -1566,7 +1585,8 @@ export function createMathLaunchService(
 
     async createOfflineExport(questionId, input, actorUserId) {
       const context = await loadLaunchContext(db, harnessRegistry, questionId, {
-        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache,
+        problem9RepoRootCandidatesForTests: options?.problem9RepoRootCandidatesForTests
       });
 
       if (!context) {

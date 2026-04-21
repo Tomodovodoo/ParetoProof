@@ -736,6 +736,71 @@ test("getQuestionLaunchView ignores cwd scaffolds that only contain three source
   }
 });
 
+test("getQuestionLaunchView returns a mismatch issue when the canonical repo root is incomplete", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-canonical-incomplete-root-"));
+
+  try {
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "FirstProof", "Problem9"), {
+      recursive: true
+    });
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "statements"), {
+      recursive: true
+    });
+    await mkdir(path.join(repoRoot, "apps", "worker", "prompts", "problem9"), { recursive: true });
+    await writeFile(
+      path.join(repoRoot, "benchmarks", "firstproof", "problem9", "benchmark-package.json"),
+      JSON.stringify(createProblem9SourceManifestFixture(), null, 2)
+    );
+    await writeFile(
+      path.join(repoRoot, "benchmarks", "firstproof", "problem9", "statements", "problem.md"),
+      "Problem statement\n"
+    );
+    await writeFile(
+      path.join(
+        repoRoot,
+        "benchmarks",
+        "firstproof",
+        "problem9",
+        "FirstProof",
+        "Problem9",
+        "Statement.lean"
+      ),
+      "theorem scaffold_statement : True := by\n  trivial\n"
+    );
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "benchmark.md"), "Benchmark layer\n");
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "system.md"), "System layer\n");
+
+    const service = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub(),
+        problem9RepoRootCandidatesForTests: [repoRoot]
+      }
+    );
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.launchConfigs.length, 0);
+    assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "2026.03.15");
+  } finally {
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
 test("getQuestionLaunchView keeps a complete current cwd authoritative over the fallback repo", async () => {
   const originalCwd = process.cwd();
   const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-complete-cwd-root-"));
