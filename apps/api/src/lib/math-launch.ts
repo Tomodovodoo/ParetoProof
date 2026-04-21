@@ -1,5 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -35,7 +35,9 @@ import {
   mathLaunchRecords,
   mathRunnerBootstrapSessions,
   runs,
-  workerJobLeases
+  workerInstances,
+  workerJobLeases,
+  workerPoolDefinitions
 } from "../db/schema.js";
 import type { HarnessRegistryService } from "./harness-registry.js";
 import { createHarnessRegistryService } from "./harness-registry.js";
@@ -68,6 +70,28 @@ const supportedConnectedAuthModes = [
   "trusted_local_user",
   "machine_api_key"
 ] as const satisfies MathQuestionLaunchConfig["localSupportedAuthModes"];
+const problem9SourceHashRelativePaths = [
+  "README.md",
+  "LICENSE",
+  "lean-toolchain",
+  "lake-manifest.json",
+  "lakefile.toml",
+  "statements/problem.md",
+  "FirstProof/Problem9/Statement.lean",
+  "FirstProof/Problem9/Support.lean",
+  "FirstProof/Problem9/Gold.lean"
+] as const;
+const problem9SourceRequiredRelativePaths = [
+  "benchmark-package.json",
+  ...problem9SourceHashRelativePaths
+] as const;
+const ignoredProblem9SourcePathSegments = new Set([
+  ".DS_Store",
+  ".git",
+  ".lake",
+  ".tmp",
+  "Thumbs.db"
+]);
 
 const problem9SourceManifestSchema = z.object({
   benchmarkFamily: z.literal("firstproof"),
@@ -81,8 +105,32 @@ const problem9SourceManifestSchema = z.object({
     primaryLane: z.string().min(1),
     supportedLanes: z.array(z.string().min(1)).min(1)
   }),
+  materialization: z.object({
+    generatedManifestPath: z.literal("benchmark-package.json"),
+    packageRoot: z.literal("firstproof/Problem9")
+  }),
   packageId: z.literal("firstproof/Problem9"),
-  packageVersion: z.string().min(1)
+  packageVersion: z.string().min(1),
+  sourceMetadata: z.object({
+    laneEvidence: z.object({
+      lean422_exact: z.literal("lean-toolchain")
+    }),
+    license: z.object({
+      file: z.literal("LICENSE"),
+      spdxId: z.literal("Apache-2.0")
+    }),
+    provenance: z.object({
+      goldModule: z.literal("FirstProof/Problem9/Gold.lean"),
+      humanStatement: z.literal("statements/problem.md"),
+      statementModule: z.literal("FirstProof/Problem9/Statement.lean"),
+      supportModule: z.literal("FirstProof/Problem9/Support.lean")
+    }),
+    regressionEvidence: z.object({
+      cohesionCheck: z.literal("bun run check:problem9-package-cohesion"),
+      integrityTest: z.literal("node --import tsx --test test/problem9-integrity.test.ts")
+    })
+  }),
+  sourceSchemaVersion: z.string().min(1)
 });
 
 type DbClient = ReturnTypeOfCreateDbClient;
@@ -94,8 +142,10 @@ type RunnerBootstrapRedeemRequest = MathRunnerBootstrapSessionRedeemInput & {
 const localRunnerWorkerPoolPrefix = "local-";
 
 type Problem9SourceBundle = {
+  benchmarkPackageDigest: string | null;
   benchmarkTemplate: string;
   manifest: z.infer<typeof problem9SourceManifestSchema>;
+  sourceTreeShapeValid: boolean;
   statementLean: string;
   statementMarkdown: string;
   supportLean: string;
@@ -255,6 +305,55 @@ function resolveRepoRoot() {
   throw new Error("Unable to resolve the Problem 9 benchmark source tree.");
 }
 
+function collectProblem9SourceFileHashes(sourceRoot: string) {
+  return Object.fromEntries(
+    [...problem9SourceHashRelativePaths]
+      .sort((left, right) => left.localeCompare(right))
+      .map((relativePath) => {
+        const filePath = path.join(sourceRoot, relativePath);
+        return [relativePath, sha256Text(normalizeText(readFileSync(filePath, "utf8")))];
+      })
+  );
+}
+
+function listProblem9SourceFiles(root: string, relativeRoot = ""): string[] {
+  const directoryPath = path.join(root, relativeRoot);
+  const entries = readdirSync(directoryPath, {
+    withFileTypes: true
+  });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    if (ignoredProblem9SourcePathSegments.has(entry.name) || entry.name.startsWith(".#")) {
+      continue;
+    }
+
+    const nextRelativePath = relativeRoot ? `${relativeRoot}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      files.push(...listProblem9SourceFiles(root, nextRelativePath));
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      const entryPath = path.join(root, nextRelativePath);
+      throw new Error(`Unsupported non-file Problem 9 source entry: ${entryPath}`);
+    }
+
+    files.push(nextRelativePath);
+  }
+
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function hasExpectedProblem9SourceTreeShape(sourceRoot: string) {
+  const discoveredPaths = listProblem9SourceFiles(sourceRoot);
+  const expectedPaths = [...problem9SourceRequiredRelativePaths].sort((left, right) =>
+    left.localeCompare(right)
+  );
+
+  return stableStringify(discoveredPaths) === stableStringify(expectedPaths);
+}
+
 function loadProblem9SourceBundle() {
   if (cachedProblem9SourceBundle) {
     return cachedProblem9SourceBundle;
@@ -263,26 +362,54 @@ function loadProblem9SourceBundle() {
   const repoRoot = resolveRepoRoot();
   const sourceRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9");
   const promptRoot = path.join(repoRoot, "apps", "worker", "prompts", "problem9");
-  const manifest = problem9SourceManifestSchema.parse(
-    JSON.parse(readFileSync(path.join(sourceRoot, "benchmark-package.json"), "utf8"))
+  const sourceTreeShapeValid = hasExpectedProblem9SourceTreeShape(sourceRoot);
+  const sourceManifestText = normalizeText(
+    readFileSync(path.join(sourceRoot, "benchmark-package.json"), "utf8")
   );
+  const manifest = problem9SourceManifestSchema.parse(JSON.parse(sourceManifestText));
+  const benchmarkPackageDigest = sourceTreeShapeValid
+    ? sha256Text(
+        stableStringify({
+          benchmarkFamily: manifest.benchmarkFamily,
+          benchmarkItemId: manifest.benchmarkItemId,
+          canonicalModules: manifest.canonicalModules,
+          fileHashes: collectProblem9SourceFileHashes(sourceRoot),
+          lanePolicy: manifest.lanePolicy,
+          packageId: manifest.packageId,
+          packageRoot: manifest.materialization.packageRoot,
+          packageVersion: manifest.packageVersion,
+          sourceMetadata: manifest.sourceMetadata,
+          sourceManifestDigest: sha256Text(sourceManifestText),
+          sourceSchemaVersion: manifest.sourceSchemaVersion
+        })
+      )
+    : null;
+  const statementLean = sourceTreeShapeValid
+    ? normalizeText(readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Statement.lean"), "utf8"))
+    : "";
+  const statementMarkdown = sourceTreeShapeValid
+    ? normalizeText(readFileSync(path.join(sourceRoot, "statements", "problem.md"), "utf8"))
+    : "";
+  const supportLean = sourceTreeShapeValid
+    ? normalizeText(readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Support.lean"), "utf8"))
+    : "";
 
-  cachedProblem9SourceBundle = {
+  const sourceBundle = {
+    benchmarkPackageDigest,
     benchmarkTemplate: normalizeText(readFileSync(path.join(promptRoot, "benchmark.md"), "utf8")),
     manifest,
-    statementLean: normalizeText(
-      readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Statement.lean"), "utf8")
-    ),
-    statementMarkdown: normalizeText(
-      readFileSync(path.join(sourceRoot, "statements", "problem.md"), "utf8")
-    ),
-    supportLean: normalizeText(
-      readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Support.lean"), "utf8")
-    ),
+    sourceTreeShapeValid,
+    statementLean,
+    statementMarkdown,
+    supportLean,
     systemTemplate: normalizeText(readFileSync(path.join(promptRoot, "system.md"), "utf8"))
   };
 
-  return cachedProblem9SourceBundle;
+  if (sourceTreeShapeValid) {
+    cachedProblem9SourceBundle = sourceBundle;
+  }
+
+  return sourceBundle;
 }
 
 function buildQuestionSummary(source: Problem9SourceBundle) {
@@ -577,6 +704,117 @@ function supportsLocalRunnerIdentity(input: MathRunnerBootstrapSessionRedeemInpu
   );
 }
 
+async function upsertLocalRunnerWorkerPoolDefinition(
+  tx: WriteExecutor,
+  request: Pick<MathRunnerBootstrapSessionRedeemInput, "workerPool" | "workerRuntime">,
+  now: Date
+) {
+  const [insertedWorkerPoolDefinition] = await tx
+    .insert(workerPoolDefinitions)
+    .values({
+      defaultRolloutClass: "stable",
+      updatedAt: now,
+      workerPool: request.workerPool,
+      workerRuntime: request.workerRuntime
+    })
+    .onConflictDoNothing()
+    .returning({
+      id: workerPoolDefinitions.id
+    });
+
+  if (insertedWorkerPoolDefinition) {
+    return insertedWorkerPoolDefinition.id;
+  }
+
+  const [existingWorkerPoolDefinition] = await tx
+    .select({
+      id: workerPoolDefinitions.id,
+      workerRuntime: workerPoolDefinitions.workerRuntime
+    })
+    .from(workerPoolDefinitions)
+    .where(eq(workerPoolDefinitions.workerPool, request.workerPool))
+    .limit(1);
+
+  if (!existingWorkerPoolDefinition) {
+    throw new Error("Failed to persist the local runner worker pool definition.");
+  }
+
+  if (existingWorkerPoolDefinition.workerRuntime !== request.workerRuntime) {
+    throw new MathLaunchServiceError({
+      code: "math_runner_bootstrap_identity_not_supported",
+      issues: [
+        {
+          message: `Worker pool ${request.workerPool} is already registered for runtime ${existingWorkerPoolDefinition.workerRuntime}.`,
+          path: "workerPool"
+        },
+        {
+          message: `Worker pool ${request.workerPool} is already registered for runtime ${existingWorkerPoolDefinition.workerRuntime}.`,
+          path: "workerRuntime"
+        }
+      ],
+      statusCode: 409
+    });
+  }
+
+  return existingWorkerPoolDefinition.id;
+}
+
+async function upsertLocalRunnerWorkerInstance(
+  tx: WriteExecutor,
+  options: {
+    currentLifecycleState: typeof workerInstances.$inferSelect.currentLifecycleState;
+    lastClaimAt?: Date;
+    lastLeaseActivityAt?: Date;
+    now: Date;
+    workerInstanceKey: string;
+    workerPoolDefinitionId: string;
+    workerRuntime: typeof workerInstances.$inferSelect.workerRuntime;
+    workerVersion: string;
+  }
+) {
+  const [insertedWorkerInstance] = await tx
+    .insert(workerInstances)
+    .values({
+      currentLifecycleState: options.currentLifecycleState,
+      lastSeenAt: options.now,
+      updatedAt: options.now,
+      workerId: options.workerInstanceKey,
+      workerPoolDefinitionId: options.workerPoolDefinitionId,
+      workerRuntime: options.workerRuntime,
+      workerVersion: options.workerVersion,
+      ...(options.lastClaimAt !== undefined ? { lastClaimAt: options.lastClaimAt } : {}),
+      ...(options.lastLeaseActivityAt !== undefined
+        ? { lastLeaseActivityAt: options.lastLeaseActivityAt }
+        : {})
+    })
+    .onConflictDoNothing()
+    .returning({
+      id: workerInstances.id
+    });
+
+  if (insertedWorkerInstance) {
+    return insertedWorkerInstance.id;
+  }
+
+  const [existingWorkerInstance] = await tx
+    .select({
+      id: workerInstances.id
+    })
+    .from(workerInstances)
+    .where(eq(workerInstances.workerId, options.workerInstanceKey))
+    .limit(1);
+
+  if (!existingWorkerInstance) {
+    throw new Error("Failed to persist the local runner worker instance.");
+  }
+
+  return existingWorkerInstance.id;
+}
+
+function buildLocalRunnerWorkerInstanceKey(bootstrapSessionId: string) {
+  return `math-local-bootstrap:${bootstrapSessionId}`;
+}
+
 async function loadLaunchContext(
   db: DbClient,
   harnessRegistry: HarnessRegistryService,
@@ -605,9 +843,10 @@ async function loadLaunchContext(
       )
     )
     .orderBy(desc(benchmarkVersions.createdAt));
-  const matchingSourceVersions = benchmarkVersionRows.filter(
-    (row) => row.packageVersion === source.manifest.packageVersion
-  );
+  const matchingSourceVersions =
+    source.sourceTreeShapeValid && source.benchmarkPackageDigest
+      ? benchmarkVersionRows.filter((row) => row.packageDigest === source.benchmarkPackageDigest)
+      : [];
   const issues: MathQuestionLaunchViewResponse["issues"] = [];
 
   if (benchmarkVersionRows.length === 0) {
@@ -619,13 +858,16 @@ async function loadLaunchContext(
     issues.push({
       code: "source_package_version_mismatch",
       message:
-        "The current repository Problem 9 source tree does not match any launchable benchmark version, so prompt metadata cannot be generated safely."
+        "The current repository Problem 9 source tree does not match any launchable benchmark package digest for the declared source package version, so prompt metadata cannot be generated safely."
     });
   }
 
-  const benchmarkVersionsByDigest = new Map(
-    matchingSourceVersions.map((row) => [row.packageDigest, row])
-  );
+  const benchmarkVersionsByDigest = new Map<string, (typeof matchingSourceVersions)[number]>();
+  for (const row of matchingSourceVersions) {
+    if (!benchmarkVersionsByDigest.has(row.packageDigest)) {
+      benchmarkVersionsByDigest.set(row.packageDigest, row);
+    }
+  }
   const matchingDigests = [...benchmarkVersionsByDigest.keys()];
   const runRows =
     matchingDigests.length === 0
@@ -1361,6 +1603,25 @@ export function createMathLaunchService(
             });
           }
 
+          const issuedAt = new Date();
+          const workerPoolDefinitionId = await upsertLocalRunnerWorkerPoolDefinition(
+            tx,
+            {
+              workerPool: input.workerPool,
+              workerRuntime: input.workerRuntime
+            },
+            issuedAt
+          );
+          const workerInstanceId = await upsertLocalRunnerWorkerInstance(tx, {
+            currentLifecycleState: "running",
+            lastClaimAt: issuedAt,
+            lastLeaseActivityAt: issuedAt,
+            now: issuedAt,
+            workerInstanceKey: buildLocalRunnerWorkerInstanceKey(session.id),
+            workerPoolDefinitionId,
+            workerRuntime: input.workerRuntime,
+            workerVersion: input.workerVersion
+          });
           const kernelRows = await createKernelRowsForLaunch(tx, launchRecord, {
             claimedWorker: {
               workerId: input.workerId,
@@ -1369,7 +1630,6 @@ export function createMathLaunchService(
               workerVersion: input.workerVersion
             }
           });
-          const issuedAt = new Date();
           const leaseExpiresAt = addSeconds(issuedAt, problem9WorkerHeartbeatTimeoutSeconds);
           const jobTokenExpiresAt = createProblem9JobTokenExpiry(issuedAt);
           const jobToken = issueWorkerJobToken();
@@ -1392,6 +1652,7 @@ export function createMathLaunchService(
               ],
               leaseExpiresAt,
               runId: kernelRows.runRowId,
+              workerInstanceId,
               workerId: input.workerId,
               workerPool: input.workerPool,
               workerRuntime: input.workerRuntime,
