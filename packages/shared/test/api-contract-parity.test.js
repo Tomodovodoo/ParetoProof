@@ -31,6 +31,26 @@ describe("shared api catalog parity", () => {
     );
   });
 
+  it("covers the math launch and local-runner bootstrap boundaries explicitly", () => {
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt",
+        endpointId: "math.hosted-launch.create",
+        mode: "browser_direct",
+        origin: "math_browser"
+      })
+    );
+
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "runner_bootstrap_token",
+        endpointId: "internal.math-runner-bootstrap.redeem",
+        mode: "internal_service_only",
+        origin: "local_runner"
+      })
+    );
+  });
+
   it("exposes non-null schemas for representative catalogued endpoints", () => {
     expect(apiEndpointSchemaContract["health.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();
@@ -38,8 +58,11 @@ describe("shared api catalog parity", () => {
     expect(apiEndpointSchemaContract["portal.profile.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmarks.list"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-dataset.read"].paramsSchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.question-launch.read"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.hosted-launch.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.link-intent.create"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["admin.problem9-offline-ingest.create"].requestBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["internal.math-runner-bootstrap.redeem"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["internal.worker.claim"].responseBodySchema).not.toBeNull();
   });
 

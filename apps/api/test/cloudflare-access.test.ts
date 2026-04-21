@@ -238,7 +238,7 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
   }
 });
 
-test("createAccessResolver also accepts an opaque portal access session on math routes", async () => {
+test("createAccessResolver also accepts an opaque portal access session on math launch routes", async () => {
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
     CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
@@ -258,7 +258,7 @@ test("createAccessResolver also accepts an opaque portal access session on math 
         query: {
           sessions: {
             findFirst: async () => ({
-              expiresAt: new Date(Date.now() + 60_000),
+              expiresAt: new Date("2099-03-13T16:00:00.000Z"),
               id: "session-1",
               identity: {
                 id: "identity-1",
@@ -324,10 +324,10 @@ test("createAccessResolver also accepts an opaque portal access session on math 
         cookie: "PortalAccessSession=opaque-session-token",
       },
       raw: {
-        url: "/math/questions/q_123",
+        url: "/math/questions/problem-9/launch",
       },
       routeOptions: {
-        url: "/math/questions/q_123",
+        url: "/math/questions/problem-9/launch",
       },
     } as never;
 

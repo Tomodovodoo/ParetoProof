@@ -9,6 +9,19 @@ import {
 import { healthResponseSchema } from "../schemas/health.js";
 import { harnessRegistryCatalogSchema } from "../schemas/harness-registry.js";
 import {
+  mathHostedLaunchCreateInputSchema,
+  mathHostedLaunchCreateResponseSchema,
+  mathLocalConnectedLaunchCreateInputSchema,
+  mathLocalConnectedLaunchCreateResponseSchema,
+  mathOfflineExportCreateInputSchema,
+  mathOfflineExportCreateResponseSchema,
+  mathQuestionLaunchViewResponseSchema,
+  mathQuestionParamsSchema,
+  mathRunnerBootstrapSessionParamsSchema,
+  mathRunnerBootstrapSessionRedeemInputSchema,
+  mathRunnerBootstrapSessionRedeemResponseSchema
+} from "../schemas/math-launch.js";
+import {
   adminBenchmarkReleaseCreateInputSchema,
   adminBenchmarkVersionCreateInputSchema,
   adminBenchmarkVersionLaunchabilityUpdateInputSchema,
@@ -202,6 +215,30 @@ export const apiEndpointSchemaCatalog = {
     requestQuery: null,
     responseBody: harnessRegistryCatalogSchema
   },
+  "math.question-launch.read": {
+    requestBody: null,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathQuestionLaunchViewResponseSchema
+  },
+  "math.hosted-launch.create": {
+    requestBody: mathHostedLaunchCreateInputSchema,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathHostedLaunchCreateResponseSchema
+  },
+  "math.local-bootstrap.create": {
+    requestBody: mathLocalConnectedLaunchCreateInputSchema,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathLocalConnectedLaunchCreateResponseSchema
+  },
+  "math.offline-export.create": {
+    requestBody: mathOfflineExportCreateInputSchema,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathOfflineExportCreateResponseSchema
+  },
   "portal.workers.read": {
     requestBody: null,
     requestParams: null,
@@ -363,6 +400,12 @@ export const apiEndpointSchemaCatalog = {
     requestParams: benchmarkReleaseParamsSchema,
     requestQuery: null,
     responseBody: benchmarkReleaseDetailResponseSchema
+  },
+  "internal.math-runner-bootstrap.redeem": {
+    requestBody: mathRunnerBootstrapSessionRedeemInputSchema,
+    requestParams: mathRunnerBootstrapSessionParamsSchema,
+    requestQuery: null,
+    responseBody: mathRunnerBootstrapSessionRedeemResponseSchema
   },
   "internal.worker.claim": {
     requestBody: workerClaimRequestSchema,

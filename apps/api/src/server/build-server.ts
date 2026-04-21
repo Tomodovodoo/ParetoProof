@@ -17,6 +17,7 @@ import { registerAdminRoutes } from "../routes/admin.js";
 import { registerBenchmarkWorkflowRoutes } from "../routes/benchmark-workflow.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
+import { registerMathRoutes } from "../routes/math.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
@@ -248,6 +249,9 @@ export async function buildServer(
     hostedWorkerPoolEnvironment: runtimeEnv.hostedWorkerPoolEnvironment,
     mathPublicOrigin: runtimeEnv.mathPublicOrigin,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
+    rateLimitPreHandlers,
+  });
+  registerMathRoutes(app, db, requireAccess, {
     rateLimitPreHandlers,
   });
   registerAdminRoutes(app, db, requireAccess, {

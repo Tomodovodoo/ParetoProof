@@ -12,6 +12,7 @@ export const apiCallCredentialSchema = z.enum([
   "none",
   "cloudflare_access_jwt",
   "cloudflare_service_token",
+  "runner_bootstrap_token",
   "worker_bootstrap_token",
   "worker_job_token"
 ]);
@@ -19,7 +20,9 @@ export const apiCallCredentialSchema = z.enum([
 export const apiCallOriginSchema = z.enum([
   "public_browser",
   "portal_browser",
+  "math_browser",
   "portal_server",
+  "local_runner",
   "worker_service",
   "admin_service"
 ]);

@@ -39,7 +39,9 @@ function loadHarnessRegistryCatalog(seedPath: string): HarnessRegistryCatalog {
 
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .map((issue: { message: string; path: (string | number)[] }) =>
+        `${issue.path.join(".") || "(root)"}: ${issue.message}`
+      )
       .join("; ");
 
     throw new Error(`Harness registry seed is invalid: ${issues}`);

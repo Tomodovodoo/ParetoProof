@@ -2,6 +2,13 @@ import { describe, expect, it } from "bun:test";
 import {
   apiEndpointCatalog,
   apiEndpointSchemaCatalog,
+  mathHostedLaunchCreateInputSchema,
+  mathHostedLaunchCreateResponseSchema,
+  mathQuestionLaunchViewResponseSchema,
+  mathQuestionParamsSchema,
+  mathRunnerBootstrapSessionParamsSchema,
+  mathRunnerBootstrapSessionRedeemInputSchema,
+  mathRunnerBootstrapSessionRedeemResponseSchema,
   portalAccessRequestInputSchema,
   portalAccessRequestReadResponseSchema,
   portalAdminAccessRequestParamsSchema,
@@ -107,6 +114,20 @@ describe("shared api schema catalog", () => {
       responseBody: portalAccessRequestReadResponseSchema
     });
 
+    expect(apiEndpointSchemaCatalog["math.question-launch.read"]).toEqual({
+      requestBody: null,
+      requestParams: mathQuestionParamsSchema,
+      requestQuery: null,
+      responseBody: mathQuestionLaunchViewResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.hosted-launch.create"]).toEqual({
+      requestBody: mathHostedLaunchCreateInputSchema,
+      requestParams: mathQuestionParamsSchema,
+      requestQuery: null,
+      responseBody: mathHostedLaunchCreateResponseSchema
+    });
+
     expect(apiEndpointSchemaCatalog["portal.run-detail.read"].requestParams).toBe(
       portalRunDetailParamsSchema
     );
@@ -129,6 +150,13 @@ describe("shared api schema catalog", () => {
     expect(apiEndpointSchemaCatalog["internal.worker.result.submit"].requestParams).toBe(
       workerJobParamsSchema
     );
+
+    expect(apiEndpointSchemaCatalog["internal.math-runner-bootstrap.redeem"]).toEqual({
+      requestBody: mathRunnerBootstrapSessionRedeemInputSchema,
+      requestParams: mathRunnerBootstrapSessionParamsSchema,
+      requestQuery: null,
+      responseBody: mathRunnerBootstrapSessionRedeemResponseSchema
+    });
   });
 
   it("makes intentionally unmodeled endpoint responses explicit", () => {

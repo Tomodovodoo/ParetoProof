@@ -232,6 +232,56 @@ test("trusted mutation origin hook still rejects math-origin portal mutations ou
   });
 });
 
+test("trusted mutation origin hook allows trusted math-surface mutations from the math origin only", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  app.addHook(
+    "onRequest",
+    createTrustedMutationOriginHook({
+      allowLocalhostOrigins: false,
+      allowedOriginsBySurface,
+      brandedAuthOrigins: [],
+    }),
+  );
+
+  app.post("/math/questions/problem-9/launches/hosted", async () => ({ ok: true }));
+
+  const trustedResponse = await app.inject({
+    method: "POST",
+    payload: {
+      launchConfigId: "launch-config-1",
+    },
+    url: "/math/questions/problem-9/launches/hosted",
+    headers: {
+      origin: "https://math.preview.paretoproof.com",
+    },
+  });
+
+  const crossSurfaceResponse = await app.inject({
+    method: "POST",
+    payload: {
+      launchConfigId: "launch-config-1",
+    },
+    url: "/math/questions/problem-9/launches/hosted",
+    headers: {
+      origin: "https://portal.preview.paretoproof.com",
+    },
+  });
+
+  assert.equal(trustedResponse.statusCode, 200);
+  assert.deepEqual(trustedResponse.json(), {
+    ok: true,
+  });
+  assert.equal(crossSurfaceResponse.statusCode, 403);
+  assert.deepEqual(crossSurfaceResponse.json(), {
+    error: "trusted_origin_not_allowed",
+  });
+});
+
 test("trusted mutation origin hook only allows branded auth POSTs on the finalize-submit handoff boundary", async (t) => {
   const app = Fastify();
 

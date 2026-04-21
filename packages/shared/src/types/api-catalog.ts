@@ -1,4 +1,4 @@
-export type ApiAudience = "public" | "portal" | "internal";
+export type ApiAudience = "public" | "portal" | "math" | "internal";
 
 export type ApiAccessLevel =
   | "anonymous"
