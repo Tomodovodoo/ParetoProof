@@ -79,6 +79,23 @@ function matchFenceLine(line, { maxIndent = 3 } = {}) {
   };
 }
 
+function canStartSetextHeading(line) {
+  if (!/^(?: {0,3})\S/.test(line)) {
+    return false;
+  }
+
+  const trimmed = line.trimStart();
+  if (/^(?:[-+*](?:\s|$)|\d+[.)](?:\s|$)|>\s?|#{1,6}(?:\s|$)|`{3,}|~{3,})/.test(trimmed)) {
+    return false;
+  }
+
+  if (/^(?:[-*_]\s*){3,}$/.test(trimmed)) {
+    return false;
+  }
+
+  return true;
+}
+
 function updateRawHtmlBlockState(line, activeBlock) {
   if (activeBlock) {
     const closePattern = new RegExp(`</${activeBlock.tag}\\s*>`, "i");
@@ -167,7 +184,7 @@ function collectMarkdownSections(markdown) {
     const headingMatch = visibleLine.match(/^\s{0,3}##\s+(.+?)\s*$/);
     if (headingMatch) {
       headingTitle = normalizeHeadingTitle(headingMatch[1]);
-    } else if (visibleLine.trim()) {
+    } else if (canStartSetextHeading(visibleLine)) {
       const nextLine = lines[index + 1];
       if (typeof nextLine === "string") {
         const nextStrippedLine = stripHtmlCommentsFromLine(nextLine, false);
@@ -302,7 +319,7 @@ function countRequiredHeadingOccurrences(markdown) {
       continue;
     }
 
-    if (!visibleLine.trim()) {
+    if (!canStartSetextHeading(visibleLine)) {
       continue;
     }
 

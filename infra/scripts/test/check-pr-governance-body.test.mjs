@@ -605,6 +605,39 @@ bun run test:governance-guards
   assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
 });
 
+test("validatePrGovernanceBody does not treat list items before thematic breaks as setext headings", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Verification[\s\S]*?## Security and cost review/,
+    `## Verification
+
+- [x] Commands run are listed below
+- [x] Relevant logs, artifact paths, or screenshots are linked or described
+- [x] New or changed contracts are wired through implementation, not only documented
+---
+
+node infra/scripts/check-pr-governance-body.mjs --body-file infra/scripts/fixtures/governance/pr-body-valid.md
+
+## Security and cost review`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
+test("validatePrGovernanceBody does not treat tab-indented lines before thematic breaks as setext headings", () => {
+  const validBody = readFileSync(validBodyPath, "utf8").replace(
+    /## Notes[\s\S]*$/,
+    `## Notes
+
+\tLinked issues
+---
+
+- harmless trailing note.
+`
+  );
+
+  assert.doesNotThrow(() => validatePrGovernanceBody(repoRoot, validBody));
+});
+
 test("validatePrGovernanceBody rejects duplicate required headings written with setext syntax", () => {
   const invalidBody = readFileSync(validBodyPath, "utf8").replace(
     /## Linked issues[\s\S]*?## Verification/,
