@@ -15,7 +15,10 @@ import {
   workerJobLeases,
   workerPoolDefinitions
 } from "../src/db/schema.ts";
-import { createMathLaunchService, MathLaunchServiceError } from "../src/lib/math-launch.ts";
+import {
+  createMathLaunchService,
+  MathLaunchServiceError
+} from "../src/lib/math-launch.ts";
 
 const requiredArtifactRoles = [
   "package_reference",
@@ -41,6 +44,20 @@ async function computeCurrentProblem9BenchmarkDigest() {
     });
 
     return materializedPackage.packageDigest;
+  } finally {
+    await rm(outputRoot, { force: true, recursive: true });
+  }
+}
+
+async function readCurrentProblem9PackageVersion() {
+  const outputRoot = await mkdtemp(path.join(tmpdir(), "problem9-package-version-"));
+
+  try {
+    const materializedPackage = await materializeProblem9Package({
+      outputRoot
+    });
+
+    return materializedPackage.packageVersion;
   } finally {
     await rm(outputRoot, { force: true, recursive: true });
   }
@@ -119,6 +136,114 @@ function createLaunchRecordRow() {
     toolProfile: "workspace_edit_limited",
     verifierVersion: "lean4.22"
   };
+}
+
+function createProblem9SourceManifestFixture() {
+  return {
+    benchmarkFamily: "firstproof",
+    benchmarkItemId: "Problem9",
+    canonicalModules: {
+      gold: "FirstProof/Problem9/Gold.lean",
+      statement: "FirstProof/Problem9/Statement.lean",
+      support: "FirstProof/Problem9/Support.lean"
+    },
+    lanePolicy: {
+      primaryLane: "lean422_exact",
+      supportedLanes: ["lean422_exact"]
+    },
+    materialization: {
+      generatedManifestPath: "benchmark-package.json",
+      packageRoot: "firstproof/Problem9"
+    },
+    packageId: "firstproof/Problem9",
+    packageVersion: "2026.03.15",
+    sourceMetadata: {
+      laneEvidence: {
+        lean422_exact: "lean-toolchain"
+      },
+      license: {
+        file: "LICENSE",
+        spdxId: "Apache-2.0"
+      },
+      provenance: {
+        goldModule: "FirstProof/Problem9/Gold.lean",
+        humanStatement: "statements/problem.md",
+        statementModule: "FirstProof/Problem9/Statement.lean",
+        supportModule: "FirstProof/Problem9/Support.lean"
+      },
+      regressionEvidence: {
+        cohesionCheck: "bun run check:problem9-package-cohesion",
+        integrityTest: "node --import tsx --test test/problem9-integrity.test.ts"
+      }
+    },
+    sourceSchemaVersion: "1"
+  };
+}
+
+function assertProblem9QuestionSummary(
+  actual: {
+    benchmarkFamily: string;
+    benchmarkItemId: string;
+    benchmarkPackageId: string;
+    label: string;
+    questionId: string;
+    routePath: string;
+    sourcePackageVersion: string;
+  },
+  sourcePackageVersion: string
+) {
+  assert.deepEqual(actual, {
+    benchmarkFamily: "firstproof",
+    benchmarkItemId: "Problem9",
+    benchmarkPackageId: "firstproof/Problem9",
+    label: "Problem 9",
+    questionId: "problem-9",
+    routePath: "/questions/problem-9",
+    sourcePackageVersion
+  });
+}
+
+async function writeProblem9FixtureRepo(
+  repoRoot: string,
+  options?: {
+    manifestText?: string;
+    omitPaths?: string[];
+  }
+) {
+  const omittedPaths = new Set(options?.omitPaths ?? []);
+  const sourceFiles = {
+    "README.md": "# Problem 9\n",
+    "LICENSE": "Apache License\n",
+    "lean-toolchain": "leanprover/lean4:v4.22.0\n",
+    "lake-manifest.json": "{}\n",
+    "lakefile.toml": "[package]\nname = \"FirstProof\"\n",
+    "statements/problem.md": "Problem statement\n",
+    "FirstProof/Problem9/Statement.lean": "theorem problem9_statement : True := by\n  trivial\n",
+    "FirstProof/Problem9/Support.lean": "def problem9_support : Nat := 0\n",
+    "FirstProof/Problem9/Gold.lean": "theorem problem9_gold : True := by\n  trivial\n",
+    "benchmark-package.json":
+      options?.manifestText ?? JSON.stringify(createProblem9SourceManifestFixture(), null, 2)
+  } as const;
+  const promptFiles = {
+    "benchmark.md": "Benchmark layer\n",
+    "system.md": "System layer\n"
+  } as const;
+
+  for (const [relativePath, contents] of Object.entries(sourceFiles)) {
+    if (omittedPaths.has(relativePath)) {
+      continue;
+    }
+
+    const targetPath = path.join(repoRoot, "benchmarks", "firstproof", "problem9", relativePath);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, contents);
+  }
+
+  for (const [relativePath, contents] of Object.entries(promptFiles)) {
+    const targetPath = path.join(repoRoot, "apps", "worker", "prompts", "problem9", relativePath);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, contents);
+  }
 }
 
 function createRedeemDb(options?: {
@@ -424,70 +549,14 @@ test("getQuestionLaunchView keeps the newest benchmark version row for the curre
 test("getQuestionLaunchView returns a mismatch issue instead of crashing when required source files are missing", async () => {
   const originalCwd = process.cwd();
   const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-source-tree-"));
-  const moduleUrl = new URL("../src/lib/math-launch.ts", import.meta.url);
-  moduleUrl.searchParams.set("missing-source", `${Date.now()}`);
 
   try {
-    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9"), { recursive: true });
-    await mkdir(path.join(repoRoot, "apps", "worker", "prompts", "problem9"), { recursive: true });
-    await writeFile(
-      path.join(repoRoot, "benchmarks", "firstproof", "problem9", "benchmark-package.json"),
-      JSON.stringify(
-        {
-          benchmarkFamily: "firstproof",
-          benchmarkItemId: "Problem9",
-          canonicalModules: {
-            gold: "FirstProof/Problem9/Gold.lean",
-            statement: "FirstProof/Problem9/Statement.lean",
-            support: "FirstProof/Problem9/Support.lean"
-          },
-          lanePolicy: {
-            primaryLane: "lean422_exact",
-            supportedLanes: ["lean422_exact"]
-          },
-          materialization: {
-            generatedManifestPath: "benchmark-package.json",
-            packageRoot: "firstproof/Problem9"
-          },
-          packageId: "firstproof/Problem9",
-          packageVersion: "2026.03.15",
-          sourceMetadata: {
-            laneEvidence: {
-              lean422_exact: "lean-toolchain"
-            },
-            license: {
-              file: "LICENSE",
-              spdxId: "Apache-2.0"
-            },
-            provenance: {
-              goldModule: "FirstProof/Problem9/Gold.lean",
-              humanStatement: "statements/problem.md",
-              statementModule: "FirstProof/Problem9/Statement.lean",
-              supportModule: "FirstProof/Problem9/Support.lean"
-            },
-            regressionEvidence: {
-              cohesionCheck: "bun run check:problem9-package-cohesion",
-              integrityTest: "node --import tsx --test test/problem9-integrity.test.ts"
-            }
-          },
-          sourceSchemaVersion: "1"
-        },
-        null,
-        2
-      )
-    );
-    await writeFile(
-      path.join(repoRoot, "apps", "worker", "prompts", "problem9", "benchmark.md"),
-      "Benchmark layer"
-    );
-    await writeFile(
-      path.join(repoRoot, "apps", "worker", "prompts", "problem9", "system.md"),
-      "System layer"
-    );
+    await writeProblem9FixtureRepo(repoRoot, {
+      omitPaths: ["FirstProof/Problem9/Statement.lean"]
+    });
 
     process.chdir(repoRoot);
-    const { createMathLaunchService: createIsolatedMathLaunchService } = await import(moduleUrl.href);
-    const service = createIsolatedMathLaunchService(
+    const service = createMathLaunchService(
       createQueuedSelectDb([
         [
           {
@@ -501,6 +570,7 @@ test("getQuestionLaunchView returns a mismatch issue instead of crashing when re
         ]
       ]),
       {
+        disableProblem9SourceBundleCache: true,
         harnessRegistry: createHarnessRegistryStub()
       }
     );
@@ -510,6 +580,403 @@ test("getQuestionLaunchView returns a mismatch issue instead of crashing when re
     assert.ok(view);
     assert.equal(view.launchConfigs.length, 0);
     assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "2026.03.15");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView ignores partial cwd scaffolds that are missing the prompt package", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-partial-root-"));
+  const currentPackageVersion = await readCurrentProblem9PackageVersion();
+
+  try {
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9"), { recursive: true });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(createQueuedSelectDb([[]]), {
+      disableProblem9SourceBundleCache: true,
+      harnessRegistry: createHarnessRegistryStub()
+    });
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.issues[0]?.code, "no_launchable_benchmark_version");
+    assertProblem9QuestionSummary(view.question, currentPackageVersion);
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView ignores cwd scaffolds that only contain prompts and a README", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-readme-only-root-"));
+  const currentPackageVersion = await readCurrentProblem9PackageVersion();
+
+  try {
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9"), { recursive: true });
+    await mkdir(path.join(repoRoot, "apps", "worker", "prompts", "problem9"), { recursive: true });
+    await writeFile(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "README.md"), "# Problem 9\n");
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "benchmark.md"), "Benchmark layer\n");
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "system.md"), "System layer\n");
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(createQueuedSelectDb([[]]), {
+      disableProblem9SourceBundleCache: true,
+      harnessRegistry: createHarnessRegistryStub()
+    });
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.issues[0]?.code, "no_launchable_benchmark_version");
+    assertProblem9QuestionSummary(view.question, currentPackageVersion);
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView ignores cwd scaffolds that only contain prompts and one Lean file", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-single-lean-root-"));
+  const currentPackageVersion = await readCurrentProblem9PackageVersion();
+
+  try {
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "FirstProof", "Problem9"), {
+      recursive: true
+    });
+    await mkdir(path.join(repoRoot, "apps", "worker", "prompts", "problem9"), { recursive: true });
+    await writeFile(
+      path.join(
+        repoRoot,
+        "benchmarks",
+        "firstproof",
+        "problem9",
+        "FirstProof",
+        "Problem9",
+        "Statement.lean"
+      ),
+      "theorem scaffold_statement : True := by\n  trivial\n"
+    );
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "benchmark.md"), "Benchmark layer\n");
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "system.md"), "System layer\n");
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(createQueuedSelectDb([[]]), {
+      disableProblem9SourceBundleCache: true,
+      harnessRegistry: createHarnessRegistryStub()
+    });
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.issues[0]?.code, "no_launchable_benchmark_version");
+    assertProblem9QuestionSummary(view.question, currentPackageVersion);
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView ignores cwd scaffolds that only contain three source signals", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-three-signals-root-"));
+  const currentPackageVersion = await readCurrentProblem9PackageVersion();
+
+  try {
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "FirstProof", "Problem9"), {
+      recursive: true
+    });
+    await mkdir(path.join(repoRoot, "benchmarks", "firstproof", "problem9", "statements"), {
+      recursive: true
+    });
+    await mkdir(path.join(repoRoot, "apps", "worker", "prompts", "problem9"), { recursive: true });
+    await writeFile(
+      path.join(repoRoot, "benchmarks", "firstproof", "problem9", "benchmark-package.json"),
+      JSON.stringify(createProblem9SourceManifestFixture(), null, 2)
+    );
+    await writeFile(
+      path.join(repoRoot, "benchmarks", "firstproof", "problem9", "statements", "problem.md"),
+      "Problem statement\n"
+    );
+    await writeFile(
+      path.join(
+        repoRoot,
+        "benchmarks",
+        "firstproof",
+        "problem9",
+        "FirstProof",
+        "Problem9",
+        "Statement.lean"
+      ),
+      "theorem scaffold_statement : True := by\n  trivial\n"
+    );
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "benchmark.md"), "Benchmark layer\n");
+    await writeFile(path.join(repoRoot, "apps", "worker", "prompts", "problem9", "system.md"), "System layer\n");
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(createQueuedSelectDb([[]]), {
+      disableProblem9SourceBundleCache: true,
+      harnessRegistry: createHarnessRegistryStub()
+    });
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.issues[0]?.code, "no_launchable_benchmark_version");
+    assertProblem9QuestionSummary(view.question, currentPackageVersion);
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView keeps a complete current cwd authoritative over the fallback repo", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-complete-cwd-root-"));
+
+  try {
+    await writeProblem9FixtureRepo(repoRoot, {
+      manifestText: JSON.stringify(
+        {
+          ...createProblem9SourceManifestFixture(),
+          packageVersion: "2099.01.01"
+        },
+        null,
+        2
+      )
+    });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(createQueuedSelectDb([[]]), {
+      disableProblem9SourceBundleCache: true,
+      harnessRegistry: createHarnessRegistryStub()
+    });
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.issues[0]?.code, "no_launchable_benchmark_version");
+    assertProblem9QuestionSummary(view.question, "2099.01.01");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView keeps the current cwd authoritative when its manifest is missing", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-cwd-missing-manifest-"));
+
+  try {
+    await writeProblem9FixtureRepo(repoRoot, {
+      omitPaths: ["benchmark-package.json"]
+    });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub()
+      }
+    );
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.launchConfigs.length, 0);
+    assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "invalid-manifest");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView bypasses a warmed source-bundle cache when cache is disabled", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-cache-bypass-"));
+
+  try {
+    const cachedService = createMathLaunchService(createQueuedSelectDb([[]]), {
+      harnessRegistry: createHarnessRegistryStub()
+    });
+    const cachedView = await cachedService.getQuestionLaunchView("problem-9");
+    assert.ok(cachedView);
+
+    await writeProblem9FixtureRepo(repoRoot, {
+      manifestText: "{ invalid json"
+    });
+
+    process.chdir(repoRoot);
+    const uncachedService = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub()
+      }
+    );
+
+    const uncachedView = await uncachedService.getQuestionLaunchView("problem-9");
+
+    assert.ok(uncachedView);
+    assert.equal(uncachedView.launchConfigs.length, 0);
+    assert.equal(uncachedView.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(uncachedView.question, "invalid-manifest");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView returns a mismatch issue instead of crashing when benchmark-package.json is missing", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-missing-manifest-"));
+
+  try {
+    await writeProblem9FixtureRepo(repoRoot, {
+      omitPaths: ["benchmark-package.json"]
+    });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub()
+      }
+    );
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.launchConfigs.length, 0);
+    assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "invalid-manifest");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView returns a mismatch issue instead of crashing when the benchmark manifest is malformed", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-invalid-manifest-"));
+
+  try {
+    await writeProblem9FixtureRepo(repoRoot, {
+      manifestText: "{ invalid json"
+    });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub()
+      }
+    );
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.launchConfigs.length, 0);
+    assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "invalid-manifest");
+  } finally {
+    process.chdir(originalCwd);
+    await rm(repoRoot, { force: true, recursive: true });
+  }
+});
+
+test("getQuestionLaunchView returns an invalid-manifest summary when manifest JSON fails schema validation", async () => {
+  const originalCwd = process.cwd();
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "problem9-schema-invalid-manifest-"));
+
+  try {
+    await writeProblem9FixtureRepo(repoRoot, {
+      manifestText: JSON.stringify({
+        ...createProblem9SourceManifestFixture(),
+        sourceSchemaVersion: 42
+      })
+    });
+
+    process.chdir(repoRoot);
+    const service = createMathLaunchService(
+      createQueuedSelectDb([
+        [
+          {
+            benchmarkVersionId: "benchmark-version-1",
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
+            displayLabel: "Launchable version",
+            launchability: "launchable",
+            packageDigest: "c".repeat(64),
+            packageVersion: "2026.03.15"
+          }
+        ]
+      ]),
+      {
+        disableProblem9SourceBundleCache: true,
+        harnessRegistry: createHarnessRegistryStub()
+      }
+    );
+
+    const view = await service.getQuestionLaunchView("problem-9");
+
+    assert.ok(view);
+    assert.equal(view.launchConfigs.length, 0);
+    assert.equal(view.issues[0]?.code, "source_package_version_mismatch");
+    assertProblem9QuestionSummary(view.question, "invalid-manifest");
   } finally {
     process.chdir(originalCwd);
     await rm(repoRoot, { force: true, recursive: true });

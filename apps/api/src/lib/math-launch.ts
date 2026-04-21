@@ -132,6 +132,45 @@ const problem9SourceManifestSchema = z.object({
   }),
   sourceSchemaVersion: z.string().min(1)
 });
+const fallbackProblem9SourceManifest: z.infer<typeof problem9SourceManifestSchema> = {
+  benchmarkFamily: "firstproof",
+  benchmarkItemId: "Problem9",
+  canonicalModules: {
+    gold: "FirstProof/Problem9/Gold.lean",
+    statement: "FirstProof/Problem9/Statement.lean",
+    support: "FirstProof/Problem9/Support.lean"
+  },
+  lanePolicy: {
+    primaryLane: "lean422_exact",
+    supportedLanes: ["lean422_exact"]
+  },
+  materialization: {
+    generatedManifestPath: "benchmark-package.json",
+    packageRoot: "firstproof/Problem9"
+  },
+  packageId: "firstproof/Problem9",
+  packageVersion: "unknown",
+  sourceMetadata: {
+    laneEvidence: {
+      lean422_exact: "lean-toolchain"
+    },
+    license: {
+      file: "LICENSE",
+      spdxId: "Apache-2.0"
+    },
+    provenance: {
+      goldModule: "FirstProof/Problem9/Gold.lean",
+      humanStatement: "statements/problem.md",
+      statementModule: "FirstProof/Problem9/Statement.lean",
+      supportModule: "FirstProof/Problem9/Support.lean"
+    },
+    regressionEvidence: {
+      cohesionCheck: "bun run check:problem9-package-cohesion",
+      integrityTest: "node --import tsx --test test/problem9-integrity.test.ts"
+    }
+  },
+  sourceSchemaVersion: "unknown"
+};
 
 type DbClient = ReturnTypeOfCreateDbClient;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
@@ -145,6 +184,7 @@ type Problem9SourceBundle = {
   benchmarkPackageDigest: string | null;
   benchmarkTemplate: string;
   manifest: z.infer<typeof problem9SourceManifestSchema>;
+  sourcePackageVersion: string;
   sourceTreeShapeValid: boolean;
   statementLean: string;
   statementMarkdown: string;
@@ -285,21 +325,53 @@ function sortJsonValue(value: unknown): unknown {
   return value;
 }
 
+function hasProblem9RepoSourceSignal(sourceRoot: string) {
+  const sourceSignalRelativePaths = [
+    "benchmark-package.json",
+    "statements/problem.md",
+    "FirstProof/Problem9/Statement.lean",
+    "FirstProof/Problem9/Support.lean",
+    "FirstProof/Problem9/Gold.lean"
+  ];
+
+  const presentSignalCount = sourceSignalRelativePaths.reduce(
+    (count, relativePath) => count + (existsSync(path.join(sourceRoot, relativePath)) ? 1 : 0),
+    0
+  );
+
+  return presentSignalCount >= 4;
+}
+
 function resolveRepoRoot() {
   const candidateRoots = [process.cwd(), fallbackRepoRoot];
+  const checkedRoots = new Set<string>();
 
   for (const candidateRoot of candidateRoots) {
-    const manifestPath = path.join(
+    if (checkedRoots.has(candidateRoot)) {
+      continue;
+    }
+
+    checkedRoots.add(candidateRoot);
+    const problem9SourceRoot = path.join(
       candidateRoot,
       "benchmarks",
       "firstproof",
-      "problem9",
-      "benchmark-package.json"
+      "problem9"
     );
+    const promptRoot = path.join(candidateRoot, "apps", "worker", "prompts", "problem9");
+    const promptBenchmarkPath = path.join(promptRoot, "benchmark.md");
+    const promptSystemPath = path.join(promptRoot, "system.md");
 
-    if (existsSync(manifestPath)) {
-      return candidateRoot;
+    if (
+      !existsSync(problem9SourceRoot) ||
+      !existsSync(promptBenchmarkPath) ||
+      !existsSync(promptSystemPath) ||
+      !hasProblem9RepoSourceSignal(problem9SourceRoot)
+    ) {
+      continue;
     }
+
+    return candidateRoot;
   }
 
   throw new Error("Unable to resolve the Problem 9 benchmark source tree.");
@@ -354,20 +426,34 @@ function hasExpectedProblem9SourceTreeShape(sourceRoot: string) {
   return stableStringify(discoveredPaths) === stableStringify(expectedPaths);
 }
 
-function loadProblem9SourceBundle() {
-  if (cachedProblem9SourceBundle) {
+function loadProblem9SourceBundle(options?: { useCache?: boolean }) {
+  const useCache = options?.useCache ?? true;
+
+  if (useCache && cachedProblem9SourceBundle) {
     return cachedProblem9SourceBundle;
   }
 
   const repoRoot = resolveRepoRoot();
   const sourceRoot = path.join(repoRoot, "benchmarks", "firstproof", "problem9");
   const promptRoot = path.join(repoRoot, "apps", "worker", "prompts", "problem9");
+  const sourceManifestPath = path.join(sourceRoot, "benchmark-package.json");
   const sourceTreeShapeValid = hasExpectedProblem9SourceTreeShape(sourceRoot);
-  const sourceManifestText = normalizeText(
-    readFileSync(path.join(sourceRoot, "benchmark-package.json"), "utf8")
-  );
-  const manifest = problem9SourceManifestSchema.parse(JSON.parse(sourceManifestText));
-  const benchmarkPackageDigest = sourceTreeShapeValid
+  const sourceManifestText = existsSync(sourceManifestPath)
+    ? normalizeText(readFileSync(sourceManifestPath, "utf8"))
+    : null;
+  let manifest = fallbackProblem9SourceManifest;
+  let sourceManifestValid = false;
+
+  if (sourceManifestText !== null) {
+    try {
+      manifest = problem9SourceManifestSchema.parse(JSON.parse(sourceManifestText));
+      sourceManifestValid = true;
+    } catch {
+      sourceManifestValid = false;
+    }
+  }
+
+  const benchmarkPackageDigest = sourceTreeShapeValid && sourceManifestValid
     ? sha256Text(
         stableStringify({
           benchmarkFamily: manifest.benchmarkFamily,
@@ -379,18 +465,18 @@ function loadProblem9SourceBundle() {
           packageRoot: manifest.materialization.packageRoot,
           packageVersion: manifest.packageVersion,
           sourceMetadata: manifest.sourceMetadata,
-          sourceManifestDigest: sha256Text(sourceManifestText),
+          sourceManifestDigest: sha256Text(sourceManifestText!),
           sourceSchemaVersion: manifest.sourceSchemaVersion
         })
       )
     : null;
-  const statementLean = sourceTreeShapeValid
+  const statementLean = sourceTreeShapeValid && sourceManifestValid
     ? normalizeText(readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Statement.lean"), "utf8"))
     : "";
-  const statementMarkdown = sourceTreeShapeValid
+  const statementMarkdown = sourceTreeShapeValid && sourceManifestValid
     ? normalizeText(readFileSync(path.join(sourceRoot, "statements", "problem.md"), "utf8"))
     : "";
-  const supportLean = sourceTreeShapeValid
+  const supportLean = sourceTreeShapeValid && sourceManifestValid
     ? normalizeText(readFileSync(path.join(sourceRoot, "FirstProof", "Problem9", "Support.lean"), "utf8"))
     : "";
 
@@ -398,6 +484,7 @@ function loadProblem9SourceBundle() {
     benchmarkPackageDigest,
     benchmarkTemplate: normalizeText(readFileSync(path.join(promptRoot, "benchmark.md"), "utf8")),
     manifest,
+    sourcePackageVersion: sourceManifestValid ? manifest.packageVersion : "invalid-manifest",
     sourceTreeShapeValid,
     statementLean,
     statementMarkdown,
@@ -405,7 +492,7 @@ function loadProblem9SourceBundle() {
     systemTemplate: normalizeText(readFileSync(path.join(promptRoot, "system.md"), "utf8"))
   };
 
-  if (sourceTreeShapeValid) {
+  if (useCache && sourceTreeShapeValid && sourceManifestValid) {
     cachedProblem9SourceBundle = sourceBundle;
   }
 
@@ -414,13 +501,13 @@ function loadProblem9SourceBundle() {
 
 function buildQuestionSummary(source: Problem9SourceBundle) {
   return {
-    benchmarkFamily: source.manifest.benchmarkFamily,
-    benchmarkItemId: source.manifest.benchmarkItemId,
-    benchmarkPackageId: source.manifest.packageId,
+    benchmarkFamily: "firstproof",
+    benchmarkItemId: "Problem9",
+    benchmarkPackageId: "firstproof/Problem9",
     label: "Problem 9",
     questionId: "problem-9",
     routePath: "/questions/problem-9",
-    sourcePackageVersion: source.manifest.packageVersion
+    sourcePackageVersion: source.sourcePackageVersion
   } satisfies MathQuestionLaunchViewResponse["question"];
 }
 
@@ -818,13 +905,18 @@ function buildLocalRunnerWorkerInstanceKey(bootstrapSessionId: string) {
 async function loadLaunchContext(
   db: DbClient,
   harnessRegistry: HarnessRegistryService,
-  questionId: string
+  questionId: string,
+  options?: {
+    disableProblem9SourceBundleCache?: boolean;
+  }
 ): Promise<LaunchContext | null> {
   if (questionId !== "problem-9") {
     return null;
   }
 
-  const source = loadProblem9SourceBundle();
+  const source = loadProblem9SourceBundle({
+    useCache: !options?.disableProblem9SourceBundleCache
+  });
   const question = buildQuestionSummary(source);
   const benchmarkVersionRows = await db
     .select({
@@ -1330,6 +1422,7 @@ function isUniqueConstraintError(error: unknown, constraintNames: Set<string>) {
 export function createMathLaunchService(
   db: DbClient,
   options?: {
+    disableProblem9SourceBundleCache?: boolean;
     harnessRegistry?: HarnessRegistryService;
   }
 ): MathLaunchService {
@@ -1337,12 +1430,16 @@ export function createMathLaunchService(
 
   return {
     async getQuestionLaunchView(questionId) {
-      const context = await loadLaunchContext(db, harnessRegistry, questionId);
+      const context = await loadLaunchContext(db, harnessRegistry, questionId, {
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+      });
       return context?.view ?? null;
     },
 
     async createHostedLaunch(questionId, input, actorUserId) {
-      const context = await loadLaunchContext(db, harnessRegistry, questionId);
+      const context = await loadLaunchContext(db, harnessRegistry, questionId, {
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+      });
 
       if (!context) {
         throw new MathLaunchServiceError({
@@ -1396,7 +1493,9 @@ export function createMathLaunchService(
     },
 
     async createLocalBootstrap(questionId, input, actorUserId) {
-      const context = await loadLaunchContext(db, harnessRegistry, questionId);
+      const context = await loadLaunchContext(db, harnessRegistry, questionId, {
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+      });
 
       if (!context) {
         throw new MathLaunchServiceError({
@@ -1466,7 +1565,9 @@ export function createMathLaunchService(
     },
 
     async createOfflineExport(questionId, input, actorUserId) {
-      const context = await loadLaunchContext(db, harnessRegistry, questionId);
+      const context = await loadLaunchContext(db, harnessRegistry, questionId, {
+        disableProblem9SourceBundleCache: options?.disableProblem9SourceBundleCache
+      });
 
       if (!context) {
         throw new MathLaunchServiceError({
