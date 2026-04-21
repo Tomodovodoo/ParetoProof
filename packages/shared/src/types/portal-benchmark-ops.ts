@@ -382,7 +382,7 @@ export type PortalWorkerPoolSummary = {
   staleLeaseCount: number;
   workerPool: string;
   workerRuntime: "local_docker" | "modal";
-  workerVersion: string;
+  workerVersion: string | null;
 };
 
 export type PortalWorkersViewResponse = {
