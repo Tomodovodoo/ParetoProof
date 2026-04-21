@@ -313,9 +313,11 @@ These names may appear in examples as commented placeholders, but they are not p
   - image smoke: `Build Problem 9 execution image smoke target`, `Verify Problem 9 execution image smoke target`, `Build Problem 9 devbox image smoke target`, and `Verify Problem 9 devbox image smoke target`
   - worker smoke: `Run deterministic Problem 9 verifier smoke` and `Run deterministic Problem 9 local-stub attempt smoke`
   - coupled auth/runtime gates when those surfaces changed: `Check runtime env examples`, `Check trusted-local auth boundaries`, `Smoke startup validation across runtime surfaces`, `Test API auth handoff routes`, and `Test web auth relay functions`
+- also require a successful `Pull Request Trusted Governance / governance` run on the same head before treating workflow-governance or PR-template obligations as satisfied
 - do not sign off main-branch promotion from generic success signals alone such as typecheck, build, or unrelated frontend checks when the slice changes worker or runtime kernel paths
 - sample promotion path:
   - review the PR and wait for `Pull Request CI / ci` on the final head
+  - wait for `Pull Request Trusted Governance / governance` on the final head
   - confirm the named smoke evidence above for the touched surfaces
   - merge to `main`
   - if the merge triggers image publication, attach the `problem9-image-digests` or `problem9-devbox-image-digest` artifact from the publish workflow to the release packet as the post-merge digest record

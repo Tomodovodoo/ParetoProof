@@ -42,7 +42,15 @@ This repo uses a small number of runtime rules.
 
 ## Main-Branch Promotion Gate
 
-Use the PR's `Pull Request CI / ci` run as the pre-merge promotion gate for worker, image, auth, and runtime slices.
+Use the PR's `Pull Request CI / ci` run as the pre-merge PR smoke gate for worker, image, auth, and runtime slices.
+
+Use `Pull Request Trusted Governance / governance` as the workflow-governance gate for the candidate PR-template contract, deployment-workflow policy, and main-branch promotion-policy wiring.
+
+Changes to the trusted-governance workflow and validator implementation itself stay solely CODEOWNERS-owned by `@Tomodovodoo`.
+
+The trusted workflow evaluates candidate policy files with trusted-base validator logic; it does not trust candidate validator implementation from the PR head.
+
+Bootstrap rollout caveat: the PR that first introduces or replaces these protections still needs explicit owner review on the current base branch because new `CODEOWNERS` rules and `pull_request_target` gates only apply after merge.
 
 PR-template completion is a separate merge-time governance record:
 

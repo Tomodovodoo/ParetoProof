@@ -36,7 +36,10 @@ A scoping issue is only complete when it produces a clear implementation path. I
 ## Promotion Rule
 
 - treat `main` promotion as a kernel-evidence gate, not a generic "CI looks green" judgment
-- the required pre-merge evidence source is the `Pull Request CI` workflow on the exact PR head that will merge
+- the required pre-merge PR smoke gate is the `Pull Request CI` workflow on the exact PR head that will merge
+- the required workflow-governance gate is the `Pull Request Trusted Governance` workflow on the same head
+- changes to the trusted-governance workflow, validator scripts, and shared parsing helpers stay solely CODEOWNERS-owned by `@Tomodovodoo`; the trusted workflow evaluates candidate policy files, including the PR template, with trusted-base validator logic instead of trusting candidate implementation
+- bootstrap rollout caveat: the PR that first introduces or replaces these protections still needs explicit owner review on the current base branch because new `CODEOWNERS` rules and `pull_request_target` gates only apply after merge
 - when a slice touches worker execution, image packaging, auth handoff, or runtime validation, reviewers should read the named smoke and boundary steps listed in [runtime.md](./runtime.md) instead of inferring health from unrelated UI, build, or typecheck steps
 - post-merge publish workflows may add release evidence such as image digests, but they do not replace the pre-merge PR smoke gate
 

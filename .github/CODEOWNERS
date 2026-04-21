@@ -1,0 +1,15 @@
+/.github/PULL_REQUEST_TEMPLATE.md @Tomodovodoo
+/.github/CODEOWNERS @Tomodovodoo
+/.github/workflows/deploy-pages.yml @Tomodovodoo
+/.github/workflows/publish-problem9-devbox-image.yml @Tomodovodoo
+/.github/workflows/publish-worker-image.yml @Tomodovodoo
+/.github/workflows/pull-request-ci.yml @Tomodovodoo
+/.github/workflows/pull-request-trusted-governance.yml @Tomodovodoo
+/docs/project-management.md @Tomodovodoo
+/docs/runtime-env-mode-checklists.md @Tomodovodoo
+/docs/runtime.md @Tomodovodoo
+/infra/README.md @Tomodovodoo
+/infra/scripts/check-deployment-workflow-node-runtime.mjs @Tomodovodoo
+/infra/scripts/check-main-branch-promotion-gate.mjs @Tomodovodoo
+/infra/scripts/check-pr-governance-body.mjs @Tomodovodoo
+/infra/scripts/lib/workflow-utils.mjs @Tomodovodoo
