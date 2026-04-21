@@ -839,6 +839,117 @@ test("portal benchmark ops runs summary verdict aggregation only counts terminal
   }
 });
 
+test("portal worker-pool summaries include environment-filtered registered pools even before any worker lease is active", () => {
+  const workerPools = portalBenchmarkOpsReadModelTestUtils.buildWorkerPoolSummaries({
+    activeLeases: [],
+    registeredWorkerPools: [
+      {
+        workerPool: "modal-dev",
+        workerRuntime: "modal"
+      }
+    ]
+  });
+
+  assert.deepEqual(workerPools, [
+    {
+      activeLeaseCount: 0,
+      activeRunIds: [],
+      staleLeaseCount: 0,
+      workerPool: "modal-dev",
+      workerRuntime: "modal",
+      workerVersion: null
+    }
+  ]);
+});
+
+test("portal worker-pool summaries do not synthesize zero-lease pools without an environment-filtered registry slice", () => {
+  const workerPools = portalBenchmarkOpsReadModelTestUtils.buildWorkerPoolSummaries({
+    activeLeases: []
+  });
+
+  assert.deepEqual(workerPools, []);
+});
+
+test("portal worker-pool summaries are derived only from observed leases", () => {
+  const workerPools = portalBenchmarkOpsReadModelTestUtils.buildWorkerPoolSummaries({
+    activeLeases: [
+      {
+        attemptId: "attempt-1",
+        heartbeatIntervalSeconds: 60,
+        heartbeatTimeoutSeconds: 180,
+        health: "healthy",
+        jobId: "job-1",
+        lastEventSequence: 2,
+        lastHeartbeatAt: "2026-03-13T20:00:00.000Z",
+        leaseExpiresAt: "2026-03-13T20:03:00.000Z",
+        runId: "PP-318",
+        workerId: "worker-1",
+        workerPool: "modal-dev",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1"
+      }
+    ]
+  });
+
+  assert.deepEqual(workerPools, [
+    {
+      activeLeaseCount: 1,
+      activeRunIds: ["PP-318"],
+      staleLeaseCount: 0,
+      workerPool: "modal-dev",
+      workerRuntime: "modal",
+      workerVersion: "worker.v1"
+    }
+  ]);
+});
+
+test("portal worker-pool registry selection filters the catalog by deployment environment", () => {
+  const registeredWorkerPools =
+    portalBenchmarkOpsReadModelTestUtils.readRegisteredWorkerPoolsForEnvironment({
+      catalog: {
+        items: [
+          {
+            defaultRolloutClass: "stable",
+            deploymentTargets: [
+              {
+                environment: "dev",
+                modalAppName: "paretoproof-worker-dev-modal-dev",
+                secretName: "paretoproof-worker-modal-dev"
+              }
+            ],
+            notes: [],
+            ownershipSummary: null,
+            workerPool: "modal-dev",
+            workerRuntime: "modal"
+          },
+          {
+            defaultRolloutClass: "stable",
+            deploymentTargets: [
+              {
+                environment: "staging",
+                modalAppName: "paretoproof-worker-staging-modal-staging",
+                secretName: "paretoproof-worker-modal-staging"
+              }
+            ],
+            notes: [],
+            ownershipSummary: null,
+            workerPool: "modal-staging",
+            workerRuntime: "modal"
+          }
+        ],
+        version: 1
+      },
+      environment: "dev"
+    });
+
+  assert.deepEqual(registeredWorkerPools, [
+    {
+      workerPool: "modal-dev",
+      workerRuntime: "modal"
+    }
+  ]);
+});
+
 test("portal overview benchmark highlight query counts verdicts per run instead of per attempt row", () => {
   const statement = renderSqlFragment(
     portalBenchmarkOpsReadModelTestUtils.buildOverviewBenchmarkHighlightsQuery()

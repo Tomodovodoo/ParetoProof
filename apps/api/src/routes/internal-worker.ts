@@ -101,7 +101,10 @@ export function registerInternalWorkerRoutes(
     ) => Promise<WorkerTerminalFailureResponse>;
   }
 ) {
-  const internalWorkerControl = createInternalWorkerControlService(db);
+  const internalWorkerControl = createInternalWorkerControlService(db, {
+    hostedWorkerPoolEnvironment: runtimeEnv.hostedWorkerPoolEnvironment,
+    requireScopedHostedWorkerPools: true
+  });
   const claimWorker = options?.claimWorker ?? internalWorkerControl!.claim;
   const eventWorker = options?.eventWorker ?? internalWorkerControl!.reportEvent;
   const artifactManifestWorker =
@@ -136,7 +139,16 @@ export function registerInternalWorkerRoutes(
       return;
     }
 
-    reply.send(await claimWorker(parsedBody.data));
+    try {
+      reply.send(await claimWorker(parsedBody.data));
+    } catch (error) {
+      if (error instanceof InternalWorkerControlError) {
+        replyWithInternalWorkerError(reply, error);
+        return;
+      }
+
+      throw error;
+    }
   });
 
   app.post("/internal/worker/jobs/:jobId/heartbeat", async (request, reply) => {

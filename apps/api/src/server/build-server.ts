@@ -29,6 +29,7 @@ import {
   isAllowedLocalBrandedAuthOrigin,
   isAllowedLocalOrigin,
   normalizeOrigin,
+  type TrustedMutationOriginsBySurface,
 } from "./trusted-mutation-origin.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -71,40 +72,23 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   ];
 }
 
-export function readTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
-  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+export function readTrustedMutationOrigins(
+  runtimeEnv: ApiRuntimeEnv,
+): TrustedMutationOriginsBySurface {
   const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
   const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
+  const includesDefaultSurfaceOrigins =
+    normalizeOrigin(runtimeEnv.authPublicOrigin) ===
+      normalizeOrigin(defaultApiAuthPublicOrigin) &&
+    portalPublicOrigin === normalizeOrigin(defaultApiPortalPublicOrigin);
+  const includeMathPublicOrigin =
+    mathPublicOrigin !== normalizeOrigin(defaultApiMathPublicOrigin) ||
+    includesDefaultSurfaceOrigins;
 
-  return [
-    ...new Set(
-      [portalPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
-        .map(normalizeOrigin)
-        .filter(
-          (origin) =>
-            origin === portalPublicOrigin ||
-            (origin !== mathPublicOrigin && !brandedAuthOrigins.has(origin)),
-        ),
-    ),
-  ];
-}
-
-export function readMathTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
-  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
-  const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
-  const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
-
-  return [
-    ...new Set(
-      [mathPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
-        .map(normalizeOrigin)
-        .filter(
-          (origin) =>
-            origin === mathPublicOrigin ||
-            (origin !== portalPublicOrigin && !brandedAuthOrigins.has(origin)),
-        ),
-    ),
-  ];
+  return {
+    math: includeMathPublicOrigin ? [mathPublicOrigin] : [],
+    portal: [portalPublicOrigin],
+  };
 }
 
 function usesBrandedFinalizeSubmitCorsBoundary(
@@ -201,7 +185,6 @@ export async function buildServer(
   );
   const corsAllowedOrigins = readAllowedCorsOrigins(runtimeEnv);
   const trustedMutationOrigins = readTrustedMutationOrigins(runtimeEnv);
-  const mathTrustedMutationOrigins = readMathTrustedMutationOrigins(runtimeEnv);
   const brandedAuthOrigins = readBrandedAuthOrigins(runtimeEnv);
   const allowLocalhostCors = runtimeEnv.corsAllowLocalhost;
   const checkReadiness =
@@ -246,9 +229,8 @@ export async function buildServer(
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: allowLocalhostCors,
-      allowedOrigins: trustedMutationOrigins,
+      allowedOriginsBySurface: trustedMutationOrigins,
       brandedAuthOrigins,
-      mathAllowedOrigins: mathTrustedMutationOrigins,
     }),
   );
 
@@ -264,6 +246,7 @@ export async function buildServer(
     allowLocalhostOrigins: runtimeEnv.corsAllowLocalhost,
     authPublicOrigin: runtimeEnv.authPublicOrigin,
     brandedAuthOrigins: runtimeEnv.brandedAuthOrigins,
+    hostedWorkerPoolEnvironment: runtimeEnv.hostedWorkerPoolEnvironment,
     mathPublicOrigin: runtimeEnv.mathPublicOrigin,
     portalPublicOrigin: runtimeEnv.portalPublicOrigin,
     rateLimitPreHandlers,

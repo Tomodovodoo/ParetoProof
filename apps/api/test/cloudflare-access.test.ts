@@ -238,22 +238,20 @@ test("createAccessResolver accepts an opaque portal access session when the DB s
   }
 });
 
-test("createAccessResolver reuses opaque PortalAccessSession cookies for math routes too", async () => {
+test("createAccessResolver also accepts an opaque portal access session on math launch routes", async () => {
   const originalEnv = {
     ACCESS_PROVIDER_STATE_SECRET: process.env.ACCESS_PROVIDER_STATE_SECRET,
-    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
     CF_ACCESS_BRANDED_AUDS: process.env.CF_ACCESS_BRANDED_AUDS,
+    CF_ACCESS_PORTAL_AUD: process.env.CF_ACCESS_PORTAL_AUD,
     CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN,
-    WORKER_BOOTSTRAP_TOKEN: process.env.WORKER_BOOTSTRAP_TOKEN,
   };
 
-  try {
-    process.env.ACCESS_PROVIDER_STATE_SECRET = "runtime-secret";
-    process.env.CF_ACCESS_PORTAL_AUD = "portal-audience";
-    process.env.CF_ACCESS_BRANDED_AUDS = "github-audience,google-audience";
-    process.env.CF_ACCESS_TEAM_DOMAIN = "paretoproof.cloudflareaccess.com";
-    process.env.WORKER_BOOTSTRAP_TOKEN = "worker-bootstrap-token";
+  process.env.ACCESS_PROVIDER_STATE_SECRET = "wrong-env-secret";
+  process.env.CF_ACCESS_BRANDED_AUDS = "wrong-branded-audience";
+  process.env.CF_ACCESS_PORTAL_AUD = "wrong-portal-audience";
+  process.env.CF_ACCESS_TEAM_DOMAIN = "wrong-team.example";
 
+  try {
     let touchedSession = false;
     const resolveAccess = createAccessResolver(
       {
@@ -343,6 +341,7 @@ test("createAccessResolver reuses opaque PortalAccessSession cookies for math ro
       subject: "subject-1",
       userId: "user-1",
     });
+    assert.equal(request.accessIdentity?.subject, "subject-1");
     assert.equal(touchedSession, true);
   } finally {
     Object.assign(process.env, originalEnv);

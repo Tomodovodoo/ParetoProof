@@ -57,6 +57,40 @@ afterEach(() => {
 });
 
 describe("PortalShell overview ordering", () => {
+  it("uses short sidebar labels and removes explanatory summaries from navigation", async () => {
+    const { getPortalSidebarLabel } = await loadPortalShellModule();
+
+    expect(getPortalSidebarLabel({ id: "overview" })).toBe("Overview");
+    expect(getPortalSidebarLabel({ id: "access_requests" })).toBe("Requests");
+
+    const html = await renderPortalShell({
+      email: "ada@paretoproof.local",
+      roles: ["admin"],
+      url: "http://127.0.0.1/?surface=portal&access=approved&roles=admin&email=ada%40paretoproof.local",
+      width: 1280
+    });
+
+    expect(html).toContain("Requests");
+    expect(html).not.toContain("Landing summary before deeper benchmark operations.");
+    expect(html).not.toContain("Admin-only contributor approval workspace.");
+  });
+
+  it("starts compact portal navigation as a closed drawer with a reachable menu toggle", async () => {
+    const html = await renderPortalShell({
+      email: "ada@paretoproof.local",
+      roles: ["admin"],
+      url: "http://127.0.0.1/?surface=portal&access=approved&roles=admin&email=ada%40paretoproof.local",
+      width: 390
+    });
+
+    expect(html).toContain("portal-shell-compact");
+    expect(html).toContain("portal-shell-compact-nav-closed");
+    expect(html).toContain("portal-sidebar-hidden");
+    expect(html).toContain("portal-topbar-nav-toggle");
+    expect(html).toContain("inert=\"\"");
+    expect(html).toContain(">Menu<");
+  });
+
   it("blocks overlapping overview polls until the active request settles", async () => {
     jest.useFakeTimers();
     setWindow("http://127.0.0.1/?surface=portal&access=approved", 1280);

@@ -11,7 +11,8 @@ import {
 } from "drizzle-orm";
 import {
   problem9HostedAuthModes,
-  problem9HostedProviderFamilies
+  problem9HostedProviderFamilies,
+  type HostedWorkerPoolEnvironment
 } from "@paretoproof/shared";
 import type {
   Problem9HostedAuthMode,
@@ -42,6 +43,10 @@ import {
   workerJobLeases,
   workerPoolDefinitions
 } from "../db/schema.js";
+import {
+  createHostedWorkerPoolRegistryService,
+  type HostedWorkerPoolRegistryService
+} from "./hosted-worker-pool-registry.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 import {
   addSeconds,
@@ -61,6 +66,10 @@ type SelectExecutor = Pick<DbClient, "select">;
 type ReadExecutor = Pick<DbClient, "select">;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
 type MutationExecutor = Pick<DbClient, "insert" | "select" | "update">;
+type RegisteredHostedWorkerPool = Awaited<
+  ReturnType<HostedWorkerPoolRegistryService["getWorkerPool"]>
+>;
+const localDockerWorkerPoolPrefix = "local-";
 
 type CandidateClaimRow = {
   authMode: Problem9HostedAuthMode;
@@ -195,6 +204,17 @@ function supportsCurrentProblem9Assignment(request: WorkerClaimRequest) {
   );
 }
 
+function isHostedWorkerPoolAvailableInEnvironment(
+  registeredWorkerPool: RegisteredHostedWorkerPool,
+  environment: HostedWorkerPoolEnvironment
+) {
+  return (
+    registeredWorkerPool?.deploymentTargets.some(
+      (target) => target.environment === environment
+    ) ?? false
+  );
+}
+
 function claimableUnstartedJobWhereClause(): SQL {
   return and(
     inArray(jobs.state, ["queued", "claimed"]),
@@ -300,12 +320,16 @@ function resolveCancelRequestedLeaseExpiry(lease: LeaseStateRow) {
 async function upsertWorkerPoolDefinition(
   tx: MutationExecutor,
   request: Pick<WorkerClaimRequest, "workerPool" | "workerRuntime">,
-  now: Date
+  now: Date,
+  registeredWorkerPool: RegisteredHostedWorkerPool
 ) {
+  const desiredDefaultRolloutClass = registeredWorkerPool?.defaultRolloutClass ?? "stable";
+  const desiredOwnershipSummary = registeredWorkerPool?.ownershipSummary ?? null;
   const [insertedWorkerPoolDefinition] = await tx
     .insert(workerPoolDefinitions)
     .values({
-      defaultRolloutClass: "stable",
+      defaultRolloutClass: desiredDefaultRolloutClass,
+      ownershipSummary: desiredOwnershipSummary,
       updatedAt: now,
       workerPool: request.workerPool,
       workerRuntime: request.workerRuntime
@@ -321,7 +345,9 @@ async function upsertWorkerPoolDefinition(
 
   const [existingWorkerPoolDefinition] = await tx
     .select({
+      defaultRolloutClass: workerPoolDefinitions.defaultRolloutClass,
       id: workerPoolDefinitions.id,
+      ownershipSummary: workerPoolDefinitions.ownershipSummary,
       workerRuntime: workerPoolDefinitions.workerRuntime
     })
     .from(workerPoolDefinitions)
@@ -338,6 +364,25 @@ async function upsertWorkerPoolDefinition(
       `Worker pool ${request.workerPool} is already registered for runtime ${existingWorkerPoolDefinition.workerRuntime}.`,
       "workerRuntime"
     );
+  }
+
+  const hasProjectedMetadata =
+    "defaultRolloutClass" in existingWorkerPoolDefinition &&
+    "ownershipSummary" in existingWorkerPoolDefinition;
+
+  if (
+    hasProjectedMetadata &&
+    (existingWorkerPoolDefinition.defaultRolloutClass !== desiredDefaultRolloutClass ||
+      (existingWorkerPoolDefinition.ownershipSummary ?? null) !== desiredOwnershipSummary)
+  ) {
+    await tx
+      .update(workerPoolDefinitions)
+      .set({
+        defaultRolloutClass: desiredDefaultRolloutClass,
+        ownershipSummary: desiredOwnershipSummary,
+        updatedAt: now
+      })
+      .where(eq(workerPoolDefinitions.id, existingWorkerPoolDefinition.id));
   }
 
   return existingWorkerPoolDefinition.id;
@@ -1418,7 +1463,19 @@ export const internalWorkerControlTestUtils = {
   assertResultPayload
 };
 
-export function createInternalWorkerControlService(db: DbClient) {
+export function createInternalWorkerControlService(
+  db: DbClient,
+  options?: {
+    hostedWorkerPoolEnvironment?: HostedWorkerPoolEnvironment;
+    hostedWorkerPoolRegistry?: HostedWorkerPoolRegistryService;
+    requireScopedHostedWorkerPools?: boolean;
+  }
+) {
+  const hostedWorkerPoolEnvironment = options?.hostedWorkerPoolEnvironment;
+  const hostedWorkerPoolRegistry =
+    options?.hostedWorkerPoolRegistry ?? createHostedWorkerPoolRegistryService();
+  const requireScopedHostedWorkerPools = options?.requireScopedHostedWorkerPools ?? false;
+
   return {
     async authenticateJobToken(
       jobId: string,
@@ -1485,6 +1542,69 @@ export function createInternalWorkerControlService(db: DbClient) {
     },
 
     async claim(request: WorkerClaimRequest): Promise<WorkerClaimResponse> {
+      if (
+        request.workerRuntime === "local_docker" &&
+        !request.workerPool.startsWith(localDockerWorkerPoolPrefix)
+      ) {
+        throw createConflictError(
+          "worker_pool_namespace_invalid",
+          `Local Docker worker pools must use the reserved ${localDockerWorkerPoolPrefix}* namespace.`,
+          "workerPool"
+        );
+      }
+
+      let registeredWorkerPool: RegisteredHostedWorkerPool = null;
+
+      if (request.workerRuntime === "modal") {
+        registeredWorkerPool = await hostedWorkerPoolRegistry.getWorkerPool(
+          request.workerPool
+        );
+      }
+
+      if (request.workerRuntime === "modal" && !registeredWorkerPool) {
+        throw createConflictError(
+          "worker_pool_not_registered",
+          `Worker pool ${request.workerPool} is not part of the registered hosted worker fleet.`,
+          "workerPool"
+        );
+      }
+
+      if (
+        request.workerRuntime === "modal" &&
+        requireScopedHostedWorkerPools &&
+        !hostedWorkerPoolEnvironment
+      ) {
+        throw createConflictError(
+          "worker_pool_environment_not_configured",
+          "Hosted worker pool environment is not configured for modal worker claims.",
+          "workerPool"
+        );
+      }
+
+      if (
+        request.workerRuntime === "modal" &&
+        registeredWorkerPool &&
+        hostedWorkerPoolEnvironment &&
+        !isHostedWorkerPoolAvailableInEnvironment(
+          registeredWorkerPool,
+          hostedWorkerPoolEnvironment
+        )
+      ) {
+        throw createConflictError(
+          "worker_pool_environment_mismatch",
+          `Worker pool ${request.workerPool} is not registered for hosted environment ${hostedWorkerPoolEnvironment}.`,
+          "workerPool"
+        );
+      }
+
+      if (registeredWorkerPool && registeredWorkerPool.workerRuntime !== request.workerRuntime) {
+        throw createConflictError(
+          "worker_pool_runtime_mismatch",
+          `Worker pool ${request.workerPool} is registered for runtime ${registeredWorkerPool.workerRuntime}.`,
+          "workerRuntime"
+        );
+      }
+
       if (!supportsCurrentProblem9Assignment(request)) {
         return buildIdleClaimResponse();
       }
@@ -1496,7 +1616,12 @@ export function createInternalWorkerControlService(db: DbClient) {
           await recoverExpiredClaimLeases(tx, new Date());
           const candidate = await selectNextClaimCandidate(tx);
           const now = new Date();
-          const workerPoolDefinitionId = await upsertWorkerPoolDefinition(tx, request, now);
+          const workerPoolDefinitionId = await upsertWorkerPoolDefinition(
+            tx,
+            request,
+            now,
+            registeredWorkerPool
+          );
           provisionalWorkerInstanceId = await upsertWorkerInstance(tx, {
             currentLifecycleState:
               candidate || request.activeJobCount > 0 ? "running" : "ready",

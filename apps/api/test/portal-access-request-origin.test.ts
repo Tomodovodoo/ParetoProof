@@ -46,9 +46,12 @@ function registerPortalAccessRequestTestApp(options: {
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: options.allowLocalhostOrigins ?? false,
-      allowedOrigins: options.allowedOrigins ?? [
-        "https://portal.preview.paretoproof.com",
-      ],
+      allowedOriginsBySurface: {
+        math: [],
+        portal: options.allowedOrigins ?? [
+          "https://portal.preview.paretoproof.com",
+        ],
+      },
     }),
   );
 

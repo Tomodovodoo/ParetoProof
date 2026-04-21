@@ -30,7 +30,6 @@ type PortalShellProps = {
 
 type PortalNavGroup = {
   id: "account" | "benchmark_ops" | "admin";
-  label: string;
   sections: PortalSectionDefinition[];
 };
 
@@ -98,6 +97,16 @@ const portalSectionIconById: Record<PortalSectionDefinition["id"], AppIconName> 
   workers: "server"
 };
 
+const portalSidebarLabelById: Record<PortalSectionDefinition["id"], string> = {
+  access_requests: "Requests",
+  launch: "Launch",
+  overview: "Overview",
+  profile: "Profile",
+  runs: "Runs",
+  users: "Users",
+  workers: "Workers"
+};
+
 
 const portalSectionBodyCopy: Record<PortalSectionDefinition["id"], string> = {
   access_requests:
@@ -151,20 +160,21 @@ function getPortalNavGroups(sections: PortalSectionDefinition[]): PortalNavGroup
   return [
     {
       id: "account" as const,
-      label: "Portal",
       sections: accountSections
     },
     {
       id: "benchmark_ops" as const,
-      label: "Benchmark Ops",
       sections: benchmarkOpsSections
     },
     {
       id: "admin" as const,
-      label: "Admin",
       sections: adminSections
     }
   ].filter((group) => group.sections.length > 0);
+}
+
+export function getPortalSidebarLabel(section: PortalSectionDefinition) {
+  return portalSidebarLabelById[section.id];
 }
 
 function resolveActiveSection(
@@ -440,12 +450,12 @@ export function buildOverviewBenchmarkVisualSegments(
 }
 
 export function PortalShell({ email, roles }: PortalShellProps) {
-  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const compactLayout = useCompactLayout();
+  const [navigationCollapsed, setNavigationCollapsed] = useState(() => compactLayout);
   const [overviewRefreshing, setOverviewRefreshing] = useState(false);
   const [overviewState, setOverviewState] = useState<PortalOverviewState>({
     status: "loading"
   });
-  const compactLayout = useCompactLayout();
   const approvedRoles = useMemo(() => coercePortalRoles(roles), [roles]);
   const sections = useMemo(
     () => getPortalSectionsForRoles(approvedRoles),
@@ -505,6 +515,11 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       })) ?? [],
     [overviewData]
   );
+  const compactSidebarClosed = compactLayout && navigationCollapsed;
+  const desktopSidebarCollapsed = !compactLayout && navigationCollapsed;
+  const navigationToggleLabel = compactSidebarClosed || desktopSidebarCollapsed
+    ? "Open navigation"
+    : "Close navigation";
 
   useEffect(() => {
     if (matchedPortalRoute || pathname === activeSectionHref || pathname.startsWith("/runs/")) {
@@ -532,6 +547,28 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
+
+  useEffect(() => {
+    setNavigationCollapsed(compactLayout);
+  }, [compactLayout]);
+
+  useEffect(() => {
+    if (!compactLayout || compactSidebarClosed) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNavigationCollapsed(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [compactLayout, compactSidebarClosed]);
 
   useEffect(() => {
     if (!overviewRouteActive) {
@@ -583,6 +620,10 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       pathname: nextPathname,
       search: mergedSearch
     });
+  }
+
+  function toggleNavigation() {
+    setNavigationCollapsed((collapsed) => !collapsed);
   }
 
   const overviewActionRail = (
@@ -857,7 +898,13 @@ export function PortalShell({ email, roles }: PortalShellProps) {
   return (
     <main
       className={`portal-shell${
-        navigationCollapsed ? " portal-shell-collapsed" : ""
+        desktopSidebarCollapsed ? " portal-shell-collapsed" : ""
+      }${
+        compactLayout ? " portal-shell-compact" : ""
+      }${
+        compactSidebarClosed ? " portal-shell-compact-nav-closed" : ""
+      }${
+        compactLayout && !compactSidebarClosed ? " portal-shell-compact-nav-open" : ""
       }${
         overviewRouteActive ? " portal-shell-overview-active" : ""
       }${
@@ -866,38 +913,54 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         benchmarkOpsRouteActive ? " portal-shell-benchmark-ops-active" : ""
       }`}
     >
+      {compactLayout && !compactSidebarClosed ? (
+        <button
+          aria-label="Close navigation"
+          className="portal-sidebar-scrim"
+          onClick={() => {
+            setNavigationCollapsed(true);
+          }}
+          type="button"
+        />
+      ) : null}
       <aside
         aria-label="Portal navigation"
-        className={`portal-sidebar${navigationCollapsed ? " portal-sidebar-collapsed" : ""}`}
+        aria-hidden={compactSidebarClosed ? true : undefined}
+        inert={compactSidebarClosed || undefined}
+        className={`portal-sidebar${
+          desktopSidebarCollapsed ? " portal-sidebar-collapsed" : ""
+        }${
+          compactLayout ? " portal-sidebar-compact" : ""
+        }${
+          compactSidebarClosed ? " portal-sidebar-hidden" : ""
+        }`}
       >
         <div className="portal-sidebar-header">
           <div className="portal-brand-block">
             <span className="portal-brand-mark" aria-hidden="true">
               <AppIcon name="spark" />
             </span>
-            {!navigationCollapsed ? (
+            {!desktopSidebarCollapsed ? (
               <div>
                 <p className="eyebrow">Portal</p>
                 <h1>ParetoProof</h1>
-                <p className="portal-brand-copy">
-                  Formal benchmark operations and contributor tooling.
-                </p>
               </div>
             ) : null}
           </div>
           <button
-            aria-expanded={!navigationCollapsed}
+            aria-expanded={!compactSidebarClosed && !desktopSidebarCollapsed}
+            aria-label={navigationToggleLabel}
             className="sidebar-toggle"
-            onClick={() => {
-              setNavigationCollapsed((collapsed) => !collapsed);
-            }}
+            onClick={toggleNavigation}
             type="button"
           >
             <span className="sidebar-toggle-icon" aria-hidden="true">
-              <AppIcon name={navigationCollapsed ? "panel-right" : "panel-left"} />
+              <AppIcon
+                name={compactSidebarClosed || desktopSidebarCollapsed ? "panel-right" : "panel-left"}
+              />
             </span>
             <span className="sr-only">
-              {navigationCollapsed ? "Expand navigation" : "Collapse navigation"}
+              {navigationToggleLabel}
             </span>
           </button>
         </div>
@@ -905,28 +968,30 @@ export function PortalShell({ email, roles }: PortalShellProps) {
         <nav className="portal-nav">
           {navGroups.map((group) => (
             <div className="portal-nav-group" key={group.id}>
-              {!navigationCollapsed ? (
-                <p className="portal-nav-group-label">{group.label}</p>
-              ) : null}
               {group.sections.map((section) => {
                 const href = getSectionHref(section);
                 const isActive = activeSection?.id === section.id;
+                const sidebarLabel = getPortalSidebarLabel(section);
 
                 return (
                   <a
                     aria-current={isActive ? "page" : undefined}
                     className={`portal-nav-link${isActive ? " portal-nav-link-active" : ""}`}
                     href={href}
+                    onClick={() => {
+                      if (compactLayout) {
+                        setNavigationCollapsed(true);
+                      }
+                    }}
                     key={section.id}
-                    title={section.navLabel}
+                    title={sidebarLabel}
                   >
                     <span className="portal-nav-link-icon" aria-hidden="true">
                       <AppIcon name={portalSectionIconById[section.id]} />
                     </span>
-                    {!navigationCollapsed ? (
+                    {!desktopSidebarCollapsed ? (
                       <span className="portal-nav-copy">
-                        <span className="portal-nav-label">{section.navLabel}</span>
-                        <span className="portal-nav-summary">{section.summary}</span>
+                        <span className="portal-nav-label">{sidebarLabel}</span>
                       </span>
                     ) : null}
                   </a>
@@ -936,7 +1001,7 @@ export function PortalShell({ email, roles }: PortalShellProps) {
           ))}
         </nav>
 
-        {!navigationCollapsed ? (
+        {!desktopSidebarCollapsed ? (
           <div className="portal-sidebar-footer">
             <p className="portal-sidebar-footer-label">Signed in</p>
             <p className="portal-sidebar-footer-value">
@@ -949,6 +1014,22 @@ export function PortalShell({ email, roles }: PortalShellProps) {
       <section className="portal-main">
         <header className="portal-topbar">
           <div className="portal-topbar-left">
+            {compactLayout ? (
+              <button
+                aria-expanded={!compactSidebarClosed}
+                aria-label={navigationToggleLabel}
+                className="portal-topbar-nav-toggle"
+                onClick={toggleNavigation}
+                type="button"
+              >
+                <span className="portal-topbar-nav-toggle-icon" aria-hidden="true">
+                  <AppIcon
+                    name={compactSidebarClosed ? "panel-right" : "panel-left"}
+                  />
+                </span>
+                <span>Menu</span>
+              </button>
+            ) : null}
             <h1>{activeSection?.navLabel ?? "Portal"}</h1>
             <span className="portal-topbar-breadcrumb">
               {activeSection?.description ?? "Contributor and benchmark control surface."}

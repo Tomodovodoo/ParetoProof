@@ -167,6 +167,45 @@ function createLaunchLoadState() {
   };
 }
 
+function createWorkersLoadState() {
+  return {
+    data: {
+      activeLeases: [],
+      generatedAt: "2026-04-17T04:00:00.000Z",
+      incidents: [],
+      queueSummary: {
+        activeRuns: 0,
+        cancelRequestedJobs: 0,
+        claimedJobs: 0,
+        queuedJobs: 0,
+        queuedRuns: 0,
+        runningJobs: 0
+      },
+      workerPools: [
+        {
+          activeLeaseCount: 0,
+          activeRunIds: [],
+          staleLeaseCount: 0,
+          workerPool: "modal-dev",
+          workerRuntime: "modal",
+          workerVersion: null
+        },
+        {
+          activeLeaseCount: 1,
+          activeRunIds: ["PP-318"],
+          staleLeaseCount: 0,
+          workerPool: "modal-dev",
+          workerRuntime: "modal",
+          workerVersion: "worker.v1"
+        }
+      ]
+    },
+    error: null,
+    isLoading: false,
+    lastUpdatedAt: "2026-04-17T04:00:00.000Z"
+  };
+}
+
 describe("portal benchmark ops route targets", () => {
   it("keeps the current runs query when routing into run detail", () => {
     expect(
@@ -322,5 +361,21 @@ describe("portal benchmark ops route targets", () => {
 
     expect(html).toContain("Launch options are not ready yet.");
     expect(html).not.toContain("Run kind");
+  });
+
+  it("renders registered but not-yet-seen worker pools without crashing on duplicate pool names", () => {
+    setWindow("http://127.0.0.1/workers?surface=portal&access=approved", 1280);
+
+    const html = renderToStaticMarkup(
+      createElement(PortalWorkersSurface, {
+        activeRouteId: "portal.workers",
+        loadState: createWorkersLoadState(),
+        onRefresh: async () => {}
+      })
+    );
+
+    expect(html).toContain("modal / no workers seen yet");
+    expect(html).toContain("modal / worker.v1");
+    expect(html).toContain("Open PP-318");
   });
 });
