@@ -132,13 +132,12 @@ export type MathOfflineExportCreateResponse = {
 
 export type MathRunnerBootstrapSessionRedeemInput = {
   availableRunKinds: RunKind[];
-  sessionToken: string;
   supportedArtifactRoles: WorkerBundleArtifactRole[];
   supportsOfflineBundleContract: boolean;
   supportsTraceUploads: boolean;
   workerId: string;
-  workerPool: string;
-  workerRuntime: "local_docker" | "modal";
+  workerPool: `local-${string}`;
+  workerRuntime: "local_docker";
   workerVersion: string;
 };
 

@@ -88,6 +88,10 @@ const problem9SourceManifestSchema = z.object({
 type DbClient = ReturnTypeOfCreateDbClient;
 type ReadWriteExecutor = Pick<DbClient, "select" | "update">;
 type WriteExecutor = Pick<DbClient, "insert" | "select" | "update">;
+type RunnerBootstrapRedeemRequest = MathRunnerBootstrapSessionRedeemInput & {
+  sessionToken: string;
+};
+const localRunnerWorkerPoolPrefix = "local-";
 
 type Problem9SourceBundle = {
   benchmarkTemplate: string;
@@ -196,7 +200,7 @@ export type MathLaunchService = {
   getQuestionLaunchView: (questionId: string) => Promise<MathQuestionLaunchViewResponse | null>;
   redeemRunnerBootstrapSession: (
     bootstrapSessionId: string,
-    input: MathRunnerBootstrapSessionRedeemInput
+    input: RunnerBootstrapRedeemRequest
   ) => Promise<MathRunnerBootstrapSessionRedeemResponse>;
 };
 
@@ -563,6 +567,13 @@ function supportsRunnerBootstrap(input: MathRunnerBootstrapSessionRedeemInput) {
     input.supportsOfflineBundleContract &&
     input.availableRunKinds.includes("single_run") &&
     requiredProblem9ArtifactRoles.every((role) => input.supportedArtifactRoles.includes(role))
+  );
+}
+
+function supportsLocalRunnerIdentity(input: MathRunnerBootstrapSessionRedeemInput) {
+  return (
+    input.workerRuntime === "local_docker" &&
+    input.workerPool.startsWith(localRunnerWorkerPoolPrefix)
   );
 }
 
@@ -1261,6 +1272,25 @@ export function createMathLaunchService(
     },
 
     async redeemRunnerBootstrapSession(bootstrapSessionId, input) {
+      if (!supportsLocalRunnerIdentity(input)) {
+        throw new MathLaunchServiceError({
+          code: "math_runner_bootstrap_identity_not_supported",
+          issues: [
+            {
+              message:
+                "Local runner bootstrap redemption only supports local_docker workers in the reserved local-* pool namespace.",
+              path: "workerRuntime"
+            },
+            {
+              message:
+                "Local runner bootstrap redemption only supports local_docker workers in the reserved local-* pool namespace.",
+              path: "workerPool"
+            }
+          ],
+          statusCode: 409
+        });
+      }
+
       if (!supportsRunnerBootstrap(input)) {
         throw new MathLaunchServiceError({
           code: "math_local_runner_incompatible",

@@ -23,6 +23,20 @@ function zodIssuesToResponse(issues: Array<{ message: string; path: (string | nu
   }));
 }
 
+function readBearerToken(authorizationHeader: string | undefined) {
+  if (!authorizationHeader) {
+    return null;
+  }
+
+  const [scheme, token] = authorizationHeader.split(/\s+/, 2);
+
+  if (!scheme || !token || scheme.toLowerCase() !== "bearer") {
+    return null;
+  }
+
+  return token;
+}
+
 function getApprovedActorUserId(request: FastifyRequest) {
   const context = request.accessRbacContext;
 
@@ -209,6 +223,15 @@ export function registerMathRoutes(
     async (request, reply) => {
       const parsedParams = mathRunnerBootstrapSessionParamsSchema.safeParse(request.params ?? {});
       const parsedBody = mathRunnerBootstrapSessionRedeemInputSchema.safeParse(request.body ?? {});
+      const runnerBootstrapToken = readBearerToken(
+        typeof request.headers.authorization === "string"
+          ? request.headers.authorization
+          : undefined
+      );
+      const requestOrigin =
+        typeof request.headers.origin === "string" && request.headers.origin.length > 0
+          ? request.headers.origin
+          : null;
 
       if (!parsedParams.success || !parsedBody.success) {
         reply.code(400).send({
@@ -221,10 +244,28 @@ export function registerMathRoutes(
         return;
       }
 
+      if (!runnerBootstrapToken) {
+        reply.code(401).send({
+          error: "invalid_math_runner_bootstrap_token"
+        });
+        return;
+      }
+
+      if (requestOrigin) {
+        reply.code(403).send({
+          error: "math_runner_bootstrap_origin_not_allowed"
+        });
+        return;
+      }
+
       try {
         const response = await mathLaunchService.redeemRunnerBootstrapSession(
           parsedParams.data.bootstrapSessionId,
-          parsedBody.data
+          {
+            ...parsedBody.data,
+            workerPool: parsedBody.data.workerPool as `local-${string}`,
+            sessionToken: runnerBootstrapToken
+          }
         );
         reply.send(response);
       } catch (error) {

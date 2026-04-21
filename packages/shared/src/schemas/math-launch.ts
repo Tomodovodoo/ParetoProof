@@ -162,15 +162,16 @@ export const mathOfflineExportCreateResponseSchema = z.object({
 
 export const mathRunnerBootstrapSessionRedeemInputSchema = z.object({
   availableRunKinds: z.array(runKindSchema),
-  sessionToken: nonEmptyStringSchema,
   supportedArtifactRoles: z.array(workerBundleArtifactRoleSchema).min(1),
   supportsOfflineBundleContract: z.boolean(),
   supportsTraceUploads: z.boolean(),
   workerId: nonEmptyStringSchema,
-  workerPool: nonEmptyStringSchema,
-  workerRuntime: z.enum(["local_docker", "modal"]),
+  workerPool: nonEmptyStringSchema.refine((value) => value.startsWith("local-"), {
+    message: "workerPool must start with local-"
+  }),
+  workerRuntime: z.literal("local_docker"),
   workerVersion: nonEmptyStringSchema
-});
+}).strict();
 
 export const mathRunnerBootstrapSessionRedeemResponseSchema = z.object({
   launchId: z.string().uuid(),

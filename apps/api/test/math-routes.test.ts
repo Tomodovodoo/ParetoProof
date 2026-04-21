@@ -221,6 +221,8 @@ test("POST /math/questions/:questionId/launches/hosted requires approved helper 
 
 test("POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem returns the leased worker job payload", async (t) => {
   const app = Fastify();
+  let receivedBootstrapSessionId: string | null = null;
+  let receivedRedeemInput: Record<string, unknown> | null = null;
   registerMathRoutes(app, {} as never, createRequireAccessStub([]) as never, {
     mathLaunchService: {
       attachOfflineIngestToLaunch: async () => undefined,
@@ -234,7 +236,11 @@ test("POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem r
         throw new Error("not expected");
       },
       getQuestionLaunchView: async () => buildLaunchView(),
-      redeemRunnerBootstrapSession: async () => buildRedeemResponse()
+      redeemRunnerBootstrapSession: async (bootstrapSessionId, input) => {
+        receivedBootstrapSessionId = bootstrapSessionId;
+        receivedRedeemInput = input as unknown as Record<string, unknown>;
+        return buildRedeemResponse();
+      }
     } as never
   });
 
@@ -244,9 +250,11 @@ test("POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem r
 
   const response = await app.inject({
     method: "POST",
+    headers: {
+      authorization: "Bearer bootstrap-token"
+    },
     payload: {
       availableRunKinds: ["single_run"],
-      sessionToken: "bootstrap-token",
       supportedArtifactRoles: [
         "package_reference",
         "prompt_package",
@@ -268,8 +276,256 @@ test("POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem r
   });
 
   assert.equal(response.statusCode, 200);
+  assert.equal(
+    receivedBootstrapSessionId,
+    "cf8516ba-f6ea-4f61-82f0-6af1903c3223"
+  );
+  assert.equal(receivedRedeemInput?.sessionToken, "bootstrap-token");
+  assert.equal(receivedRedeemInput?.workerPool, "local-devbox");
   assert.deepEqual(
     mathLaunchContract.runnerBootstrapSessionRedeemResponse.parse(response.json()),
     buildRedeemResponse()
   );
 });
+
+test(
+  "POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem requires a bearer bootstrap token",
+  async (t) => {
+    const app = Fastify();
+    registerMathRoutes(app, {} as never, createRequireAccessStub([]) as never, {
+      mathLaunchService: {
+        attachOfflineIngestToLaunch: async () => undefined,
+        createHostedLaunch: async () => {
+          throw new Error("not expected");
+        },
+        createLocalBootstrap: async () => {
+          throw new Error("not expected");
+        },
+        createOfflineExport: async () => {
+          throw new Error("not expected");
+        },
+        getQuestionLaunchView: async () => buildLaunchView(),
+        redeemRunnerBootstrapSession: async () => {
+          throw new Error("not expected");
+        }
+      } as never
+    });
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      payload: {
+        availableRunKinds: ["single_run"],
+        supportedArtifactRoles: [
+          "package_reference",
+          "prompt_package",
+          "candidate_source",
+          "verdict_record",
+          "compiler_output",
+          "compiler_diagnostics",
+          "verifier_output",
+          "environment_snapshot"
+        ],
+        supportsOfflineBundleContract: true,
+        supportsTraceUploads: true,
+        workerId: "worker-1",
+        workerPool: "local-devbox",
+        workerRuntime: "local_docker",
+        workerVersion: "worker.v1"
+      },
+      url: "/internal/math/runner-bootstrap-sessions/cf8516ba-f6ea-4f61-82f0-6af1903c3223/redeem"
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.json(), {
+      error: "invalid_math_runner_bootstrap_token"
+    });
+  }
+);
+
+test(
+  "POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem rejects browser-origin requests",
+  async (t) => {
+    const app = Fastify();
+    registerMathRoutes(app, {} as never, createRequireAccessStub([]) as never, {
+      mathLaunchService: {
+        attachOfflineIngestToLaunch: async () => undefined,
+        createHostedLaunch: async () => {
+          throw new Error("not expected");
+        },
+        createLocalBootstrap: async () => {
+          throw new Error("not expected");
+        },
+        createOfflineExport: async () => {
+          throw new Error("not expected");
+        },
+        getQuestionLaunchView: async () => buildLaunchView(),
+        redeemRunnerBootstrapSession: async () => {
+          throw new Error("not expected");
+        }
+      } as never
+    });
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer bootstrap-token",
+        origin: "https://math.paretoproof.com"
+      },
+      payload: {
+        availableRunKinds: ["single_run"],
+        supportedArtifactRoles: [
+          "package_reference",
+          "prompt_package",
+          "candidate_source",
+          "verdict_record",
+          "compiler_output",
+          "compiler_diagnostics",
+          "verifier_output",
+          "environment_snapshot"
+        ],
+        supportsOfflineBundleContract: true,
+        supportsTraceUploads: true,
+        workerId: "worker-1",
+        workerPool: "local-devbox",
+        workerRuntime: "local_docker",
+        workerVersion: "worker.v1"
+      },
+      url: "/internal/math/runner-bootstrap-sessions/cf8516ba-f6ea-4f61-82f0-6af1903c3223/redeem"
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.deepEqual(response.json(), {
+      error: "math_runner_bootstrap_origin_not_allowed"
+    });
+  }
+);
+
+test(
+  "POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem rejects hosted worker identities in the payload",
+  async (t) => {
+    const app = Fastify();
+    registerMathRoutes(app, {} as never, createRequireAccessStub([]) as never, {
+      mathLaunchService: {
+        attachOfflineIngestToLaunch: async () => undefined,
+        createHostedLaunch: async () => {
+          throw new Error("not expected");
+        },
+        createLocalBootstrap: async () => {
+          throw new Error("not expected");
+        },
+        createOfflineExport: async () => {
+          throw new Error("not expected");
+        },
+        getQuestionLaunchView: async () => buildLaunchView(),
+        redeemRunnerBootstrapSession: async () => {
+          throw new Error("not expected");
+        }
+      } as never
+    });
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer bootstrap-token"
+      },
+      payload: {
+        availableRunKinds: ["single_run"],
+        supportedArtifactRoles: [
+          "package_reference",
+          "prompt_package",
+          "candidate_source",
+          "verdict_record",
+          "compiler_output",
+          "compiler_diagnostics",
+          "verifier_output",
+          "environment_snapshot"
+        ],
+        supportsOfflineBundleContract: true,
+        supportsTraceUploads: true,
+        workerId: "worker-1",
+        workerPool: "modal-prod",
+        workerRuntime: "modal",
+        workerVersion: "worker.v1"
+      },
+      url: "/internal/math/runner-bootstrap-sessions/cf8516ba-f6ea-4f61-82f0-6af1903c3223/redeem"
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "invalid_math_runner_bootstrap_payload");
+    assert.equal(response.json().issues?.[0]?.path, "workerPool");
+    assert.equal(response.json().issues?.[1]?.path, "workerRuntime");
+  }
+);
+
+test(
+  "POST /internal/math/runner-bootstrap-sessions/:bootstrapSessionId/redeem rejects the obsolete body sessionToken field",
+  async (t) => {
+    const app = Fastify();
+    registerMathRoutes(app, {} as never, createRequireAccessStub([]) as never, {
+      mathLaunchService: {
+        attachOfflineIngestToLaunch: async () => undefined,
+        createHostedLaunch: async () => {
+          throw new Error("not expected");
+        },
+        createLocalBootstrap: async () => {
+          throw new Error("not expected");
+        },
+        createOfflineExport: async () => {
+          throw new Error("not expected");
+        },
+        getQuestionLaunchView: async () => buildLaunchView(),
+        redeemRunnerBootstrapSession: async () => {
+          throw new Error("not expected");
+        }
+      } as never
+    });
+
+    t.after(async () => {
+      await app.close();
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer bootstrap-token"
+      },
+      payload: {
+        availableRunKinds: ["single_run"],
+        sessionToken: "stale-body-token",
+        supportedArtifactRoles: [
+          "package_reference",
+          "prompt_package",
+          "candidate_source",
+          "verdict_record",
+          "compiler_output",
+          "compiler_diagnostics",
+          "verifier_output",
+          "environment_snapshot"
+        ],
+        supportsOfflineBundleContract: true,
+        supportsTraceUploads: true,
+        workerId: "worker-1",
+        workerPool: "local-devbox",
+        workerRuntime: "local_docker",
+        workerVersion: "worker.v1"
+      },
+      url: "/internal/math/runner-bootstrap-sessions/cf8516ba-f6ea-4f61-82f0-6af1903c3223/redeem"
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "invalid_math_runner_bootstrap_payload");
+    assert.match(response.json().issues?.[0]?.message ?? "", /sessionToken/);
+  }
+);
