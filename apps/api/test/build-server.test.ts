@@ -77,7 +77,7 @@ test("readAllowedCorsOrigins excludes the default production math host when prev
   );
 });
 
-test("readTrustedMutationOrigins keeps portal and math mutation allowlists scoped to their own surfaces", () => {
+test("readTrustedMutationOrigins scopes mutation allowlists to canonical surface origins only", () => {
   const origins = readTrustedMutationOrigins({
     authPublicOrigin: "https://auth.preview.paretoproof.com",
     brandedAuthOrigins: [
@@ -97,16 +97,64 @@ test("readTrustedMutationOrigins keeps portal and math mutation allowlists scope
 
   assert.deepEqual(origins, {
     math: ["https://math.preview.paretoproof.com"],
-    portal: [
-      "https://portal.preview.paretoproof.com",
-      "https://portal-canary.preview.paretoproof.com",
-    ],
+    portal: ["https://portal.preview.paretoproof.com"],
   });
   assert.equal(origins.portal.includes("https://math.preview.paretoproof.com"), false);
+  assert.equal(
+    origins.portal.includes("https://portal-canary.preview.paretoproof.com"),
+    false,
+  );
   assert.equal(
     origins.portal.includes("https://github.auth.preview.paretoproof.com"),
     false,
   );
+});
+
+test("readTrustedMutationOrigins ignores extra preview aliases when math keeps the default production origin", () => {
+  const origins = readTrustedMutationOrigins({
+    authPublicOrigin: "https://auth.preview.paretoproof.com",
+    brandedAuthOrigins: [
+      "https://auth.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+      "https://google.auth.preview.paretoproof.com",
+    ],
+    corsAllowedOrigins: [
+      "https://portal-canary.preview.paretoproof.com",
+      "https://math.preview.paretoproof.com",
+      "https://reports.preview.paretoproof.com",
+      "https://github.auth.preview.paretoproof.com",
+    ],
+    mathPublicOrigin: "https://math.paretoproof.com",
+    portalPublicOrigin: "https://portal.preview.paretoproof.com",
+  } as never);
+
+  assert.deepEqual(origins, {
+    math: [],
+    portal: ["https://portal.preview.paretoproof.com"],
+  });
+  assert.equal(origins.portal.includes("https://math.preview.paretoproof.com"), false);
+  assert.equal(
+    origins.portal.includes("https://reports.preview.paretoproof.com"),
+    false,
+  );
+});
+
+test("readTrustedMutationOrigins does not infer trusted mutation surfaces from CORS hostnames", () => {
+  const origins = readTrustedMutationOrigins({
+    authPublicOrigin: "https://auth.example.com",
+    brandedAuthOrigins: ["https://auth.example.com"],
+    corsAllowedOrigins: [
+      "https://app-canary.example.com",
+      "https://app-math-preview.example.com",
+    ],
+    mathPublicOrigin: "https://app-math.example.com",
+    portalPublicOrigin: "https://app.example.com",
+  } as never);
+
+  assert.deepEqual(origins, {
+    math: ["https://app-math.example.com"],
+    portal: ["https://app.example.com"],
+  });
 });
 
 test("readBrandedAuthOrigins excludes the portal origin when auth and portal share one origin", () => {

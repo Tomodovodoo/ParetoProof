@@ -74,7 +74,6 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
 export function readTrustedMutationOrigins(
   runtimeEnv: ApiRuntimeEnv,
 ): TrustedMutationOriginsBySurface {
-  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
   const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
   const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
   const includesDefaultSurfaceOrigins =
@@ -87,17 +86,7 @@ export function readTrustedMutationOrigins(
 
   return {
     math: includeMathPublicOrigin ? [mathPublicOrigin] : [],
-    portal: [
-      ...new Set(
-        [portalPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
-          .map(normalizeOrigin)
-          .filter(
-            (origin) =>
-              origin === portalPublicOrigin ||
-              (origin !== mathPublicOrigin && !brandedAuthOrigins.has(origin)),
-          ),
-      ),
-    ],
+    portal: [portalPublicOrigin],
   };
 }
 
