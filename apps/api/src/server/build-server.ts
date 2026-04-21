@@ -28,6 +28,7 @@ import {
   isAllowedLocalBrandedAuthOrigin,
   isAllowedLocalOrigin,
   normalizeOrigin,
+  type TrustedMutationOriginsBySurface,
 } from "./trusted-mutation-origin.js";
 import type { ReturnTypeOfCreateDbClient } from "../types/db-client.js";
 
@@ -70,22 +71,23 @@ export function readAllowedCorsOrigins(runtimeEnv: ApiRuntimeEnv) {
   ];
 }
 
-export function readTrustedMutationOrigins(runtimeEnv: ApiRuntimeEnv) {
-  const brandedAuthOrigins = new Set(readBrandedAuthOrigins(runtimeEnv));
+export function readTrustedMutationOrigins(
+  runtimeEnv: ApiRuntimeEnv,
+): TrustedMutationOriginsBySurface {
   const portalPublicOrigin = normalizeOrigin(runtimeEnv.portalPublicOrigin);
   const mathPublicOrigin = normalizeOrigin(runtimeEnv.mathPublicOrigin);
+  const includesDefaultSurfaceOrigins =
+    normalizeOrigin(runtimeEnv.authPublicOrigin) ===
+      normalizeOrigin(defaultApiAuthPublicOrigin) &&
+    portalPublicOrigin === normalizeOrigin(defaultApiPortalPublicOrigin);
+  const includeMathPublicOrigin =
+    mathPublicOrigin !== normalizeOrigin(defaultApiMathPublicOrigin) ||
+    includesDefaultSurfaceOrigins;
 
-  return [
-    ...new Set(
-      [portalPublicOrigin, ...runtimeEnv.corsAllowedOrigins]
-        .map(normalizeOrigin)
-        .filter(
-          (origin) =>
-            origin === portalPublicOrigin ||
-            (origin !== mathPublicOrigin && !brandedAuthOrigins.has(origin)),
-        ),
-    ),
-  ];
+  return {
+    math: includeMathPublicOrigin ? [mathPublicOrigin] : [],
+    portal: [portalPublicOrigin],
+  };
 }
 
 function usesBrandedFinalizeSubmitCorsBoundary(
@@ -226,7 +228,7 @@ export async function buildServer(
     "onRequest",
     createTrustedMutationOriginHook({
       allowLocalhostOrigins: allowLocalhostCors,
-      allowedOrigins: trustedMutationOrigins,
+      allowedOriginsBySurface: trustedMutationOrigins,
       brandedAuthOrigins,
     }),
   );
