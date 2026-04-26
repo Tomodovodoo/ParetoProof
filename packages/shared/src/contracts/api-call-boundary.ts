@@ -171,6 +171,14 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "portal.worker-ops.overview.read",
+    mode: "browser_direct",
+    origin: "portal_browser",
+    rationale:
+      "The worker-ops compatibility overview is a browser-facing portal read model with API-owned freshness metadata and no control-plane mutations."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "portal.profile.update",
     mode: "browser_direct",
     origin: "portal_browser",

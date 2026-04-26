@@ -208,6 +208,12 @@ export const apiEndpointSchemaCatalog = {
     requestQuery: null,
     responseBody: portalWorkersViewResponseSchema
   },
+  "portal.worker-ops.overview.read": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: portalWorkersViewResponseSchema
+  },
   "portal.profile.update": {
     requestBody: portalProfileUpdateInputSchema,
     requestParams: null,

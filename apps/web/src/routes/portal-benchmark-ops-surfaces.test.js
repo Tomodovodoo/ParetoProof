@@ -167,10 +167,23 @@ function createLaunchLoadState() {
   };
 }
 
+function createWorkerOpsFreshness(overrides = {}) {
+  return {
+    degradationReason: null,
+    freshnessStatus: "live",
+    generatedAt: "2026-04-17T04:00:00.000Z",
+    observedThrough: "2026-04-17T03:59:45.000Z",
+    recommendedPollAfterSeconds: 15,
+    staleAfterSeconds: 60,
+    ...overrides
+  };
+}
+
 function createWorkersLoadState() {
   return {
     data: {
       activeLeases: [],
+      freshness: createWorkerOpsFreshness(),
       generatedAt: "2026-04-17T04:00:00.000Z",
       incidents: [],
       queueSummary: {
@@ -377,5 +390,49 @@ describe("portal benchmark ops route targets", () => {
     expect(html).toContain("modal / no workers seen yet");
     expect(html).toContain("modal / worker.v1");
     expect(html).toContain("Open PP-318");
+  });
+
+  it("renders API-owned stale worker freshness without hiding current worker rows", () => {
+    setWindow("http://127.0.0.1/workers?surface=portal&access=approved", 1280);
+    const loadState = createWorkersLoadState();
+    loadState.data.freshness = createWorkerOpsFreshness({
+      freshnessStatus: "stale",
+      observedThrough: "2026-04-17T03:57:45.000Z"
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(PortalWorkersSurface, {
+        activeRouteId: "portal.workers",
+        loadState,
+        onRefresh: async () => {}
+      })
+    );
+
+    expect(html).toContain("Worker snapshot is stale");
+    expect(html).toContain("Stale");
+    expect(html).toContain("modal / worker.v1");
+    expect(html).toContain("Open PP-318");
+  });
+
+  it("renders degraded worker freshness with the API reason", () => {
+    setWindow("http://127.0.0.1/workers?surface=portal&access=approved", 1280);
+    const loadState = createWorkersLoadState();
+    loadState.data.freshness = createWorkerOpsFreshness({
+      degradationReason: "worker read model lagged behind the queue",
+      freshnessStatus: "degraded",
+      observedThrough: null
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(PortalWorkersSurface, {
+        activeRouteId: "portal.workers",
+        loadState,
+        onRefresh: async () => {}
+      })
+    );
+
+    expect(html).toContain("Worker snapshot is degraded");
+    expect(html).toContain("worker read model lagged behind the queue");
+    expect(html).toContain("Degraded");
   });
 });

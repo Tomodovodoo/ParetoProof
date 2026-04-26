@@ -416,20 +416,65 @@ export const portalWorkerPoolSummarySchema = z.object({
   workerVersion: z.string().nullable()
 });
 
-export const portalWorkersViewResponseSchema = z.object({
-  activeLeases: z.array(portalWorkerLeaseSummarySchema),
-  generatedAt: timestampSchema,
-  incidents: z.array(portalWorkerIncidentSchema),
-  queueSummary: z.object({
-    activeRuns: z.number().int().nonnegative(),
-    cancelRequestedJobs: z.number().int().nonnegative(),
-    claimedJobs: z.number().int().nonnegative(),
-    queuedJobs: z.number().int().nonnegative(),
-    queuedRuns: z.number().int().nonnegative(),
-    runningJobs: z.number().int().nonnegative()
-  }),
-  workerPools: z.array(portalWorkerPoolSummarySchema)
-});
+export const portalWorkerOpsFreshnessStatusSchema = z.enum([
+  "live",
+  "stale",
+  "degraded"
+]);
+
+export const portalWorkerOpsFreshnessSchema = z
+  .object({
+    degradationReason: z.string().min(1).nullable(),
+    freshnessStatus: portalWorkerOpsFreshnessStatusSchema,
+    generatedAt: timestampSchema,
+    observedThrough: timestampSchema.nullable(),
+    recommendedPollAfterSeconds: z.number().int().positive(),
+    staleAfterSeconds: z.number().int().positive()
+  })
+  .superRefine((value, context) => {
+    if (value.freshnessStatus === "degraded" && !value.degradationReason) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "degraded worker-ops freshness requires a degradation reason",
+        path: ["degradationReason"]
+      });
+      return;
+    }
+
+    if (value.freshnessStatus !== "degraded" && value.degradationReason !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "non-degraded worker-ops freshness must not include a degradation reason",
+        path: ["degradationReason"]
+      });
+    }
+  });
+
+export const portalWorkersViewResponseSchema = z
+  .object({
+    activeLeases: z.array(portalWorkerLeaseSummarySchema),
+    freshness: portalWorkerOpsFreshnessSchema,
+    generatedAt: timestampSchema,
+    incidents: z.array(portalWorkerIncidentSchema),
+    queueSummary: z.object({
+      activeRuns: z.number().int().nonnegative(),
+      cancelRequestedJobs: z.number().int().nonnegative(),
+      claimedJobs: z.number().int().nonnegative(),
+      queuedJobs: z.number().int().nonnegative(),
+      queuedRuns: z.number().int().nonnegative(),
+      runningJobs: z.number().int().nonnegative()
+    }),
+    workerPools: z.array(portalWorkerPoolSummarySchema)
+  })
+  .superRefine((value, context) => {
+    if (value.generatedAt !== value.freshness.generatedAt) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "worker-ops snapshot generatedAt must match freshness.generatedAt",
+        path: ["freshness", "generatedAt"]
+      });
+    }
+  });
 
 export const portalOverviewResponseSchema = z.object({
   benchmarkHighlights: z.array(portalBenchmarkListItemSchema),

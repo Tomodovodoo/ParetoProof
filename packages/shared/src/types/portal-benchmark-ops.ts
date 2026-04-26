@@ -385,8 +385,20 @@ export type PortalWorkerPoolSummary = {
   workerVersion: string | null;
 };
 
+export type PortalWorkerOpsFreshnessStatus = "live" | "stale" | "degraded";
+
+export type PortalWorkerOpsFreshness = {
+  degradationReason: string | null;
+  freshnessStatus: PortalWorkerOpsFreshnessStatus;
+  generatedAt: string;
+  observedThrough: string | null;
+  recommendedPollAfterSeconds: number;
+  staleAfterSeconds: number;
+};
+
 export type PortalWorkersViewResponse = {
   activeLeases: PortalWorkerLeaseSummary[];
+  freshness: PortalWorkerOpsFreshness;
   generatedAt: string;
   incidents: PortalWorkerIncident[];
   queueSummary: {
