@@ -20,6 +20,7 @@ export * from "./contracts/health.js";
 export * from "./contracts/harness-registry.js";
 export * from "./contracts/portal-navigation.js";
 export * from "./contracts/math-lean-submission.js";
+export * from "./contracts/web-surface-routing.js";
 export * from "./schemas/audit-event.js";
 export * from "./schemas/api-call-boundary.js";
 export * from "./schemas/access-request.js";

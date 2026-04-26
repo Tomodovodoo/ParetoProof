@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   buildAccessFinalizeUrl,
+  buildAccessStartUrl,
   buildAuthGuidanceUrl,
   buildAuthUrl,
+  buildLocalAuthPreviewUrl,
   buildMathUrl,
   buildPortalUrl,
   buildPublicUrl,
@@ -107,6 +109,94 @@ describe("buildPortalUrl", () => {
     ).toBe(
       "https://google.auth.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fprofile"
     );
+  });
+
+  it("keeps provider start URLs hosted even when the current browser host is local", () => {
+    setWindowUrl(
+      "http://127.0.0.1/?surface=auth&email=ada%40paretoproof.local&role=admin"
+    );
+
+    const startUrl = new URL(
+      buildAccessStartUrl("github", "/runs/alpha", {
+        surface: "portal"
+      })
+    );
+
+    expect(startUrl.origin).toBe("https://auth.paretoproof.com");
+    expect(startUrl.pathname).toBe("/api/access/start/github");
+    expect(startUrl.searchParams.get("app")).toBe("portal");
+    expect(startUrl.searchParams.get("redirect")).toBe("/runs/alpha");
+    expect(startUrl.searchParams.has("access")).toBe(false);
+    expect(startUrl.searchParams.has("email")).toBe(false);
+    expect(startUrl.searchParams.has("role")).toBe(false);
+  });
+
+  it("builds hosted provider start URLs without an ambient browser window when inputs are explicit", () => {
+    delete globalThis.window;
+
+    expect(
+      buildAccessStartUrl(
+        "google",
+        "/launch",
+        {
+          surface: "math"
+        },
+        "auth.paretoproof.com"
+      )
+    ).toBe(
+      "https://auth.paretoproof.com/api/access/start/google?app=math&redirect=%2Flaunch"
+    );
+  });
+
+  it("builds least-privilege local auth previews only through the explicit preview helper", () => {
+    setWindowUrl("http://127.0.0.1/?surface=auth");
+
+    const previewUrl = new URL(
+      buildLocalAuthPreviewUrl("/runs/alpha", {
+        surface: "portal"
+      })
+    );
+
+    expect(previewUrl.origin).toBe("http://127.0.0.1");
+    expect(previewUrl.pathname).toBe("/runs/alpha");
+    expect(previewUrl.searchParams.get("surface")).toBe("portal");
+    expect(previewUrl.searchParams.get("access")).toBe("approved");
+    expect(previewUrl.searchParams.get("email")).toBe("local@example.com");
+    expect(previewUrl.searchParams.get("role")).toBe("helper");
+    expect(previewUrl.searchParams.has("roles")).toBe(false);
+  });
+
+  it("preserves explicit local preview identity state without widening default privileges", () => {
+    setWindowUrl(
+      "http://localhost/?surface=auth&email=ada%40paretoproof.local&role=admin&roles=helper&reason=stale"
+    );
+
+    const previewUrl = new URL(
+      buildLocalAuthPreviewUrl("/profile", {
+        surface: "portal"
+      })
+    );
+
+    expect(previewUrl.searchParams.get("access")).toBe("approved");
+    expect(previewUrl.searchParams.get("email")).toBe("ada@paretoproof.local");
+    expect(previewUrl.searchParams.get("role")).toBe("admin");
+    expect(previewUrl.searchParams.has("roles")).toBe(false);
+    expect(previewUrl.searchParams.has("reason")).toBe(false);
+  });
+
+  it("does not attach local preview access state on hosted auth surfaces", () => {
+    setWindowUrl("https://auth.paretoproof.com/?app=portal&redirect=%2Fruns%2Falpha");
+
+    const previewUrl = new URL(
+      buildLocalAuthPreviewUrl("/runs/alpha", {
+        surface: "portal"
+      })
+    );
+
+    expect(previewUrl.toString()).toBe("https://portal.paretoproof.com/runs/alpha");
+    expect(previewUrl.searchParams.has("access")).toBe(false);
+    expect(previewUrl.searchParams.has("email")).toBe(false);
+    expect(previewUrl.searchParams.has("role")).toBe(false);
   });
 });
 

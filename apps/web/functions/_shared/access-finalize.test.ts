@@ -495,6 +495,110 @@ describe("handleAccessFinalize", () => {
     expect(fetchCalled).toBe(false);
   });
 
+  it("rejects branded http finalize relay origins unless they include an explicit local port", async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 200 });
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("http://github.auth.paretoproof.com/api/access/finalize?app=portal", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-plain-http",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://github.auth.paretoproof.com"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
+    );
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("relays loopback-mapped branded http finalize origins through the local API port", async () => {
+    globalThis.fetch = async (input, init) => {
+      expect(input).toBe(
+        "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit"
+      );
+      expect((init?.headers as Headers).get("origin")).toBe(
+        "http://github.auth.paretoproof.com:4173"
+      );
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "https://portal.paretoproof.com/profile"
+        }),
+        {
+          status: 200
+        }
+      );
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("http://github.auth.paretoproof.com:4173/api/access/finalize?app=portal", {
+        body: new URLSearchParams({
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-local-http",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://github.auth.paretoproof.com:4173"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("https://portal.paretoproof.com/profile");
+  });
+
+  it("rejects finalized redirects to auth, public, or wrong-surface routes", async () => {
+    const unsafeRedirects = [
+      "https://auth.paretoproof.com/",
+      "https://paretoproof.com/project",
+      "https://math.paretoproof.com/profile"
+    ];
+
+    for (const redirectTo of unsafeRedirects) {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            redirectTo
+          }),
+          {
+            status: 200
+          }
+        );
+
+      const response = await handleAccessFinalize(
+        new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
+          body: new URLSearchParams({
+            redirect: "/profile"
+          }),
+          headers: {
+            "cf-access-jwt-assertion": "assertion-unsafe-redirect",
+            "content-type": "application/x-www-form-urlencoded",
+            origin: "https://github.auth.paretoproof.com"
+          },
+          method: "POST"
+        })
+      );
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe(
+        "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
+      );
+    }
+  });
+
   it("redirects back to retry without relaying when both Origin and Referer are absent", async () => {
     let fetchCalled = false;
     globalThis.fetch = async () => {

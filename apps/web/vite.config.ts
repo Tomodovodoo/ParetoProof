@@ -1,7 +1,7 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { paretoProofBrandedHosts } from "./src/lib/local-development";
+import { paretoProofBrandedHosts } from "../../packages/shared/src/contracts/web-surface-hosts";
 
 export const paretoProofDevAllowedHosts = [...paretoProofBrandedHosts];
 

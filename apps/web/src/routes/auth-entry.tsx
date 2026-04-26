@@ -11,12 +11,13 @@ import {
   buildAccessStartUrl,
   buildAuthenticatedAppUrl,
   buildAuthUrl,
+  buildLocalAuthPreviewUrl,
   buildPortalUrl,
   buildPublicUrl,
   describeAuthenticatedSurface,
-  type AuthenticatedSurface,
-  isLocalHostname
+  type AuthenticatedSurface
 } from "../lib/surface";
+import { isLocalDevelopmentLocation } from "../lib/local-development";
 
 type AuthEntryProps = {
   redirectPath: string;
@@ -135,7 +136,7 @@ export function buildLocalAuthEntryPreviewState(
           redirectSurface === "math"
             ? "Open the math workspace preview directly against your local or configured API target."
             : "Open the contributor portal shell directly against your local or configured API target.",
-        href: buildAuthenticatedAppUrl(
+        href: buildLocalAuthPreviewUrl(
           resolveAuthEntryApprovedPortalTargetPath(redirectPath),
           {
             surface: redirectSurface
@@ -250,17 +251,21 @@ export function resolveApprovedAuthEntryHandoff(
 
 export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
   const mode = resolveAuthEntryMode(redirectPath);
-  const githubStartUrl = buildAccessStartUrl("github", redirectPath, {
-    surface: redirectSurface
-  });
-  const googleStartUrl = buildAccessStartUrl("google", redirectPath, {
-    surface: redirectSurface
-  });
   const approvedSignInUrl = buildAuthUrl("/", undefined, {
     surface: "portal"
   });
   const accessRequestUrl = buildAccessRequestUrl();
-  const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
+  const isLocal = isLocalDevelopmentLocation(window.location);
+  const providerStartUrls = isLocal
+    ? null
+    : {
+        github: buildAccessStartUrl("github", redirectPath, {
+          surface: redirectSurface
+        }),
+        google: buildAccessStartUrl("google", redirectPath, {
+          surface: redirectSurface
+        })
+      };
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const destinationUrl = useMemo(
     () =>
@@ -292,6 +297,10 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
     : mode === "access_request"
       ? accessRequestChecks
       : signInChecks;
+  const hostedProviderStartUrls = providerStartUrls ?? {
+    github: "#",
+    google: "#"
+  };
 
   useEffect(() => {
     if (isLocal || skipSessionCheck) {
@@ -443,7 +452,7 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
                 ))
               ) : (
                 <>
-                  <a className="auth-provider-button" href={githubStartUrl}>
+                  <a className="auth-provider-button" href={hostedProviderStartUrls.github}>
                     <span className="auth-provider-mark" aria-hidden="true">
                       <AppIcon name="github" />
                     </span>
@@ -455,7 +464,7 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
                       <AppIcon name="arrow-right" />
                     </span>
                   </a>
-                  <a className="auth-provider-button" href={googleStartUrl}>
+                  <a className="auth-provider-button" href={hostedProviderStartUrls.google}>
                     <span className="auth-provider-mark" aria-hidden="true">
                       <AppIcon name="google" />
                     </span>
