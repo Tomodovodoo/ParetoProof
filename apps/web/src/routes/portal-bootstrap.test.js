@@ -131,6 +131,28 @@ describe("mapPortalMutationErrorMessage", () => {
     });
   });
 
+  it("rejects malformed /portal/me payloads before deriving portal state", async () => {
+    await expect(
+      fetchPortalBootstrapState("https://api.paretoproof.test", {
+        fetcher: async () => ({
+          json: async () => ({
+            access: {
+              email: "collab@paretoproof.local",
+              role: "collaborator",
+              status: "approved"
+            },
+            identity: {
+              provider: "github"
+            }
+          }),
+          ok: true,
+          status: 200,
+          type: "basic"
+        })
+      })
+    ).rejects.toThrow("Portal bootstrap response did not match the shared contract.");
+  });
+
   it("derives the local singleton role list from the approved portal role", () => {
     expect(derivePortalRoles("collaborator")).toEqual(["collaborator"]);
     expect(derivePortalRoles(null)).toEqual([]);
@@ -160,6 +182,21 @@ describe("mapPortalMutationErrorMessage", () => {
       kind: "local_api_unavailable",
       message:
         "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+      status: "error"
+    });
+  });
+
+  it("describes missing local API wiring in math workspace terms", () => {
+    expect(
+      buildPortalBootstrapErrorState(new Error("Failed to fetch"), {
+        apiBaseUrl: "http://127.0.0.1:3000",
+        localApiFallback: true,
+        surface: "math"
+      })
+    ).toEqual({
+      kind: "local_api_unavailable",
+      message:
+        "This local math workspace preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using math workspace routes.",
       status: "error"
     });
   });
@@ -479,9 +516,9 @@ describe("PortalBootstrap auth handoff", () => {
     const secondHtml = renderToStaticMarkup(<PortalBootstrap />);
 
     expect(firstHtml).not.toContain("Opening portal");
-    expect(firstHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(firstHtml).toContain("Portal landing summary for current run activity");
     expect(firstHtml).toContain("Authenticated session");
-    expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(secondHtml).toContain("Portal landing summary for current run activity");
     expect(globalThis.document.cookie).toBe(handoffCookie);
   });
 

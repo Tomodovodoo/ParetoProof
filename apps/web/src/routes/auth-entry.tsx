@@ -1,3 +1,7 @@
+import {
+  portalMeResponseSchema,
+  type PortalMeResponse
+} from "@paretoproof/shared";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
 import { getApiBaseUrl } from "../lib/api-base-url";
@@ -23,20 +27,7 @@ type AuthEntryProps = {
   redirectSurface: AuthenticatedSurface;
 };
 
-type AuthEntrySessionCheckPayload = {
-  access: {
-    role?: "admin" | "collaborator" | "helper" | null;
-    reason?:
-      | "access_request_required"
-      | "identity_recovery_required"
-      | "rejected_or_withdrawn"
-      | "unknown_identity";
-    status: "approved" | "pending" | "denied";
-  };
-  identity: {
-    provider: "cloudflare_one_time_pin" | "cloudflare_github" | "cloudflare_google" | null;
-  } | null;
-};
+type AuthEntrySessionCheckPayload = PortalMeResponse;
 
 type AuthEntryAction = {
   copy: string;
@@ -180,6 +171,14 @@ export function buildAuthEntrySessionCheckRequestInit(signal: AbortSignal): Requ
   };
 }
 
+export function parseAuthEntrySessionCheckPayload(
+  payload: unknown
+): AuthEntrySessionCheckPayload | null {
+  const parsed = portalMeResponseSchema.safeParse(payload);
+
+  return parsed.success ? parsed.data : null;
+}
+
 export function shouldStayOnAuthEntryForProviderlessRecovery(
   payload: AuthEntrySessionCheckPayload | null
 ) {
@@ -206,6 +205,10 @@ export function resolveAuthEntrySessionCheckAction(
   payload: AuthEntrySessionCheckPayload | null = null
 ): AuthEntrySessionCheckAction {
   if (response.ok) {
+    if (!payload) {
+      return "stay_on_auth_entry";
+    }
+
     if (shouldStayOnAuthEntryForProviderlessRecovery(payload)) {
       return "stay_on_auth_entry";
     }
@@ -222,7 +225,11 @@ export function resolveAuthEntrySessionCheckAction(
       return "redirect_denied";
     }
 
-    return "redirect_authenticated_app";
+    if (payload.access.status === "approved") {
+      return "redirect_authenticated_app";
+    }
+
+    return "stay_on_auth_entry";
   }
 
   if (response.type === "opaqueredirect" || response.status === 401) {
@@ -306,8 +313,9 @@ export function AuthEntry({ redirectPath, redirectSurface }: AuthEntryProps) {
           `${apiBaseUrl}/portal/me`,
           buildAuthEntrySessionCheckRequestInit(controller.signal)
         );
-        const payload =
-          response.ok ? ((await response.json()) as AuthEntrySessionCheckPayload) : null;
+        const payload = response.ok
+          ? parseAuthEntrySessionCheckPayload(await response.json())
+          : null;
         const action = resolveAuthEntrySessionCheckAction(response, payload);
 
         if (action !== "stay_on_auth_entry") {

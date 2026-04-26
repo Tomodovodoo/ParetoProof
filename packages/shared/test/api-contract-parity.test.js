@@ -31,11 +31,33 @@ describe("shared api catalog parity", () => {
     );
   });
 
+  it("covers shared authenticated portal and math bootstrap boundaries explicitly", () => {
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt_or_session",
+        endpointId: "portal.me.read",
+        mode: "browser_direct",
+        origin: "authenticated_browser"
+      })
+    );
+
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt_or_session",
+        endpointId: "portal.session.finalize.submit",
+        mode: "browser_navigation",
+        origin: "authenticated_browser"
+      })
+    );
+  });
+
   it("exposes non-null schemas for representative catalogued endpoints", () => {
     expect(apiEndpointSchemaContract["health.read"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.me.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.read"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["portal.session.finalize.submit"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmarks.list"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-dataset.read"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.link-intent.create"].responseBodySchema).not.toBeNull();
@@ -53,12 +75,10 @@ describe("shared api catalog parity", () => {
       ]);
     }
 
-    expect(apiEndpointSchemaContract["portal.me.read"]).toEqual({
-      paramsSchema: null,
-      querySchema: null,
-      requestBodySchema: null,
-      responseBodySchema: null
-    });
+    expect(apiEndpointSchemaContract["portal.me.read"].paramsSchema).toBeNull();
+    expect(apiEndpointSchemaContract["portal.me.read"].querySchema).toBeNull();
+    expect(apiEndpointSchemaContract["portal.me.read"].requestBodySchema).toBeNull();
+    expect(apiEndpointSchemaContract["portal.me.read"].responseBodySchema).not.toBeNull();
 
     expect(apiEndpointSchemaContract["portal.benchmark-export.read"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-export.read"].querySchema).not.toBeNull();

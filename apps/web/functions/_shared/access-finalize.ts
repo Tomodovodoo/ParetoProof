@@ -1,4 +1,7 @@
-import { findAppRouteBySurface } from "@paretoproof/shared";
+import {
+  findAppRouteBySurface,
+  portalSessionFinalizeResponseSchema
+} from "@paretoproof/shared";
 
 const authOrigin = "https://auth.paretoproof.com";
 const portalOrigin = "https://portal.paretoproof.com";
@@ -379,8 +382,14 @@ export async function handleAccessFinalize(request: Request) {
     return buildRedirectResponse(retryUrl, finalizeResponse.headers);
   }
 
+  const parsedResponseBody = portalSessionFinalizeResponseSchema.safeParse(responseBody);
+
+  if (!parsedResponseBody.success) {
+    return buildRedirectResponse(retryUrl, finalizeResponse.headers);
+  }
+
   const redirectTarget = resolveAuthenticatedRedirectTarget(
-    (responseBody as { redirectTo?: unknown }).redirectTo,
+    parsedResponseBody.data.redirectTo,
     redirectPath,
     targetSurface
   );

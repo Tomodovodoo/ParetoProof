@@ -5,10 +5,13 @@ import {
   portalHarnessRegistryReadContract,
   portalAccessRecoveryInputSchema,
   portalAccessRequestInputSchema,
+  portalMeResponseSchema,
+  portalProfileContract,
   portalRunDetailParamsSchema,
   portalProfileLinkIntentInputSchema,
   portalProfileUpdateInputSchema,
   portalRunsListQuerySchema,
+  portalSessionFinalizeResponseSchema,
   type PortalBenchmarkDatasetResponse,
   type PortalProfile,
   type PortalProfileLinkIntent,
@@ -145,6 +148,13 @@ function readRequestAuthenticatedContinuation(
     },
     runtimeConfig,
   );
+}
+
+function buildPortalMeResponse(request: FastifyRequest) {
+  return portalMeResponseSchema.parse({
+    access: request.accessRbacContext,
+    identity: request.accessIdentity,
+  });
 }
 
 function clearSignedAccessCookie(
@@ -667,9 +677,9 @@ export function registerPortalRoutes(
       typeof request.headers.accept === "string" &&
       request.headers.accept.includes("application/json")
     ) {
-      return reply.send({
+      return reply.send(portalSessionFinalizeResponseSchema.parse({
         redirectTo: redirectUrl.toString(),
-      });
+      }));
     }
 
     reply.redirect(redirectUrl.toString());
@@ -786,6 +796,9 @@ export function registerPortalRoutes(
   app.get(
     "/portal/me",
     {
+      config: {
+        contract: portalProfileContract.meResponse,
+      },
       preHandler: [
         ...withAuthenticatedRateLimit(
           requireAccess("authenticated_access_identity"),
@@ -793,10 +806,7 @@ export function registerPortalRoutes(
       ],
     },
     async (request) => {
-      return {
-        identity: request.accessIdentity,
-        access: request.accessRbacContext,
-      };
+      return buildPortalMeResponse(request);
     },
   );
 
@@ -973,6 +983,9 @@ export function registerPortalRoutes(
   app.get(
     "/portal/profile",
     {
+      config: {
+        contract: portalProfileContract.readResponse,
+      },
       preHandler: [
         ...withAuthenticatedRateLimit(
           requireAccess("approved_helper_or_higher"),
@@ -988,13 +1001,13 @@ export function registerPortalRoutes(
         );
       }
 
-      return {
+      return portalProfileContract.readResponse.parse({
         profile: await loadPortalProfile(db, {
           fallbackEmail: normalizeOptionalEmail(identity.email),
           identityProvider: identity.provider,
           identitySubject: identity.subject,
         }),
-      };
+      });
     },
   );
 
@@ -1307,18 +1320,21 @@ export function registerPortalRoutes(
       })
       .where(eq(users.id, linkedIdentity.user.id));
 
-    return {
+    return portalProfileContract.updateResponse.parse({
       profile: await loadPortalProfile(db, {
         fallbackEmail: normalizeOptionalEmail(identity.email),
         identityProvider: identity.provider,
         identitySubject: identity.subject,
       }),
-    };
+    });
   };
 
   app.patch(
     "/portal/profile",
     {
+      config: {
+        contract: portalProfileContract.updateResponse,
+      },
       preHandler: [
         ...withAuthenticatedRateLimit(
           requireAccess("approved_helper_or_higher"),
@@ -1331,6 +1347,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/profile",
     {
+      config: {
+        contract: portalProfileContract.updateResponse,
+      },
       preHandler: [
         ...withAuthenticatedRateLimit(
           requireAccess("approved_helper_or_higher"),
@@ -1343,6 +1362,9 @@ export function registerPortalRoutes(
   app.post(
     "/portal/profile/link-intents",
     {
+      config: {
+        contract: portalProfileContract.createLinkIntentResponse,
+      },
       preHandler: [
         ...withAuthenticatedRateLimit(
           requireAccess("approved_helper_or_higher"),
@@ -1484,9 +1506,9 @@ export function registerPortalRoutes(
         }),
       );
 
-      return {
+      return portalProfileContract.createLinkIntentResponse.parse({
         intent: responseBody,
-      };
+      });
     },
   );
 

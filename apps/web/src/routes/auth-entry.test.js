@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   AuthEntry,
   buildLocalAuthEntryPreviewState,
+  parseAuthEntrySessionCheckPayload,
   resolveApprovedAuthEntryHandoff,
   resolveAuthEntryApprovedPortalTargetPath,
   resolveAuthEntrySessionCheckAction,
@@ -54,6 +55,45 @@ describe("shouldStayOnAuthEntryForProviderlessRecovery", () => {
   });
 });
 
+describe("parseAuthEntrySessionCheckPayload", () => {
+  it("accepts the shared portal bootstrap response contract", () => {
+    expect(
+      parseAuthEntrySessionCheckPayload({
+        access: {
+          email: "helper@example.com",
+          role: "helper",
+          status: "approved"
+        },
+        identity: {
+          provider: "cloudflare_google"
+        }
+      })
+    ).toEqual({
+      access: {
+        email: "helper@example.com",
+        role: "helper",
+        status: "approved"
+      },
+      identity: {
+        provider: "cloudflare_google"
+      }
+    });
+  });
+
+  it("returns null for malformed session-check payloads", () => {
+    expect(
+      parseAuthEntrySessionCheckPayload({
+        access: {
+          status: "approved"
+        },
+        identity: {
+          provider: "google"
+        }
+      })
+    ).toBeNull();
+  });
+});
+
 describe("shouldSkipAuthEntrySessionCheck", () => {
   it("skips automatic session reuse when guidance mode is requested explicitly", () => {
     expect(shouldSkipAuthEntrySessionCheck("?guidance=1")).toBe(true);
@@ -62,6 +102,19 @@ describe("shouldSkipAuthEntrySessionCheck", () => {
 });
 
 describe("resolveAuthEntrySessionCheckAction", () => {
+  it("stays on auth entry when a successful response does not match the shared contract", () => {
+    expect(
+      resolveAuthEntrySessionCheckAction(
+        {
+          ok: true,
+          status: 200,
+          type: "basic"
+        },
+        null
+      )
+    ).toBe("stay_on_auth_entry");
+  });
+
   it("stays on auth entry for providerless recovery responses", () => {
     expect(
       resolveAuthEntrySessionCheckAction(

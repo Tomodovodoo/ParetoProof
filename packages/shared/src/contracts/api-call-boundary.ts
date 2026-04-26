@@ -10,12 +10,12 @@ export const apiCallBoundaryCatalog = [
       "Health checks need to work without Access so Railway and external uptime probes can reach the API."
   },
   {
-    credential: "cloudflare_access_jwt",
+    credential: "cloudflare_access_jwt_or_session",
     endpointId: "portal.me.read",
     mode: "browser_direct",
-    origin: "portal_browser",
+    origin: "authenticated_browser",
     rationale:
-      "The portal shell needs the caller identity immediately after Access login, so the browser calls the protected route directly."
+      "Portal and math bootstrap flows need the caller identity immediately after Access login, and the API can also trust the DB-backed session established by the protected finalize handoff."
   },
   {
     credential: "none",
@@ -42,28 +42,28 @@ export const apiCallBoundaryCatalog = [
       "The branded auth handoff can arrive through a top-level GET navigation on the finalize-submit route, which either completes the session or redirects the browser back to the retry relay."
   },
   {
-    credential: "cloudflare_access_jwt",
+    credential: "cloudflare_access_jwt_or_session",
     endpointId: "portal.session.complete.submit",
     mode: "browser_navigation",
-    origin: "portal_browser",
+    origin: "authenticated_browser",
     rationale:
-      "Legacy same-site completion forms still POST to the complete alias, so the authenticated browser must retain an explicit contract for that handoff route."
+      "Legacy same-site completion forms can serve portal or math handoffs, so the authenticated browser must retain an explicit contract that accepts the Access assertion or existing session."
   },
   {
-    credential: "cloudflare_access_jwt",
+    credential: "cloudflare_access_jwt_or_session",
     endpointId: "portal.session.finalize.submit",
     mode: "browser_navigation",
-    origin: "portal_browser",
+    origin: "authenticated_browser",
     rationale:
-      "Legacy finalize POSTs stay on the same authenticated browser boundary as the canonical submit route while preserving redirect-bearing handoff semantics."
+      "Legacy finalize POSTs stay on the authenticated browser boundary shared by portal and math while preserving redirect-bearing handoff semantics."
   },
   {
-    credential: "cloudflare_access_jwt",
+    credential: "cloudflare_access_jwt_or_session",
     endpointId: "portal.session.complete",
     mode: "browser_navigation",
-    origin: "portal_browser",
+    origin: "authenticated_browser",
     rationale:
-      "Custom auth buttons finish on a protected API handoff route through a same-site form POST so Cloudflare Access can establish the API audience without leaving a mutating GET finalize path."
+      "Custom auth buttons finish on a protected API handoff route through a same-site form POST so Cloudflare Access can establish the API audience for either authenticated browser surface."
   },
   {
     credential: "cloudflare_access_jwt",

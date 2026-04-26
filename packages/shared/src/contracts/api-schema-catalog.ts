@@ -56,9 +56,11 @@ import {
   problem9OfflineIngestResponseSchema
 } from "../schemas/problem9-offline-ingest.js";
 import {
+  portalMeResponseSchema,
   portalProfileLinkIntentInputSchema,
   portalProfileLinkIntentResponseSchema,
   portalProfileResponseSchema,
+  portalSessionFinalizeResponseSchema,
   portalSessionRedirectInputSchema,
   portalSessionRedirectRequestBodySchema,
   portalProfileUpdateInputSchema
@@ -92,7 +94,7 @@ export const apiEndpointSchemaCatalog = {
     requestBody: null,
     requestParams: null,
     requestQuery: null,
-    responseBody: null
+    responseBody: portalMeResponseSchema
   },
   "portal.session.retry.complete": {
     requestBody: null,
@@ -116,19 +118,19 @@ export const apiEndpointSchemaCatalog = {
     requestBody: portalSessionRedirectRequestBodySchema,
     requestParams: null,
     requestQuery: portalSessionRedirectInputSchema,
-    responseBody: null
+    responseBody: portalSessionFinalizeResponseSchema
   },
   "portal.session.finalize.submit": {
     requestBody: portalSessionRedirectRequestBodySchema,
     requestParams: null,
     requestQuery: portalSessionRedirectInputSchema,
-    responseBody: null
+    responseBody: portalSessionFinalizeResponseSchema
   },
   "portal.session.complete": {
     requestBody: portalSessionRedirectRequestBodySchema,
     requestParams: null,
     requestQuery: portalSessionRedirectInputSchema,
-    responseBody: null
+    responseBody: portalSessionFinalizeResponseSchema
   },
   "portal.access-request.create": {
     requestBody: portalAccessRequestInputSchema,
