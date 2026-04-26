@@ -260,10 +260,16 @@ describe("buildLocalAuthEntryPreviewState", () => {
       location: new URL("http://127.0.0.1/?surface=auth")
     };
 
-    expect(buildLocalAuthEntryPreviewState("sign_in", "/runs/alpha", "portal")).toMatchObject({
+    const previewState = buildLocalAuthEntryPreviewState(
+      "sign_in",
+      "/runs/alpha",
+      "portal"
+    );
+    const portalPreviewUrl = new URL(previewState.actions[0].href);
+
+    expect(previewState).toMatchObject({
       actions: [
         {
-          href: "http://127.0.0.1/runs/alpha?surface=portal",
           title: "Open local portal preview"
         },
         {
@@ -272,6 +278,12 @@ describe("buildLocalAuthEntryPreviewState", () => {
         }
       ]
     });
+    expect(portalPreviewUrl.origin).toBe("http://127.0.0.1");
+    expect(portalPreviewUrl.pathname).toBe("/runs/alpha");
+    expect(portalPreviewUrl.searchParams.get("surface")).toBe("portal");
+    expect(portalPreviewUrl.searchParams.get("access")).toBe("approved");
+    expect(portalPreviewUrl.searchParams.get("email")).toBe("local@example.com");
+    expect(portalPreviewUrl.searchParams.get("role")).toBe("helper");
   });
 
   it("builds a local access-request preview with a direct portal route handoff", () => {
@@ -310,10 +322,15 @@ describe("AuthEntry local rendering", () => {
     expect(html).toContain("Open local portal preview");
     expect(html).toContain("Open local access-request preview");
     expect(html).toContain("http://127.0.0.1/runs/alpha?surface=portal");
+    expect(html).toContain("access=approved");
+    expect(html).toContain("email=local%40example.com");
+    expect(html).toContain("role=helper");
     expect(html).toContain("Back to local home");
     expect(countOccurrences(html, "Open local portal preview")).toBe(1);
     expect(html).not.toContain("Continue with GitHub");
     expect(html).not.toContain("Continue with Google");
+    expect(html).not.toContain("/api/access/start/github");
+    expect(html).not.toContain("/api/access/start/google");
   });
 
   it("renders truthful local access-request guidance instead of identity-verification promises", () => {

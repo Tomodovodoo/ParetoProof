@@ -1,62 +1,22 @@
-import { findAppRouteBySurface } from "@paretoproof/shared";
+import {
+  type AccessProvider as Provider,
+  type AuthenticatedSurface,
+  productionAuthOrigin,
+  productionProviderAuthOrigins,
+  readAuthenticatedSurface,
+  sanitizeAuthenticatedRedirectTarget
+} from "@paretoproof/shared";
 
-const authOrigin = "https://auth.paretoproof.com";
-const portalOrigin = "https://portal.paretoproof.com";
-const mathOrigin = "https://math.paretoproof.com";
-
-type Provider = "github" | "google";
 type PersistedProvider = "cloudflare_github" | "cloudflare_google";
-type AuthenticatedSurface = "portal" | "math";
 
 type AccessStartEnv = {
   ACCESS_PROVIDER_STATE_SECRET?: string;
-};
-
-const providerOrigins: Record<Provider, string> = {
-  github: "https://github.auth.paretoproof.com",
-  google: "https://google.auth.paretoproof.com"
 };
 
 const persistedProviders: Record<Provider, PersistedProvider> = {
   github: "cloudflare_github",
   google: "cloudflare_google"
 };
-
-function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface {
-  return surface === "math" ? "math" : "portal";
-}
-
-function readSurfaceOrigin(surface: AuthenticatedSurface) {
-  return surface === "math" ? mathOrigin : portalOrigin;
-}
-
-function sanitizeRedirectPath(
-  rawRedirectPath: string | null,
-  targetSurface: AuthenticatedSurface
-) {
-  if (!rawRedirectPath || rawRedirectPath === "/") {
-    return "/";
-  }
-
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) || rawRedirectPath.startsWith("//")) {
-    return "/";
-  }
-
-  try {
-    const url = new URL(
-      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      readSurfaceOrigin(targetSurface)
-    );
-
-    if (!findAppRouteBySurface(targetSurface, url.pathname)) {
-      return "/";
-    }
-
-    return `${url.pathname}${url.search}${url.hash}` || "/";
-  } catch {
-    return "/";
-  }
-}
 
 function toBase64Url(bytes: ArrayBuffer) {
   const encoded = btoa(String.fromCharCode(...new Uint8Array(bytes)));
@@ -114,7 +74,7 @@ function buildAuthFailureUrl(
   redirectPath: string,
   targetSurface: AuthenticatedSurface
 ) {
-  const authUrl = new URL(authOrigin);
+  const authUrl = new URL(productionAuthOrigin);
   authUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
@@ -133,14 +93,17 @@ export async function handleAccessStart(
 ) {
   const requestUrl = new URL(request.url);
   const targetSurface = readAuthenticatedSurface(requestUrl.searchParams.get("app"));
-  const redirectPath = sanitizeRedirectPath(
+  const redirectPath = sanitizeAuthenticatedRedirectTarget(
     requestUrl.searchParams.get("redirect"),
-    targetSurface
+    {
+      allowAbsolute: false,
+      surface: targetSurface
+    }
   );
 
   try {
     const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
-    const providerUrl = new URL("/", providerOrigins[provider]);
+    const providerUrl = new URL("/", productionProviderAuthOrigins[provider]);
     const providerHintCookie = await buildProviderHintCookie(env, provider);
 
     providerUrl.searchParams.set("app", targetSurface);

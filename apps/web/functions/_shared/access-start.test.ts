@@ -68,4 +68,48 @@ describe("handleAccessStart", () => {
       "https://google.auth.paretoproof.com/?app=math&redirect=%2Fquestions%2Fproblem-9"
     );
   });
+
+  it("drops absolute, public, and wrong-surface redirect inputs before provider handoff", async () => {
+    const redirectInputs = [
+      "https://portal.paretoproof.com/profile",
+      "//portal.paretoproof.com/profile",
+      "javascript:alert(1)",
+      "/project",
+      "/benchmarks"
+    ];
+
+    for (const redirectInput of redirectInputs) {
+      const response = await handleAccessStart(
+        new Request(
+          `https://auth.paretoproof.com/api/access/start/github?app=portal&redirect=${encodeURIComponent(
+            redirectInput
+          )}`
+        ),
+        {
+          ACCESS_PROVIDER_STATE_SECRET: "test-secret"
+        },
+        "github"
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        "https://github.auth.paretoproof.com/?app=portal"
+      );
+    }
+
+    const mathResponse = await handleAccessStart(
+      new Request(
+        "https://auth.paretoproof.com/api/access/start/google?app=math&redirect=/profile"
+      ),
+      {
+        ACCESS_PROVIDER_STATE_SECRET: "test-secret"
+      },
+      "google"
+    );
+
+    expect(mathResponse.status).toBe(302);
+    expect(mathResponse.headers.get("location")).toBe(
+      "https://google.auth.paretoproof.com/?app=math"
+    );
+  });
 });

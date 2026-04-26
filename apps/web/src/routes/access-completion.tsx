@@ -4,9 +4,9 @@ import {
   buildAccessFinalizeUrl,
   buildAuthUrl,
   describeAuthenticatedSurface,
-  type AuthenticatedSurface,
-  isLocalHostname
+  type AuthenticatedSurface
 } from "../lib/surface";
+import { isLocalDevelopmentLocation } from "../lib/local-development";
 
 type AccessCompletionProps = {
   provider: "github" | "google";
@@ -28,7 +28,7 @@ export function AccessCompletion({
       surface: redirectSurface
     })
   );
-  const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
+  const isLocal = isLocalDevelopmentLocation(window.location);
   const destinationLabel = describeAuthenticatedSurface(redirectSurface);
 
   retryUrl.searchParams.set("handoff", "retry");

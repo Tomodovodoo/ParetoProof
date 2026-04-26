@@ -1,10 +1,13 @@
-import { findAppRouteBySurface } from "@paretoproof/shared";
-
-const authOrigin = "https://auth.paretoproof.com";
-const portalOrigin = "https://portal.paretoproof.com";
-const mathOrigin = "https://math.paretoproof.com";
-
-type AuthenticatedSurface = "portal" | "math";
+import {
+  type AuthenticatedSurface,
+  isLocalDevelopmentLocation,
+  isParetoProofBrandedHost,
+  isTrustedFinalizeRelayLocation,
+  productionAuthOrigin,
+  readAuthenticatedSurface,
+  resolveFinalizedAuthenticatedRedirectTarget,
+  sanitizeAuthenticatedRedirectTarget
+} from "@paretoproof/shared";
 
 function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
@@ -26,29 +29,6 @@ function readCookieValue(cookieHeader: string | null, name: string) {
   return null;
 }
 
-const brandedHosts = new Set([
-  "paretoproof.com",
-  "auth.paretoproof.com",
-  "github.auth.paretoproof.com",
-  "google.auth.paretoproof.com",
-  "math.paretoproof.com",
-  "portal.paretoproof.com"
-]);
-const brandedFinalizeRelayHosts = new Set([
-  "auth.paretoproof.com",
-  "github.auth.paretoproof.com",
-  "google.auth.paretoproof.com"
-]);
-
-function isLocalHostname(hostname: string) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.endsWith(".localhost")
-  );
-}
-
 function readTrustedFinalizeRelayOrigin(request: Request) {
   const originHeader = request.headers.get("origin");
 
@@ -62,20 +42,7 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
     try {
       const refererUrl = new URL(refererHeader);
 
-      if (
-        refererUrl.protocol === "https:" &&
-        brandedFinalizeRelayHosts.has(refererUrl.hostname)
-      ) {
-        return refererUrl.origin;
-      }
-
-      if (
-        refererUrl.protocol === "http:" &&
-        (
-          brandedFinalizeRelayHosts.has(refererUrl.hostname) ||
-          isLocalHostname(refererUrl.hostname)
-        )
-      ) {
+      if (isTrustedFinalizeRelayLocation(refererUrl)) {
         return refererUrl.origin;
       }
     } catch {
@@ -88,20 +55,7 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
   try {
     const originUrl = new URL(originHeader);
 
-    if (
-      originUrl.protocol === "https:" &&
-      brandedFinalizeRelayHosts.has(originUrl.hostname)
-    ) {
-      return originUrl.origin;
-    }
-
-    if (
-      originUrl.protocol === "http:" &&
-      (
-        brandedFinalizeRelayHosts.has(originUrl.hostname) ||
-        isLocalHostname(originUrl.hostname)
-      )
-    ) {
+    if (isTrustedFinalizeRelayLocation(originUrl)) {
       return originUrl.origin;
     }
   } catch {
@@ -111,47 +65,11 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
   return null;
 }
 
-function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface {
-  return surface === "math" ? "math" : "portal";
-}
-
-function readSurfaceOrigin(surface: AuthenticatedSurface) {
-  return surface === "math" ? mathOrigin : portalOrigin;
-}
-
-function sanitizeRedirectPath(
-  rawRedirectPath: string | null,
-  targetSurface: AuthenticatedSurface
-) {
-  if (!rawRedirectPath || rawRedirectPath === "/") {
-    return "/";
-  }
-
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawRedirectPath) || rawRedirectPath.startsWith("//")) {
-    return "/";
-  }
-
-  try {
-    const url = new URL(
-      rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      readSurfaceOrigin(targetSurface)
-    );
-
-    if (!findAppRouteBySurface(targetSurface, url.pathname)) {
-      return "/";
-    }
-
-    return `${url.pathname}${url.search}${url.hash}` || "/";
-  } catch {
-    return "/";
-  }
-}
-
 function buildAuthRetryUrl(
   redirectPath: string,
   targetSurface: AuthenticatedSurface
 ) {
-  const authUrl = new URL(authOrigin);
+  const authUrl = new URL(productionAuthOrigin);
   authUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
@@ -165,9 +83,8 @@ function buildAuthRetryUrl(
 
 function resolveApiBaseUrl(requestUrl: URL) {
   if (
-    requestUrl.protocol === "http:" &&
-    requestUrl.port !== "" &&
-    brandedHosts.has(requestUrl.hostname)
+    isLocalDevelopmentLocation(requestUrl) &&
+    isParetoProofBrandedHost(requestUrl.hostname)
   ) {
     const localApiUrl = new URL(requestUrl.origin);
     localApiUrl.port = "3000";
@@ -184,49 +101,11 @@ function resolveApiBaseUrl(requestUrl: URL) {
   const localApiUrl = new URL(requestUrl.origin);
   localApiUrl.port = "3000";
 
-  if (isLocalHostname(requestUrl.hostname)) {
+  if (isLocalDevelopmentLocation(requestUrl)) {
     return trimTrailingSlash(localApiUrl.origin);
   }
 
   return "https://api.paretoproof.com";
-}
-
-function buildAuthenticatedRedirectUrl(
-  targetSurface: AuthenticatedSurface,
-  redirectPath: string
-) {
-  return new URL(redirectPath, readSurfaceOrigin(targetSurface)).toString();
-}
-
-function resolveAuthenticatedRedirectTarget(
-  rawRedirectTarget: unknown,
-  fallbackRedirectPath: string,
-  fallbackSurface: AuthenticatedSurface
-) {
-  if (typeof rawRedirectTarget !== "string" || rawRedirectTarget.length === 0) {
-    return buildAuthenticatedRedirectUrl(fallbackSurface, fallbackRedirectPath);
-  }
-
-  let targetUrl: URL;
-
-  try {
-    targetUrl = new URL(rawRedirectTarget);
-  } catch {
-    return null;
-  }
-
-  const targetSurface =
-    targetUrl.origin === portalOrigin
-      ? "portal"
-      : targetUrl.origin === mathOrigin
-        ? "math"
-        : null;
-
-  if (!targetSurface || !findAppRouteBySurface(targetSurface, targetUrl.pathname)) {
-    return null;
-  }
-
-  return targetUrl.toString();
 }
 
 function splitCombinedSetCookieHeader(cookieHeader: string) {
@@ -265,7 +144,10 @@ async function readRedirectOptions(request: Request) {
 
   if (request.method !== "POST") {
     return {
-      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface),
+      redirectPath: sanitizeAuthenticatedRedirectTarget(fallbackRedirectPath, {
+        allowAbsolute: false,
+        surface: fallbackSurface
+      }),
       targetSurface: fallbackSurface
     };
   }
@@ -277,7 +159,10 @@ async function readRedirectOptions(request: Request) {
     !contentType.includes("multipart/form-data")
   ) {
     return {
-      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface),
+      redirectPath: sanitizeAuthenticatedRedirectTarget(fallbackRedirectPath, {
+        allowAbsolute: false,
+        surface: fallbackSurface
+      }),
       targetSurface: fallbackSurface
     };
   }
@@ -291,9 +176,12 @@ async function readRedirectOptions(request: Request) {
       : fallbackSurface;
 
   return {
-    redirectPath: sanitizeRedirectPath(
+    redirectPath: sanitizeAuthenticatedRedirectTarget(
       typeof redirectValue === "string" ? redirectValue : fallbackRedirectPath,
-      targetSurface
+      {
+        allowAbsolute: false,
+        surface: targetSurface
+      }
     ),
     targetSurface
   };
@@ -379,10 +267,12 @@ export async function handleAccessFinalize(request: Request) {
     return buildRedirectResponse(retryUrl, finalizeResponse.headers);
   }
 
-  const redirectTarget = resolveAuthenticatedRedirectTarget(
+  const redirectTarget = resolveFinalizedAuthenticatedRedirectTarget(
     (responseBody as { redirectTo?: unknown }).redirectTo,
-    redirectPath,
-    targetSurface
+    {
+      fallbackRedirectPath: redirectPath,
+      fallbackSurface: targetSurface
+    }
   );
 
   if (!redirectTarget) {
