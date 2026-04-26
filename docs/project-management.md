@@ -38,6 +38,7 @@ A scoping issue is only complete when it produces a clear implementation path. I
 - the required pre-merge evidence source is the `Pull Request CI` workflow on the exact PR head that will merge
 - when a slice touches worker execution, image packaging, auth handoff, or runtime validation, reviewers should read the named smoke and boundary steps listed in [runtime.md](./runtime.md) instead of inferring health from unrelated UI, build, or typecheck steps
 - post-merge publish workflows may add release evidence such as image digests, but they do not replace the pre-merge PR smoke gate
+- manual production deploys must not bypass the main-branch promotion path; Pages production deploys are sourced from `main`, while rollback should use a Cloudflare Pages rollback or a revert/fix on `main`
 
 ## Status rule
 

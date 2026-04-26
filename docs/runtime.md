@@ -16,6 +16,7 @@ This repo uses a small number of runtime rules.
 ## Deploy surfaces
 
 - Cloudflare Pages hosts the public site and auth-entry runtime.
+- Repository-owned Cloudflare Pages production deploys must be sourced from `main`; non-`main` web builds are preview or local-only and must not be uploaded as the Pages `main` branch.
 - Railway hosts the API.
 - Workers run locally or in hosted runtimes against the API control plane.
 - GHCR holds worker images.
@@ -63,6 +64,7 @@ Required kernel evidence comes from these named steps:
 
 After merge, treat the main-branch publish workflows as release evidence only:
 
+- `Deploy Pages` uploads the web bundle to Cloudflare Pages as branch `main` only from a `push` to `main`
 - `Publish Problem 9 Execution and Worker Images` records the pushed image digests in the `problem9-image-digests` artifact and step summary
 - `Publish Problem 9 Devbox Image` records the pushed image digest in the `problem9-devbox-image-digest` artifact and step summary
 

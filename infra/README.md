@@ -9,7 +9,7 @@ Current helper scripts:
 - `infra/scripts/check-runtime-env-examples.mjs`: fails CI when app `.env.example` files or README env pointers drift from the approved runtime-env contract shape.
 - `infra/scripts/check-harness-registry-seed.mjs`: fails CI when the harness registry seed manifest drifts from the approved image graph, hosted capability matrix, or root script wiring.
 - `infra/scripts/check-problem9-image-policy.mjs`: fails CI when the Problem 9 image manifest, publish workflows, root build scripts, or operator docs drift apart.
-- `infra/scripts/check-deployment-workflow-node-runtime.mjs`: fails CI when deployment workflows drift away from the approved Node 24-compatible action/runtime shape, replaces the Node-20-only Wrangler JavaScript action with a local `bunx wrangler` deploy step, and pins the active deployment workflows to Node-24-compatible action revisions.
+- `infra/scripts/check-deployment-workflow-node-runtime.mjs`: fails CI when deployment workflows drift away from the approved Node 24-compatible action/runtime shape, replaces the Node-20-only Wrangler JavaScript action with a local `bunx wrangler` deploy step, pins the active deployment workflows to Node-24-compatible action revisions, and enforces the main-only production source invariant for Cloudflare Pages deploys.
 - `infra/scripts/verify-problem9-image-toolchains.mjs`: runs toolchain checks against a built `problem9-execution` or `problem9-devbox` image, or against a filesystem export of one, and fails on Lean, Node, Bun, Codex CLI, or `lean-lsp-mcp` drift.
 - `infra/scripts/check-trusted-local-boundaries.mjs`: fails CI when repo ignore rules, worker Docker packaging, or trusted-local docs drift toward persisting Codex auth material in the repository or image build context.
 
