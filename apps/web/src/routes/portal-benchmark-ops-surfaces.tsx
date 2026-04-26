@@ -9,6 +9,7 @@ import {
   type PortalRunDetailResponse,
   type PortalRunsListQuery,
   type PortalRunsListResponse,
+  type PortalWorkerOpsFreshness,
   type PortalWorkersViewResponse,
   type RunKind
 } from "@paretoproof/shared";
@@ -1510,17 +1511,19 @@ export function PortalWorkersSurface({
   onRefresh
 }: SurfaceProps<PortalWorkersViewResponse>) {
   const data = loadState.data;
+  const workerOpsFreshness = data?.freshness ?? null;
   const awaitingFirstLoad = isAwaitingFirstLoad(loadState);
   const isCompactLayout = useCompactLayout(480);
   const compactEvidenceCards = buildWorkersCompactEvidenceCards(data);
   const freshnessCard = (
     <PortalFreshnessCard
       isRefreshing={loadState.isLoading}
-      lastUpdatedAt={loadState.lastUpdatedAt}
+      lastUpdatedAt={workerOpsFreshness?.generatedAt ?? loadState.lastUpdatedAt}
       onRefresh={() => {
         void onRefresh();
       }}
       routeId={activeRouteId}
+      workerOpsFreshness={workerOpsFreshness}
     />
   );
 
@@ -1538,7 +1541,7 @@ export function PortalWorkersSurface({
         <div className="portal-panel-header">
           <div>
             {!isCompactLayout ? <p className="section-tag">Worker operations</p> : null}
-            <h2>Workers tracks queue pressure, lease health, and incident anchors.</h2>
+            <h2>Workers gives the current fleet overview, pool posture, and recovery signals.</h2>
           </div>
           <a className="button button-secondary" href={buildPortalUrl("/runs")}>
             Jump to runs
@@ -1568,6 +1571,7 @@ export function PortalWorkersSurface({
                 </div>
               </article>
             ) : null}
+            <PortalWorkerOpsFreshnessBanner freshness={data.freshness} />
             <div className="portal-summary-grid">
               <article className="portal-summary-card">
                 <span>Queued jobs</span>
@@ -1585,33 +1589,45 @@ export function PortalWorkersSurface({
                 <small>{data.queueSummary.cancelRequestedJobs} cancel requested</small>
               </article>
               <article className="portal-summary-card">
-                <span>Generated</span>
-                <strong>{formatTimestamp(data.generatedAt)}</strong>
-                <small>Current read model snapshot</small>
+                <span>Observed through</span>
+                <strong>
+                  {data.freshness.observedThrough
+                    ? formatTimestamp(data.freshness.observedThrough)
+                    : "No observations"}
+                </strong>
+                <small>API-owned worker freshness</small>
               </article>
             </div>
             {isCompactLayout ? freshnessCard : null}
             {data.workerPools.length ? (
-              <div className="portal-results-contract-grid">
-                {data.workerPools.map((pool) => (
-                  <article
-                    className="portal-results-contract-card"
-                    key={`${pool.workerPool}:${pool.workerRuntime}:${pool.workerVersion ?? "unseen"}`}
-                  >
-                    <p className="section-tag">Worker pool</p>
-                    <h3>{pool.workerPool}</h3>
-                    <p>{pool.workerRuntime} / {pool.workerVersion ?? "no workers seen yet"}</p>
-                    <p>
-                      Active leases: {pool.activeLeaseCount} / stale leases: {pool.staleLeaseCount}
-                    </p>
-                    {pool.activeRunIds.length ? (
-                      <a className="portal-inline-link" href={buildRunDetailHref(pool.activeRunIds[0])}>
-                        Open {pool.activeRunIds[0]}
-                      </a>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
+              <article className="portal-panel-table-flat">
+                <div className="portal-panel-header">
+                  <div>
+                    <p className="section-tag">Pool posture</p>
+                    <h2>Worker pools stay bounded to fields the API exposes today.</h2>
+                  </div>
+                </div>
+                <div className="portal-results-contract-grid">
+                  {data.workerPools.map((pool) => (
+                    <article
+                      className="portal-results-contract-card"
+                      key={`${pool.workerPool}:${pool.workerRuntime}:${pool.workerVersion ?? "unseen"}`}
+                    >
+                      <p className="section-tag">Worker pool</p>
+                      <h3>{pool.workerPool}</h3>
+                      <p>{pool.workerRuntime} / {pool.workerVersion ?? "no workers seen yet"}</p>
+                      <p>
+                        Active leases: {pool.activeLeaseCount} / stale leases: {pool.staleLeaseCount}
+                      </p>
+                      {pool.activeRunIds.length ? (
+                        <a className="portal-inline-link" href={buildRunDetailHref(pool.activeRunIds[0])}>
+                          Open {pool.activeRunIds[0]}
+                        </a>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </article>
             ) : (
               <PortalEmptyState
                 description="Refresh the worker operations view to reload current pool and lease posture."
@@ -1622,7 +1638,7 @@ export function PortalWorkersSurface({
               <div className="portal-panel-header">
                 <div>
                   <p className="section-tag">Incidents</p>
-                  <h2>Operational incidents stay tied to concrete runs.</h2>
+                  <h2>Active incidents route operators to concrete runs.</h2>
                 </div>
               </div>
               {data.incidents.length ? (
@@ -1670,8 +1686,8 @@ export function PortalWorkersSurface({
       </article>
 
       <aside className="portal-surface-rail">
-        <p className="section-tag">Active leases</p>
-        <h2>Lease posture stays tied to run evidence.</h2>
+        <p className="section-tag">Stale leases and active runs</p>
+        <h2>Lease posture stays tied to run evidence until worker-ops detail routes land.</h2>
         {(data?.activeLeases ?? []).length ? (
           <div className="portal-action-list">
             {(data?.activeLeases ?? []).map((lease) => (
@@ -1757,6 +1773,38 @@ function buildWorkersCompactEvidenceCards(data: PortalWorkersViewResponse | null
   );
 
   return cards;
+}
+
+function PortalWorkerOpsFreshnessBanner({
+  freshness
+}: {
+  freshness: PortalWorkerOpsFreshness;
+}) {
+  if (freshness.freshnessStatus === "live") {
+    return null;
+  }
+
+  if (freshness.freshnessStatus === "degraded") {
+    return (
+      <article className="portal-feedback-card portal-feedback-error">
+        <strong>Worker snapshot is degraded</strong>
+        <p>
+          The API returned a partial worker-operations snapshot: {freshness.degradationReason}.
+        </p>
+      </article>
+    );
+  }
+
+  return (
+    <article className="portal-feedback-card">
+      <strong>Worker snapshot is stale</strong>
+      <p>
+        The API last observed worker data through{" "}
+        {freshness.observedThrough ? formatTimestamp(freshness.observedThrough) : "an unknown time"}.
+        Keep existing rows visible, but confirm current posture before taking operator action.
+      </p>
+    </article>
+  );
 }
 
 function PortalErrorState({ error }: { error: string }) {

@@ -13,6 +13,7 @@ import {
   portalRunDetailParamsSchema,
   portalAccessRequestSummaryResponseSchema,
   portalProfileResponseSchema,
+  portalWorkersViewResponseSchema,
   portalSessionRedirectInputSchema,
   portalSessionRedirectRequestBodySchema,
   workerJobParamsSchema,
@@ -110,6 +111,17 @@ describe("shared api schema catalog", () => {
     expect(apiEndpointSchemaCatalog["portal.run-detail.read"].requestParams).toBe(
       portalRunDetailParamsSchema
     );
+
+    expect(apiEndpointSchemaCatalog["portal.workers.read"].responseBody).toBe(
+      portalWorkersViewResponseSchema
+    );
+
+    expect(apiEndpointSchemaCatalog["portal.worker-ops.overview.read"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: portalWorkersViewResponseSchema
+    });
 
     expect(apiEndpointSchemaCatalog["admin.access-request.detail"].requestParams).toBe(
       portalAdminAccessRequestParamsSchema

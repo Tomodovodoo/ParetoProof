@@ -1251,6 +1251,21 @@ export function registerPortalRoutes(
     async () => portalBenchmarkOpsReadModels.getWorkersView(),
   );
 
+  app.get(
+    "/portal/worker-ops/overview",
+    {
+      config: {
+        contract: portalBenchmarkOpsReadModelsContract.workersViewResponse,
+      },
+      preHandler: [
+        ...withAuthenticatedRateLimit(
+          requireAccess("approved_collaborator_or_higher"),
+        ),
+      ],
+    },
+    async () => portalBenchmarkOpsReadModels.getWorkersView(),
+  );
+
   const handlePortalProfileUpdate = async (
     request: FastifyRequest,
     reply: FastifyReply,

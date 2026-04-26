@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
   portalBenchmarkDatasetResponseSchema,
+  portalWorkerOpsFreshnessSchema,
+  portalWorkersViewResponseSchema,
   portalRunAttemptSummarySchema,
   portalRunJobSummarySchema,
   portalRunListItemSchema,
@@ -43,6 +45,80 @@ const baseRunItem = {
 };
 
 describe("portal benchmark-ops lifecycle contracts", () => {
+  it("requires explicit API-owned worker freshness for workers responses", () => {
+    const baseWorkersResponse = {
+      activeLeases: [],
+      freshness: {
+        degradationReason: null,
+        freshnessStatus: "live",
+        generatedAt: "2026-04-26T18:00:00.000Z",
+        observedThrough: null,
+        recommendedPollAfterSeconds: 15,
+        staleAfterSeconds: 60
+      },
+      generatedAt: "2026-04-26T18:00:00.000Z",
+      incidents: [],
+      queueSummary: {
+        activeRuns: 0,
+        cancelRequestedJobs: 0,
+        claimedJobs: 0,
+        queuedJobs: 0,
+        queuedRuns: 0,
+        runningJobs: 0
+      },
+      workerPools: []
+    };
+    const parsed = portalWorkersViewResponseSchema.parse(baseWorkersResponse);
+
+    expect(parsed.freshness.freshnessStatus).toBe("live");
+    expect(parsed.freshness.observedThrough).toBeNull();
+
+    expect(
+      portalWorkersViewResponseSchema.safeParse({
+        ...baseWorkersResponse,
+        freshness: {
+          ...baseWorkersResponse.freshness,
+          generatedAt: "2026-04-26T18:00:01.000Z"
+        }
+      }).success
+    ).toBe(false);
+  });
+
+  it("keeps worker degraded-state reasons explicit and absent from live states", () => {
+    expect(
+      portalWorkerOpsFreshnessSchema.parse({
+        degradationReason: "worker_ops_partial_snapshot",
+        freshnessStatus: "degraded",
+        generatedAt: "2026-04-26T18:00:00.000Z",
+        observedThrough: "2026-04-26T17:59:00.000Z",
+        recommendedPollAfterSeconds: 15,
+        staleAfterSeconds: 60
+      }).degradationReason
+    ).toBe("worker_ops_partial_snapshot");
+
+    expect(
+      portalWorkerOpsFreshnessSchema.safeParse({
+        degradationReason: null,
+        freshnessStatus: "degraded",
+        generatedAt: "2026-04-26T18:00:00.000Z",
+        observedThrough: "2026-04-26T17:59:00.000Z",
+        recommendedPollAfterSeconds: 15,
+        staleAfterSeconds: 60
+      }).success
+    ).toBe(false);
+
+    expect(
+      portalWorkerOpsFreshnessSchema.safeParse({
+        degradationReason: "not_allowed_for_live",
+        freshnessStatus: "live",
+        generatedAt: "2026-04-26T18:00:00.000Z",
+        observedThrough: "2026-04-26T17:59:00.000Z",
+        recommendedPollAfterSeconds: 15,
+        staleAfterSeconds: 60
+      }).success
+    ).toBe(false);
+  });
+
   it("accepts non-terminal runs with null terminal-only fields", () => {
     const parsed = portalRunListItemSchema.parse({
       ...baseRunItem,

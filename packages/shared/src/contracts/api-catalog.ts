@@ -186,6 +186,15 @@ export const apiEndpointCatalog = [
       "Return the bounded worker-operations overview for queue pressure, active leases, and derived operational incidents."
   },
   {
+    access: "approved_collaborator_or_higher",
+    audience: "portal",
+    id: "portal.worker-ops.overview.read",
+    method: "GET",
+    path: "/portal/worker-ops/overview",
+    purpose:
+      "Return the private worker-ops compatibility overview with API-owned freshness metadata."
+  },
+  {
     access: "authenticated_access_identity",
     audience: "portal",
     id: "portal.profile.update",

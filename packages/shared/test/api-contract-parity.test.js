@@ -31,6 +31,17 @@ describe("shared api catalog parity", () => {
     );
   });
 
+  it("covers the worker-ops compatibility overview as a browser-facing read model", () => {
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt",
+        endpointId: "portal.worker-ops.overview.read",
+        mode: "browser_direct",
+        origin: "portal_browser"
+      })
+    );
+  });
+
   it("exposes non-null schemas for representative catalogued endpoints", () => {
     expect(apiEndpointSchemaContract["health.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();

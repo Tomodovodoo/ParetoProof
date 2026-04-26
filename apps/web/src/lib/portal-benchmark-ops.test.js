@@ -462,6 +462,14 @@ describe("portal benchmark ops fetchers", () => {
       return new Response(
         JSON.stringify({
           activeLeases: [],
+          freshness: {
+            degradationReason: null,
+            freshnessStatus: "live",
+            generatedAt: "2026-04-17T03:30:00.000Z",
+            observedThrough: null,
+            recommendedPollAfterSeconds: 15,
+            staleAfterSeconds: 60
+          },
           generatedAt: "2026-04-17T03:30:00.000Z",
           incidents: [],
           queueSummary: {

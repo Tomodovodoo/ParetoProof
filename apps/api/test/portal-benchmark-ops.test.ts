@@ -445,6 +445,14 @@ function buildLaunchViewResponse(): PortalLaunchViewResponse {
 function buildWorkersViewResponse(): PortalWorkersViewResponse {
   return {
     activeLeases: [],
+    freshness: {
+      degradationReason: null,
+      freshnessStatus: "live",
+      generatedAt: "2026-03-13T20:00:00.000Z",
+      observedThrough: "2026-03-13T19:59:30.000Z",
+      recommendedPollAfterSeconds: 15,
+      staleAfterSeconds: 60
+    },
     generatedAt: "2026-03-13T20:00:00.000Z",
     incidents: [],
     queueSummary: {
@@ -948,6 +956,33 @@ test("portal worker-pool registry selection filters the catalog by deployment en
       workerRuntime: "modal"
     }
   ]);
+});
+
+test("portal worker-ops freshness is stale only when control-plane observations are old", () => {
+  const live = portalBenchmarkOpsReadModelTestUtils.buildPortalWorkerOpsFreshness({
+    generatedAt: new Date("2026-04-26T18:00:00.000Z"),
+    observedAtValues: [new Date("2026-04-26T17:59:30.000Z")]
+  });
+  const stale = portalBenchmarkOpsReadModelTestUtils.buildPortalWorkerOpsFreshness({
+    generatedAt: new Date("2026-04-26T18:00:00.000Z"),
+    observedAtValues: [new Date("2026-04-26T17:58:00.000Z")]
+  });
+  const empty = portalBenchmarkOpsReadModelTestUtils.buildPortalWorkerOpsFreshness({
+    generatedAt: new Date("2026-04-26T18:00:00.000Z"),
+    observedAtValues: []
+  });
+  const degraded = portalBenchmarkOpsReadModelTestUtils.buildPortalWorkerOpsFreshness({
+    degradationReason: "worker_ops_partial_snapshot",
+    generatedAt: new Date("2026-04-26T18:00:00.000Z"),
+    observedAtValues: [new Date("2026-04-26T17:59:30.000Z")]
+  });
+
+  assert.equal(live.freshnessStatus, "live");
+  assert.equal(stale.freshnessStatus, "stale");
+  assert.equal(empty.freshnessStatus, "live");
+  assert.equal(empty.observedThrough, null);
+  assert.equal(degraded.freshnessStatus, "degraded");
+  assert.equal(degraded.degradationReason, "worker_ops_partial_snapshot");
 });
 
 test("portal overview benchmark highlight query counts verdicts per run instead of per attempt row", () => {
@@ -1518,6 +1553,38 @@ test("GET /portal/workers returns the worker posture view for collaborators", as
     response.json()
   );
   assert.equal(payload.queueSummary.queuedJobs, 1);
+  assert.equal(payload.freshness.freshnessStatus, "live");
+  assert.equal(payload.generatedAt, payload.freshness.generatedAt);
+});
+
+test("GET /portal/worker-ops/overview mirrors the worker posture compatibility view", async (t) => {
+  const app = Fastify();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  registerPortalRoutes(
+    app,
+    {} as never,
+    createRequireAccessStub(["collaborator"]) as never,
+    {
+      portalBenchmarkOpsReadModels: createReadModelService(),
+      resolvePortalAccess: createResolvePortalAccessStub(["collaborator"]) as never
+    }
+  );
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/portal/worker-ops/overview"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = portalBenchmarkOpsReadModelsContract.workersViewResponse.parse(
+    response.json()
+  );
+  assert.equal(payload.queueSummary.queuedJobs, 1);
+  assert.equal(payload.freshness.recommendedPollAfterSeconds, 15);
 });
 
 test("portal benchmark ops normalization helpers keep canonical lifecycle wording aligned", () => {

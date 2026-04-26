@@ -28,6 +28,7 @@ import {
   type PortalRunsListQuery,
   type PortalRunsListResponse,
   type PortalWorkerIncident,
+  type PortalWorkerOpsFreshness,
   type PortalWorkerLeaseSummary,
   type PortalWorkersViewResponse
 } from "@paretoproof/shared";
@@ -100,6 +101,8 @@ function getRunLifecycleBucket(runState: RunRow["state"]): PortalRunsLifecycleBu
 const terminalRunStates = ["succeeded", "failed", "cancelled"] as const;
 const terminalJobStates = ["completed", "failed", "cancelled"] as const;
 const terminalAttemptStates = ["succeeded", "failed", "cancelled"] as const;
+const portalWorkerOpsRecommendedPollAfterSeconds = 15;
+const portalWorkerOpsStaleAfterSeconds = 60;
 
 function isTerminalRunState(
   state: RunRow["state"]
@@ -132,6 +135,46 @@ function compareByLeaseExpiryDesc(
   right: WorkerJobLeaseRow
 ) {
   return right.leaseExpiresAt.getTime() - left.leaseExpiresAt.getTime();
+}
+
+function getLatestTimestamp(values: Array<Date | null | undefined>) {
+  return values.reduce<Date | null>((latest, value) => {
+    if (!value) {
+      return latest;
+    }
+
+    if (!latest || value.getTime() > latest.getTime()) {
+      return value;
+    }
+
+    return latest;
+  }, null);
+}
+
+function buildPortalWorkerOpsFreshness(options: {
+  degradationReason?: string | null;
+  generatedAt: Date;
+  observedAtValues: Array<Date | null | undefined>;
+}): PortalWorkerOpsFreshness {
+  const observedThrough = getLatestTimestamp(options.observedAtValues);
+  const degradationReason = options.degradationReason ?? null;
+  const freshnessStatus =
+    degradationReason !== null
+      ? "degraded"
+      : observedThrough &&
+          options.generatedAt.getTime() - observedThrough.getTime() >
+            portalWorkerOpsStaleAfterSeconds * 1000
+        ? "stale"
+        : "live";
+
+  return {
+    degradationReason,
+    freshnessStatus,
+    generatedAt: options.generatedAt.toISOString(),
+    observedThrough: toIso(observedThrough),
+    recommendedPollAfterSeconds: portalWorkerOpsRecommendedPollAfterSeconds,
+    staleAfterSeconds: portalWorkerOpsStaleAfterSeconds
+  };
 }
 
 function compareNullableTimestampDescNullsLast(
@@ -461,6 +504,7 @@ function buildTimeline(options: {
 }
 
 export const portalBenchmarkOpsReadModelTestUtils = {
+  buildPortalWorkerOpsFreshness,
   buildWorkerPoolSummaries,
   readRegisteredWorkerPoolsForEnvironment,
   buildOverviewBenchmarkHighlightsQuery,
@@ -1612,7 +1656,8 @@ export function createPortalBenchmarkOpsReadModelService(
           .select({
             completedAt: runs.completedAt,
             primaryFailureFamily: runs.primaryFailureFamily,
-            sourceRunId: runs.sourceRunId
+            sourceRunId: runs.sourceRunId,
+            updatedAt: runs.updatedAt
           })
           .from(runs)
           .where(eq(runs.state, "failed"))
@@ -1620,7 +1665,8 @@ export function createPortalBenchmarkOpsReadModelService(
           .limit(20),
         db
           .select({
-            sourceRunId: runs.sourceRunId
+            sourceRunId: runs.sourceRunId,
+            updatedAt: runs.updatedAt
           })
           .from(runs)
           .where(eq(runs.state, "queued"))
@@ -1713,10 +1759,22 @@ export function createPortalBenchmarkOpsReadModelService(
           });
         }
       }
+      const freshness = buildPortalWorkerOpsFreshness({
+        generatedAt: now,
+        observedAtValues: [
+          ...leaseRows.flatMap((leaseRow) => [leaseRow.updatedAt, leaseRow.lastHeartbeatAt]),
+          ...runRows.map((runRow) => runRow.updatedAt),
+          ...jobRows.map((jobRow) => jobRow.updatedAt),
+          ...attemptRows.map((attemptRow) => attemptRow.updatedAt),
+          ...recentFailedRuns.flatMap((runRow) => [runRow.updatedAt, runRow.completedAt]),
+          ...queuedRunRows.map((runRow) => runRow.updatedAt)
+        ]
+      });
 
       return {
         activeLeases,
-        generatedAt: now.toISOString(),
+        freshness,
+        generatedAt: freshness.generatedAt,
         incidents,
         queueSummary: {
           activeRuns,

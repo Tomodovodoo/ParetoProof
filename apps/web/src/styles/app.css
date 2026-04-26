@@ -1687,6 +1687,12 @@ a.button-secondary {
   background: rgba(185, 117, 20, 0.1);
 }
 
+.portal-freshness-degraded {
+  color: var(--rose);
+  border-color: rgba(176, 52, 71, 0.22);
+  background: rgba(176, 52, 71, 0.1);
+}
+
 .portal-section-notes {
   padding-top: 14px;
   border-top: 1px solid var(--line);
