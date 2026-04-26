@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
+import { portalSessionFinalizeResponseSchema } from "@paretoproof/shared";
 import { buildSignedAccessCookie } from "../src/auth/cloudflare-access.ts";
 import { createAccessGuard } from "../src/auth/require-access.ts";
 import { sessions } from "../src/db/schema.ts";
@@ -403,7 +404,9 @@ test("POST /portal/session/finalize/submit returns the JSON redirect payload for
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), {
+  const responseBody = response.json();
+  assert.equal(portalSessionFinalizeResponseSchema.safeParse(responseBody).success, true);
+  assert.deepEqual(responseBody, {
     redirectTo: "https://portal.paretoproof.com/profile",
   });
   assert.equal(mutationAttempted, false);
@@ -482,7 +485,9 @@ test("POST /portal/session/finalize/submit returns a math-surface redirect for a
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), {
+  const responseBody = response.json();
+  assert.equal(portalSessionFinalizeResponseSchema.safeParse(responseBody).success, true);
+  assert.deepEqual(responseBody, {
     redirectTo: "https://math.preview.paretoproof.com/launch",
   });
   assert.equal(mutationAttempted, false);

@@ -1,3 +1,5 @@
+import type { PortalRole } from "./portal-navigation.js";
+
 export type PortalIdentityProvider =
   | "cloudflare_google"
   | "cloudflare_github"
@@ -6,6 +8,30 @@ export type PortalIdentityProvider =
 export type PortalLinkableIdentityProvider =
   | "cloudflare_google"
   | "cloudflare_github";
+
+export type PortalAccessStatus = "approved" | "pending" | "denied";
+
+export type PortalAccessDeniedReason =
+  | "access_request_required"
+  | "identity_recovery_required"
+  | "rejected_or_withdrawn"
+  | "unknown_identity";
+
+export type PortalMeAccess =
+  | {
+      email: string;
+      role: PortalRole;
+      status: "approved";
+    }
+  | {
+      email: string | null;
+      status: "pending";
+    }
+  | {
+      email: string | null;
+      reason: PortalAccessDeniedReason;
+      status: "denied";
+    };
 
 export type PortalProfileIdentity = {
   createdAt: string;
@@ -38,8 +64,19 @@ export type PortalSessionRedirectInput = {
   redirect?: string | null;
 };
 
+export type PortalMeResponse = {
+  access: PortalMeAccess;
+  identity: {
+    provider: PortalIdentityProvider | null;
+  } | null;
+};
+
 export type PortalProfileLinkIntent = {
   expiresAt: string;
   provider: PortalLinkableIdentityProvider;
   startUrl: string;
+};
+
+export type PortalSessionFinalizeResponse = {
+  redirectTo: string;
 };

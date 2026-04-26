@@ -1,4 +1,5 @@
 const rateLimitBackoffByOrigin = new Map<string, number>();
+export const authenticatedAuthExpiredEventName = "paretoproof:authenticated-auth-expired";
 export const portalAuthExpiredEventName = "paretoproof:portal-auth-expired";
 
 export class ApiRateLimitError extends Error {
@@ -69,8 +70,12 @@ function shouldAutoRetry(init: RequestInit | undefined) {
   return method === "GET" || method === "HEAD";
 }
 
-function signalPortalAuthExpired(requestUrl: URL, response: Response) {
-  if (response.status !== 401 || !requestUrl.pathname.startsWith("/portal/")) {
+function isAuthenticatedSurfaceApiPath(pathname: string) {
+  return pathname.startsWith("/portal/") || pathname.startsWith("/math/");
+}
+
+function signalAuthenticatedAuthExpired(requestUrl: URL, response: Response) {
+  if (response.status !== 401 || !isAuthenticatedSurfaceApiPath(requestUrl.pathname)) {
     return;
   }
 
@@ -78,7 +83,11 @@ function signalPortalAuthExpired(requestUrl: URL, response: Response) {
     return;
   }
 
-  window.dispatchEvent(new Event(portalAuthExpiredEventName));
+  window.dispatchEvent(new Event(authenticatedAuthExpiredEventName));
+
+  if (requestUrl.pathname.startsWith("/portal/")) {
+    window.dispatchEvent(new Event(portalAuthExpiredEventName));
+  }
 }
 
 export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -98,7 +107,7 @@ export async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Pr
     const response = await fetch(input, init);
 
     if (response.status !== 429) {
-      signalPortalAuthExpired(requestUrl, response);
+      signalAuthenticatedAuthExpired(requestUrl, response);
       return response;
     }
 

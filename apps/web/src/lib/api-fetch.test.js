@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ApiRateLimitError,
+  authenticatedAuthExpiredEventName,
   fetchApi,
   portalAuthExpiredEventName
 } from "./api-fetch.ts";
@@ -94,7 +95,7 @@ test("fetchApi throws ApiRateLimitError for non-idempotent requests after readin
   }
 });
 
-test("fetchApi emits a portal auth-expired event for 401 portal responses", async () => {
+test("fetchApi emits authenticated and legacy portal auth-expired events for 401 portal responses", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const observedEvents = [];
@@ -124,14 +125,54 @@ test("fetchApi emits a portal auth-expired event for 401 portal responses", asyn
     const response = await fetchApi("https://api.paretoproof.com/portal/admin/access-requests");
 
     assert.equal(response.status, 401);
-    assert.deepEqual(observedEvents, [portalAuthExpiredEventName]);
+    assert.deepEqual(observedEvents, [
+      authenticatedAuthExpiredEventName,
+      portalAuthExpiredEventName
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.window = originalWindow;
   }
 });
 
-test("fetchApi does not emit a portal auth-expired event for non-portal 401 responses", async () => {
+test("fetchApi emits the authenticated auth-expired event for 401 math responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const observedEvents = [];
+
+  globalThis.window = {
+    dispatchEvent(event) {
+      observedEvents.push(event.type);
+      return true;
+    },
+    location: {
+      origin: "https://math.paretoproof.com"
+    },
+    setTimeout(callback) {
+      callback();
+      return 0;
+    }
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: "access_assertion_required" }), {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      status: 401
+    });
+
+  try {
+    const response = await fetchApi("https://api.paretoproof.com/math/submissions");
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(observedEvents, [authenticatedAuthExpiredEventName]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
+  }
+});
+
+test("fetchApi does not emit an authenticated auth-expired event for public 401 responses", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const observedEvents = [];

@@ -431,6 +431,38 @@ describe("handleAccessFinalize", () => {
     );
   });
 
+  it("redirects back to retry when the API finalize response does not match the shared contract", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          redirectTo: "/profile"
+        }),
+        {
+          status: 200
+        }
+      );
+
+    const response = await handleAccessFinalize(
+      new Request("https://github.auth.paretoproof.com/api/access/finalize?app=portal", {
+        body: new URLSearchParams({
+          app: "portal",
+          redirect: "/profile"
+        }),
+        headers: {
+          "cf-access-jwt-assertion": "assertion-malformed-contract",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "https://github.auth.paretoproof.com"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://auth.paretoproof.com/?app=portal&redirect=%2Fprofile&handoff=retry"
+    );
+  });
+
   it("redirects back to retry without relaying when the browser Origin header is absent", async () => {
     globalThis.fetch = async (_input, init) => {
       expect((init?.headers as Headers).get("origin")).toBe(

@@ -1,4 +1,4 @@
-export type ApiAudience = "public" | "portal" | "internal";
+export type ApiAudience = "public" | "authenticated_surface" | "portal" | "internal";
 
 export type ApiAccessLevel =
   | "anonymous"

@@ -11,11 +11,12 @@ export const apiEndpointCatalog = [
   },
   {
     access: "authenticated_access_identity",
-    audience: "portal",
+    audience: "authenticated_surface",
     id: "portal.me.read",
     method: "GET",
     path: "/portal/me",
-    purpose: "Return the caller's resolved identity, role summary, and approval state."
+    purpose:
+      "Return the caller's resolved identity, role summary, and approval state for portal or math bootstrap."
   },
   {
     access: "anonymous",
@@ -46,30 +47,30 @@ export const apiEndpointCatalog = [
   },
   {
     access: "authenticated_access_identity",
-    audience: "portal",
+    audience: "authenticated_surface",
     id: "portal.session.complete.submit",
     method: "POST",
     path: "/portal/session/complete",
     purpose:
-      "Finish the Cloudflare Access login handoff on the legacy complete POST alias without requiring the caller to switch away from the authenticated browser surface."
+      "Finish a portal or math Cloudflare Access login handoff on the legacy complete POST alias without requiring the caller to switch away from the authenticated browser surface."
   },
   {
     access: "authenticated_access_identity",
-    audience: "portal",
+    audience: "authenticated_surface",
     id: "portal.session.finalize.submit",
     method: "POST",
     path: "/portal/session/finalize",
     purpose:
-      "Finish the Cloudflare Access login handoff on the legacy finalize POST alias while preserving the same redirect-bearing session semantics as the canonical submit route."
+      "Finish a portal or math Cloudflare Access login handoff on the legacy finalize POST alias while preserving the same redirect-bearing session semantics as the canonical submit route."
   },
   {
     access: "authenticated_access_identity",
-    audience: "portal",
+    audience: "authenticated_surface",
     id: "portal.session.complete",
     method: "POST",
     path: "/portal/session/finalize/submit",
     purpose:
-      "Finish the Cloudflare Access login handoff with a first-party POST on the API audience and return the browser to the static portal host."
+      "Finish a portal or math Cloudflare Access login handoff with a first-party POST on the API audience and return the browser to the requested authenticated surface."
   },
   {
     access: "authenticated_access_identity",

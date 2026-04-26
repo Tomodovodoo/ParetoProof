@@ -1,7 +1,8 @@
-import type {
-  PortalAccessRecoveryInput,
-  PortalAccessRequestInput,
-  PortalRole
+import {
+  portalMeResponseSchema,
+  type PortalMeResponse,
+  type PortalAccessRecoveryInput,
+  type PortalAccessRequestInput
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppIcon } from "../components/app-icon";
@@ -10,7 +11,11 @@ import {
   clearApprovedAuthHandoffCookie,
   readApprovedAuthHandoffCookie
 } from "../lib/approved-auth-handoff";
-import { fetchApi, portalAuthExpiredEventName } from "../lib/api-fetch";
+import {
+  authenticatedAuthExpiredEventName,
+  fetchApi,
+  portalAuthExpiredEventName
+} from "../lib/api-fetch";
 import { createApiFormBody } from "../lib/api-form";
 import { isLocalDevelopmentLocation } from "../lib/local-development";
 import { resolveSurfaceRouteRedirect } from "../lib/portal-route-access";
@@ -32,22 +37,6 @@ import {
 } from "./portal-bootstrap-state";
 import { PortalShell } from "./portal-shell";
 
-type PortalMeResponse = {
-  access: {
-    email: string | null;
-    role?: PortalRole | null;
-    reason?:
-      | "access_request_required"
-      | "identity_recovery_required"
-      | "rejected_or_withdrawn"
-      | "unknown_identity";
-    status: "approved" | "pending" | "denied";
-  };
-  identity: {
-    provider: "cloudflare_one_time_pin" | "cloudflare_github" | "cloudflare_google" | null;
-  } | null;
-};
-
 type PortalMutationAction = "access_request" | "identity_recovery";
 
 type PortalMutationErrorPayload = {
@@ -62,6 +51,16 @@ type PortalBootstrapFetcher = (
 
 export function derivePortalRoles(role: string | null | undefined) {
   return role ? [role] : [];
+}
+
+export function parsePortalMeResponse(payload: unknown): PortalMeResponse {
+  const parsed = portalMeResponseSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    throw new Error("Portal bootstrap response did not match the shared contract.");
+  }
+
+  return parsed.data;
 }
 
 export async function fetchPortalBootstrapState(
@@ -89,7 +88,7 @@ export async function fetchPortalBootstrapState(
     throw new Error(`Portal bootstrap failed with ${response.status}.`);
   }
 
-  const payload = (await response.json()) as PortalMeResponse;
+  const payload = parsePortalMeResponse(await response.json());
 
   if (shouldRestartPortalAuthForMissingProvider(payload)) {
     return { status: "unauthenticated" };
@@ -124,6 +123,7 @@ export async function recoverPortalStateAfterAuthExpiry(
     fetcher?: PortalBootstrapFetcher;
     localApiFallback?: boolean;
     signal?: AbortSignal;
+    surface?: AuthenticatedSurface;
   }
 ): Promise<PortalAccessState> {
   const reducedState = reducePortalStateAfterAuthExpiry(currentState);
@@ -137,7 +137,8 @@ export async function recoverPortalStateAfterAuthExpiry(
   } catch (error) {
     return buildPortalBootstrapErrorState(error, {
       apiBaseUrl,
-      localApiFallback: options?.localApiFallback ?? false
+      localApiFallback: options?.localApiFallback ?? false,
+      surface: options?.surface
     });
   }
 }
@@ -151,6 +152,7 @@ function readRouteDeniedReason(search = window.location.search) {
 type PortalBootstrapErrorContext = {
   apiBaseUrl: string;
   localApiFallback: boolean;
+  surface?: AuthenticatedSurface;
 };
 
 function isNetworkFetchFailure(error: unknown) {
@@ -171,10 +173,12 @@ export function buildPortalBootstrapErrorState(
   error: unknown,
   context: PortalBootstrapErrorContext
 ): Extract<PortalAccessState, { status: "error" }> {
+  const surface = context.surface ?? "portal";
+
   if (isNetworkFetchFailure(error) && context.localApiFallback) {
     return {
       kind: "local_api_unavailable",
-      message: `This local portal preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.`,
+      message: `This local ${describeSurfaceName(surface)} preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using ${describeSurfaceRouteScope(surface)}.`,
       status: "error"
     };
   }
@@ -182,8 +186,7 @@ export function buildPortalBootstrapErrorState(
   if (isNetworkFetchFailure(error)) {
     return {
       kind: "portal_unavailable",
-      message:
-        "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      message: `The ${describeSurfaceName(surface)} could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.`,
       status: "error"
     };
   }
@@ -191,15 +194,14 @@ export function buildPortalBootstrapErrorState(
   if (error instanceof Error) {
     return {
       kind: "portal_unavailable",
-      message:
-        "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      message: `The ${describeSurfaceName(surface)} could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.`,
       status: "error"
     };
   }
 
   return {
     kind: "portal_unavailable",
-    message: "The portal could not finish loading right now. Try again in a moment.",
+    message: `The ${describeSurfaceName(surface)} could not finish loading right now. Try again in a moment.`,
     status: "error"
   };
 }
@@ -249,6 +251,10 @@ function describeSurfaceLabel(surface: AuthenticatedSurface) {
 
 function describeSurfaceName(surface: AuthenticatedSurface) {
   return surface === "math" ? "math workspace" : "portal";
+}
+
+function describeSurfaceRouteScope(surface: AuthenticatedSurface) {
+  return surface === "math" ? "math workspace routes" : "portal routes";
 }
 
 type PortalBootstrapProps = {
@@ -368,7 +374,8 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
         setState(
           buildPortalBootstrapErrorState(error, {
             apiBaseUrl,
-            localApiFallback
+            localApiFallback,
+            surface
           })
         );
       }
@@ -394,7 +401,8 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
 
       void recoverPortalStateAfterAuthExpiry(currentState, apiBaseUrl, {
         localApiFallback,
-        signal: controller.signal
+        signal: controller.signal,
+        surface
       })
         .then((recoveredState) => {
           if (controller.signal.aborted || !active) {
@@ -408,14 +416,16 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
         });
     };
 
+    window.addEventListener(authenticatedAuthExpiredEventName, handlePortalAuthExpired);
     window.addEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
 
     return () => {
       active = false;
       controller.abort();
+      window.removeEventListener(authenticatedAuthExpiredEventName, handlePortalAuthExpired);
       window.removeEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
     };
-  }, [apiBaseUrl, localApiFallback]);
+  }, [apiBaseUrl, localApiFallback, surface]);
 
   useEffect(() => {
     if (state.status !== "unauthenticated" || localPreviewMode) {

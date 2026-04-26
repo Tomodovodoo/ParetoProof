@@ -10,9 +10,11 @@ import {
   portalBenchmarkDatasetResponseSchema,
   portalBenchmarkExportQuerySchema,
   portalBenchmarksListResponseSchema,
+  portalMeResponseSchema,
   portalRunDetailParamsSchema,
   portalAccessRequestSummaryResponseSchema,
   portalProfileResponseSchema,
+  portalSessionFinalizeResponseSchema,
   portalSessionRedirectInputSchema,
   portalSessionRedirectRequestBodySchema,
   workerJobParamsSchema,
@@ -43,6 +45,13 @@ describe("shared api schema catalog", () => {
       responseBody: portalProfileResponseSchema
     });
 
+    expect(apiEndpointSchemaCatalog["portal.me.read"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: portalMeResponseSchema
+    });
+
     expect(apiEndpointSchemaCatalog["portal.session.retry.complete"]).toEqual({
       requestBody: null,
       requestParams: null,
@@ -68,21 +77,21 @@ describe("shared api schema catalog", () => {
       requestBody: portalSessionRedirectRequestBodySchema,
       requestParams: null,
       requestQuery: portalSessionRedirectInputSchema,
-      responseBody: null
+      responseBody: portalSessionFinalizeResponseSchema
     });
 
     expect(apiEndpointSchemaCatalog["portal.session.finalize.submit"]).toEqual({
       requestBody: portalSessionRedirectRequestBodySchema,
       requestParams: null,
       requestQuery: portalSessionRedirectInputSchema,
-      responseBody: null
+      responseBody: portalSessionFinalizeResponseSchema
     });
 
     expect(apiEndpointSchemaCatalog["portal.session.complete"]).toEqual({
       requestBody: portalSessionRedirectRequestBodySchema,
       requestParams: null,
       requestQuery: portalSessionRedirectInputSchema,
-      responseBody: null
+      responseBody: portalSessionFinalizeResponseSchema
     });
 
     expect(apiEndpointSchemaCatalog["portal.benchmarks.list"].responseBody).toBe(
@@ -132,12 +141,8 @@ describe("shared api schema catalog", () => {
   });
 
   it("makes intentionally unmodeled endpoint responses explicit", () => {
-    expect(apiEndpointSchemaCatalog["portal.me.read"].responseBody).toBeNull();
     expect(apiEndpointSchemaCatalog["portal.session.retry.complete"].responseBody).toBeNull();
     expect(apiEndpointSchemaCatalog["portal.session.retry.finalize"].responseBody).toBeNull();
     expect(apiEndpointSchemaCatalog["portal.session.finalize.read"].responseBody).toBeNull();
-    expect(apiEndpointSchemaCatalog["portal.session.complete.submit"].responseBody).toBeNull();
-    expect(apiEndpointSchemaCatalog["portal.session.finalize.submit"].responseBody).toBeNull();
-    expect(apiEndpointSchemaCatalog["portal.session.complete"].responseBody).toBeNull();
   });
 });

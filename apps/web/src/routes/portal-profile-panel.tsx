@@ -1,11 +1,11 @@
 import type {
   PortalLinkableIdentityProvider,
-  PortalProfile,
-  PortalProfileLinkIntent,
-  PortalProfileUpdateInput
+  PortalProfile
 } from "@paretoproof/shared";
 import {
   portalProfileLinkIntentInputSchema,
+  portalProfileLinkIntentResponseSchema,
+  portalProfileResponseSchema,
   portalProfileUpdateInputSchema
 } from "@paretoproof/shared";
 import { useEffect, useMemo, useState, startTransition } from "react";
@@ -120,6 +120,26 @@ export function consumeLinkStatus(
   };
 }
 
+export function parsePortalProfileResponse(payload: unknown) {
+  const parsed = portalProfileResponseSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    throw new Error("Portal profile response did not match the shared contract.");
+  }
+
+  return parsed.data;
+}
+
+export function parsePortalProfileLinkIntentResponse(payload: unknown) {
+  const parsed = portalProfileLinkIntentResponseSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    throw new Error("Portal profile link-intent response did not match the shared contract.");
+  }
+
+  return parsed.data;
+}
+
 export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
   const [profile, setProfile] = useState<PortalProfile | null>(null);
   const [displayNameInput, setDisplayNameInput] = useState("");
@@ -178,9 +198,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
           throw new Error(`Profile load failed with ${response.status}.`);
         }
 
-        const payload = (await response.json()) as {
-          profile: PortalProfile;
-        };
+        const payload = parsePortalProfileResponse(await response.json());
 
         if (!cancelled) {
           setDisplayNameInput(payload.profile.displayName ?? "");
@@ -240,9 +258,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         throw new Error(`Link preparation failed with ${response.status}.`);
       }
 
-      const payload = (await response.json()) as {
-        intent: PortalProfileLinkIntent;
-      };
+      const payload = parsePortalProfileLinkIntentResponse(await response.json());
 
       window.location.assign(payload.intent.startUrl);
     } catch (error) {
@@ -285,9 +301,7 @@ export function PortalProfilePanel({ email }: PortalProfilePanelProps) {
         throw new Error(`Profile save failed with ${response.status}.`);
       }
 
-      const payload = (await response.json()) as {
-        profile: PortalProfile;
-      };
+      const payload = parsePortalProfileResponse(await response.json());
 
       setDisplayNameInput(payload.profile.displayName ?? "");
       setLastUpdatedAt(new Date().toISOString());
