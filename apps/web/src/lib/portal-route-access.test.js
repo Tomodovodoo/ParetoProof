@@ -154,6 +154,23 @@ describe("resolvePortalRouteRedirect", () => {
     ).toBeNull();
   });
 
+  it("keeps approved users on math review detail routes", () => {
+    setWindowUrl(
+      "http://localhost/reviews/review-peer-problem9-submission?surface=math&access=approved&roles=helper&email=lin@paretoproof.local"
+    );
+
+    expect(
+      resolveSurfaceRouteRedirect({
+        pathname: "/reviews/review-peer-problem9-submission",
+        roles: ["helper"],
+        search:
+          "?surface=math&access=approved&roles=helper&email=lin@paretoproof.local",
+        status: "approved",
+        surface: "math"
+      })
+    ).toBeNull();
+  });
+
   it("redirects pending math users to the portal pending surface", () => {
     setWindowUrl(
       "http://localhost/launch?surface=math&access=pending&email=ada@paretoproof.local"

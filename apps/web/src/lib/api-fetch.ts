@@ -69,8 +69,12 @@ function shouldAutoRetry(init: RequestInit | undefined) {
   return method === "GET" || method === "HEAD";
 }
 
+function usesAuthenticatedApiSession(pathname: string) {
+  return pathname.startsWith("/portal/") || pathname.startsWith("/math/");
+}
+
 function signalPortalAuthExpired(requestUrl: URL, response: Response) {
-  if (response.status !== 401 || !requestUrl.pathname.startsWith("/portal/")) {
+  if (response.status !== 401 || !usesAuthenticatedApiSession(requestUrl.pathname)) {
     return;
   }
 

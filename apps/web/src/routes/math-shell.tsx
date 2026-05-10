@@ -1,5 +1,8 @@
 import { AppIcon } from "../components/app-icon";
+import type { ReactNode } from "react";
 import { buildMathUrl, buildPortalUrl } from "../lib/surface";
+import { MathReviewDetail } from "./math-review-detail";
+import { MathReviewQueues } from "./math-review-queues";
 
 type MathShellProps = {
   email: string | null;
@@ -58,10 +61,29 @@ function describeMathPath(pathname: string) {
 export function MathShell({ email, pathname, roles }: MathShellProps) {
   const descriptor = describeMathPath(pathname);
   const roleLabel = roles[0] ?? "approved contributor";
+  const search = typeof window !== "undefined" ? window.location.search : "";
+
+  if (pathname === "/reviews") {
+    return (
+      <MathWorkspaceFrame email={email} pathname={pathname} roleLabel={roleLabel}>
+        <MathReviewQueues search={search} />
+      </MathWorkspaceFrame>
+    );
+  }
+
+  if (pathname.startsWith("/reviews/")) {
+    const reviewId = decodeURIComponent(pathname.slice("/reviews/".length));
+
+    return (
+      <MathWorkspaceFrame email={email} pathname={pathname} roleLabel={roleLabel}>
+        <MathReviewDetail reviewId={reviewId} reviewerDisplayName={email ?? "Current reviewer"} />
+      </MathWorkspaceFrame>
+    );
+  }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card auth-card-polished auth-status-card">
+    <MathWorkspaceFrame email={email} pathname={pathname} roleLabel={roleLabel}>
+      <section className="math-review-panel math-review-placeholder">
         <p className="eyebrow">
           <span className="inline-icon" aria-hidden="true">
             <AppIcon name="shield" />
@@ -86,6 +108,68 @@ export function MathShell({ email, pathname, roles }: MathShellProps) {
           </a>
         </div>
       </section>
+    </MathWorkspaceFrame>
+  );
+}
+
+function MathWorkspaceFrame({
+  children,
+  email,
+  pathname,
+  roleLabel
+}: {
+  children: ReactNode;
+  email: string | null;
+  pathname: string;
+  roleLabel: string;
+}) {
+  const navItems = [
+    { href: buildMathUrl("/"), label: "Home", path: "/" },
+    { href: buildMathUrl("/questions"), label: "Questions", path: "/questions" },
+    { href: buildMathUrl("/submissions"), label: "Submissions", path: "/submissions" },
+    { href: buildMathUrl("/reviews"), label: "Reviews", path: "/reviews" },
+    { href: buildMathUrl("/launch"), label: "Launch", path: "/launch" }
+  ];
+
+  return (
+    <main className="math-workspace-shell">
+      <header className="math-workspace-header">
+        <div>
+          <p className="eyebrow">
+            <span className="inline-icon" aria-hidden="true">
+              <AppIcon name="shield" />
+            </span>
+            ParetoProof math
+          </p>
+          <h1>Math workspace</h1>
+          <p>
+            Signed in{email ? ` as ${email}` : ""} with {roleLabel} access.
+          </p>
+        </div>
+        <nav className="math-workspace-nav" aria-label="Math workspace">
+          {navItems.map((item) => (
+            <a
+              aria-current={
+                pathname === item.path ||
+                (item.path !== "/" && pathname.startsWith(`${item.path}/`))
+                  ? "page"
+                  : undefined
+              }
+              className={
+                pathname === item.path ||
+                (item.path !== "/" && pathname.startsWith(`${item.path}/`))
+                  ? "math-workspace-nav-active"
+                  : undefined
+              }
+              href={item.href}
+              key={item.path}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      </header>
+      {children}
     </main>
   );
 }

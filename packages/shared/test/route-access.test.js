@@ -31,6 +31,9 @@ describe("route ownership matrix helpers", () => {
     expect(findAppRouteBySurface("math", "/questions/problem-9")?.id).toBe(
       "math.question-detail"
     );
+    expect(findAppRouteBySurface("math", "/reviews/review-123")?.id).toBe(
+      "math.review-detail"
+    );
     expect(findAppRouteBySurface("math", "/workers")).toBeNull();
   });
 

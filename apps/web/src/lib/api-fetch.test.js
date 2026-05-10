@@ -131,6 +131,43 @@ test("fetchApi emits a portal auth-expired event for 401 portal responses", asyn
   }
 });
 
+test("fetchApi emits an auth-expired event for 401 math responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const observedEvents = [];
+
+  globalThis.window = {
+    dispatchEvent(event) {
+      observedEvents.push(event.type);
+      return true;
+    },
+    location: {
+      origin: "https://math.paretoproof.com"
+    },
+    setTimeout(callback) {
+      callback();
+      return 0;
+    }
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: "access_assertion_required" }), {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      status: 401
+    });
+
+  try {
+    const response = await fetchApi("https://api.paretoproof.com/math/reviews");
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(observedEvents, [portalAuthExpiredEventName]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
+  }
+});
+
 test("fetchApi does not emit a portal auth-expired event for non-portal 401 responses", async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
