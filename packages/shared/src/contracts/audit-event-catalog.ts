@@ -3,6 +3,146 @@ import type { AuditEventCatalogEntry } from "../types/audit-event.js";
 export const auditEventCatalog = [
   {
     actor: "portal_user",
+    id: "math_question.created",
+    rationale:
+      "Question creation establishes a durable math workflow identity for revisions, submissions, and later release lineage.",
+    requiredFields: ["actorUserId", "mathQuestionId", "slug"],
+    severity: "info",
+    subject: "math_question"
+  },
+  {
+    actor: "portal_user",
+    id: "math_question_revision.created",
+    rationale:
+      "Question revisions are immutable review targets, so creation must preserve the author and parent question.",
+    requiredFields: ["actorUserId", "mathQuestionId", "mathQuestionRevisionId"],
+    severity: "info",
+    subject: "math_question_revision"
+  },
+  {
+    actor: "portal_user",
+    id: "math_question_revision.posture_updated",
+    rationale:
+      "Revision posture changes decide whether a question definition is reviewable, accepted, or retired.",
+    requiredFields: ["actorUserId", "mathQuestionRevisionId", "posture"],
+    severity: "warning",
+    subject: "math_question_revision"
+  },
+  {
+    actor: "portal_user",
+    id: "math_submission.created",
+    rationale:
+      "Submissions are durable units of math work and need a traceable submitter, question, and targeted revision.",
+    requiredFields: [
+      "actorUserId",
+      "mathQuestionId",
+      "mathQuestionRevisionId",
+      "mathSubmissionId"
+    ],
+    severity: "info",
+    subject: "math_submission"
+  },
+  {
+    actor: "portal_user",
+    id: "math_submission.posture_updated",
+    rationale:
+      "Submission posture changes affect review and package-candidate eligibility and must retain the actor and resulting state.",
+    requiredFields: ["actorUserId", "mathSubmissionId", "posture"],
+    severity: "warning",
+    subject: "math_submission"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.record_opened",
+    rationale:
+      "Opening a math review record creates the durable review anchor for a specific subject and kind.",
+    requiredFields: ["actorUserId", "mathReviewRecordId", "reviewKind", "subjectType"],
+    severity: "info",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.round_opened",
+    rationale:
+      "Review rounds preserve separate review attempts under a durable record and need an auditable opener.",
+    requiredFields: ["actorUserId", "mathReviewRecordId", "mathReviewRoundId"],
+    severity: "info",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.assignment_changed",
+    rationale:
+      "Assignment changes decide who owns a round and must preserve reassignment or recusal history.",
+    requiredFields: ["actorUserId", "assignmentRole", "mathReviewRoundId"],
+    severity: "warning",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.checklist_updated",
+    rationale:
+      "Checklist state is structured review evidence and should not be reconstructed from comments.",
+    requiredFields: ["actorUserId", "checklistFamily", "itemKey", "mathReviewRoundId"],
+    severity: "info",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.comment_added",
+    rationale:
+      "Review comments are round-owned evidence and discussion tied to a durable review subject.",
+    requiredFields: ["actorUserId", "mathReviewCommentId", "mathReviewRoundId"],
+    severity: "info",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_review.decision_recorded",
+    rationale:
+      "Review decisions determine progression through math workflow and must preserve the actor, round, and outcome.",
+    requiredFields: ["actorUserId", "decision", "mathReviewRecordId", "mathReviewRoundId"],
+    severity: "critical",
+    subject: "math_review_record"
+  },
+  {
+    actor: "portal_user",
+    id: "math_package_candidate.created",
+    rationale:
+      "Package candidates bridge accepted math workflow output into repository-backed benchmark material.",
+    requiredFields: ["actorUserId", "mathPackageCandidateId", "mathQuestionId", "sourceType"],
+    severity: "info",
+    subject: "math_package_candidate"
+  },
+  {
+    actor: "portal_user",
+    id: "math_package_candidate.posture_updated",
+    rationale:
+      "Package-candidate posture changes decide whether math output may progress toward freeze, version, or release linkage.",
+    requiredFields: ["actorUserId", "mathPackageCandidateId", "posture"],
+    severity: "warning",
+    subject: "math_package_candidate"
+  },
+  {
+    actor: "portal_user",
+    id: "math_release_link.created",
+    rationale:
+      "Release links record how a math package candidate connects to benchmark version or release objects.",
+    requiredFields: ["actorUserId", "mathPackageCandidateId", "mathReleaseLinkId"],
+    severity: "info",
+    subject: "math_release_link"
+  },
+  {
+    actor: "portal_user",
+    id: "math_release_link.posture_updated",
+    rationale:
+      "Release-link posture changes affect the traceable path from math workflow to benchmark product objects.",
+    requiredFields: ["actorUserId", "mathReleaseLinkId", "posture"],
+    severity: "warning",
+    subject: "math_release_link"
+  },
+  {
+    actor: "portal_user",
     id: "benchmark_workflow.repo_sync_recorded",
     rationale:
       "Recording a repo sync candidate establishes the repository review boundary between proposed math output and launchable benchmark source.",
