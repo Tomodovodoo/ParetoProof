@@ -190,6 +190,15 @@ export const appRouteAccessMatrix = [
   defineAppRouteEntry({
     access: "approved_helper_or_higher",
     host: "math.paretoproof.com",
+    id: "math.review-detail",
+    path: "/reviews/:reviewId",
+    redirectIfDenied: "portal_pending",
+    surface: "math",
+    summary: "Detailed math review round workspace with assignments, checklist, comments, and source anchors."
+  }),
+  defineAppRouteEntry({
+    access: "approved_helper_or_higher",
+    host: "math.paretoproof.com",
     id: "math.launch",
     path: "/launch",
     redirectIfDenied: "portal_pending",
