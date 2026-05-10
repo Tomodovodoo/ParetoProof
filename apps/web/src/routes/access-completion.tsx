@@ -4,8 +4,7 @@ import {
   buildAccessFinalizeUrl,
   buildAuthUrl,
   describeAuthenticatedSurface,
-  type AuthenticatedSurface,
-  isLocalHostname
+  type AuthenticatedSurface
 } from "../lib/surface";
 
 type AccessCompletionProps = {
@@ -28,18 +27,13 @@ export function AccessCompletion({
       surface: redirectSurface
     })
   );
-  const isLocal = isLocalHostname(window.location.hostname.toLowerCase());
   const destinationLabel = describeAuthenticatedSurface(redirectSurface);
 
   retryUrl.searchParams.set("handoff", "retry");
 
   useEffect(() => {
-    if (isLocal) {
-      return;
-    }
-
     finalizeFormRef.current?.requestSubmit();
-  }, [isLocal]);
+  }, []);
 
   const providerLabel = provider === "github" ? "GitHub" : "Google";
 

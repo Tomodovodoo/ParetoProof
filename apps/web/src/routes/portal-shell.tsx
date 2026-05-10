@@ -13,6 +13,7 @@ import {
 } from "@paretoproof/shared";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../components/app-icon";
+import { stripSyntheticLocalAuthParams } from "../lib/local-development";
 import { PortalFreshnessCard } from "../components/portal-freshness-card";
 import { fetchPortalOverview } from "../lib/portal-overview";
 import { findMatchedPortalRoute } from "../lib/portal-route-access";
@@ -63,12 +64,12 @@ const portalRoutePathById = new Map<PortalRouteId, string>(
     .map((entry) => [entry.id, entry.path] as [PortalRouteId, string])
 );
 
-const localPortalStateParamKeys = ["surface", "access", "email", "role", "roles", "reason"] as const;
+const localPortalStateParamKeys = ["surface"] as const;
 
 export function mergeLocalPortalSearchParams(currentSearch: string, nextSearch: string) {
   const preservedParams = new URLSearchParams();
   const currentParams = new URLSearchParams(currentSearch);
-  const nextParams = new URLSearchParams(nextSearch);
+  const nextParams = stripSyntheticLocalAuthParams(new URLSearchParams(nextSearch));
 
   for (const key of localPortalStateParamKeys) {
     const value = currentParams.get(key);

@@ -1,3 +1,5 @@
+import { stripSyntheticLocalAuthParams } from "../lib/local-development";
+
 export type PortalAccessState =
   | { status: "loading" }
   | { status: "unauthenticated" }
@@ -19,20 +21,9 @@ export type PortalAccessState =
     };
 
 export function buildLocalPendingPortalUrl(currentSearch = window.location.search) {
-  const currentParams = new URLSearchParams(currentSearch);
-  const nextParams = new URLSearchParams(currentParams);
+  const nextParams = stripSyntheticLocalAuthParams(new URLSearchParams(currentSearch));
 
   nextParams.set("surface", "portal");
-  nextParams.set("access", "pending");
-  nextParams.delete("reason");
-  nextParams.delete("role");
-  nextParams.delete("roles");
-
-  const email = currentParams.get("email");
-
-  if (email) {
-    nextParams.set("email", email);
-  }
 
   const nextSearch = nextParams.toString();
   return `/pending${nextSearch ? `?${nextSearch}` : ""}`;

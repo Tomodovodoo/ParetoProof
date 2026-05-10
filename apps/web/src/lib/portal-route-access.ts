@@ -7,6 +7,7 @@ import {
   buildPortalUrl,
   buildPublicUrl
 } from "./surface";
+import { stripSyntheticLocalAuthParams } from "./local-development";
 
 type PortalAccessStatus = "approved" | "denied" | "pending" | "unauthenticated";
 type AuthenticatedSurface = "portal" | "math";
@@ -110,7 +111,9 @@ function readRouteDeniedReason(
 }
 
 function normalizeSearch(search = "") {
-  const params = new URLSearchParams(search);
+  const params = stripSyntheticLocalAuthParams(new URLSearchParams(search), {
+    preserveRouteDeniedReason: true
+  });
   params.sort();
   const normalizedSearch = params.toString();
   return normalizedSearch ? `?${normalizedSearch}` : "";

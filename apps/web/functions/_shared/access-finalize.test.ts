@@ -154,6 +154,72 @@ describe("handleAccessFinalize", () => {
     ]);
   });
 
+  it("relays loopback-branded finalize requests through the local API and accepts local surface redirects", async () => {
+    globalThis.fetch = async (input, init) => {
+      expect(input).toBe(
+        "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit"
+      );
+      expect(init?.method).toBe("POST");
+      expect((init?.headers as Headers).get("origin")).toBe(
+        "http://github.auth.paretoproof.com:4173"
+      );
+      expect((init?.headers as Headers).get("cookie")).toContain(
+        "CF_Authorization=session-cookie"
+      );
+      expect(init?.body).toBe(JSON.stringify({ app: "portal", redirect: "/profile" }));
+
+      return new Response(
+        JSON.stringify({
+          redirectTo: "http://portal.paretoproof.com:4173/profile"
+        }),
+        {
+          status: 200
+        }
+      );
+    };
+
+    const response = await handleAccessFinalize(
+      new Request("http://github.auth.paretoproof.com:4173/api/access/finalize?app=portal", {
+        body: new URLSearchParams({
+          app: "portal",
+          redirect: "/profile"
+        }),
+        headers: {
+          cookie: "CF_Authorization=session-cookie; PortalAccessProvider=signed",
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://github.auth.paretoproof.com:4173"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "http://portal.paretoproof.com:4173/profile"
+    );
+  });
+
+  it("redirects loopback-branded finalize retries back through the local auth entry", async () => {
+    const response = await handleAccessFinalize(
+      new Request("http://google.auth.paretoproof.com:4173/api/access/finalize?app=math", {
+        body: new URLSearchParams({
+          app: "math",
+          redirect: "/launch"
+        }),
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://google.auth.paretoproof.com:4173"
+        },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "http://auth.paretoproof.com:4173/?app=math&redirect=%2Flaunch&handoff=retry"
+    );
+  });
+
   it("preserves the finalized portal path when converting the response into a browser redirect", async () => {
     globalThis.fetch = async () =>
       new Response(
