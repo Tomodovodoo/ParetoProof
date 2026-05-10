@@ -210,6 +210,28 @@ describe("resolveApprovedAuthEntryHandoff", () => {
     });
   });
 
+  it("preserves math as the destination surface in approved handoffs", () => {
+    expect(
+      resolveApprovedAuthEntryHandoff(
+        "redirect_authenticated_app",
+        {
+          access: {
+            role: "helper",
+            status: "approved"
+          },
+          identity: {
+            provider: "cloudflare_github"
+          }
+        },
+        "math"
+      )
+    ).toEqual({
+      role: "helper",
+      status: "approved",
+      surface: "math"
+    });
+  });
+
   it("does not build a handoff for pending or denied states", () => {
     expect(
       resolveApprovedAuthEntryHandoff(
@@ -294,6 +316,28 @@ describe("buildLocalAuthEntryPreviewState", () => {
       ]
     });
   });
+
+  it("builds a local math preview from auth guidance without changing the target route", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/?surface=auth&app=math&redirect=%2Fquestions%2Fproblem-9"
+      )
+    };
+
+    expect(buildLocalAuthEntryPreviewState("sign_in", "/questions/problem-9", "math"))
+      .toMatchObject({
+        actions: [
+          {
+            href: "http://127.0.0.1/questions/problem-9?surface=math",
+            title: "Open local math preview"
+          },
+          {
+            href: "http://127.0.0.1/?surface=auth&app=portal&redirect=%2Faccess-request",
+            title: "Open local access-request preview"
+          }
+        ]
+      });
+  });
 });
 
 describe("AuthEntry local rendering", () => {
@@ -331,6 +375,22 @@ describe("AuthEntry local rendering", () => {
     expect(html).toContain("Back to local home");
     expect(countOccurrences(html, "Open local access-request route")).toBe(1);
     expect(html).not.toContain("Use GitHub or Google to verify your identity.");
+  });
+
+  it("renders local math guidance with a math-surface destination link", () => {
+    globalThis.window = {
+      location: new URL(
+        "http://127.0.0.1/?surface=auth&app=math&redirect=%2Fquestions%2Fproblem-9"
+      )
+    };
+
+    const html = renderToStaticMarkup(
+      <AuthEntry redirectPath="/questions/problem-9" redirectSurface="math" />
+    );
+
+    expect(html).toContain("Open local math preview");
+    expect(html).toContain("http://127.0.0.1/questions/problem-9?surface=math");
+    expect(html).not.toContain("Open local portal preview");
   });
 });
 

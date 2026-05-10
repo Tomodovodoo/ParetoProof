@@ -124,6 +124,7 @@ export async function recoverPortalStateAfterAuthExpiry(
     fetcher?: PortalBootstrapFetcher;
     localApiFallback?: boolean;
     signal?: AbortSignal;
+    surface?: AuthenticatedSurface;
   }
 ): Promise<PortalAccessState> {
   const reducedState = reducePortalStateAfterAuthExpiry(currentState);
@@ -137,7 +138,8 @@ export async function recoverPortalStateAfterAuthExpiry(
   } catch (error) {
     return buildPortalBootstrapErrorState(error, {
       apiBaseUrl,
-      localApiFallback: options?.localApiFallback ?? false
+      localApiFallback: options?.localApiFallback ?? false,
+      surface: options?.surface
     });
   }
 }
@@ -151,6 +153,7 @@ function readRouteDeniedReason(search = window.location.search) {
 type PortalBootstrapErrorContext = {
   apiBaseUrl: string;
   localApiFallback: boolean;
+  surface?: AuthenticatedSurface;
 };
 
 function isNetworkFetchFailure(error: unknown) {
@@ -171,10 +174,14 @@ export function buildPortalBootstrapErrorState(
   error: unknown,
   context: PortalBootstrapErrorContext
 ): Extract<PortalAccessState, { status: "error" }> {
+  const surface = context.surface ?? "portal";
+  const surfaceName = surface === "math" ? "math workspace" : "portal";
+  const routeName = surface === "math" ? "math routes" : "portal routes";
+
   if (isNetworkFetchFailure(error) && context.localApiFallback) {
     return {
       kind: "local_api_unavailable",
-      message: `This local portal preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.`,
+      message: `This local ${surfaceName} preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using ${routeName}.`,
       status: "error"
     };
   }
@@ -182,8 +189,7 @@ export function buildPortalBootstrapErrorState(
   if (isNetworkFetchFailure(error)) {
     return {
       kind: "portal_unavailable",
-      message:
-        "The portal could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      message: `The ${surfaceName} could not reach the API right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.`,
       status: "error"
     };
   }
@@ -191,15 +197,14 @@ export function buildPortalBootstrapErrorState(
   if (error instanceof Error) {
     return {
       kind: "portal_unavailable",
-      message:
-        "The portal could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.",
+      message: `The ${surfaceName} could not finish loading right now. Try again in a moment. If the handoff still feels stuck, restart from the auth entry.`,
       status: "error"
     };
   }
 
   return {
     kind: "portal_unavailable",
-    message: "The portal could not finish loading right now. Try again in a moment.",
+    message: `The ${surfaceName} could not finish loading right now. Try again in a moment.`,
     status: "error"
   };
 }
@@ -368,7 +373,8 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
         setState(
           buildPortalBootstrapErrorState(error, {
             apiBaseUrl,
-            localApiFallback
+            localApiFallback,
+            surface
           })
         );
       }
@@ -394,7 +400,8 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
 
       void recoverPortalStateAfterAuthExpiry(currentState, apiBaseUrl, {
         localApiFallback,
-        signal: controller.signal
+        signal: controller.signal,
+        surface
       })
         .then((recoveredState) => {
           if (controller.signal.aborted || !active) {
@@ -415,7 +422,7 @@ export function PortalBootstrap({ surface = "portal" }: PortalBootstrapProps) {
       controller.abort();
       window.removeEventListener(portalAuthExpiredEventName, handlePortalAuthExpired);
     };
-  }, [apiBaseUrl, localApiFallback]);
+  }, [apiBaseUrl, localApiFallback, surface]);
 
   useEffect(() => {
     if (state.status !== "unauthenticated" || localPreviewMode) {
