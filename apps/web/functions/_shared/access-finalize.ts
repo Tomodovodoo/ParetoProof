@@ -1,10 +1,18 @@
 import { findAppRouteBySurface } from "@paretoproof/shared";
+import {
+  type AuthenticatedSurface,
+  isLocalDevelopmentLocation,
+  isLoopbackBrandedLocation,
+  paretoProofSurfaceHosts,
+  resolveAuthenticatedSurfaceOrigin,
+  resolveAuthStartOrigin
+} from "../../src/lib/local-development";
 
-const authOrigin = "https://auth.paretoproof.com";
-const portalOrigin = "https://portal.paretoproof.com";
-const mathOrigin = "https://math.paretoproof.com";
-
-type AuthenticatedSurface = "portal" | "math";
+const brandedFinalizeRelayHosts = new Set<string>([
+  paretoProofSurfaceHosts.auth,
+  paretoProofSurfaceHosts.githubAuth,
+  paretoProofSurfaceHosts.googleAuth
+]);
 
 function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
@@ -26,27 +34,16 @@ function readCookieValue(cookieHeader: string | null, name: string) {
   return null;
 }
 
-const brandedHosts = new Set([
-  "paretoproof.com",
-  "auth.paretoproof.com",
-  "github.auth.paretoproof.com",
-  "google.auth.paretoproof.com",
-  "math.paretoproof.com",
-  "portal.paretoproof.com"
-]);
-const brandedFinalizeRelayHosts = new Set([
-  "auth.paretoproof.com",
-  "github.auth.paretoproof.com",
-  "google.auth.paretoproof.com"
-]);
+function isTrustedFinalizeRelayUrl(url: URL) {
+  if (!brandedFinalizeRelayHosts.has(url.hostname)) {
+    return false;
+  }
 
-function isLocalHostname(hostname: string) {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.endsWith(".localhost")
-  );
+  if (url.protocol === "https:") {
+    return true;
+  }
+
+  return isLoopbackBrandedLocation(url);
 }
 
 function readTrustedFinalizeRelayOrigin(request: Request) {
@@ -62,20 +59,7 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
     try {
       const refererUrl = new URL(refererHeader);
 
-      if (
-        refererUrl.protocol === "https:" &&
-        brandedFinalizeRelayHosts.has(refererUrl.hostname)
-      ) {
-        return refererUrl.origin;
-      }
-
-      if (
-        refererUrl.protocol === "http:" &&
-        (
-          brandedFinalizeRelayHosts.has(refererUrl.hostname) ||
-          isLocalHostname(refererUrl.hostname)
-        )
-      ) {
+      if (isTrustedFinalizeRelayUrl(refererUrl)) {
         return refererUrl.origin;
       }
     } catch {
@@ -88,20 +72,7 @@ function readTrustedFinalizeRelayOrigin(request: Request) {
   try {
     const originUrl = new URL(originHeader);
 
-    if (
-      originUrl.protocol === "https:" &&
-      brandedFinalizeRelayHosts.has(originUrl.hostname)
-    ) {
-      return originUrl.origin;
-    }
-
-    if (
-      originUrl.protocol === "http:" &&
-      (
-        brandedFinalizeRelayHosts.has(originUrl.hostname) ||
-        isLocalHostname(originUrl.hostname)
-      )
-    ) {
+    if (isTrustedFinalizeRelayUrl(originUrl)) {
       return originUrl.origin;
     }
   } catch {
@@ -115,13 +86,14 @@ function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface 
   return surface === "math" ? "math" : "portal";
 }
 
-function readSurfaceOrigin(surface: AuthenticatedSurface) {
-  return surface === "math" ? mathOrigin : portalOrigin;
+function readSurfaceOrigin(surface: AuthenticatedSurface, requestUrl: URL) {
+  return resolveAuthenticatedSurfaceOrigin(surface, requestUrl);
 }
 
 function sanitizeRedirectPath(
   rawRedirectPath: string | null,
-  targetSurface: AuthenticatedSurface
+  targetSurface: AuthenticatedSurface,
+  requestUrl: URL
 ) {
   if (!rawRedirectPath || rawRedirectPath === "/") {
     return "/";
@@ -134,7 +106,7 @@ function sanitizeRedirectPath(
   try {
     const url = new URL(
       rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      readSurfaceOrigin(targetSurface)
+      readSurfaceOrigin(targetSurface, requestUrl)
     );
 
     if (!findAppRouteBySurface(targetSurface, url.pathname)) {
@@ -149,9 +121,10 @@ function sanitizeRedirectPath(
 
 function buildAuthRetryUrl(
   redirectPath: string,
-  targetSurface: AuthenticatedSurface
+  targetSurface: AuthenticatedSurface,
+  requestUrl: URL
 ) {
-  const authUrl = new URL(authOrigin);
+  const authUrl = new URL(resolveAuthStartOrigin(requestUrl));
   authUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
@@ -164,11 +137,7 @@ function buildAuthRetryUrl(
 }
 
 function resolveApiBaseUrl(requestUrl: URL) {
-  if (
-    requestUrl.protocol === "http:" &&
-    requestUrl.port !== "" &&
-    brandedHosts.has(requestUrl.hostname)
-  ) {
+  if (isLocalDevelopmentLocation(requestUrl)) {
     const localApiUrl = new URL(requestUrl.origin);
     localApiUrl.port = "3000";
     return trimTrailingSlash(localApiUrl.origin);
@@ -181,30 +150,25 @@ function resolveApiBaseUrl(requestUrl: URL) {
     return "https://api.paretoproof.com";
   }
 
-  const localApiUrl = new URL(requestUrl.origin);
-  localApiUrl.port = "3000";
-
-  if (isLocalHostname(requestUrl.hostname)) {
-    return trimTrailingSlash(localApiUrl.origin);
-  }
-
   return "https://api.paretoproof.com";
 }
 
 function buildAuthenticatedRedirectUrl(
   targetSurface: AuthenticatedSurface,
-  redirectPath: string
+  redirectPath: string,
+  requestUrl: URL
 ) {
-  return new URL(redirectPath, readSurfaceOrigin(targetSurface)).toString();
+  return new URL(redirectPath, readSurfaceOrigin(targetSurface, requestUrl)).toString();
 }
 
 function resolveAuthenticatedRedirectTarget(
   rawRedirectTarget: unknown,
   fallbackRedirectPath: string,
-  fallbackSurface: AuthenticatedSurface
+  fallbackSurface: AuthenticatedSurface,
+  requestUrl: URL
 ) {
   if (typeof rawRedirectTarget !== "string" || rawRedirectTarget.length === 0) {
-    return buildAuthenticatedRedirectUrl(fallbackSurface, fallbackRedirectPath);
+    return buildAuthenticatedRedirectUrl(fallbackSurface, fallbackRedirectPath, requestUrl);
   }
 
   let targetUrl: URL;
@@ -215,6 +179,8 @@ function resolveAuthenticatedRedirectTarget(
     return null;
   }
 
+  const portalOrigin = resolveAuthenticatedSurfaceOrigin("portal", requestUrl);
+  const mathOrigin = resolveAuthenticatedSurfaceOrigin("math", requestUrl);
   const targetSurface =
     targetUrl.origin === portalOrigin
       ? "portal"
@@ -265,7 +231,7 @@ async function readRedirectOptions(request: Request) {
 
   if (request.method !== "POST") {
     return {
-      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface),
+      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface, requestUrl),
       targetSurface: fallbackSurface
     };
   }
@@ -277,7 +243,7 @@ async function readRedirectOptions(request: Request) {
     !contentType.includes("multipart/form-data")
   ) {
     return {
-      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface),
+      redirectPath: sanitizeRedirectPath(fallbackRedirectPath, fallbackSurface, requestUrl),
       targetSurface: fallbackSurface
     };
   }
@@ -293,7 +259,8 @@ async function readRedirectOptions(request: Request) {
   return {
     redirectPath: sanitizeRedirectPath(
       typeof redirectValue === "string" ? redirectValue : fallbackRedirectPath,
-      targetSurface
+      targetSurface,
+      requestUrl
     ),
     targetSurface
   };
@@ -317,8 +284,8 @@ function buildRedirectResponse(targetUrl: string, responseHeaders?: Headers) {
 
 export async function handleAccessFinalize(request: Request) {
   const { redirectPath, targetSurface } = await readRedirectOptions(request);
-  const retryUrl = buildAuthRetryUrl(redirectPath, targetSurface);
   const requestUrl = new URL(request.url);
+  const retryUrl = buildAuthRetryUrl(redirectPath, targetSurface, requestUrl);
   const apiUrl = new URL("/portal/session/finalize/submit", resolveApiBaseUrl(requestUrl));
   const trustedOrigin = readTrustedFinalizeRelayOrigin(request);
 
@@ -382,7 +349,8 @@ export async function handleAccessFinalize(request: Request) {
   const redirectTarget = resolveAuthenticatedRedirectTarget(
     (responseBody as { redirectTo?: unknown }).redirectTo,
     redirectPath,
-    targetSurface
+    targetSurface,
+    requestUrl
   );
 
   if (!redirectTarget) {

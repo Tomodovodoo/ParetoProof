@@ -81,7 +81,7 @@ Use this mode for `bun run dev:api`, `bun run build:api`, and direct local serve
 - Notes:
   - `CF_ACCESS_INTERNAL_AUD` falls back to the portal audience when omitted
   - `CF_ACCESS_BRANDED_AUDS` is the comma-separated allowlist of branded provider-host Access audiences accepted only on the finalize-submit handoff boundary
-  - set `CORS_ALLOW_LOCALHOST=true` when you need loopback-mapped branded auth hosts such as `http://github.auth.paretoproof.com:<port>` or `http://google.auth.paretoproof.com:<port>` to post directly to the local API finalize-submit boundary during auth-flow previews
+  - set `CORS_ALLOW_LOCALHOST=true` when you need loopback-mapped branded auth hosts such as `http://github.auth.paretoproof.com:<port>` or `http://google.auth.paretoproof.com:<port>` to let the Pages finalize relay forward auth-flow previews to the local API finalize-submit boundary
   - `PORTAL_PUBLIC_ORIGIN` defaults to `https://portal.paretoproof.com`
   - `MATH_PUBLIC_ORIGIN` defaults to `https://math.paretoproof.com`
   - `AUTH_PUBLIC_ORIGIN` defaults to `https://auth.paretoproof.com`

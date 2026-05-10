@@ -1,24 +1,21 @@
 import { findAppRouteBySurface } from "@paretoproof/shared";
-import { getApiBaseUrl } from "./api-base-url";
-import { isLocalDevelopmentLocation } from "./local-development";
+import {
+  isLocalDevelopmentLocation,
+  paretoProofSurfaceHosts,
+  productionWebOrigins,
+  resolveAuthStartOrigin,
+  resolvePublicOrigin,
+  stripSyntheticLocalAuthParams
+} from "./local-development";
 
 export type WebSurface = "public" | "auth" | "portal" | "math";
 export type AuthenticatedSurface = "portal" | "math";
 export type AccessProvider = "github" | "google";
 
-const productionPublicOrigin = "https://paretoproof.com";
-const productionAuthOrigin = "https://auth.paretoproof.com";
-const productionPortalOrigin = "https://portal.paretoproof.com";
-const productionMathOrigin = "https://math.paretoproof.com";
-const localPortalStateParamKeys = ["access", "email"] as const;
 const authenticatedSurfaces = ["portal", "math"] as const;
-const productionProviderAuthOrigins: Record<AccessProvider, string> = {
-  github: "https://github.auth.paretoproof.com",
-  google: "https://google.auth.paretoproof.com"
-};
 const productionOriginByAuthenticatedSurface: Record<AuthenticatedSurface, string> = {
-  math: productionMathOrigin,
-  portal: productionPortalOrigin
+  math: productionWebOrigins.math,
+  portal: productionWebOrigins.portal
 };
 
 type OwnedAppSurface = "public_site" | AuthenticatedSurface;
@@ -52,23 +49,7 @@ function isLocalOrigin(hostname = window.location.hostname) {
 }
 
 function buildLocalPublicOrigin(locationLike = window.location) {
-  const { hostname, origin, port, protocol } = locationLike;
-
-  if (!isLocalDevelopmentLocation(locationLike)) {
-    return origin;
-  }
-
-  if (
-    hostname === "auth.paretoproof.com" ||
-    hostname === "github.auth.paretoproof.com" ||
-    hostname === "google.auth.paretoproof.com" ||
-    hostname === "portal.paretoproof.com" ||
-    hostname === "math.paretoproof.com"
-  ) {
-    return `${protocol}//paretoproof.com${port ? `:${port}` : ""}`;
-  }
-
-  return origin;
+  return resolvePublicOrigin(locationLike);
 }
 
 function isAuthenticatedSurface(surface: string | null): surface is AuthenticatedSurface {
@@ -108,18 +89,18 @@ export function resolveWebSurfaceFromUrl(
   const { hostname, search } = locationLike;
 
   if (
-    hostname === "auth.paretoproof.com" ||
-    hostname === "github.auth.paretoproof.com" ||
-    hostname === "google.auth.paretoproof.com"
+    hostname === paretoProofSurfaceHosts.auth ||
+    hostname === paretoProofSurfaceHosts.githubAuth ||
+    hostname === paretoProofSurfaceHosts.googleAuth
   ) {
     return "auth";
   }
 
-  if (hostname === "portal.paretoproof.com") {
+  if (hostname === paretoProofSurfaceHosts.portal) {
     return "portal";
   }
 
-  if (hostname === "math.paretoproof.com") {
+  if (hostname === paretoProofSurfaceHosts.math) {
     return "math";
   }
 
@@ -184,7 +165,7 @@ function tryResolveRelativeTarget(
 
 function mapOwnedSurfaceToOrigin(surface: OwnedAppSurface) {
   if (surface === "public_site") {
-    return productionPublicOrigin;
+    return productionWebOrigins.public;
   }
 
   return mapAuthenticatedSurfaceToOrigin(surface);
@@ -334,6 +315,9 @@ function buildLocalSurfaceUrl(
 
     surfaceUrl.searchParams.set("surface", surface);
     copyLocalPortalState(surfaceUrl);
+    stripSyntheticLocalAuthParams(surfaceUrl.searchParams, {
+      preserveRouteDeniedReason: true
+    });
     return surfaceUrl.toString();
   }
 
@@ -353,71 +337,24 @@ function buildLocalSurfaceUrl(
   return surfaceUrl.toString();
 }
 
-function shouldPreserveLocalPortalReason(
-  targetUrl: URL,
-  currentParams: URLSearchParams
-) {
-  if (currentParams.get("access") !== "denied") {
-    return false;
-  }
-
-  return targetUrl.pathname === "/access-request" || targetUrl.pathname === "/denied";
-}
-
-function shouldPreserveLocalPortalRoles(currentParams: URLSearchParams) {
-  return currentParams.get("access") === "approved";
-}
-
 export function copyLocalPortalState(targetUrl: URL, currentLocation = window.location) {
   if (!isLocalOrigin(currentLocation.hostname)) {
     return;
   }
 
   const currentParams = new URLSearchParams(currentLocation.search);
-
-  for (const key of localPortalStateParamKeys) {
-    if (targetUrl.searchParams.has(key)) {
-      continue;
-    }
-    const value = currentParams.get(key);
-
-    if (value) {
-      targetUrl.searchParams.set(key, value);
-    }
-  }
+  const surface = currentParams.get("surface");
 
   if (
-    !targetUrl.searchParams.has("role") &&
-    shouldPreserveLocalPortalRoles(currentParams)
+    !targetUrl.searchParams.has("surface") &&
+    (surface === "portal" || surface === "math")
   ) {
-    const role = currentParams.get("role");
-
-    if (role) {
-      targetUrl.searchParams.set("role", role);
-    }
+    targetUrl.searchParams.set("surface", surface);
   }
 
-  if (
-    !targetUrl.searchParams.has("roles") &&
-    shouldPreserveLocalPortalRoles(currentParams)
-  ) {
-    const roles = currentParams.get("roles");
-
-    if (roles) {
-      targetUrl.searchParams.set("roles", roles);
-    }
-  }
-
-  if (
-    !targetUrl.searchParams.has("reason") &&
-    shouldPreserveLocalPortalReason(targetUrl, currentParams)
-  ) {
-    const reason = currentParams.get("reason");
-
-    if (reason) {
-      targetUrl.searchParams.set("reason", reason);
-    }
-  }
+  stripSyntheticLocalAuthParams(targetUrl.searchParams, {
+    preserveRouteDeniedReason: true
+  });
 }
 
 export function buildAuthUrl(
@@ -446,7 +383,7 @@ export function buildAuthUrl(
     );
   }
 
-  const authUrl = new URL(productionAuthOrigin);
+  const authUrl = new URL(productionWebOrigins.auth);
   authUrl.searchParams.set("app", resolvedTarget.surface);
 
   if (resolvedTarget.targetPath !== "/") {
@@ -481,7 +418,7 @@ export function buildPublicUrl(targetPath = "/", hostname = window.location.host
     return new URL(normalizedTargetPath, buildLocalPublicOrigin()).toString();
   }
 
-  return new URL(normalizedTargetPath, productionPublicOrigin).toString();
+  return new URL(normalizedTargetPath, productionWebOrigins.public).toString();
 }
 
 export function buildPortalUrl(targetPath = "/", hostname = window.location.hostname) {
@@ -491,7 +428,7 @@ export function buildPortalUrl(targetPath = "/", hostname = window.location.host
     return buildLocalSurfaceUrl("portal", normalizedTargetPath, "portal");
   }
 
-  return new URL(normalizedTargetPath, productionPortalOrigin).toString();
+  return new URL(normalizedTargetPath, productionWebOrigins.portal).toString();
 }
 
 export function buildMathUrl(targetPath = "/", hostname = window.location.hostname) {
@@ -501,7 +438,7 @@ export function buildMathUrl(targetPath = "/", hostname = window.location.hostna
     return buildLocalSurfaceUrl("math", normalizedTargetPath, "math");
   }
 
-  return new URL(normalizedTargetPath, productionMathOrigin).toString();
+  return new URL(normalizedTargetPath, productionWebOrigins.math).toString();
 }
 
 export function buildAuthenticatedAppUrl(
@@ -547,34 +484,16 @@ export function buildAccessStartUrl(
       targetPath: "/"
     };
 
-  if (isLocalOrigin(hostname)) {
-    const localUrl = new URL(
-      buildAuthenticatedAppUrl(
-        resolvedTarget.targetPath,
-        {
-          surface: resolvedTarget.surface
-        },
-        hostname
-      )
-    );
-    const currentParams = new URLSearchParams(window.location.search);
-    const approvedRole =
-      currentParams.get("role") ??
-      (currentParams.get("roles") ?? "")
-        .split(",")
-        .map((role) => role.trim())
-        .find(Boolean) ??
-      "admin";
-
-    localUrl.searchParams.set("access", "approved");
-    localUrl.searchParams.set("email", currentParams.get("email") ?? "local@example.com");
-    localUrl.searchParams.set("role", approvedRole);
-    localUrl.searchParams.delete("roles");
-    localUrl.searchParams.delete("reason");
-    return localUrl.toString();
-  }
-
-  const authUrl = new URL(`/api/access/start/${provider}`, productionAuthOrigin);
+  const authUrl = new URL(
+    `/api/access/start/${provider}`,
+    isLocalOrigin(hostname)
+      ? resolveAuthStartOrigin({
+          hostname,
+          port: window.location.port,
+          protocol: window.location.protocol
+        })
+      : productionWebOrigins.auth
+  );
   authUrl.searchParams.set("app", resolvedTarget.surface);
 
   if (resolvedTarget.targetPath !== "/") {
@@ -606,17 +525,6 @@ export function buildAccessFinalizeUrl(
       targetPath: "/"
     };
 
-  if (isLocalOrigin(hostname)) {
-    const completionUrl = new URL("/portal/session/finalize/submit", getApiBaseUrl());
-    completionUrl.searchParams.set("app", resolvedTarget.surface);
-
-    if (resolvedTarget.targetPath !== "/") {
-      completionUrl.searchParams.set("redirect", resolvedTarget.targetPath);
-    }
-
-    return completionUrl.toString();
-  }
-
   const completionUrl = new URL("/api/access/finalize", window.location.origin);
   completionUrl.searchParams.set("app", resolvedTarget.surface);
 
@@ -630,11 +538,11 @@ export function buildAccessFinalizeUrl(
 export function resolveAccessProviderHost(
   hostname = window.location.hostname
 ): AccessProvider | null {
-  if (hostname === "github.auth.paretoproof.com") {
+  if (hostname === paretoProofSurfaceHosts.githubAuth) {
     return "github";
   }
 
-  if (hostname === "google.auth.paretoproof.com") {
+  if (hostname === paretoProofSurfaceHosts.googleAuth) {
     return "google";
   }
 
@@ -646,14 +554,8 @@ export function describeAuthenticatedSurface(surface: AuthenticatedSurface) {
 }
 
 export function getCurrentRelativeUrl(location = window.location) {
-  const params = new URLSearchParams(location.search);
-
+  const params = stripSyntheticLocalAuthParams(new URLSearchParams(location.search));
   params.delete("surface");
-  params.delete("access");
-  params.delete("email");
-  params.delete("role");
-  params.delete("roles");
-  params.delete("reason");
 
   const search = params.toString();
   const relativeUrl = `${location.pathname}${search ? `?${search}` : ""}${location.hash}`;

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   AuthEntry,
-  buildLocalAuthEntryPreviewState,
   resolveApprovedAuthEntryHandoff,
   resolveAuthEntryApprovedPortalTargetPath,
   resolveAuthEntrySessionCheckAction,
@@ -11,10 +10,6 @@ import {
 } from "./auth-entry.tsx";
 
 const originalWindow = globalThis.window;
-
-function countOccurrences(haystack, needle) {
-  return haystack.split(needle).length - 1;
-}
 
 afterEach(() => {
   if (originalWindow) {
@@ -254,83 +249,47 @@ describe("resolveAuthEntryApprovedPortalTargetPath", () => {
   });
 });
 
-describe("buildLocalAuthEntryPreviewState", () => {
-  it("builds a local sign-in preview with portal and access-request entry routes", () => {
-    globalThis.window = {
-      location: new URL("http://127.0.0.1/?surface=auth")
-    };
-
-    expect(buildLocalAuthEntryPreviewState("sign_in", "/runs/alpha", "portal")).toMatchObject({
-      actions: [
-        {
-          href: "http://127.0.0.1/runs/alpha?surface=portal",
-          title: "Open local portal preview"
-        },
-        {
-          href: "http://127.0.0.1/?surface=auth&app=portal&redirect=%2Faccess-request",
-          title: "Open local access-request preview"
-        }
-      ]
-    });
-  });
-
-  it("builds a local access-request preview with a direct portal route handoff", () => {
-    globalThis.window = {
-      location: new URL("http://127.0.0.1/?surface=auth&redirect=%2Faccess-request")
-    };
-
-    expect(
-      buildLocalAuthEntryPreviewState("access_request", "/access-request", "portal")
-    ).toMatchObject({
-      actions: [
-        {
-          href: "http://127.0.0.1/access-request?surface=portal",
-          title: "Open local access-request route"
-        },
-        {
-          href: "http://127.0.0.1/?surface=auth&app=portal",
-          title: "Open local sign-in guidance"
-        }
-      ]
-    });
-  });
-});
-
 describe("AuthEntry local rendering", () => {
-  it("renders truthful local sign-in guidance instead of provider sign-in CTAs", () => {
+  it("renders local sign-in provider CTAs backed by auth-start", () => {
     globalThis.window = {
-      location: new URL("http://127.0.0.1/?surface=auth")
+      location: new URL("http://127.0.0.1:4173/?surface=auth")
     };
 
     const html = renderToStaticMarkup(
       <AuthEntry redirectPath="/runs/alpha" redirectSurface="portal" />
     );
 
-    expect(html).toContain("Local development bypasses live provider sign-in.");
-    expect(html).toContain("Open local portal preview");
-    expect(html).toContain("Open local access-request preview");
-    expect(html).toContain("http://127.0.0.1/runs/alpha?surface=portal");
+    expect(html).toContain("Continue with GitHub");
+    expect(html).toContain("Continue with Google");
+    expect(html).toContain(
+      "http://auth.paretoproof.com:4173/api/access/start/github?app=portal&amp;redirect=%2Fruns%2Falpha"
+    );
+    expect(html).toContain(
+      "http://auth.paretoproof.com:4173/api/access/start/google?app=portal&amp;redirect=%2Fruns%2Falpha"
+    );
     expect(html).toContain("Back to local home");
-    expect(countOccurrences(html, "Open local portal preview")).toBe(1);
-    expect(html).not.toContain("Continue with GitHub");
-    expect(html).not.toContain("Continue with Google");
+    expect(html).not.toContain("Local development bypasses live provider sign-in.");
+    expect(html).not.toContain("Open local portal preview");
   });
 
-  it("renders truthful local access-request guidance instead of identity-verification promises", () => {
+  it("renders local access-request provider CTAs instead of preview-only actions", () => {
     globalThis.window = {
-      location: new URL("http://127.0.0.1/?surface=auth&redirect=%2Faccess-request")
+      location: new URL("http://127.0.0.1:4173/?surface=auth&redirect=%2Faccess-request")
     };
 
     const html = renderToStaticMarkup(
       <AuthEntry redirectPath="/access-request" redirectSurface="portal" />
     );
 
-    expect(html).toContain("Local development bypasses provider verification here.");
-    expect(html).toContain("Open local access-request route");
-    expect(html).toContain("Open local sign-in guidance");
+    expect(html).toContain("Use GitHub or Google to verify your identity.");
+    expect(html).toContain("Continue with GitHub");
+    expect(html).toContain("Continue with Google");
+    expect(html).toContain(
+      "http://auth.paretoproof.com:4173/api/access/start/github?app=portal&amp;redirect=%2Faccess-request"
+    );
     expect(html).toContain("Back to local home");
-    expect(countOccurrences(html, "Open local access-request route")).toBe(1);
-    expect(html).not.toContain("Use GitHub or Google to verify your identity.");
+    expect(html).not.toContain("Open local access-request route");
+    expect(html).not.toContain("Open local sign-in guidance");
   });
 });
 

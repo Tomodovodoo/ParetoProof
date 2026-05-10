@@ -242,7 +242,7 @@ test(
   async () => {
     for (const scenario of [
       {
-        expectedText: /Local preview needs auth context/,
+        expectedText: /Local session required/,
         expectedPathname: "/",
         name: "401",
         port: 4177,

@@ -25,9 +25,13 @@ describe("handleAccessStart", () => {
     const setCookies = readSetCookies(response);
     expect(setCookies).toHaveLength(2);
     expect(setCookies[0]).toContain("PortalLinkIntent=");
+    expect(setCookies[0]).toContain("Domain=.paretoproof.com");
     expect(setCookies[0]).toContain("SameSite=Strict");
+    expect(setCookies[0]).toContain("Secure");
     expect(setCookies[1]).toContain("PortalAccessProvider=");
+    expect(setCookies[1]).toContain("Domain=.paretoproof.com");
     expect(setCookies[1]).toContain("SameSite=Strict");
+    expect(setCookies[1]).toContain("Secure");
   });
 
   it("starts GitHub profile linking without clearing the existing link intent and keeps provider state Strict", async () => {
@@ -66,6 +70,47 @@ describe("handleAccessStart", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
       "https://google.auth.paretoproof.com/?app=math&redirect=%2Fquestions%2Fproblem-9"
+    );
+  });
+
+  it("routes loopback-branded starts to the matching local provider host and emits non-Secure shared cookies", async () => {
+    const response = await handleAccessStart(
+      new Request(
+        "http://auth.paretoproof.com:4173/api/access/start/google?app=portal&redirect=/profile"
+      ),
+      {
+        ACCESS_PROVIDER_STATE_SECRET: "test-secret"
+      },
+      "google"
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "http://google.auth.paretoproof.com:4173/?app=portal&redirect=%2Fprofile"
+    );
+
+    const setCookies = readSetCookies(response);
+    expect(setCookies).toHaveLength(2);
+    expect(setCookies[0]).toContain("PortalLinkIntent=");
+    expect(setCookies[0]).toContain("Domain=.paretoproof.com");
+    expect(setCookies[0]).not.toContain("; Secure");
+    expect(setCookies[1]).toContain("PortalAccessProvider=");
+    expect(setCookies[1]).toContain("Domain=.paretoproof.com");
+    expect(setCookies[1]).not.toContain("; Secure");
+  });
+
+  it("keeps local start failures on the loopback-branded auth entry", async () => {
+    const response = await handleAccessStart(
+      new Request(
+        "http://auth.paretoproof.com:4173/api/access/start/github?app=portal&redirect=/profile"
+      ),
+      {},
+      "github"
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "http://auth.paretoproof.com:4173/?app=portal&redirect=%2Fprofile&handoff=failed"
     );
   });
 });

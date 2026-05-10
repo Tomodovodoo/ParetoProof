@@ -1,8 +1,10 @@
 import { findAppRouteBySurface } from "@paretoproof/shared";
-
-const authOrigin = "https://auth.paretoproof.com";
-const portalOrigin = "https://portal.paretoproof.com";
-const mathOrigin = "https://math.paretoproof.com";
+import {
+  resolveAuthenticatedSurfaceOrigin,
+  resolveAuthRelayCookieOptions,
+  resolveAuthStartOrigin,
+  resolveProviderAuthOrigin
+} from "../../src/lib/local-development";
 
 type Provider = "github" | "google";
 type PersistedProvider = "cloudflare_github" | "cloudflare_google";
@@ -10,11 +12,6 @@ type AuthenticatedSurface = "portal" | "math";
 
 type AccessStartEnv = {
   ACCESS_PROVIDER_STATE_SECRET?: string;
-};
-
-const providerOrigins: Record<Provider, string> = {
-  github: "https://github.auth.paretoproof.com",
-  google: "https://google.auth.paretoproof.com"
 };
 
 const persistedProviders: Record<Provider, PersistedProvider> = {
@@ -26,13 +23,10 @@ function readAuthenticatedSurface(surface: string | null): AuthenticatedSurface 
   return surface === "math" ? "math" : "portal";
 }
 
-function readSurfaceOrigin(surface: AuthenticatedSurface) {
-  return surface === "math" ? mathOrigin : portalOrigin;
-}
-
 function sanitizeRedirectPath(
   rawRedirectPath: string | null,
-  targetSurface: AuthenticatedSurface
+  targetSurface: AuthenticatedSurface,
+  requestUrl: URL
 ) {
   if (!rawRedirectPath || rawRedirectPath === "/") {
     return "/";
@@ -45,7 +39,7 @@ function sanitizeRedirectPath(
   try {
     const url = new URL(
       rawRedirectPath.startsWith("/") ? rawRedirectPath : `/${rawRedirectPath}`,
-      readSurfaceOrigin(targetSurface)
+      resolveAuthenticatedSurfaceOrigin(targetSurface, requestUrl)
     );
 
     if (!findAppRouteBySurface(targetSurface, url.pathname)) {
@@ -78,7 +72,11 @@ async function signProviderHint(provider: PersistedProvider, secret: string) {
   return `${payload}.${toBase64Url(signature)}`;
 }
 
-async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) {
+async function buildProviderHintCookie(
+  env: AccessStartEnv,
+  provider: Provider,
+  requestUrl: URL
+) {
   const secret = env.ACCESS_PROVIDER_STATE_SECRET;
 
   if (!secret) {
@@ -86,35 +84,42 @@ async function buildProviderHintCookie(env: AccessStartEnv, provider: Provider) 
   }
 
   const value = await signProviderHint(persistedProviders[provider], secret);
+  const { cookieDomain, secure } = resolveAuthRelayCookieOptions(requestUrl);
 
   return [
     `PortalAccessProvider=${value}`,
-    "Domain=.paretoproof.com",
+    ...(cookieDomain ? [`Domain=${cookieDomain}`] : []),
     "Path=/",
     "SameSite=Strict",
     "Max-Age=600",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "HttpOnly"
   ].join("; ");
 }
 
-function clearSignedAccessCookie(name: "PortalAccessProvider" | "PortalLinkIntent") {
+function clearSignedAccessCookie(
+  name: "PortalAccessProvider" | "PortalLinkIntent",
+  requestUrl: URL
+) {
+  const { cookieDomain, secure } = resolveAuthRelayCookieOptions(requestUrl);
+
   return [
     `${name}=`,
-    "Domain=.paretoproof.com",
+    ...(cookieDomain ? [`Domain=${cookieDomain}`] : []),
     "Path=/",
     "SameSite=Strict",
     "Max-Age=0",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "HttpOnly"
   ].join("; ");
 }
 
 function buildAuthFailureUrl(
   redirectPath: string,
-  targetSurface: AuthenticatedSurface
+  targetSurface: AuthenticatedSurface,
+  requestUrl: URL
 ) {
-  const authUrl = new URL(authOrigin);
+  const authUrl = new URL(resolveAuthStartOrigin(requestUrl));
   authUrl.searchParams.set("app", targetSurface);
 
   if (redirectPath !== "/") {
@@ -135,13 +140,14 @@ export async function handleAccessStart(
   const targetSurface = readAuthenticatedSurface(requestUrl.searchParams.get("app"));
   const redirectPath = sanitizeRedirectPath(
     requestUrl.searchParams.get("redirect"),
-    targetSurface
+    targetSurface,
+    requestUrl
   );
 
   try {
     const flow = requestUrl.searchParams.get("flow") === "link" ? "link" : "sign_in";
-    const providerUrl = new URL("/", providerOrigins[provider]);
-    const providerHintCookie = await buildProviderHintCookie(env, provider);
+    const providerUrl = new URL("/", resolveProviderAuthOrigin(provider, requestUrl));
+    const providerHintCookie = await buildProviderHintCookie(env, provider, requestUrl);
 
     providerUrl.searchParams.set("app", targetSurface);
 
@@ -159,7 +165,7 @@ export async function handleAccessStart(
 
     // Regular sign-in should not inherit an abandoned profile-link cookie.
     if (flow !== "link") {
-      headers.append("set-cookie", clearSignedAccessCookie("PortalLinkIntent"));
+      headers.append("set-cookie", clearSignedAccessCookie("PortalLinkIntent", requestUrl));
     }
 
     headers.append("set-cookie", providerHintCookie);
@@ -173,7 +179,7 @@ export async function handleAccessStart(
 
     return new Response(null, {
       headers: {
-        location: buildAuthFailureUrl(redirectPath, targetSurface)
+        location: buildAuthFailureUrl(redirectPath, targetSurface, requestUrl)
       },
       status: 302
     });

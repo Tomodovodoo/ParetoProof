@@ -174,7 +174,7 @@ export function buildPortalBootstrapErrorState(
   if (isNetworkFetchFailure(error) && context.localApiFallback) {
     return {
       kind: "local_api_unavailable",
-      message: `This local portal preview is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.`,
+      message: `This local portal route is targeting ${context.apiBaseUrl}, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.`,
       status: "error"
     };
   }
@@ -619,7 +619,7 @@ export function renderPortalBootstrapErrorCard(
               : buildPublicUrl("/"),
           label:
             state.kind === "local_api_unavailable"
-              ? "Open local auth guidance"
+              ? "Start local sign-in"
               : localPreviewMode
                 ? "Back to local home"
                 : "Back to paretoproof.com",
@@ -637,14 +637,14 @@ export function renderLocalPortalUnauthenticatedCard(
   return (
     <PortalStatusCard
       eyebrow={describeSurfaceLabel(surface)}
-      title="Local preview needs auth context"
-      body={`This localhost ${surface === "math" ? "math" : "portal"} route did not receive an authenticated access state from the API. Open the local auth guidance to choose the right preview path, or return to the public site.`}
+      title="Local session required"
+      body={`This localhost ${surface === "math" ? "math" : "portal"} route did not receive a backend-confirmed session from the API. Start local sign-in to complete the provider handoff, or return to the public site.`}
       actions={[
         {
           href: buildAuthUrl(currentRelativeUrl, undefined, {
             surface
           }),
-          label: "Open local auth guidance"
+          label: "Start local sign-in"
         },
         {
           href: buildPublicUrl("/"),

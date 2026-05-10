@@ -185,10 +185,11 @@ describe("PortalShell overview ordering", () => {
     );
     const mergedUrl = new URL(`http://127.0.0.1/${mergedSearch}`);
 
-    expect(mergedUrl.searchParams.get("role")).toBe("collaborator");
     expect(mergedUrl.searchParams.get("tab")).toBe("history");
     expect(mergedUrl.searchParams.get("surface")).toBe("portal");
-    expect(mergedUrl.searchParams.get("access")).toBe("approved");
+    expect(mergedUrl.searchParams.has("access")).toBe(false);
+    expect(mergedUrl.searchParams.has("email")).toBe(false);
+    expect(mergedUrl.searchParams.has("role")).toBe(false);
   });
 
   it("puts compact admin recent-run evidence before the action rail", async () => {

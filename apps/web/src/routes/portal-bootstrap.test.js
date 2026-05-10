@@ -38,18 +38,18 @@ afterEach(() => {
 });
 
 describe("portal bootstrap state", () => {
-  it("promotes the local access state to pending and clears denial-only params", () => {
+  it("builds a local pending URL without synthetic access state", () => {
     expect(
       buildLocalPendingPortalUrl(
         "?surface=portal&access=denied&reason=access_request_required&email=lin@paretoproof.local&roles=helper"
       )
-    ).toBe("/pending?surface=portal&access=pending&email=lin%40paretoproof.local");
+    ).toBe("/pending?surface=portal");
   });
 
-  it("preserves the local email when no denial reason is present", () => {
+  it("drops local email when no denial reason is present", () => {
     expect(
       buildLocalPendingPortalUrl("?surface=portal&access=denied&email=ada@paretoproof.local")
-    ).toBe("/pending?surface=portal&access=pending&email=ada%40paretoproof.local");
+    ).toBe("/pending?surface=portal");
   });
 
   it("clears stale singular approved role previews when returning to pending", () => {
@@ -57,7 +57,7 @@ describe("portal bootstrap state", () => {
       buildLocalPendingPortalUrl(
         "?surface=portal&access=denied&email=ada@paretoproof.local&role=admin"
       )
-    ).toBe("/pending?surface=portal&access=pending&email=ada%40paretoproof.local");
+    ).toBe("/pending?surface=portal");
   });
 
   it("moves stale approved state into recovery loading after auth expiry", () => {
@@ -159,7 +159,7 @@ describe("mapPortalMutationErrorMessage", () => {
     ).toEqual({
       kind: "local_api_unavailable",
       message:
-        "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+        "This local portal route is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
       status: "error"
     });
   });
@@ -173,7 +173,7 @@ describe("mapPortalMutationErrorMessage", () => {
     ).toEqual({
       kind: "local_api_unavailable",
       message:
-        "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+        "This local portal route is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
       status: "error"
     });
   });
@@ -202,7 +202,7 @@ describe("mapPortalMutationErrorMessage", () => {
         {
           kind: "local_api_unavailable",
           message:
-            "This local portal preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
+            "This local portal route is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using portal routes.",
           status: "error"
         },
         "/"
@@ -211,7 +211,7 @@ describe("mapPortalMutationErrorMessage", () => {
 
     expect(html).toContain("Local API unavailable");
     expect(html).toContain("Retry after starting API");
-    expect(html).toContain("Open local auth guidance");
+    expect(html).toContain("Start local sign-in");
     expect(html).toContain("http://127.0.0.1:3000");
   });
 
@@ -315,8 +315,8 @@ describe("mapPortalMutationErrorMessage", () => {
 
     const html = renderToStaticMarkup(renderLocalPortalUnauthenticatedCard("/"));
 
-    expect(html).toContain("Local preview needs auth context");
-    expect(html).toContain("Open local auth guidance");
+    expect(html).toContain("Local session required");
+    expect(html).toContain("Start local sign-in");
     expect(html).toContain("Back to local home");
     expect(html).not.toContain("Continue to sign in");
   });
@@ -479,9 +479,9 @@ describe("PortalBootstrap auth handoff", () => {
     const secondHtml = renderToStaticMarkup(<PortalBootstrap />);
 
     expect(firstHtml).not.toContain("Opening portal");
-    expect(firstHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(firstHtml).toContain("Portal landing summary");
     expect(firstHtml).toContain("Authenticated session");
-    expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(secondHtml).toContain("Portal landing summary");
     expect(globalThis.document.cookie).toBe(handoffCookie);
   });
 

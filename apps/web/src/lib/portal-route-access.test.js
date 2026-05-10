@@ -41,9 +41,9 @@ describe("resolvePortalRouteRedirect", () => {
 
     expect(redirect.pathname).toBe("/profile");
     expect(redirect.searchParams.get("surface")).toBe("portal");
-    expect(redirect.searchParams.get("access")).toBe("approved");
-    expect(redirect.searchParams.get("email")).toBe("lin@paretoproof.local");
-    expect(redirect.searchParams.get("roles")).toBe("helper");
+    expect(redirect.searchParams.has("access")).toBe(false);
+    expect(redirect.searchParams.has("email")).toBe(false);
+    expect(redirect.searchParams.has("roles")).toBe(false);
     expect(redirect.searchParams.has("reason")).toBe(false);
   });
 
@@ -65,8 +65,8 @@ describe("resolvePortalRouteRedirect", () => {
 
     expect(redirect.pathname).toBe("/pending");
     expect(redirect.searchParams.get("surface")).toBe("portal");
-    expect(redirect.searchParams.get("access")).toBe("pending");
-    expect(redirect.searchParams.get("email")).toBe("ada@paretoproof.local");
+    expect(redirect.searchParams.has("access")).toBe(false);
+    expect(redirect.searchParams.has("email")).toBe(false);
     expect(redirect.searchParams.has("roles")).toBe(false);
   });
 
@@ -172,7 +172,7 @@ describe("resolvePortalRouteRedirect", () => {
 
     expect(redirect.pathname).toBe("/pending");
     expect(redirect.searchParams.get("surface")).toBe("portal");
-    expect(redirect.searchParams.get("access")).toBe("pending");
+    expect(redirect.searchParams.has("access")).toBe(false);
   });
 
   it("canonicalizes hosted pending math users onto the portal host even when the path already matches", () => {
@@ -212,6 +212,6 @@ describe("resolvePortalRouteRedirect", () => {
 
     expect(redirect.pathname).toBe("/");
     expect(redirect.searchParams.get("surface")).toBe("math");
-    expect(redirect.searchParams.get("access")).toBe("approved");
+    expect(redirect.searchParams.has("access")).toBe(false);
   });
 });

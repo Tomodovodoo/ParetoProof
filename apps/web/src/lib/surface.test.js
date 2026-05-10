@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   buildAccessFinalizeUrl,
+  buildAccessStartUrl,
   buildAuthGuidanceUrl,
   buildAuthUrl,
   buildMathUrl,
@@ -30,7 +31,7 @@ afterEach(() => {
 });
 
 describe("buildPortalUrl", () => {
-  it("drops stale denial reasons when building approved portal routes", () => {
+  it("strips synthetic approved access params when building local portal routes", () => {
     setWindowUrl(
       "http://localhost/denied?surface=portal&access=approved&role=helper&reason=insufficient_role&email=lin@paretoproof.local"
     );
@@ -39,13 +40,13 @@ describe("buildPortalUrl", () => {
 
     expect(portalUrl.pathname).toBe("/");
     expect(portalUrl.searchParams.get("surface")).toBe("portal");
-    expect(portalUrl.searchParams.get("access")).toBe("approved");
-    expect(portalUrl.searchParams.get("email")).toBe("lin@paretoproof.local");
-    expect(portalUrl.searchParams.get("role")).toBe("helper");
+    expect(portalUrl.searchParams.has("access")).toBe(false);
+    expect(portalUrl.searchParams.has("email")).toBe(false);
+    expect(portalUrl.searchParams.has("role")).toBe(false);
     expect(portalUrl.searchParams.has("reason")).toBe(false);
   });
 
-  it("keeps denied reasons on denied-flow targets", () => {
+  it("strips synthetic denied access params on denied-flow targets", () => {
     setWindowUrl(
       "http://localhost/denied?surface=portal&access=denied&reason=access_request_required&roles=helper&email=lin@paretoproof.local"
     );
@@ -54,13 +55,28 @@ describe("buildPortalUrl", () => {
 
     expect(portalUrl.pathname).toBe("/access-request");
     expect(portalUrl.searchParams.get("surface")).toBe("portal");
-    expect(portalUrl.searchParams.get("access")).toBe("denied");
-    expect(portalUrl.searchParams.get("email")).toBe("lin@paretoproof.local");
-    expect(portalUrl.searchParams.get("reason")).toBe("access_request_required");
+    expect(portalUrl.searchParams.has("access")).toBe(false);
+    expect(portalUrl.searchParams.has("email")).toBe(false);
+    expect(portalUrl.searchParams.has("reason")).toBe(false);
     expect(portalUrl.searchParams.has("roles")).toBe(false);
   });
 
-  it("drops stale approved roles when the current preview access is pending", () => {
+  it("keeps explicit insufficient-role route reasons while stripping synthetic access params", () => {
+    setWindowUrl(
+      "http://localhost/admin/users?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local"
+    );
+
+    const deniedUrl = new URL(buildPortalUrl("/denied?reason=insufficient_role"));
+
+    expect(deniedUrl.pathname).toBe("/denied");
+    expect(deniedUrl.searchParams.get("surface")).toBe("portal");
+    expect(deniedUrl.searchParams.get("reason")).toBe("insufficient_role");
+    expect(deniedUrl.searchParams.has("access")).toBe(false);
+    expect(deniedUrl.searchParams.has("email")).toBe(false);
+    expect(deniedUrl.searchParams.has("role")).toBe(false);
+  });
+
+  it("strips synthetic pending access params when building local portal routes", () => {
     setWindowUrl(
       "http://localhost/pending?surface=portal&access=pending&role=admin&email=ada@paretoproof.local"
     );
@@ -69,23 +85,25 @@ describe("buildPortalUrl", () => {
 
     expect(portalUrl.pathname).toBe("/");
     expect(portalUrl.searchParams.get("surface")).toBe("portal");
-    expect(portalUrl.searchParams.get("access")).toBe("pending");
-    expect(portalUrl.searchParams.get("email")).toBe("ada@paretoproof.local");
+    expect(portalUrl.searchParams.has("access")).toBe(false);
+    expect(portalUrl.searchParams.has("email")).toBe(false);
     expect(portalUrl.searchParams.has("role")).toBe(false);
   });
 
-  it("preserves the singular approved role preview on local portal redirects", () => {
+  it("strips singular approved role previews on local portal redirects", () => {
     setWindowUrl(
       "http://localhost/?surface=portal&access=approved&role=collaborator&email=ada@paretoproof.local"
     );
 
     const portalUrl = new URL(buildPortalUrl("/launch"));
 
-    expect(portalUrl.searchParams.get("role")).toBe("collaborator");
+    expect(portalUrl.searchParams.has("role")).toBe(false);
+    expect(portalUrl.searchParams.has("access")).toBe(false);
+    expect(portalUrl.searchParams.has("email")).toBe(false);
     expect(portalUrl.searchParams.has("roles")).toBe(false);
   });
 
-  it("uses the local API finalize endpoint on loopback-mapped branded auth hosts", () => {
+  it("uses the branded finalize relay endpoint on loopback-mapped branded auth hosts", () => {
     setWindowUrl("http://github.auth.paretoproof.com:4371/?surface=auth&app=math");
 
     expect(
@@ -93,7 +111,7 @@ describe("buildPortalUrl", () => {
         surface: "math"
       })
     ).toBe(
-      "http://github.auth.paretoproof.com:3000/portal/session/finalize/submit?app=math&redirect=%2Flaunch"
+      "http://github.auth.paretoproof.com:4371/api/access/finalize?app=math&redirect=%2Flaunch"
     );
   });
 
@@ -107,6 +125,25 @@ describe("buildPortalUrl", () => {
     ).toBe(
       "https://google.auth.paretoproof.com/api/access/finalize?app=portal&redirect=%2Fprofile"
     );
+  });
+
+  it("builds local provider starts through the loopback-branded auth relay without synthetic access params", () => {
+    setWindowUrl(
+      "http://127.0.0.1:4173/?surface=auth&access=approved&email=ada@paretoproof.local&role=admin"
+    );
+
+    const startUrl = new URL(
+      buildAccessStartUrl("github", "/runs/alpha", {
+        surface: "portal"
+      })
+    );
+
+    expect(startUrl.toString()).toBe(
+      "http://auth.paretoproof.com:4173/api/access/start/github?app=portal&redirect=%2Fruns%2Falpha"
+    );
+    expect(startUrl.searchParams.has("access")).toBe(false);
+    expect(startUrl.searchParams.has("email")).toBe(false);
+    expect(startUrl.searchParams.has("role")).toBe(false);
   });
 });
 
