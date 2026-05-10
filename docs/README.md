@@ -23,6 +23,7 @@ Use these files:
 - [hosted-worker-budget-governance-baseline.md](./hosted-worker-budget-governance-baseline.md) for hosted worker spend accounting, quota states, emergency cutoffs, and override policy
 - [hosted-worker-network-egress-baseline.md](./hosted-worker-network-egress-baseline.md) for the class-based hosted worker allowlist, forbidden destinations, and secret-exfiltration boundary
 - [portal-worker-operations-live-ia-baseline.md](./portal-worker-operations-live-ia-baseline.md) for the live portal worker-operations information architecture, drill-down routes, and stale-state presentation
+- [worker-data-freshness-and-failure-ux-baseline.md](./worker-data-freshness-and-failure-ux-baseline.md) for private worker-ops freshness, public reporting revalidation, stale states, cache invalidation, and failure UX
 - [math-surface-activation-baseline.md](./math-surface-activation-baseline.md) for the accepted dedicated `math.paretoproof.com` workflow surface split
 - [math-data-model-baseline.md](./math-data-model-baseline.md) for the canonical question, revision, submission, review, and release-link object model
 - [math-review-workflow-baseline.md](./math-review-workflow-baseline.md) for the accepted triage, peer-review, editor-review, and release-decision workflow on the math surface
