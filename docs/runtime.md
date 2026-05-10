@@ -15,12 +15,13 @@ This repo uses a small number of runtime rules.
 
 ## Deploy surfaces
 
-- Cloudflare Pages hosts the public site and auth-entry runtime.
+- Cloudflare Pages hosts the public site, auth-entry runtime, portal shell, and math shell.
 - Railway hosts the API.
 - Workers run locally or in hosted runtimes against the API control plane.
 - GHCR holds worker images.
 - Cloudflare R2 holds larger artifacts when the flow requires object storage.
 - Hosted Cloudflare Access split:
+  - `portal.paretoproof.com/*` and `math.paretoproof.com/*` are authenticated app surfaces and should stay `noindex` in Pages response headers.
   - `api.paretoproof.com/portal/*` must bypass Cloudflare Access so `portal.paretoproof.com` and `math.paretoproof.com` can make cross-origin JSON `fetch()` calls without an opaque Access redirect.
   - `api.paretoproof.com/internal/*` stays behind its own Cloudflare Access app for owner and service-token callers.
 

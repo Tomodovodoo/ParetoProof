@@ -164,6 +164,21 @@ describe("mapPortalMutationErrorMessage", () => {
     });
   });
 
+  it("describes missing local API wiring explicitly for localhost math previews", () => {
+    expect(
+      buildPortalBootstrapErrorState(new Error("Failed to fetch"), {
+        apiBaseUrl: "http://127.0.0.1:3000",
+        localApiFallback: true,
+        surface: "math"
+      })
+    ).toEqual({
+      kind: "local_api_unavailable",
+      message:
+        "This local math workspace preview is targeting http://127.0.0.1:3000, but no API responded. Start the local API there or set VITE_API_BASE_URL to a reachable backend before using math routes.",
+      status: "error"
+    });
+  });
+
   it("treats alternate browser network-failure strings as local API availability errors", () => {
     expect(
       buildPortalBootstrapErrorState(new Error("Load failed"), {
@@ -318,6 +333,22 @@ describe("mapPortalMutationErrorMessage", () => {
     expect(html).toContain("Local preview needs auth context");
     expect(html).toContain("Open local auth guidance");
     expect(html).toContain("Back to local home");
+    expect(html).not.toContain("Continue to sign in");
+  });
+
+  it("renders localhost math unauthenticated bootstrap with math auth guidance", () => {
+    globalThis.window = {
+      location: new URL("http://127.0.0.1/questions/problem-9?surface=math")
+    };
+
+    const html = renderToStaticMarkup(
+      renderLocalPortalUnauthenticatedCard("/questions/problem-9", "math")
+    );
+
+    expect(html).toContain("localhost math route");
+    expect(html).toContain(
+      "http://127.0.0.1/?surface=auth&amp;app=math&amp;redirect=%2Fquestions%2Fproblem-9"
+    );
     expect(html).not.toContain("Continue to sign in");
   });
 });
@@ -479,9 +510,9 @@ describe("PortalBootstrap auth handoff", () => {
     const secondHtml = renderToStaticMarkup(<PortalBootstrap />);
 
     expect(firstHtml).not.toContain("Opening portal");
-    expect(firstHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(firstHtml).toContain("Portal landing summary for current run activity");
     expect(firstHtml).toContain("Authenticated session");
-    expect(secondHtml).toContain("Formal benchmark operations and contributor tooling.");
+    expect(secondHtml).toContain("Portal landing summary for current run activity");
     expect(globalThis.document.cookie).toBe(handoffCookie);
   });
 

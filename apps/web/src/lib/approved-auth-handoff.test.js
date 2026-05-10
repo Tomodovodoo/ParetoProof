@@ -30,6 +30,28 @@ describe("approved auth handoff cookies", () => {
     });
   });
 
+  it("round-trips a fresh math handoff cookie", () => {
+    const cookieHeader = buildApprovedAuthHandoffCookieValue(
+      {
+        role: "helper",
+        status: "approved",
+        surface: "math"
+      },
+      10_000
+    );
+
+    expect(
+      readApprovedAuthHandoffCookie(cookieHeader, {
+        nowMs: 20_000,
+        surface: "math"
+      })
+    ).toEqual({
+      role: "helper",
+      status: "approved",
+      surface: "math"
+    });
+  });
+
   it("ignores expired handoff cookies", () => {
     const cookieHeader = buildApprovedAuthHandoffCookieValue(
       {
@@ -62,6 +84,24 @@ describe("approved auth handoff cookies", () => {
       readApprovedAuthHandoffCookie(cookieHeader, {
         nowMs: 20_000,
         surface: "portal"
+      })
+    ).toBeNull();
+  });
+
+  it("ignores portal cookies while entering the math surface", () => {
+    const cookieHeader = buildApprovedAuthHandoffCookieValue(
+      {
+        role: "admin",
+        status: "approved",
+        surface: "portal"
+      },
+      10_000
+    );
+
+    expect(
+      readApprovedAuthHandoffCookie(cookieHeader, {
+        nowMs: 20_000,
+        surface: "math"
       })
     ).toBeNull();
   });

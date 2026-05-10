@@ -33,7 +33,7 @@ Use this mode for `bun run dev:web` and `bun run build:web`.
 
 ### Pages auth-entry runtime
 
-Use this mode for the Pages-managed auth provider-start handlers and the legacy finalize compatibility route.
+Use this mode for the Pages-managed auth provider-start handlers, the legacy finalize compatibility route, and the browser bundle that serves the public, portal, and math custom domains.
 
 - Checked-in example file: none by design
 - Required env:
@@ -45,6 +45,8 @@ Use this mode for the Pages-managed auth provider-start handlers and the legacy 
   - Cloudflare Pages runtime, not the browser bundle
 - Do not set here:
   - `VITE_API_BASE_URL` as a secret substitute
+- Notes:
+  - `math.paretoproof.com` uses the browser bundle and `/portal/me` access state; keep it authenticated and noindexed until dedicated math APIs and public discovery rules exist.
 
 ## API modes
 
