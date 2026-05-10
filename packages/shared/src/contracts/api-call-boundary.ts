@@ -187,6 +187,110 @@ export const apiCallBoundaryCatalog = [
   },
   {
     credential: "cloudflare_access_jwt",
+    endpointId: "math.questions.list",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Approved math users will browse question workflow state directly from the dedicated math surface once durable persistence lands."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.question.detail",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Question detail is a math-owned read model and should not be fetched through portal route conventions."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.submission.create",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Submission intake is a collaborator-owned math mutation protected by the math Access and trusted-origin boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.submission.detail",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Submission detail belongs to the math workflow surface while the backend still enforces approved-user access."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.submission.lean-profile.update",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Lean profile updates are math workflow mutations and must stay behind the math Access and trusted-origin boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.submission.review-gate.update",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Review-gate updates are first-party math mutations protected by collaborator access and the math trusted-origin boundary."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.reviews.list",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Math review queues are first-party math browser reads, not portal sidecar routes."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.review.detail",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Math review detail belongs to the dedicated review workflow surface and should not be fetched through portal route conventions."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.package-candidates.list",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Math users can inspect package-candidate posture from math while authoritative package mutations remain admin-owned."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.package-candidate.detail",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Package-candidate detail is a math workflow read model while authoritative freeze mutations remain admin-owned."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.releases.list",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Math release lineage is a first-party math browser read model once release persistence is available."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.release.detail",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Release detail is visible from the math workflow without moving release mutation authority out of admin governance."
+  },
+  {
+    credential: "cloudflare_access_jwt",
+    endpointId: "math.question-launch.read",
+    mode: "browser_direct",
+    origin: "math_browser",
+    rationale:
+      "Question-scoped launch readiness is a math-owned read model that should not force users through the generic portal launch page."
+  },
+  {
+    credential: "cloudflare_access_jwt",
     endpointId: "admin.problem9-offline-ingest.create",
     mode: "browser_direct",
     origin: "portal_browser",

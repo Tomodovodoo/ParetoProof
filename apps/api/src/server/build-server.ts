@@ -17,6 +17,7 @@ import { registerAdminRoutes } from "../routes/admin.js";
 import { registerBenchmarkWorkflowRoutes } from "../routes/benchmark-workflow.js";
 import { registerHealthRoute } from "../routes/health.js";
 import { registerInternalWorkerRoutes } from "../routes/internal-worker.js";
+import { registerMathRoutes } from "../routes/math.js";
 import { registerOfflineIngestRoutes } from "../routes/offline-ingest.js";
 import { registerPortalRoutes } from "../routes/portal.js";
 import {
@@ -254,6 +255,9 @@ export async function buildServer(
     rateLimitPreHandlers,
   });
   registerBenchmarkWorkflowRoutes(app, db, requireAccess, {
+    rateLimitPreHandlers,
+  });
+  registerMathRoutes(app, db, requireAccess, {
     rateLimitPreHandlers,
   });
   registerOfflineIngestRoutes(app, db, requireAccess);

@@ -31,6 +31,33 @@ describe("shared api catalog parity", () => {
     );
   });
 
+  it("covers the math browser boundary explicitly", () => {
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt",
+        endpointId: "math.questions.list",
+        mode: "browser_direct",
+        origin: "math_browser"
+      })
+    );
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt",
+        endpointId: "math.submission.create",
+        mode: "browser_direct",
+        origin: "math_browser"
+      })
+    );
+    expect(apiCallBoundaryCatalog).toContainEqual(
+      expect.objectContaining({
+        credential: "cloudflare_access_jwt",
+        endpointId: "math.submission.review-gate.update",
+        mode: "browser_direct",
+        origin: "math_browser"
+      })
+    );
+  });
+
   it("exposes non-null schemas for representative catalogued endpoints", () => {
     expect(apiEndpointSchemaContract["health.read"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.access-request.create"].requestBodySchema).not.toBeNull();
@@ -39,6 +66,11 @@ describe("shared api catalog parity", () => {
     expect(apiEndpointSchemaContract["portal.benchmarks.list"].responseBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.benchmark-dataset.read"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["portal.profile.link-intent.create"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.questions.list"].responseBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.question.detail"].paramsSchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.submission.create"].requestBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.submission.review-gate.update"].requestBodySchema).not.toBeNull();
+    expect(apiEndpointSchemaContract["math.release.detail"].paramsSchema).not.toBeNull();
     expect(apiEndpointSchemaContract["admin.problem9-offline-ingest.create"].requestBodySchema).not.toBeNull();
     expect(apiEndpointSchemaContract["internal.worker.claim"].responseBodySchema).not.toBeNull();
   });

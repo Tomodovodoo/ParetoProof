@@ -16,6 +16,7 @@ export type ApiCallCredential =
 export type ApiCallOrigin =
   | "public_browser"
   | "portal_browser"
+  | "math_browser"
   | "portal_server"
   | "worker_service"
   | "admin_service";

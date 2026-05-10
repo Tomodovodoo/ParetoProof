@@ -15,6 +15,16 @@ import {
   portalProfileResponseSchema,
   portalSessionRedirectInputSchema,
   portalSessionRedirectRequestBodySchema,
+  mathApiUnavailableResponseSchema,
+  mathLeanReviewGateUpdateInputSchema,
+  mathLeanSubmissionCreateInputSchema,
+  mathLeanSubmissionPatchInputSchema,
+  mathPackageCandidateParamsSchema,
+  mathQuestionParamsSchema,
+  mathReleaseParamsSchema,
+  mathReviewGateParamsSchema,
+  mathReviewParamsSchema,
+  mathSubmissionParamsSchema,
   workerJobParamsSchema,
   workerClaimRequestSchema,
   workerClaimResponseSchema
@@ -105,6 +115,97 @@ describe("shared api schema catalog", () => {
       requestParams: null,
       requestQuery: null,
       responseBody: portalAccessRequestReadResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.questions.list"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.question.detail"]).toEqual({
+      requestBody: null,
+      requestParams: mathQuestionParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.submission.create"]).toEqual({
+      requestBody: mathLeanSubmissionCreateInputSchema,
+      requestParams: mathQuestionParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.submission.detail"]).toEqual({
+      requestBody: null,
+      requestParams: mathSubmissionParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.submission.lean-profile.update"]).toEqual({
+      requestBody: mathLeanSubmissionPatchInputSchema,
+      requestParams: mathSubmissionParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.submission.review-gate.update"]).toEqual({
+      requestBody: mathLeanReviewGateUpdateInputSchema,
+      requestParams: mathReviewGateParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.reviews.list"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.review.detail"]).toEqual({
+      requestBody: null,
+      requestParams: mathReviewParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.package-candidates.list"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.package-candidate.detail"]).toEqual({
+      requestBody: null,
+      requestParams: mathPackageCandidateParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.releases.list"]).toEqual({
+      requestBody: null,
+      requestParams: null,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.release.detail"]).toEqual({
+      requestBody: null,
+      requestParams: mathReleaseParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
+    });
+
+    expect(apiEndpointSchemaCatalog["math.question-launch.read"]).toEqual({
+      requestBody: null,
+      requestParams: mathQuestionParamsSchema,
+      requestQuery: null,
+      responseBody: mathApiUnavailableResponseSchema
     });
 
     expect(apiEndpointSchemaCatalog["portal.run-detail.read"].requestParams).toBe(

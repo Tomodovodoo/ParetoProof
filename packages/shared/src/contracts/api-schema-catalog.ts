@@ -9,6 +9,20 @@ import {
 import { healthResponseSchema } from "../schemas/health.js";
 import { harnessRegistryCatalogSchema } from "../schemas/harness-registry.js";
 import {
+  mathApiUnavailableResponseSchema,
+  mathPackageCandidateParamsSchema,
+  mathQuestionParamsSchema,
+  mathReleaseParamsSchema,
+  mathReviewGateParamsSchema,
+  mathReviewParamsSchema,
+  mathSubmissionParamsSchema
+} from "../schemas/math-api.js";
+import {
+  mathLeanReviewGateUpdateInputSchema,
+  mathLeanSubmissionCreateInputSchema,
+  mathLeanSubmissionPatchInputSchema
+} from "../schemas/math-lean-submission.js";
+import {
   adminBenchmarkReleaseCreateInputSchema,
   adminBenchmarkVersionCreateInputSchema,
   adminBenchmarkVersionLaunchabilityUpdateInputSchema,
@@ -219,6 +233,84 @@ export const apiEndpointSchemaCatalog = {
     requestParams: null,
     requestQuery: null,
     responseBody: portalProfileLinkIntentResponseSchema
+  },
+  "math.questions.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.question.detail": {
+    requestBody: null,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.submission.create": {
+    requestBody: mathLeanSubmissionCreateInputSchema,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.submission.detail": {
+    requestBody: null,
+    requestParams: mathSubmissionParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.submission.lean-profile.update": {
+    requestBody: mathLeanSubmissionPatchInputSchema,
+    requestParams: mathSubmissionParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.submission.review-gate.update": {
+    requestBody: mathLeanReviewGateUpdateInputSchema,
+    requestParams: mathReviewGateParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.reviews.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.review.detail": {
+    requestBody: null,
+    requestParams: mathReviewParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.package-candidates.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.package-candidate.detail": {
+    requestBody: null,
+    requestParams: mathPackageCandidateParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.releases.list": {
+    requestBody: null,
+    requestParams: null,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.release.detail": {
+    requestBody: null,
+    requestParams: mathReleaseParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
+  },
+  "math.question-launch.read": {
+    requestBody: null,
+    requestParams: mathQuestionParamsSchema,
+    requestQuery: null,
+    responseBody: mathApiUnavailableResponseSchema
   },
   "admin.problem9-offline-ingest.create": {
     requestBody: problem9OfflineIngestRequestSchema,
