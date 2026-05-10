@@ -1075,6 +1075,11 @@ a.button-secondary {
   cursor: not-allowed;
 }
 
+.button:disabled:hover,
+.button:disabled:focus-visible {
+  transform: none;
+}
+
 .auth-field textarea {
   min-height: 7.5rem;
   resize: vertical;
@@ -2624,6 +2629,176 @@ a.button-secondary {
   color: var(--mint);
 }
 
+.input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.72rem 0.84rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+
+.input:focus {
+  outline: 2px solid rgba(79, 70, 229, 0.2);
+  border-color: rgba(79, 70, 229, 0.4);
+}
+
+.math-shell {
+  width: min(1320px, calc(100% - 48px));
+  display: grid;
+  gap: 18px;
+}
+
+.math-launch-hero,
+.math-launch-panel,
+.math-launch-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 251, 255, 0.96));
+}
+
+.math-launch-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+  gap: 24px;
+  align-items: stretch;
+  padding: 24px;
+}
+
+.math-launch-copy,
+.math-question-summary,
+.math-preset-card,
+.math-launch-card {
+  min-width: 0;
+}
+
+.math-launch-copy {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.math-launch-copy h1 {
+  font-size: 3.4rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.math-launch-copy p,
+.math-launch-card p,
+.math-question-summary span,
+.math-command-block,
+.math-launch-note {
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.math-question-summary {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(8, 145, 178, 0.07), rgba(79, 70, 229, 0.05)),
+    rgba(255, 255, 255, 0.68);
+}
+
+.math-question-summary strong {
+  overflow-wrap: anywhere;
+}
+
+.math-launch-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.math-preset-grid {
+  align-items: stretch;
+}
+
+.math-launch-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.math-launch-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+}
+
+.math-launch-card-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.math-launch-card h2,
+.math-preset-card h3 {
+  font-size: 1.16rem;
+  letter-spacing: 0;
+}
+
+.math-launch-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.math-launch-facts div {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.math-launch-facts dt {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.math-launch-facts dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.math-command-block {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 42, 103, 0.04);
+}
+
+.math-command-block span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.math-command-block code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+}
+
+.math-launch-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 @media (max-width: 1220px) {
   .site-hero,
   .auth-provider-layout,
@@ -2660,6 +2835,11 @@ a.button-secondary {
   .portal-admin-detail-columns,
   .portal-admin-summary-grid,
   .portal-admin-two-column {
+    grid-template-columns: 1fr;
+  }
+
+  .math-launch-hero,
+  .math-launch-card-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2894,6 +3074,10 @@ a.button-secondary {
 }
 
 @media (max-width: 640px) {
+  .math-launch-copy h1 {
+    font-size: 2.2rem;
+  }
+
   .site-header-actions {
     gap: 8px;
   }
