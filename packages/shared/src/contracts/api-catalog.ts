@@ -203,6 +203,123 @@ export const apiEndpointCatalog = [
       "Create a short-lived identity-link handoff so an approved user can attach another sign-in method."
   },
   {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.questions.list",
+    method: "GET",
+    path: "/math/questions",
+    purpose:
+      "List math questions once the durable math question persistence layer is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.question.detail",
+    method: "GET",
+    path: "/math/questions/:questionId",
+    purpose:
+      "Read one math question and its workflow posture once the durable math question model is available."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "math",
+    id: "math.submission.create",
+    method: "POST",
+    path: "/math/questions/:questionId/submissions",
+    purpose:
+      "Create a math submission against one question revision once the durable submission layer is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.submission.detail",
+    method: "GET",
+    path: "/math/submissions/:submissionId",
+    purpose:
+      "Read one math submission with Lean profile, automation, and review-gate posture once persistence is available."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "math",
+    id: "math.submission.lean-profile.update",
+    method: "PATCH",
+    path: "/math/submissions/:submissionId/lean-profile",
+    purpose:
+      "Update the Lean submission profile boundary once durable submission workflow state is available."
+  },
+  {
+    access: "approved_collaborator_or_higher",
+    audience: "math",
+    id: "math.submission.review-gate.update",
+    method: "PATCH",
+    path: "/math/submissions/:submissionId/review-gates/:reviewGateKind",
+    purpose:
+      "Update one Lean review gate from the math workflow surface once review persistence is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.reviews.list",
+    method: "GET",
+    path: "/math/reviews",
+    purpose:
+      "List math review records and queues once the durable review workflow tables are available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.review.detail",
+    method: "GET",
+    path: "/math/reviews/:reviewId",
+    purpose:
+      "Read one math review record once durable review workflow persistence is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.package-candidates.list",
+    method: "GET",
+    path: "/math/package-candidates",
+    purpose:
+      "List math package-candidate posture without moving package authority out of the admin workflow."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.package-candidate.detail",
+    method: "GET",
+    path: "/math/package-candidates/:packageCandidateId",
+    purpose:
+      "Read one math package-candidate posture without moving package authority out of the admin workflow."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.releases.list",
+    method: "GET",
+    path: "/math/releases",
+    purpose:
+      "List release lineage visible to the math workflow once release persistence is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.release.detail",
+    method: "GET",
+    path: "/math/releases/:releaseId",
+    purpose:
+      "Read one release lineage record visible to the math workflow once release persistence is available."
+  },
+  {
+    access: "approved_helper_or_higher",
+    audience: "math",
+    id: "math.question-launch.read",
+    method: "GET",
+    path: "/math/questions/:questionId/launch",
+    purpose:
+      "Read question-scoped launch readiness once launch-source and benchmark-version linkage are available."
+  },
+  {
     access: "admin_only",
     audience: "portal",
     id: "admin.problem9-offline-ingest.create",
